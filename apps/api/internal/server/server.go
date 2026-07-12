@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Barayo/TestPulse/apps/api/internal/service"
 	"github.com/Barayo/TestPulse/apps/api/internal/web"
 )
 
@@ -18,7 +19,7 @@ type ReadinessChecker interface {
 	Ready(ctx context.Context) error
 }
 
-func New(logger *slog.Logger, readiness ReadinessChecker) http.Handler {
+func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
@@ -28,6 +29,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker) http.Handler {
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/meta", handleMeta)
+		mountAPI(r, logger, svc)
 	})
 
 	// Everything else is the embedded web UI (SPA fallback included).

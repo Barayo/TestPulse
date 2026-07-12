@@ -59,8 +59,603 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Meta"
+  /api/v1/projects:
+    get:
+      operationId: listProjects
+      summary: List projects
+      tags: [projects]
+      responses:
+        "200":
+          description: All projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
+    post:
+      operationId: createProject
+      summary: Create a project
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectInput" }
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/projects/{projectId}:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getProject
+      summary: Get a project
+      tags: [projects]
+      responses:
+        "200":
+          description: The project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: updateProject
+      summary: Rename or archive a project
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectUpdate" }
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectId}/cases:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCases
+      summary: List test cases in a project
+      tags: [cases]
+      responses:
+        "200":
+          description: Cases with their current version content
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TestCase" }
+    post:
+      operationId: createCase
+      summary: Create a test case (version 1). Defaults into the project's root folder.
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseCreateInput" }
+      responses:
+        "201":
+          description: Created case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectId}/folders:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listFolders
+      summary: List all folders in a project (flat; reconstruct the tree from parentFolderId)
+      tags: [folders]
+      responses:
+        "200":
+          description: Folders, including the project's root folder
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Folder" }
+    post:
+      operationId: createFolder
+      summary: Create a subfolder (a parent folder is always required)
+      tags: [folders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewFolder" }
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Folder" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/folders/{folderId}:
+    parameters:
+      - { name: folderId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteFolder
+      summary: Delete a folder, reparenting its child folders and cases to its parent
+      tags: [folders]
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/cases/{caseId}/folder:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: moveCase
+      summary: Move a case to a different folder (suite membership is unaffected)
+      tags: [cases, folders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folderId]
+              properties:
+                folderId: { type: string }
+      responses:
+        "204": { description: Moved }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/cases/{caseId}:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getCase
+      summary: Get a case at its current version
+      tags: [cases]
+      responses:
+        "200":
+          description: The case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: editCase
+      summary: Edit a case (creates a new immutable version)
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseContent" }
+      responses:
+        "200":
+          description: Case at its new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteCase
+      summary: Soft-delete a case (versions stay readable in runs)
+      tags: [cases]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/cases/{caseId}/versions:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCaseVersions
+      summary: Full version history of a case
+      tags: [cases]
+      responses:
+        "200":
+          description: All versions, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseVersion" }
+  /api/v1/projects/{projectId}/suites:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listSuites
+      summary: List suites in a project
+      tags: [suites]
+      responses:
+        "200":
+          description: Suites with case membership
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Suite" }
+    post:
+      operationId: createSuite
+      summary: Create a suite
+      tags: [suites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SuiteInput" }
+      responses:
+        "201":
+          description: Created suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/suites/{suiteId}/cases/{caseId}:
+    parameters:
+      - { name: suiteId, in: path, required: true, schema: { type: string } }
+      - { name: caseId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: addCaseToSuite
+      summary: Add a case to a suite (n:m)
+      tags: [suites]
+      responses:
+        "204": { description: Added }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeCaseFromSuite
+      summary: Remove a case from a suite (case itself survives)
+      tags: [suites]
+      responses:
+        "204": { description: Removed }
+  /api/v1/projects/{projectId}/runs:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listRuns
+      summary: List runs in a project
+      tags: [runs]
+      responses:
+        "200":
+          description: Runs, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Run" }
+    post:
+      operationId: createRun
+      summary: Create a run, pinning each case's current version
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunInput" }
+      responses:
+        "201":
+          description: Created run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/runs/{runId}:
+    parameters:
+      - { name: runId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRun
+      summary: Get a run
+      tags: [runs]
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/runs/{runId}/items:
+    parameters:
+      - { name: runId, in: path, required: true, schema: { type: string } }
+      - { name: assignee, in: query, required: false, schema: { type: string } }
+    get:
+      operationId: listRunItems
+      summary: List run items with pinned content, optionally by assignee
+      tags: [runs]
+      responses:
+        "200":
+          description: Run items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RunItem" }
+    post:
+      operationId: addRunItem
+      summary: Add a case to an open run (pins its then-current version)
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddItemInput" }
+      responses:
+        "201":
+          description: Created run item id
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties: { id: { type: string } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/items/{itemId}/results:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listResults
+      summary: Append-only result log of a run item
+      tags: [runs]
+      responses:
+        "200":
+          description: Results, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Result" }
+    post:
+      operationId: recordResult
+      summary: Record a verdict (appends to log, updates item status)
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewResult" }
+      responses:
+        "201":
+          description: Recorded result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Result" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/items/{itemId}/status:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: updateItemStatus
+      summary: Set item status (e.g. retest) or assignee
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ItemStatusUpdate" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/runs/{runId}/summary:
+    parameters:
+      - { name: runId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRunSummary
+      summary: Item counts by status
+      tags: [runs]
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
+  responses:
+    ValidationError:
+      description: Invalid input; the message names the offending field
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Entity does not exist
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
   schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Status:
+      type: string
+      enum: [pending, pass, failed, skipped, blocked, retest]
+    Verdict:
+      type: string
+      enum: [pass, failed, skipped, blocked]
+    Priority:
+      type: string
+      enum: [low, medium, high, critical]
+    Step:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string }
+        expected: { type: string }
+    CaseContent:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/Step" }
+        expectedResult: { type: string }
+        priority: { $ref: "#/components/schemas/Priority" }
+        tags:
+          type: array
+          items: { type: string }
+    CaseCreateInput:
+      allOf:
+        - $ref: "#/components/schemas/CaseContent"
+        - type: object
+          properties:
+            folderId:
+              type: string
+              description: Defaults to the project's root folder when omitted.
+    Folder:
+      type: object
+      required: [id, projectId, name, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        parentFolderId:
+          type: string
+          description: Absent for a project's root folder.
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+    NewFolder:
+      type: object
+      required: [name, parentFolderId]
+      properties:
+        name: { type: string }
+        parentFolderId:
+          type: string
+          description: Required — only the root folder (auto-created with the project) may have no parent.
+    Project:
+      type: object
+      required: [id, name, archived, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        archived: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    ProjectInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    ProjectUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        archived: { type: boolean }
+    TestCase:
+      type: object
+      required: [id, projectId, folderId, currentVersion, content, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        folderId: { type: string }
+        currentVersion: { type: integer }
+        content: { $ref: "#/components/schemas/CaseContent" }
+        createdAt: { type: string, format: date-time }
+    CaseVersion:
+      type: object
+      required: [caseId, version, content, createdAt]
+      properties:
+        caseId: { type: string }
+        version: { type: integer }
+        content: { $ref: "#/components/schemas/CaseContent" }
+        createdAt: { type: string, format: date-time }
+    Suite:
+      type: object
+      required: [id, projectId, name, caseIds, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        name: { type: string }
+        caseIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    SuiteInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    Run:
+      type: object
+      required: [id, projectId, name, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        name: { type: string }
+        createdAt: { type: string, format: date-time }
+    RunInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        suiteId:
+          type: string
+          description: Include all cases of this suite
+        caseIds:
+          type: array
+          items: { type: string }
+          description: Explicit cases to include
+    RunItem:
+      type: object
+      required: [id, runId, caseId, caseVersion, assignee, currentStatus, content, newerVersion, createdAt]
+      properties:
+        id: { type: string }
+        runId: { type: string }
+        caseId: { type: string }
+        caseVersion: { type: integer }
+        assignee: { type: string }
+        currentStatus: { $ref: "#/components/schemas/Status" }
+        content:
+          allOf: [{ $ref: "#/components/schemas/CaseContent" }]
+          description: Content of the pinned version, not the current one
+        newerVersion:
+          type: boolean
+          description: True when the case has a newer version than the pinned one
+        createdAt: { type: string, format: date-time }
+    AddItemInput:
+      type: object
+      required: [caseId]
+      properties:
+        caseId: { type: string }
+    NewResult:
+      type: object
+      required: [actor, verdict]
+      properties:
+        actor: { type: string }
+        verdict: { $ref: "#/components/schemas/Verdict" }
+        comment: { type: string }
+    Result:
+      type: object
+      required: [id, runItemId, actor, verdict, comment, createdAt]
+      properties:
+        id: { type: string }
+        runItemId: { type: string }
+        actor: { type: string }
+        verdict: { $ref: "#/components/schemas/Verdict" }
+        comment: { type: string }
+        createdAt: { type: string, format: date-time }
+    ItemStatusUpdate:
+      type: object
+      properties:
+        status: { $ref: "#/components/schemas/Status" }
+        assignee: { type: string }
+    RunSummary:
+      type: object
+      required: [runId, total, counts]
+      properties:
+        runId: { type: string }
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
     HealthStatus:
       type: object
       required: [status]

@@ -81,3 +81,16 @@ restart — this is intentional.
 - Put TLS at the ingress/load balancer; the app itself serves plain HTTP.
 - The app is stateless — all state is in PostgreSQL, so backup/restore is
   entirely a database concern.
+
+## Security status
+
+**As of `add-core-domain`, the domain API (`/api/v1/projects`, `/cases`,
+`/suites`, `/runs`, ...) has no authentication or authorization — every
+endpoint is open to anyone who can reach the network address.** This is
+expected for the current stage of v0.1 (see [ROADMAP.md](../ROADMAP.md)):
+identity and access control are the very next change, `add-identity-basics`.
+
+**Do not expose a TestPulse instance beyond this stage to an untrusted
+network.** For local evaluation (docker-compose on localhost, or a Helm
+install behind a private network/VPN) this is fine; do not put it on the
+public internet or an untrusted shared network until identity lands.

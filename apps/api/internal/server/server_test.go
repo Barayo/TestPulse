@@ -15,7 +15,7 @@ func (s stubReadiness) Ready(context.Context) error { return s.err }
 
 func newTestServer(readyErr error) http.Handler {
 	logger := slog.New(slog.DiscardHandler)
-	return New(logger, stubReadiness{err: readyErr})
+	return New(logger, stubReadiness{err: readyErr}, nil)
 }
 
 func TestLivenessAlwaysOK(t *testing.T) {

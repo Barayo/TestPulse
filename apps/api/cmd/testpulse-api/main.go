@@ -14,6 +14,8 @@ import (
 	"github.com/Barayo/TestPulse/apps/api/internal/config"
 	"github.com/Barayo/TestPulse/apps/api/internal/db"
 	"github.com/Barayo/TestPulse/apps/api/internal/server"
+	"github.com/Barayo/TestPulse/apps/api/internal/service"
+	"github.com/Barayo/TestPulse/apps/api/internal/store"
 )
 
 func main() {
@@ -46,9 +48,10 @@ func run() error {
 	}
 	logger.Info("migrations applied", "status", "current")
 
+	svc := service.New(store.New(pool))
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(logger, db.NewHealth(pool)),
+		Handler:           server.New(logger, db.NewHealth(pool), svc),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

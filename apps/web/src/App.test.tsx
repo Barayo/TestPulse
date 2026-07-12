@@ -4,7 +4,7 @@ import App from './App'
 import { api } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
-  api: { GET: vi.fn() },
+  api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() },
 }))
 
 const mockGET = vi.mocked(api.GET)
@@ -14,10 +14,14 @@ function mockReadyz(ok: boolean) {
     if (path === '/readyz') {
       return Promise.resolve({ response: { ok } })
     }
-    return Promise.resolve({
-      response: { ok: true },
-      data: { name: 'TestPulse', version: '0.0.1' },
-    })
+    if (path === '/api/v1/meta') {
+      return Promise.resolve({
+        response: { ok: true },
+        data: { name: 'TestPulse', version: '0.0.1' },
+      })
+    }
+    // ProjectsPage's own data fetch (irrelevant to these health-badge tests).
+    return Promise.resolve({ response: { ok: true }, data: [] })
   })
 }
 
@@ -58,11 +62,11 @@ describe('App health status', () => {
 })
 
 describe('App shell', () => {
-  it('renders the product title and empty dashboard', async () => {
+  it('renders the product title and the projects page at /', async () => {
     mockReadyz(true)
     render(<App />)
     expect(screen.getByText('TestPulse')).toBeInTheDocument()
-    expect(screen.getByText('Dashboard')).toBeInTheDocument()
+    expect(await screen.findByText('New project')).toBeInTheDocument()
     await screen.findByText('System ready') // avoid act() warnings
   })
 })

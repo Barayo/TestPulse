@@ -9,8 +9,10 @@ updated in the same change that alters the behavior it describes.
 | Page | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | Running TestPulse with Docker Compose or Helm |
+| [Test management](test-management.md) | Using TestPulse: projects, versioned test cases, suites, runs, the execution board |
 | [Deployment](deployment.md) | Configuration reference, Helm values, production notes |
 | [API](api.md) | The REST API, OpenAPI contract, and health endpoints |
+| [Database](database.md) | Schema reference and entity relationships |
 
 ## For contributors
 

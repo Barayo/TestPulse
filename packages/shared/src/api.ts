@@ -61,10 +61,462 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List projects */
+        get: operations["listProjects"];
+        put?: never;
+        /** Create a project */
+        post: operations["createProject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        /** Get a project */
+        get: operations["getProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Rename or archive a project */
+        patch: operations["updateProject"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        /** List test cases in a project */
+        get: operations["listCases"];
+        put?: never;
+        /** Create a test case (version 1). Defaults into the project's root folder. */
+        post: operations["createCase"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        /** List all folders in a project (flat; reconstruct the tree from parentFolderId) */
+        get: operations["listFolders"];
+        put?: never;
+        /** Create a subfolder (a parent folder is always required) */
+        post: operations["createFolder"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/{folderId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folderId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a folder, reparenting its child folders and cases to its parent */
+        delete: operations["deleteFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{caseId}/folder": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Move a case to a different folder (suite membership is unaffected) */
+        put: operations["moveCase"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{caseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        /** Get a case at its current version */
+        get: operations["getCase"];
+        /** Edit a case (creates a new immutable version) */
+        put: operations["editCase"];
+        post?: never;
+        /** Soft-delete a case (versions stay readable in runs) */
+        delete: operations["deleteCase"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{caseId}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        /** Full version history of a case */
+        get: operations["listCaseVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        /** List suites in a project */
+        get: operations["listSuites"];
+        put?: never;
+        /** Create a suite */
+        post: operations["createSuite"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/suites/{suiteId}/cases/{caseId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Add a case to a suite (n:m) */
+        put: operations["addCaseToSuite"];
+        post?: never;
+        /** Remove a case from a suite (case itself survives) */
+        delete: operations["removeCaseFromSuite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        /** List runs in a project */
+        get: operations["listRuns"];
+        put?: never;
+        /** Create a run, pinning each case's current version */
+        post: operations["createRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{runId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        /** Get a run */
+        get: operations["getRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{runId}/items": {
+        parameters: {
+            query?: {
+                assignee?: string;
+            };
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        /** List run items with pinned content, optionally by assignee */
+        get: operations["listRunItems"];
+        put?: never;
+        /** Add a case to an open run (pins its then-current version) */
+        post: operations["addRunItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /** Append-only result log of a run item */
+        get: operations["listResults"];
+        put?: never;
+        /** Record a verdict (appends to log, updates item status) */
+        post: operations["recordResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set item status (e.g. retest) or assignee */
+        put: operations["updateItemStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{runId}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        /** Item counts by status */
+        get: operations["getRunSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        Error: {
+            error: string;
+        };
+        /** @enum {string} */
+        Status: "pending" | "pass" | "failed" | "skipped" | "blocked" | "retest";
+        /** @enum {string} */
+        Verdict: "pass" | "failed" | "skipped" | "blocked";
+        /** @enum {string} */
+        Priority: "low" | "medium" | "high" | "critical";
+        Step: {
+            action: string;
+            expected?: string;
+        };
+        CaseContent: {
+            title: string;
+            description?: string;
+            steps?: components["schemas"]["Step"][];
+            expectedResult?: string;
+            priority?: components["schemas"]["Priority"];
+            tags?: string[];
+        };
+        CaseCreateInput: components["schemas"]["CaseContent"] & {
+            /** @description Defaults to the project's root folder when omitted. */
+            folderId?: string;
+        };
+        Folder: {
+            id: string;
+            projectId: string;
+            /** @description Absent for a project's root folder. */
+            parentFolderId?: string;
+            name: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        NewFolder: {
+            name: string;
+            /** @description Required — only the root folder (auto-created with the project) may have no parent. */
+            parentFolderId: string;
+        };
+        Project: {
+            id: string;
+            name: string;
+            archived: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ProjectInput: {
+            name: string;
+        };
+        ProjectUpdate: {
+            name?: string;
+            archived?: boolean;
+        };
+        TestCase: {
+            id: string;
+            projectId: string;
+            folderId: string;
+            currentVersion: number;
+            content: components["schemas"]["CaseContent"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CaseVersion: {
+            caseId: string;
+            version: number;
+            content: components["schemas"]["CaseContent"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        Suite: {
+            id: string;
+            projectId: string;
+            name: string;
+            caseIds: string[];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SuiteInput: {
+            name: string;
+        };
+        Run: {
+            id: string;
+            projectId: string;
+            name: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RunInput: {
+            name: string;
+            /** @description Include all cases of this suite */
+            suiteId?: string;
+            /** @description Explicit cases to include */
+            caseIds?: string[];
+        };
+        RunItem: {
+            id: string;
+            runId: string;
+            caseId: string;
+            caseVersion: number;
+            assignee: string;
+            currentStatus: components["schemas"]["Status"];
+            /** @description Content of the pinned version, not the current one */
+            content: components["schemas"]["CaseContent"];
+            /** @description True when the case has a newer version than the pinned one */
+            newerVersion: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AddItemInput: {
+            caseId: string;
+        };
+        NewResult: {
+            actor: string;
+            verdict: components["schemas"]["Verdict"];
+            comment?: string;
+        };
+        Result: {
+            id: string;
+            runItemId: string;
+            actor: string;
+            verdict: components["schemas"]["Verdict"];
+            comment: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ItemStatusUpdate: {
+            status?: components["schemas"]["Status"];
+            assignee?: string;
+        };
+        RunSummary: {
+            runId: string;
+            total: number;
+            counts: {
+                [key: string]: number;
+            };
+        };
         HealthStatus: {
             /** @enum {string} */
             status: "ok" | "unavailable";
@@ -78,7 +530,26 @@ export interface components {
             version: string;
         };
     };
-    responses: never;
+    responses: {
+        /** @description Invalid input; the message names the offending field */
+        ValidationError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description Entity does not exist */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+    };
     parameters: never;
     requestBodies: never;
     headers: never;
@@ -153,6 +624,664 @@ export interface operations {
                     "application/json": components["schemas"]["Meta"];
                 };
             };
+        };
+    };
+    listProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All projects */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"][];
+                };
+            };
+        };
+    };
+    createProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectInput"];
+            };
+        };
+        responses: {
+            /** @description Created project */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    getProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cases with their current version content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"][];
+                };
+            };
+        };
+    };
+    createCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseCreateInput"];
+            };
+        };
+        responses: {
+            /** @description Created case */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Folders, including the project's root folder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"][];
+                };
+            };
+        };
+    };
+    createFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewFolder"];
+            };
+        };
+        responses: {
+            /** @description Created folder */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    deleteFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    moveCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    folderId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Moved */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The case */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    editCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CaseContent"];
+            };
+        };
+        responses: {
+            /** @description Case at its new version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listCaseVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All versions, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseVersion"][];
+                };
+            };
+        };
+    };
+    listSuites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suites with case membership */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"][];
+                };
+            };
+        };
+    };
+    createSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuiteInput"];
+            };
+        };
+        responses: {
+            /** @description Created suite */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    addCaseToSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Added */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeCaseFromSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteId: string;
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"][];
+                };
+            };
+        };
+    };
+    createRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunInput"];
+            };
+        };
+        responses: {
+            /** @description Created run */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRunItems: {
+        parameters: {
+            query?: {
+                assignee?: string;
+            };
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunItem"][];
+                };
+            };
+        };
+    };
+    addRunItem: {
+        parameters: {
+            query?: {
+                assignee?: string;
+            };
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddItemInput"];
+            };
+        };
+        responses: {
+            /** @description Created run item id */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        id: string;
+                    };
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Results, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"][];
+                };
+            };
+        };
+    };
+    recordResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewResult"];
+            };
+        };
+        responses: {
+            /** @description Recorded result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateItemStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getRunSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
 }

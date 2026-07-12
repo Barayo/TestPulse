@@ -10,6 +10,8 @@ apps/api/coverage.out
 apps/web/coverage/
 apps/web/test-results/
 apps/web/playwright-report/
+test-results/
+playwright-report/
 # Embedded web bundle (placeholder index.html stays committed)
 apps/api/internal/web/dist/*
 !apps/api/internal/web/dist/index.html

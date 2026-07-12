@@ -25,7 +25,7 @@ test-api: ## Run Go tests (db integration tests need TESTPULSE_TEST_DATABASE_URL
 
 COVER_MIN := 80
 coverage-api: ## Go coverage for internal packages, fails under $(COVER_MIN)%
-	cd apps/api && go test -coverprofile=coverage.out ./internal/...
+	cd apps/api && go test -coverprofile=coverage.out -coverpkg=./internal/... ./internal/...
 	@cd apps/api && total=$$(go tool cover -func=coverage.out | awk '/^total:/ {sub(/%/,"",$$3); print $$3}'); \
 	echo "internal coverage: $$total% (minimum $(COVER_MIN)%)"; \
 	awk "BEGIN {exit !($$total >= $(COVER_MIN))}" || { echo "FAIL: coverage below $(COVER_MIN)%"; exit 1; }

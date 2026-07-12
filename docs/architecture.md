@@ -18,7 +18,7 @@ recorded in the OpenSpec change `establish-architecture` (see
 │  │   REST API           ←  /api/v1/*              │  │
 │  │   liveness           ←  /healthz               │  │
 │  │   readiness          ←  /readyz                │  │
-│  │   MCP server         ←  (arrives in v0.1)      │  │
+│  │   MCP server         ←  (arrives with add-mcp) │  │
 │  └───────────────────────┬────────────────────────┘  │
 └──────────────────────────┼───────────────────────────┘
                            │ pgx
@@ -47,7 +47,8 @@ recorded in the OpenSpec change `establish-architecture` (see
 - **AI-native by design.** Agents will be first-class actors: scoped API
   tokens (never SSO), their own identity in RBAC and audit logs, and an MCP
   server compiled into the same binary, sharing the service layer with REST.
-  This lands in v0.1 (see [ROADMAP](../ROADMAP.md)).
+  The service layer landed with `add-core-domain`; identity and MCP itself
+  are the next two v0.1 changes (see [ROADMAP](../ROADMAP.md)).
 
 ## Stack
 
@@ -73,11 +74,31 @@ docs/              this documentation
 openspec/          specs and change proposals (spec-first development)
 ```
 
-## Domain model (direction, implemented from v0.1)
+## Domain model
 
 Project → TestCase / TestSuite (n:m) → TestRun → per-case Result.
 Test cases are **immutably versioned**; a run pins each case to the version
-current at run creation. Run items carry a current status
+current at run creation (or when added to an open run) — never at execution
+time. Run items carry a current status
 (`pending / pass / failed / skipped / blocked / retest`) plus an append-only
-result log `{actor, timestamp, verdict, comment}` where the actor may be a
-human or an agent.
+result log `{actor, timestamp, verdict, comment}` where the actor is
+currently a free-text field (real human/agent identity arrives with
+`add-identity-basics`). Full schema and rationale: [database.md](database.md).
+
+Implementation layout inside `apps/api/internal/`:
+
+```
+domain/    types + invariants (Status, Verdict, CaseContent, validation) —
+           no I/O, shared by store, service, and (later) MCP
+store/     pgx repositories; owns transactions for multi-step invariants
+           (version bump + insert, result append + status update, ...)
+service/   use cases composing stores; validates input before any storage
+           access; this is what REST handlers — and later MCP tools —
+           call into
+server/    HTTP only: routing, request decode, response encode, error
+           → status code mapping
+```
+
+The REST API surface is documented in [api.md](api.md); the user-facing
+workflow (versioning in practice, the run execution board) is in
+[test-management.md](test-management.md).

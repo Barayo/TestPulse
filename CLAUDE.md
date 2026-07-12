@@ -48,6 +48,14 @@ dev-web / generate / sync-web / compose-up`. See `docs/development.md`.
 - Modular monolith: one Go binary (chi, pgx, goose migrations in
   `apps/api/internal/db/migrations/`), web bundle embedded via
   `apps/api/internal/web` (placeholder `dist/index.html` stays committed).
+- **Pre-1.0 migration policy**: no real deployment has data to preserve yet,
+  so there is no upgrade path to protect. Amend the existing migration file
+  for the schema in question in place — don't stack a new `000N_*.sql` file
+  on every domain change. goose itself stays (its version-tracking is what
+  makes "migrations apply automatically and idempotently at startup" true,
+  a `platform-deployment` spec requirement) — only the "one file per change"
+  habit stops. Switch to real incremental migrations once something ships
+  that people actually run with real data (first public release / v1.0).
 - Contract-first: edit `packages/shared/openapi.yaml` together with Go
   handlers, then `make generate`; CI fails on drift.
 - Config only via `TESTPULSE_*` env vars; required values fail fast by name.

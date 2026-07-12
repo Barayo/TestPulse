@@ -13,8 +13,8 @@ test.describe('Requirement: Single-command evaluation via docker-compose', () =>
 
     // THEN the web UI serves with the app shell
     await expect(page).toHaveTitle('TestPulse')
-    await expect(page.getByRole('heading', { name: 'TestPulse' })).toBeVisible()
-    await expect(page.getByText('Dashboard')).toBeVisible()
+    await expect(page.getByRole('link', { name: 'TestPulse' })).toBeVisible()
+    await expect(page.getByText('New project')).toBeVisible()
 
     // AND the API behind it is ready (database up, migrations applied),
     // proven end-to-end through the UI's own status check
@@ -25,11 +25,11 @@ test.describe('Requirement: Single-command evaluation via docker-compose', () =>
   test('Scenario: SPA routes are served after a full page load', async ({
     page,
   }) => {
-    // WHEN the browser loads a client-side route directly
-    await page.goto('/projects/some-future-route')
+    // WHEN the browser loads an unknown client-side path directly
+    await page.goto('/some/unrecognized/path')
 
-    // THEN the app shell still renders (SPA fallback, no 404)
-    await expect(page.getByRole('heading', { name: 'TestPulse' })).toBeVisible()
+    // THEN the app shell still renders (SPA fallback, no server 404)
+    await expect(page.getByRole('link', { name: 'TestPulse' })).toBeVisible()
   })
 })
 

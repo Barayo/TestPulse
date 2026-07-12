@@ -4,7 +4,7 @@
 
 TestPulse is an AI-native, MCP-first test management platform. Humans get a clean UI for authoring and executing test cases, suites, and runs; AI agents get a first-class seat at the table — their own identity, scoped API tokens, and an [MCP](https://modelcontextprotocol.io) server — so *"Claude, read `requirements.md` and create a test suite in TestPulse"* just works.
 
-> **Status**: early development — walking skeleton stage. See [ROADMAP.md](ROADMAP.md) for where this is going.
+> **Status**: early development — the core test management domain (projects, versioned test cases, suites, runs, execution) is implemented and usable. **There is no authentication yet** — don't expose an instance beyond a trusted local network. See [ROADMAP.md](ROADMAP.md) for where this is going.
 
 ## Why TestPulse?
 
@@ -54,7 +54,7 @@ Schema migrations run automatically and idempotently at startup.
 
 ## Documentation
 
-Full documentation lives in [`docs/`](docs/README.md): [getting started](docs/getting-started.md) · [deployment & configuration](docs/deployment.md) · [architecture](docs/architecture.md) · [development](docs/development.md) · [API](docs/api.md).
+Full documentation lives in [`docs/`](docs/README.md): [getting started](docs/getting-started.md) · [test management](docs/test-management.md) · [deployment & configuration](docs/deployment.md) · [architecture](docs/architecture.md) · [database](docs/database.md) · [development](docs/development.md) · [API](docs/api.md).
 
 ## Architecture at a glance
 

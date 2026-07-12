@@ -14,7 +14,7 @@ source of truth consumed by:
 All application endpoints are versioned under `/api/v1`. Health probes sit at
 the root because infrastructure expects them there.
 
-## Current endpoints (walking skeleton)
+## System endpoints
 
 | Method | Path | Description |
 |---|---|---|
@@ -31,12 +31,71 @@ curl -s http://localhost:8080/api/v1/meta
 # {"name":"TestPulse","version":"0.0.1"}
 ```
 
+## Domain endpoints
+
+All request/response bodies are documented precisely in
+[`packages/shared/openapi.yaml`](../packages/shared/openapi.yaml) — the
+tables below are a quick map, not the source of truth.
+
+**Projects**
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/projects` | List projects |
+| POST | `/api/v1/projects` | Create a project (`name`) |
+| GET | `/api/v1/projects/{projectId}` | Get a project |
+| PATCH | `/api/v1/projects/{projectId}` | Rename and/or archive |
+
+**Test cases** — every edit creates a new immutable version; see
+[Database](database.md) for the versioning model.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/projects/{projectId}/cases` | List cases (current version content) |
+| POST | `/api/v1/projects/{projectId}/cases` | Create a case (version 1); optional `folderId` defaults to the project's root folder |
+| GET | `/api/v1/cases/{caseId}` | Get a case at its current version |
+| PUT | `/api/v1/cases/{caseId}` | Edit — creates a new version |
+| DELETE | `/api/v1/cases/{caseId}` | Soft delete (versions stay readable in past runs) |
+| GET | `/api/v1/cases/{caseId}/versions` | Full version history, oldest first |
+
+**Folders** — project-level, orthogonal to suites; every case belongs to
+exactly one folder, defaulting to the project's root; see
+[Database](database.md) for the tree model.
+
+| Method | Path | Description |
+|---|---|---|
+| GET / POST | `/api/v1/projects/{projectId}/folders` | List all folders (flat) / create a subfolder (`name`, `parentFolderId` — always required) |
+| DELETE | `/api/v1/folders/{folderId}` | Delete, reparenting child folders and cases to its parent; the root folder cannot be deleted (`400`) |
+| PUT | `/api/v1/cases/{caseId}/folder` | Move a case to a different folder (`folderId`) — suite membership is unaffected |
+
+**Suites**
+
+| Method | Path | Description |
+|---|---|---|
+| GET / POST | `/api/v1/projects/{projectId}/suites` | List / create |
+| PUT / DELETE | `/api/v1/suites/{suiteId}/cases/{caseId}` | Add / remove a case (n:m; removing does not delete the case) |
+
+**Runs and execution**
+
+| Method | Path | Description |
+|---|---|---|
+| GET / POST | `/api/v1/projects/{projectId}/runs` | List / create a run — pins each case's *current* version at creation time |
+| GET | `/api/v1/runs/{runId}` | Get a run |
+| GET / POST | `/api/v1/runs/{runId}/items` | List items (optionally `?assignee=`) / add a case to an open run (pins its then-current version) |
+| GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`actor`, `verdict`, `comment`) |
+| PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or `assignee` |
+| GET | `/api/v1/runs/{runId}/summary` | Item counts by current status |
+
+Validation errors return `400 {"error": "..."}` naming the offending field;
+missing entities return `404 {"error": "not found"}`.
+
 ## Authentication
 
-None yet — the walking skeleton has no protected resources. Local users,
-sessions, and scoped agent API tokens arrive in v0.1
-(`add-identity-basics`); OIDC SSO in v0.2. This page will grow the auth
-section in those changes.
+None yet — endpoints are open. Local users, sessions, and scoped agent API
+tokens arrive in `add-identity-basics`; OIDC SSO in v0.2. **Do not expose
+this API on an untrusted network until then** — see the warning in
+[Deployment](deployment.md#security-status). This page will grow the auth
+section in that change.
 
 ## Versioning policy
 

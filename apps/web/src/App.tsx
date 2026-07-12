@@ -1,17 +1,14 @@
 import { useEffect, useState } from 'react'
+import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card'
+import ProjectsPage from '@/pages/ProjectsPage'
+import ProjectPage from '@/pages/ProjectPage'
+import RunPage from '@/pages/RunPage'
 
 type SystemStatus = 'checking' | 'ready' | 'unavailable'
 
-function App() {
+function HealthBadge() {
   const [status, setStatus] = useState<SystemStatus>('checking')
   const [version, setVersion] = useState<string>()
 
@@ -30,51 +27,50 @@ function App() {
   }, [])
 
   return (
+    <div className="flex items-center gap-2">
+      {version && <span className="text-sm text-muted-foreground">v{version}</span>}
+      <Badge
+        variant={
+          status === 'ready' ? 'default' : status === 'checking' ? 'secondary' : 'destructive'
+        }
+      >
+        {status === 'ready'
+          ? 'System ready'
+          : status === 'checking'
+            ? 'Checking…'
+            : 'API unavailable'}
+      </Badge>
+    </div>
+  )
+}
+
+function Layout({ children }: { children: React.ReactNode }) {
+  return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <h1 className="text-xl font-semibold tracking-tight">TestPulse</h1>
-          <div className="flex items-center gap-2">
-            {version && (
-              <span className="text-sm text-muted-foreground">v{version}</span>
-            )}
-            <Badge
-              variant={
-                status === 'ready'
-                  ? 'default'
-                  : status === 'checking'
-                    ? 'secondary'
-                    : 'destructive'
-              }
-            >
-              {status === 'ready'
-                ? 'System ready'
-                : status === 'checking'
-                  ? 'Checking…'
-                  : 'API unavailable'}
-            </Badge>
-          </div>
+          <Link to="/" className="text-xl font-semibold tracking-tight">
+            TestPulse
+          </Link>
+          <HealthBadge />
         </div>
       </header>
-
-      <main className="mx-auto max-w-5xl px-6 py-10">
-        <Card>
-          <CardHeader>
-            <CardTitle>Dashboard</CardTitle>
-            <CardDescription>
-              Nothing here yet — test projects, suites, and runs arrive in
-              upcoming releases.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              This walking skeleton proves the full pipeline: React UI →
-              OpenAPI-generated client → Go API → PostgreSQL.
-            </p>
-          </CardContent>
-        </Card>
-      </main>
+      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
     </div>
+  )
+}
+
+function App() {
+  return (
+    <BrowserRouter>
+      <Layout>
+        <Routes>
+          <Route path="/" element={<ProjectsPage />} />
+          <Route path="/projects/:projectId" element={<ProjectPage />} />
+          <Route path="/runs/:runId" element={<RunPage />} />
+        </Routes>
+      </Layout>
+    </BrowserRouter>
   )
 }
 
