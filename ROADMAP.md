@@ -48,6 +48,7 @@ The differentiator ships first: the MCP server is *in* the MVP, because a generi
 ## v0.3 — Insight: "it tells you things you didn't know"
 
 - `add-reporting` — pass-rate trends, run comparisons, flaky-test detection; exposed as a query API consumed equally by the UI and MCP agents.
+  - **Status charts** (pass/failed/skipped/pending/error) for a run, and for a suite across its completed runs. The run-level chart is a thin rendering of data `add-core-domain` already exposes (`GET /runs/{id}/summary`); the suite-level view needs new domain work — runs aren't currently linked back to the suite they were created from (`add-core-domain` design D6: a suite is only a *source* for populating a run's items at creation, not a persisted relationship), so "this suite's completed runs" has to be designed, not just queried. Also needs a product decision: an `error` status doesn't exist in the current model (`pending/pass/failed/skipped/blocked/retest`) — decide whether it's a new status (e.g. "the test itself couldn't run," distinct from a `failed` assertion) or an alias for an existing one before implementing.
 
 ## v0.4 — Connected: "it meets your tools where they are"
 
@@ -56,6 +57,12 @@ The differentiator ships first: the MCP server is *in* the MVP, because a generi
 ## v0.5+ — Enterprise-curious
 
 SAML, SCIM provisioning, advanced audit exports, multiple simultaneous IdPs. Candidates for a future paid/hosted tier; the open core (including SSO) stays open.
+
+## Backlog — ideas not yet scheduled to a rung
+
+Captured so they aren't lost, not committed to any release yet:
+
+- **Admin-configurable color theme.** Let an admin change the app's color palette; start with a handful of predefined palettes (the Corona-inspired default from `redesign-ui` plus a few alternates) rather than a full custom-color picker. Depends on `add-identity-basics`/`add-project-rbac` existing (admin role) and on `redesign-ui`'s token system landing first, since predefined palettes are just alternate values for the same CSS custom properties. No target release yet.
 
 ## Open questions
 
