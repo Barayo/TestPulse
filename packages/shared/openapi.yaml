@@ -1,0 +1,83 @@
+openapi: 3.0.3
+info:
+  title: TestPulse API
+  description: >
+    The TestPulse REST API. This contract is the single source of truth
+    consumed by the web UI (generated TypeScript client), MCP tooling, and
+    external integrations.
+  version: 0.0.1
+  license:
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.txt
+servers:
+  - url: /
+    description: Same-origin deployment
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Reports process health only; independent of dependency state.
+      tags: [system]
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: >
+        Reports dependency health: database reachable and schema migrations
+        current.
+      tags: [system]
+      responses:
+        "200":
+          description: Service is ready to receive traffic
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: A dependency is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /api/v1/meta:
+    get:
+      operationId: getMeta
+      summary: Service metadata
+      tags: [system]
+      responses:
+        "200":
+          description: Service name and version
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meta"
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        reason:
+          type: string
+          description: Present when status is "unavailable".
+    Meta:
+      type: object
+      required: [name, version]
+      properties:
+        name:
+          type: string
+          example: TestPulse
+        version:
+          type: string
+          example: 0.0.1

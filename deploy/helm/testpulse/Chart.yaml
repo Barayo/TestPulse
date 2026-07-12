@@ -1,0 +1,9 @@
+apiVersion: v2
+name: testpulse
+description: TestPulse — open-source, AI-native test management platform
+type: application
+version: 0.0.1
+appVersion: "0.0.1"
+home: https://github.com/Barayo/TestPulse
+sources:
+  - https://github.com/Barayo/TestPulse

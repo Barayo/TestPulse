@@ -1,0 +1,40 @@
+# TestPulse evaluation stack.
+# From the repository root:  docker compose -f deploy/compose/docker-compose.yml up
+# UI + API: http://localhost:8080
+name: testpulse
+
+services:
+  app:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: testpulse:dev
+    ports:
+      - "8080:8080"
+    environment:
+      TESTPULSE_DATABASE_URL: postgres://testpulse:testpulse@db:5432/testpulse
+      TESTPULSE_LOG_LEVEL: info
+    depends_on:
+      db:
+        condition: service_healthy
+    # Distroless has no shell/curl; probe the API over TCP from compose's
+    # perspective via the db healthcheck + restart policy. Kubernetes gets
+    # real HTTP probes from the Helm chart.
+    restart: unless-stopped
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: testpulse
+      POSTGRES_PASSWORD: testpulse
+      POSTGRES_DB: testpulse
+    volumes:
+      - testpulse-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U testpulse -d testpulse"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  testpulse-db:

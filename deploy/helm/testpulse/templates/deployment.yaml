@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "testpulse.fullname" . }}
+  labels:
+    {{- include "testpulse.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "testpulse.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "testpulse.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # Distroless "nonroot" user; numeric so the kubelet can verify it.
+        runAsUser: 65532
+        runAsGroup: 65532
+      containers:
+        - name: testpulse
+          image: {{ include "testpulse.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "testpulse.dbSecretName" . }}
+                  key: password
+            - name: TESTPULSE_DATABASE_URL
+              {{- if .Values.postgresql.enabled }}
+              value: "postgres://{{ .Values.postgresql.username }}:$(DB_PASSWORD)@{{ include "testpulse.dbHost" . }}:5432/{{ .Values.postgresql.database }}?sslmode=disable"
+              {{- else }}
+              value: "postgres://{{ .Values.externalDatabase.username }}:$(DB_PASSWORD)@{{ include "testpulse.dbHost" . }}:{{ .Values.externalDatabase.port }}/{{ .Values.externalDatabase.database }}?sslmode={{ .Values.externalDatabase.sslMode }}"
+              {{- end }}
+            - name: TESTPULSE_LOG_LEVEL
+              value: {{ .Values.app.logLevel | quote }}
+            {{- with .Values.app.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

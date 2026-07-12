@@ -1,0 +1,19 @@
+{
+  "name": "@testpulse/shared",
+  "version": "0.0.1",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "description": "TestPulse API contract: OpenAPI spec and generated TypeScript types",
+  "type": "module",
+  "exports": {
+    "./api": {
+      "types": "./src/api.ts"
+    }
+  },
+  "scripts": {
+    "generate": "openapi-typescript openapi.yaml -o src/api.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.9.1"
+  }
+}

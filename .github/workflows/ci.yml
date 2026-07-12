@@ -1,0 +1,144 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    name: API (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: test
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U test -d test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      TESTPULSE_TEST_DATABASE_URL: postgres://test:test@localhost:5433/test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/api/go.mod
+      - name: Build
+        run: go build ./...
+      - name: Vet
+        run: go vet ./...
+      - name: Lint
+        uses: golangci/golangci-lint-action@v8
+        with:
+          working-directory: apps/api
+      - name: Test with coverage gate (unit + db integration)
+        run: |
+          go test -coverprofile=coverage.out ./internal/...
+          go test ./cmd/...
+          total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub(/%/,"",$3); print $3}')
+          echo "internal coverage: ${total}% (minimum 80%)"
+          awk "BEGIN {exit !(${total} >= 80)}"
+
+  web:
+    name: Web (TypeScript)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Contract types are current
+        run: |
+          npm -w @testpulse/shared run generate
+          git diff --exit-code packages/shared/src
+      - name: Lint
+        run: npm -w web run lint
+      - name: Typecheck
+        run: npm -w web run typecheck
+      - name: Unit tests with coverage thresholds
+        run: npm -w web run test:coverage
+      - name: Build
+        run: npm -w web run build
+
+  e2e:
+    name: E2E (Playwright vs compose stack)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Install Playwright browser
+        run: npx --workspace=web playwright install --with-deps chromium
+      - name: Start compose stack
+        run: docker compose -f deploy/compose/docker-compose.yml up --build -d --wait
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/readyz && exit 0 || sleep 2
+          done
+          echo "stack never became ready"; docker compose -f deploy/compose/docker-compose.yml logs; exit 1
+      - name: Run E2E suite
+        run: npm -w web run e2e
+      - name: Upload traces on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint chart
+        run: helm lint deploy/helm/testpulse
+      - name: Render (bundled DB)
+        run: helm template tp deploy/helm/testpulse > /dev/null
+      - name: Render (external DB)
+        run: >
+          helm template tp deploy/helm/testpulse
+          --set postgresql.enabled=false
+          --set externalDatabase.host=pg.example.com
+          --set externalDatabase.password=ci
+          > /dev/null
+
+  dco:
+    name: DCO
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: All commits are signed off
+        run: |
+          range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          missing=0
+          while read -r sha; do
+            if ! git log -1 --format=%B "$sha" | grep -qi '^Signed-off-by: .\+<.\+>'; then
+              echo "::error::Commit $sha is missing a Signed-off-by trailer (use git commit -s)"
+              missing=1
+            fi
+          done < <(git rev-list --no-merges "$range")
+          exit $missing

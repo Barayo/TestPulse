@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+apps/api/bin/
+apps/web/dist/
+
+# Test artifacts
+apps/api/coverage.out
+apps/web/coverage/
+apps/web/test-results/
+apps/web/playwright-report/
+# Embedded web bundle (placeholder index.html stays committed)
+apps/api/internal/web/dist/*
+!apps/api/internal/web/dist/index.html
+*.test
+coverage.out
+
+# Environment / local config
+.env
+.env.local
+*.local.yaml
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# Logs
+*.log

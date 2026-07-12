@@ -1,0 +1,9 @@
+{
+  "name": "testpulse",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "workspaces": [
+    "apps/web",
+    "packages/shared"
+  ]
+}

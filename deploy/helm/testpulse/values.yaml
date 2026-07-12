@@ -1,0 +1,60 @@
+# Default values for the TestPulse chart.
+
+image:
+  repository: ghcr.io/barayo/testpulse
+  tag: ""            # defaults to the chart appVersion
+  pullPolicy: IfNotPresent
+
+replicaCount: 1
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: false
+  className: ""
+  host: testpulse.local
+  annotations: {}
+  tls: []
+
+app:
+  logLevel: info
+  # Extra environment variables for the app container.
+  extraEnv: []
+
+# Bundled PostgreSQL for evaluation. Disable it and set externalDatabase for
+# production deployments.
+postgresql:
+  enabled: true
+  image: postgres:16-alpine
+  database: testpulse
+  username: testpulse
+  # For evaluation only — override or use existingSecret in real deployments.
+  password: testpulse
+  # Name of an existing Secret with a "password" key; takes precedence over
+  # the inline password above.
+  existingSecret: ""
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClass: ""
+
+# Used when postgresql.enabled is false.
+externalDatabase:
+  host: ""
+  port: 5432
+  database: testpulse
+  username: testpulse
+  password: ""
+  # Name of an existing Secret with a "password" key; takes precedence over
+  # the inline password above.
+  existingSecret: ""
+  sslMode: require
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 256Mi
