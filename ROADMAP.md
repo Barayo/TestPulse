@@ -4,6 +4,8 @@
 
 Each release has a *story*, not just a feature list. A feature belongs in a release only if it serves that release's story. Every rung is implemented as one or more [OpenSpec changes](openspec/changes/); changes are created when their rung comes up, not before.
 
+Current status of every rung, one card per OpenSpec change (not per task — granular task tracking stays in each change's `tasks.md`), plus the unscheduled backlog, lives on the [TestPulse Backlog board](https://github.com/orgs/Barayo/projects/1).
+
 ## Release ladder
 
 | Version | Story | OpenSpec changes |
@@ -60,9 +62,7 @@ SAML, SCIM provisioning, advanced audit exports, multiple simultaneous IdPs. Can
 
 ## Backlog — ideas not yet scheduled to a rung
 
-Captured so they aren't lost, not committed to any release yet:
-
-- **Admin-configurable color theme.** Let an admin change the app's color palette; start with a handful of predefined palettes (the Corona-inspired default from `redesign-ui` plus a few alternates) rather than a full custom-color picker. Depends on `add-identity-basics`/`add-project-rbac` existing (admin role) and on `redesign-ui`'s token system landing first, since predefined palettes are just alternate values for the same CSS custom properties. No target release yet.
+Tracked as [GitHub issues labeled `backlog`](https://github.com/Barayo/TestPulse/issues?q=is%3Aissue+is%3Aopen+label%3Abacklog) (and, once set up, a Project board) rather than here — issues carry status, discussion, and links to the PRs/OpenSpec changes that eventually pick them up, which flat markdown can't. This file stays the release-ladder narrative; ideas not yet scheduled to a rung live on GitHub.
 
 ## Open questions
 

@@ -31,3 +31,6 @@ coverage.out
 
 # Logs
 *.log
+
+# Visual brainstorming companion scratch files
+.superpowers/
