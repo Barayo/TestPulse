@@ -43,6 +43,7 @@ tables below are a quick map, not the source of truth.
 |---|---|---|
 | GET | `/api/v1/projects` | List projects |
 | POST | `/api/v1/projects` | Create a project (`name`) |
+| GET | `/api/v1/projects/summaries` | Suite count, case count, and latest-run pass rate for every non-archived project, in one request — computed server-side (2-3 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
 | GET | `/api/v1/projects/{projectId}` | Get a project |
 | PATCH | `/api/v1/projects/{projectId}` | Rename and/or archive |
 

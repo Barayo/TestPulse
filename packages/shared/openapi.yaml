@@ -88,6 +88,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Project" }
         "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/projects/summaries:
+    get:
+      operationId: listProjectSummaries
+      summary: Suite/case counts and latest-run pass rate for every non-archived project, in one request
+      tags: [projects]
+      responses:
+        "200":
+          description: One summary per non-archived project
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProjectSummary" }
   /api/v1/projects/{projectId}:
     parameters:
       - { name: projectId, in: path, required: true, schema: { type: string } }
@@ -656,6 +669,17 @@ components:
         counts:
           type: object
           additionalProperties: { type: integer }
+    ProjectSummary:
+      type: object
+      required: [projectId, suiteCount, caseCount, passRate]
+      properties:
+        projectId: { type: string }
+        suiteCount: { type: integer }
+        caseCount: { type: integer }
+        passRate:
+          type: integer
+          nullable: true
+          description: From the project's most recently created run only; null if it has no runs yet.
     HealthStatus:
       type: object
       required: [status]

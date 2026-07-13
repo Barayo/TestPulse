@@ -25,39 +25,48 @@ function manyProjects(count: number) {
   }))
 }
 
-describe('useProjectSummaries concurrency', () => {
-  it('never has more than 4 per-project summary requests in flight at once', async () => {
-    const projectCount = 20
-    let inFlight = 0
-    let maxInFlight = 0
-
-    mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/projects') {
-        return Promise.resolve({ data: manyProjects(projectCount), response: { ok: true } })
-      }
-      // suites/cases/runs calls for each project's summary
-      inFlight++
-      maxInFlight = Math.max(maxInFlight, inFlight)
-      return new Promise((resolve) => {
-        setTimeout(() => {
-          inFlight--
-          resolve({ data: [], response: { ok: true } })
-        }, 5)
+function mockBatchedAPI(projectCount: number) {
+  mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/projects') {
+      return Promise.resolve({ data: manyProjects(projectCount), response: { ok: true } })
+    }
+    if (path === '/api/v1/projects/summaries') {
+      return Promise.resolve({
+        data: manyProjects(projectCount).map((p, i) => ({
+          projectId: p.id,
+          suiteCount: i,
+          caseCount: i * 2,
+          passRate: i === 0 ? null : 50,
+        })),
+        response: { ok: true },
       })
-    })
+    }
+    return Promise.resolve({ data: [], response: { ok: true } })
+  })
+}
 
+describe('useProjectSummaries', () => {
+  it('makes exactly one summaries request regardless of project count', async () => {
+    mockBatchedAPI(50)
     const { result } = renderHook(() => useProjectSummaries(), { wrapper })
+    await waitFor(() => expect(result.current).toHaveLength(50))
 
-    await waitFor(() => expect(result.current).toHaveLength(projectCount))
-    expect(maxInFlight).toBeLessThanOrEqual(4 * 3)
+    const summaryCalls = mockGET.mock.calls.filter((call) => call[0] === '/api/v1/projects/summaries')
+    expect(summaryCalls).toHaveLength(1)
   })
 
-  it('aborts in-flight per-project requests when the component unmounts', async () => {
+  it('merges project names with their batched stats', async () => {
+    mockBatchedAPI(2)
+    const { result } = renderHook(() => useProjectSummaries(), { wrapper })
+    await waitFor(() => expect(result.current).toHaveLength(2))
+
+    expect(result.current[0]).toEqual({ id: 'p0', name: 'Project 0', suiteCount: 0, caseCount: 0, passRate: null })
+    expect(result.current[1]).toEqual({ id: 'p1', name: 'Project 1', suiteCount: 1, caseCount: 2, passRate: 50 })
+  })
+
+  it('aborts in-flight requests when the component unmounts', async () => {
     const abortedSignals: AbortSignal[] = []
-    mockGET.mockImplementation((path: string, options?: { signal?: AbortSignal }) => {
-      if (path === '/api/v1/projects') {
-        return Promise.resolve({ data: manyProjects(10), response: { ok: true } })
-      }
+    mockGET.mockImplementation((_path: string, options?: { signal?: AbortSignal }) => {
       if (options?.signal) abortedSignals.push(options.signal)
       return new Promise(() => {}) // never resolves
     })
@@ -68,5 +77,11 @@ describe('useProjectSummaries concurrency', () => {
     unmount()
 
     expect(abortedSignals.some((s) => s.aborted)).toBe(true)
+  })
+
+  it('recovers gracefully when the request fails', async () => {
+    mockGET.mockRejectedValue(new Error('network down'))
+    const { result } = renderHook(() => useProjectSummaries(), { wrapper })
+    await waitFor(() => expect(result.current).toEqual([]))
   })
 })

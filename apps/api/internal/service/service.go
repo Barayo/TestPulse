@@ -43,6 +43,10 @@ func (s *Service) ListProjects(ctx context.Context) ([]domain.Project, error) {
 	return s.store.Projects.List(ctx)
 }
 
+func (s *Service) ProjectSummaries(ctx context.Context) ([]domain.ProjectSummary, error) {
+	return s.store.Projects.Summaries(ctx)
+}
+
 // ProjectUpdate carries optional changes; nil fields are left untouched.
 type ProjectUpdate struct {
 	Name     *string

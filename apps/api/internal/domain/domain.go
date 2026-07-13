@@ -227,3 +227,14 @@ type RunSummary struct {
 	Total  int            `json:"total"`
 	Counts map[Status]int `json:"counts"`
 }
+
+// ProjectSummary is the per-project aggregate used by the project list and
+// switcher — suite/case counts and the most recent run's pass rate, computed
+// server-side in a small fixed number of queries regardless of how many
+// projects exist (add-project-stats-endpoint).
+type ProjectSummary struct {
+	ProjectID  string `json:"projectId"`
+	SuiteCount int    `json:"suiteCount"`
+	CaseCount  int    `json:"caseCount"`
+	PassRate   *int   `json:"passRate"`
+}

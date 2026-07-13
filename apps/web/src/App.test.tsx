@@ -75,6 +75,14 @@ function mockProjectData() {
           { id: 'p2', name: 'Desktop App', archived: false, createdAt: '' },
         ],
       })
+    if (path === '/api/v1/projects/summaries')
+      return Promise.resolve({
+        response: { ok: true },
+        data: [
+          { projectId: 'p1', suiteCount: 1, caseCount: 2, passRate: 50 },
+          { projectId: 'p2', suiteCount: 0, caseCount: 0, passRate: null },
+        ],
+      })
     if (path === '/api/v1/projects/{projectId}') {
       const projectId = options?.params?.path?.projectId
       return Promise.resolve({

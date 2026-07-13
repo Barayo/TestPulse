@@ -79,6 +79,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Suite/case counts and latest-run pass rate for every non-archived project, in one request */
+        get: operations["listProjectSummaries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}": {
         parameters: {
             query?: never;
@@ -517,6 +534,13 @@ export interface components {
                 [key: string]: number;
             };
         };
+        ProjectSummary: {
+            projectId: string;
+            suiteCount: number;
+            caseCount: number;
+            /** @description From the project's most recently created run only; null if it has no runs yet. */
+            passRate: number | null;
+        };
         HealthStatus: {
             /** @enum {string} */
             status: "ok" | "unavailable";
@@ -669,6 +693,26 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+        };
+    };
+    listProjectSummaries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description One summary per non-archived project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectSummary"][];
+                };
+            };
         };
     };
     getProject: {

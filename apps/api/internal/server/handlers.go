@@ -19,6 +19,7 @@ func mountAPI(r chi.Router, logger *slog.Logger, svc *service.Service) {
 
 	r.Route("/projects", func(r chi.Router) {
 		r.Get("/", h.listProjects)
+		r.Get("/summaries", h.projectSummaries)
 		r.Post("/", h.createProject)
 		r.Get("/{projectID}", h.getProject)
 		r.Patch("/{projectID}", h.updateProject)
@@ -102,6 +103,11 @@ func badBody(h *api, w http.ResponseWriter) {
 func (h *api) listProjects(w http.ResponseWriter, r *http.Request) {
 	projects, err := h.svc.ListProjects(r.Context())
 	h.respond(w, http.StatusOK, projects, err)
+}
+
+func (h *api) projectSummaries(w http.ResponseWriter, r *http.Request) {
+	summaries, err := h.svc.ProjectSummaries(r.Context())
+	h.respond(w, http.StatusOK, summaries, err)
 }
 
 func (h *api) createProject(w http.ResponseWriter, r *http.Request) {
