@@ -32,9 +32,25 @@ Everything routes through the root `Makefile` (`make help` lists targets):
 | `make generate` | Regenerate TypeScript client from `packages/shared/openapi.yaml` |
 | `make sync-web` | Copy the web bundle into the API for embedded builds |
 | `make compose-up` / `compose-down` | Full stack via docker compose |
+| `make seed-demo` | Populate two realistic example projects for UI/design review |
 
 A convenient local loop: `make compose-up` for Postgres + a running stack,
 then `make dev-web` for UI work with hot reload against it.
+
+## Demo/design-review data
+
+`make seed-demo` (`apps/api/cmd/seed-demo`) populates two example projects
+through the service layer — the same path the REST API uses, no direct SQL:
+
+- **Banca Móvil** — a mature, dense project (nested folders including one
+  with 30+ cases, 7 suites, several runs with mixed pass/fail/skip results).
+- **Desktop App** — a brand-new project (a few folders, no suites, no runs
+  yet), exercising empty states.
+
+It's dev tooling only: never wired into server startup, and it only ever
+touches whatever `TESTPULSE_DATABASE_URL` points at — same as `make dev-api`,
+never a real deployment. Used throughout the `redesign-ui` change to validate
+layout decisions against realistic content density instead of toy data.
 
 ## The contract workflow
 

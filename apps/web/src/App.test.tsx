@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import App from './App'
 import { api } from '@/lib/api'
 
@@ -61,12 +62,149 @@ describe('App health status', () => {
   })
 })
 
+function mockProjectData() {
+  mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
+    if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+    if (path === '/api/v1/meta')
+      return Promise.resolve({ response: { ok: true }, data: { name: 'TestPulse', version: '0.0.1' } })
+    if (path === '/api/v1/projects')
+      return Promise.resolve({
+        response: { ok: true },
+        data: [
+          { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' },
+          { id: 'p2', name: 'Desktop App', archived: false, createdAt: '' },
+        ],
+      })
+    if (path === '/api/v1/projects/{projectId}') {
+      const projectId = options?.params?.path?.projectId
+      return Promise.resolve({
+        response: { ok: true },
+        data: { id: projectId, name: projectId === 'p1' ? 'Banca Móvil' : 'Desktop App', archived: false, createdAt: '' },
+      })
+    }
+    if (path === '/api/v1/projects/{projectId}/suites') {
+      const projectId = options?.params?.path?.projectId
+      if (projectId === 'p1')
+        return Promise.resolve({
+          response: { ok: true },
+          data: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' }],
+        })
+      return Promise.resolve({ response: { ok: true }, data: [] })
+    }
+    if (path === '/api/v1/projects/{projectId}/cases') {
+      const projectId = options?.params?.path?.projectId
+      if (projectId === 'p1')
+        return Promise.resolve({
+          response: { ok: true },
+          data: [
+            { id: 'c1', projectId: 'p1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case A', steps: [] } },
+            { id: 'c2', projectId: 'p1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case B', steps: [] } },
+          ],
+        })
+      return Promise.resolve({ response: { ok: true }, data: [] })
+    }
+    if (path === '/api/v1/projects/{projectId}/runs') {
+      const projectId = options?.params?.path?.projectId
+      if (projectId === 'p1')
+        return Promise.resolve({
+          response: { ok: true },
+          data: [{ id: 'r1', projectId: 'p1', name: 'Smoke run', createdAt: '2026-01-01T00:00:00Z' }],
+        })
+      return Promise.resolve({ response: { ok: true }, data: [] })
+    }
+    if (path === '/api/v1/runs/{runId}/summary')
+      return Promise.resolve({
+        response: { ok: true },
+        data: { runId: 'r1', total: 2, counts: { pass: 1 } },
+      })
+    return Promise.resolve({ response: { ok: true }, data: [] })
+  })
+}
+
 describe('App shell', () => {
   it('renders the product title and the projects page at /', async () => {
-    mockReadyz(true)
+    mockProjectData()
     render(<App />)
     expect(screen.getByText('TestPulse')).toBeInTheDocument()
-    expect(await screen.findByText('New project')).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /new project/i })).toBeInTheDocument()
     await screen.findByText('System ready') // avoid act() warnings
+  })
+
+  it('shows a placeholder on the project switcher at / (no active project)', async () => {
+    mockProjectData()
+    render(<App />)
+    expect(await screen.findByRole('button', { name: /Select project/ })).toBeInTheDocument()
+  })
+
+  it('shows the active project name on the switcher on a project route', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/projects/p1')
+    render(<App />)
+    expect(await screen.findByRole('button', { name: /Banca Móvil/ })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('opens the switcher palette with every project and its stats', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/projects/p1')
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: /Banca Móvil/ }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('Banca Móvil')).toBeInTheDocument()
+    expect(within(dialog).getByText(/1 suites/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/2 cases/)).toBeInTheDocument()
+    expect(within(dialog).getByText(/50% pass/)).toBeInTheDocument()
+    expect(within(dialog).getByText('Desktop App')).toBeInTheDocument()
+    expect(within(dialog).getByText(/no runs/i)).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('navigates to the selected project when chosen from the switcher palette', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/projects/p1')
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(await screen.findByRole('button', { name: /Banca Móvil/ }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByText('Desktop App'))
+    expect(await screen.findByRole('button', { name: /Desktop App/ })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('resolves the active project from a run route to show its name on the switcher', async () => {
+    mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
+      if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: [{ id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }],
+          response: { ok: true },
+        })
+      if (path === '/api/v1/runs/{runId}' && options?.params?.path?.runId === 'r1')
+        return Promise.resolve({
+          data: { id: 'r1', projectId: 'p1', name: 'Sprint 1', createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/runs/{runId}/items') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/runs/{runId}/summary')
+        return Promise.resolve({ data: { runId: 'r1', total: 0, counts: {} }, response: { ok: true } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    window.history.pushState({}, '', '/runs/r1')
+    render(<App />)
+    expect(await screen.findByRole('button', { name: /Banca Móvil/ })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('falls back to no active project when resolving it from a run route fails', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/runs/{runId}') return Promise.reject(new Error('network down'))
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    window.history.pushState({}, '', '/runs/r1')
+    render(<App />)
+    expect(await screen.findByRole('button', { name: /Select project/ })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
   })
 })

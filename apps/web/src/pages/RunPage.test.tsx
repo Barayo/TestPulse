@@ -42,6 +42,11 @@ function mockRunAPI(items: unknown[], summary?: unknown) {
       })
     if (path === '/api/v1/items/{itemId}/results')
       return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === '/api/v1/projects/{projectId}')
+      return Promise.resolve({
+        data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+        response: { ok: true },
+      })
     return Promise.resolve({ data: undefined, response: { ok: true } })
   })
 }
@@ -61,11 +66,27 @@ beforeEach(() => {
 })
 
 describe('Run execution board', () => {
+  it('shows a breadcrumb with Projects, the project name, and the run name', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
+    expect(within(nav).getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/')
+    expect(await within(nav).findByText('QA Platform')).toBeInTheDocument()
+    expect(within(nav).getByText('Sprint 1')).toBeInTheDocument()
+  })
+
   it('shows run items with status chips and summary', async () => {
     mockRunAPI([pendingItem])
     renderRun()
     expect(await screen.findByText('Login works')).toBeInTheDocument()
     expect(screen.getAllByText(/pending/i).length).toBeGreaterThan(0)
+  })
+
+  it('renders the item status chip via the shared StatusBadge (with its dot indicator)', async () => {
+    mockRunAPI([pendingItem])
+    const { container } = renderRun()
+    await screen.findByText('Login works')
+    expect(container.querySelector('[data-dot]')).not.toBeNull()
   })
 
   it('opens the pinned case detail with steps and expected result', async () => {

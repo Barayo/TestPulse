@@ -1,9 +1,16 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Link, Route, Routes } from 'react-router-dom'
+import { BrowserRouter, Link, Route, Routes, useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
+import { ProjectSwitcher } from '@/components/ProjectSwitcher'
+import { useActiveProjectId } from '@/lib/useActiveProject'
+import { useProjectSummaries } from '@/lib/useProjectSummaries'
+import { DataRevisionProvider } from '@/lib/DataRevision'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectPage from '@/pages/ProjectPage'
+import SuitesPage from '@/pages/SuitesPage'
+import RunsPage from '@/pages/RunsPage'
+import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import RunPage from '@/pages/RunPage'
 
 type SystemStatus = 'checking' | 'ready' | 'unavailable'
@@ -45,17 +52,28 @@ function HealthBadge() {
 }
 
 function Layout({ children }: { children: React.ReactNode }) {
+  const navigate = useNavigate()
+  const activeProjectId = useActiveProjectId()
+  const projects = useProjectSummaries()
+
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <Link to="/" className="text-xl font-semibold tracking-tight">
-            TestPulse
-          </Link>
+        <div className="flex items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-6">
+            <Link to="/" className="tp-heading text-xl">
+              TestPulse
+            </Link>
+            <ProjectSwitcher
+              projects={projects}
+              activeProjectId={activeProjectId}
+              onSelectProject={(id) => navigate(`/projects/${id}`)}
+            />
+          </div>
           <HealthBadge />
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-6 py-8">{children}</main>
+      <main className="px-6 py-8">{children}</main>
     </div>
   )
 }
@@ -63,13 +81,19 @@ function Layout({ children }: { children: React.ReactNode }) {
 function App() {
   return (
     <BrowserRouter>
-      <Layout>
-        <Routes>
-          <Route path="/" element={<ProjectsPage />} />
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/runs/:runId" element={<RunPage />} />
-        </Routes>
-      </Layout>
+      <DataRevisionProvider>
+        <Layout>
+          <Routes>
+            <Route path="/" element={<ProjectsPage />} />
+            <Route path="/projects/:projectId" element={<ProjectPage />} />
+            <Route path="/projects/:projectId/suites" element={<SuitesPage />} />
+            <Route path="/projects/:projectId/runs" element={<RunsPage />} />
+            <Route path="/projects/:projectId/library" element={<FolderExplorerPage />} />
+            <Route path="/projects/:projectId/library/:folderId" element={<FolderExplorerPage />} />
+            <Route path="/runs/:runId" element={<RunPage />} />
+          </Routes>
+        </Layout>
+      </DataRevisionProvider>
     </BrowserRouter>
   )
 }

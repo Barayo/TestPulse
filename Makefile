@@ -1,4 +1,4 @@
-.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down
+.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down seed-demo
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -58,6 +58,9 @@ lint-web: ## Lint web code
 
 dev-api: ## Run the API locally (expects Postgres; see deploy/compose)
 	cd apps/api && go run ./cmd/testpulse-api
+
+seed-demo: ## Populate two realistic example projects for design/UI review (dev only, never run against a real deployment)
+	cd apps/api && go run ./cmd/seed-demo
 
 dev-web: ## Run the web dev server
 	cd apps/web && npm run dev

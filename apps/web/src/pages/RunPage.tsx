@@ -4,8 +4,9 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
 import { Textarea } from '@/components/ui/textarea'
+import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { StatusBadge } from '@/components/StatusBadge'
 import {
   Card,
   CardContent,
@@ -19,19 +20,12 @@ type RunItem = components['schemas']['RunItem']
 type RunSummary = components['schemas']['RunSummary']
 type Verdict = components['schemas']['Verdict']
 type Result = components['schemas']['Result']
-
-const statusVariant: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  pending: 'secondary',
-  pass: 'default',
-  failed: 'destructive',
-  skipped: 'outline',
-  blocked: 'destructive',
-  retest: 'secondary',
-}
+type Project = components['schemas']['Project']
 
 export default function RunPage() {
   const { runId } = useParams<{ runId: string }>()
   const [run, setRun] = useState<Run>()
+  const [project, setProject] = useState<Project>()
   const [items, setItems] = useState<RunItem[]>([])
   const [summary, setSummary] = useState<RunSummary>()
   const [selected, setSelected] = useState<RunItem>()
@@ -55,6 +49,14 @@ export default function RunPage() {
       setItems([])
     }
   }, [runId])
+
+  useEffect(() => {
+    if (!run) return
+    api
+      .GET('/api/v1/projects/{projectId}', { params: { path: { projectId: run.projectId } } })
+      .then(({ data }) => setProject(data))
+      .catch(() => setProject(undefined))
+  }, [run])
 
   useEffect(() => {
     void load()
@@ -110,10 +112,18 @@ export default function RunPage() {
   }
 
   return (
-    <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_1.4fr]">
+    <div className="space-y-4">
+      <Breadcrumbs
+        segments={[
+          { label: 'Projects', href: '/' },
+          { label: project?.name ?? '', href: project ? `/projects/${project.id}` : undefined },
+          { label: run?.name ?? '' },
+        ]}
+      />
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_1.4fr]">
       <Card>
         <CardHeader>
-          <CardTitle>{run?.name ?? 'Run'}</CardTitle>
+          <CardTitle className="tp-heading">{run?.name ?? 'Run'}</CardTitle>
           {summary && (
             <p className="text-sm text-muted-foreground">
               {summary.total} items — {Object.entries(summary.counts)
@@ -139,9 +149,7 @@ export default function RunPage() {
                       </span>
                     )}
                   </span>
-                  <Badge variant={statusVariant[item.currentStatus] ?? 'secondary'}>
-                    {item.currentStatus}
-                  </Badge>
+                  <StatusBadge status={item.currentStatus} />
                 </button>
               </li>
             ))}
@@ -152,7 +160,7 @@ export default function RunPage() {
       {selected && (
         <Card data-testid="item-detail">
           <CardHeader>
-            <CardTitle>{selected.content.title}</CardTitle>
+            <CardTitle className="tp-heading">{selected.content.title}</CardTitle>
             <p className="text-sm text-muted-foreground">
               Pinned at v{selected.caseVersion}
               {selected.newerVersion && ' — a newer version of this case exists'}
@@ -230,6 +238,7 @@ export default function RunPage() {
           </CardContent>
         </Card>
       )}
+      </div>
     </div>
   )
 }

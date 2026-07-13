@@ -6,27 +6,35 @@ A walkthrough of TestPulse's core workflow: projects, test cases, suites, runs, 
 > who can reach the API can do all of this. See
 > [Deployment: security status](deployment.md#security-status).
 
+## Finding your way around
+
+TestPulse assumes you work in one project at a time. A compact header element always shows the active project; click it (or press **⌘K**/**Ctrl+K** from anywhere) to open a searchable switcher listing every project with its suite/case counts and latest pass rate.
+
+A project's landing page (`/projects/{id}`) is three independent panels — **Library**, **Suites**, **Recent runs** — each showing its top few items with a "see all" link to the full view, so opening a project shows top-level structure at a glance rather than everything at once. Each panel's entire header (not just "see all") is clickable to the same destination, and every row shown is itself a direct link to that item — never just a name. Each panel has its own empty state (with a working link to its full page) when a project has nothing in it yet. A breadcrumb trail at the top of the main content (`Projects › {project} › …`) reinforces where you are, with every ancestor segment clickable to go back up — including intermediate section names when browsing nested sections.
+
 ## Projects
 
-Everything lives inside a project. Create one from the home page (`/`) with just a name. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{id}`); the UI surfaces archived status but archiving itself is API-only in this release.
+Everything lives inside a project. Create one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{id}`); the UI surfaces archived status but archiving itself is API-only in this release. **+ New project** lives in its own header row, separate from the project list, so a future role gate (`add-project-rbac`) can hide it for non-admins without a layout change.
+
+## The library
+
+Click "see all"/"go to Library" on the landing's Library panel (or any row shown there) to open the explorer: a section tree on the left for navigation, and the selected section's direct contents — subsections *and* any cases that live directly in it — on the right. This two-pane layout is deliberate: a single indented tree breaks down once a section has real content (tens of cases), while splitting "where am I" from "what's here" scales without a redesign.
+
+Every case lives in exactly one **section** — a project-level, nestable tree, starting from an automatically-created root labeled **Library** in the UI (the root always exists and can't be deleted or renamed; that "Library" label is purely how it's displayed, not a separate concept to manage). Create a subsection two ways, both with no "parent" field to fill in (the parent is always wherever you triggered creation): click **+ New section** in the currently open section, or right-click a section in the tree and choose **New section** to add a child without navigating into it. Sections are deliberately independent of **suites**: moving a case to a different section never changes which suites it belongs to, and vice versa — sections answer "where does this case live," suites answer "what should run together." (Moving an existing case to a different section is API-only for now — `PUT /api/v1/cases/{id}/folder`.)
 
 ## Test cases and versioning
 
-Open a project (`/projects/{id}`) to author test cases: title, and optionally description, steps, expected result, priority, and tags (steps/description/etc. are set via the API for now — the UI form covers title, matching the "thin authoring, polished execution" design; see [architecture.md](architecture.md)).
+Click **+ New test case** in the library explorer to open a side drawer: a title and a list of steps, each with a required **Action** and an optional **Expected result**. Click an existing case to view it read-only — title, version, the suites it belongs to, its steps, and its full version history — with an **Edit** button that switches the steps back to editable.
 
-**Every edit creates a new version.** Click **Edit** on a case, change the title, **Save** — the case's version badge increments (`v1` → `v2`), and the old content is never lost; it's retrievable via `GET /api/v1/cases/{id}/versions`. This matters because of what happens next.
-
-## Folders vs. suites — two independent groupings
-
-Every case lives in exactly one **folder** — a project-level, nestable tree for organizing cases (like a filesystem), starting from an automatically-created root. Pick a folder when creating a case (defaults to root if you don't), or create a new one with the **New folder** form. Folders are deliberately independent of **suites**: moving a case to a different folder never changes which suites it belongs to, and vice versa — folders answer "where does this case live," suites answer "what should run together." (Browsing the full folder tree and moving cases between folders is coming with the navigation redesign; today's UI covers creating folders and assigning one at case-creation time.)
+**Every edit creates a new version.** Click **Edit**, change the title or steps, **Save changes** — the case's current version increments (`v1` → `v2`), the old content is never lost, and both versions are listed in the drawer's version history (backed by `GET /api/v1/cases/{id}/versions`). This matters because of what happens next.
 
 ## Suites
 
-Group related cases with a suite (**New suite** form on the project page). Add cases to a suite via the dropdown + **Add**; remove with the **Remove** button next to a case in the suite listing — removing from a suite never deletes the case itself, since suite membership is just an n:m relationship (`suite_cases`).
+Click "see all"/"go to Suites" on the landing's Suites panel to reach the full suites page: a clean list (name + case count) plus a **New suite** form. Click a suite row to open its own drawer with full case membership — add cases via the dropdown + **Add**; remove with the **Remove** button next to a case in the drawer's list. Removing from a suite never deletes the case itself, since suite membership is just an n:m relationship (`suite_cases`). Clicking a suite row on the landing's Suites panel opens straight to that suite's drawer instead of the plain list.
 
 ## Runs: version pinning in practice
 
-Create a run (**New run** form) — it includes *all current test cases* in the project as of that moment. This is the versioning model made concrete:
+Click "see all"/"go to Runs" on the landing's Recent runs panel to reach the full runs page and create one (**New run** form) — it includes *all current test cases* in the project as of that moment. This is the versioning model made concrete:
 
 ```
   t0: create case "Login works"        → v1

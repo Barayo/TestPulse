@@ -49,6 +49,22 @@ recorded in the OpenSpec change `establish-architecture` (see
   server compiled into the same binary, sharing the service layer with REST.
   The service layer landed with `add-core-domain`; identity and MCP itself
   are the next two v0.1 changes (see [ROADMAP](../ROADMAP.md)).
+- **Minimalist design system.** A small, deliberate teal palette
+  (`background`/`surface`/`ink`/`primary`/`warn`/`fail`) implemented as CSS
+  custom properties in `apps/web/src/index.css`; `primary` is pulled directly
+  from the brand mark's gradient (`assets/brand/testpulse-icon.svg`) and
+  doubles as the `pass` semantic, `fail` reserved strictly for
+  `fail`/`blocked`. Personality comes from weight/tracking on the
+  already-loaded Geist Sans/Mono, not a new display typeface. Navigation is
+  built around one active project at a time: a compact header switcher
+  (`ProjectSwitcher`, click or ⌘K) rather than an always-visible sidebar, a
+  three-panel project landing (Library/Suites/Recent runs), a two-pane
+  library explorer (`FolderExplorerPage` + `FolderTree` — user-facing copy
+  says "Library"/"Section," the underlying `Folder` domain type/API/table
+  names are unchanged) for browsing/creating sections and cases, a
+  `SuiteDrawer` for per-suite case membership, and a breadcrumb trail
+  (`Breadcrumbs`) throughout — see the `redesign-ui` change's `design.md`
+  for the full rationale.
 
 ## Stack
 

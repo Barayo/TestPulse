@@ -2,12 +2,14 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
     --font-heading: var(--font-sans);
     --font-sans: 'Geist Variable', sans-serif;
+    --font-mono: 'Geist Mono Variable', monospace;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -48,73 +50,87 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+ * Teal palette, grounded in the real brand mark's gradient
+ * (openspec/changes/redesign-ui, design D1) — replaces the rejected
+ * Corona-inspired palette. `primary` is pulled directly from
+ * assets/brand/testpulse-icon.svg's gradient (#14B8A6 -> #0D6E6A), so the
+ * logo and the UI finally agree with each other.
+ *   background #F7FAFA  page canvas — cool off-white, neutral
+ *   surface    #FFFFFF  card/panel/drawer surfaces
+ *   ink        #0B2E2C  primary text — teal-tinted near-black
+ *   primary    #14B8A6  brand accent from the logo gradient; doubles as
+ *                       the "pass" semantic, deliberately
+ *   warn       #F5C84A  "skipped"/pending-adjacent semantic
+ *   fail       #E8553F  "fail"/"blocked" semantic, never decorative
+ */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --background: #F7FAFA;
+    --foreground: #0B2E2C;
+    --card: #FFFFFF;
+    --card-foreground: #0B2E2C;
+    --popover: #FFFFFF;
+    --popover-foreground: #0B2E2C;
+    --primary: #14B8A6;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A;
+    --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2;
+    --muted-foreground: #5B6B6A;
+    --accent: #EAFAF7;
+    --accent-foreground: #0B2E2C;
+    --destructive: #E8553F;
+    --border: #E1E8E7;
+    --input: #D8E4E3;
+    --ring: #14B8A6;
+    --chart-1: #14B8A6;
+    --chart-2: #F5C84A;
+    --chart-3: #E8553F;
+    --chart-4: #0B2E2C;
+    --chart-5: #5B6B6A;
+    --radius: 0.5rem;
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #0B2E2C;
+    --sidebar-primary: #14B8A6;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #EAFAF7;
+    --sidebar-accent-foreground: #0B2E2C;
+    --sidebar-border: #E1E8E7;
+    --sidebar-ring: #14B8A6;
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.205 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.205 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.922 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.556 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.488 0.243 264.376);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.556 0 0);
+    --background: #0B2A28;
+    --foreground: #E6F5F3;
+    --card: #12403C;
+    --card-foreground: #E6F5F3;
+    --popover: #12403C;
+    --popover-foreground: #E6F5F3;
+    --primary: #2DD4BF;
+    --primary-foreground: #0B2A28;
+    --secondary: #FBBF24;
+    --secondary-foreground: #0B2A28;
+    --muted: #163A37;
+    --muted-foreground: #8FBDB8;
+    --accent: #163F3B;
+    --accent-foreground: #E6F5F3;
+    --destructive: #FF6B57;
+    --border: #1D524C;
+    --input: #1D524C;
+    --ring: #2DD4BF;
+    --chart-1: #2DD4BF;
+    --chart-2: #FBBF24;
+    --chart-3: #FF6B57;
+    --chart-4: #E6F5F3;
+    --chart-5: #8FBDB8;
+    --sidebar: #12403C;
+    --sidebar-foreground: #E6F5F3;
+    --sidebar-primary: #2DD4BF;
+    --sidebar-primary-foreground: #0B2A28;
+    --sidebar-accent: #163F3B;
+    --sidebar-accent-foreground: #E6F5F3;
+    --sidebar-border: #1D524C;
+    --sidebar-ring: #2DD4BF;
 }
 
 @layer base {
@@ -127,4 +143,18 @@
   html {
     @apply font-sans;
     }
+}
+
+/*
+ * Typography treatment (redesign-ui design D2): no new display typeface —
+ * personality comes from weight/tracking on the already-loaded Geist Sans,
+ * and Geist Mono for labels/data/breadcrumbs (uppercase, wide-tracked).
+ */
+@layer utilities {
+  .tp-heading {
+    @apply font-sans font-black tracking-tight;
+  }
+  .tp-label {
+    @apply font-mono text-xs uppercase tracking-widest text-muted-foreground;
+  }
 }
