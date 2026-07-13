@@ -36,7 +36,17 @@ include a docs-update task.
   design decisions (versioning, run model, MCP tool surface, UI thickness) are
   recorded there — don't re-litigate them.
 - Commits: DCO sign-off required (`git commit -s`); commits are SSH-signed via
-  1Password (`gpg.format ssh`).
+  1Password (`gpg.format ssh`). Messages follow the
+  [Angular/Karma commit convention](https://karma-runner.github.io/6.4/dev/git-commit-msg.html)
+  (the same convention [Conventional Commits](https://www.conventionalcommits.org/)
+  later formalized under that name): `type(scope): subject` header — lowercase
+  subject, imperative mood, no trailing period, ~50 char target — optionally
+  followed by a blank line, a wrapped body, and a footer for
+  `BREAKING CHANGE: …` or issue references (`Closes #123`). Types: `feat`,
+  `fix`, `docs`, `style`, `refactor`, `test`, `chore`. Chosen so automated
+  semantic versioning (e.g. semantic-release/release-please) can be wired in
+  later without a history rewrite. Already the de facto style in this repo's
+  history; this makes it explicit and mandatory going forward.
 
 ## Commands
 
