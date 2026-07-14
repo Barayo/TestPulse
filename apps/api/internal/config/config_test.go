@@ -63,3 +63,29 @@ func TestLoadInvalidLogLevel(t *testing.T) {
 		t.Fatal("expected error for invalid log level")
 	}
 }
+
+func TestLoadAdminBootstrapCredentialsOptional(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AdminEmail != "" || cfg.AdminPassword != "" {
+		t.Errorf("AdminEmail/AdminPassword should default empty, got %q/%q", cfg.AdminEmail, cfg.AdminPassword)
+	}
+}
+
+func TestLoadAdminBootstrapCredentialsSet(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":   "postgres://localhost/testpulse",
+		"TESTPULSE_ADMIN_EMAIL":    "admin@example.com",
+		"TESTPULSE_ADMIN_PASSWORD": "correcthorse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AdminEmail != "admin@example.com" || cfg.AdminPassword != "correcthorse" {
+		t.Errorf("AdminEmail/AdminPassword = %q/%q", cfg.AdminEmail, cfg.AdminPassword)
+	}
+}

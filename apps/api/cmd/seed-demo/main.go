@@ -139,7 +139,7 @@ func runWithVerdicts(ctx context.Context, svc *service.Service, projectID, name 
 // --- Banca Móvil: dense, mature project ---------------------------------
 
 func seedBancaMovil(ctx context.Context, svc *service.Service) error {
-	p, err := svc.CreateProject(ctx, "Banca Móvil")
+	p, err := svc.CreateProject(ctx, service.ProjectInput{Name: "Banca Móvil"})
 	if err != nil {
 		return err
 	}
@@ -310,7 +310,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 // --- Desktop App: brand-new project -------------------------------------
 
 func seedDesktopApp(ctx context.Context, svc *service.Service) error {
-	p, err := svc.CreateProject(ctx, "Desktop App")
+	p, err := svc.CreateProject(ctx, service.ProjectInput{Name: "Desktop App"})
 	if err != nil {
 		return err
 	}

@@ -1,0 +1,135 @@
+import { describe, expect, it } from 'vitest'
+import { render, screen } from '@testing-library/react'
+import {
+  HealthBar,
+  healthLabel,
+  StatusPill,
+  ProgressBar,
+  statusDotClass,
+  statusBorderClass,
+  statusTextClass,
+} from './HealthBar'
+
+describe('HealthBar', () => {
+  it('renders the rate as a percentage label', () => {
+    render(<HealthBar rate={84} />)
+    expect(screen.getByText('84%')).toBeInTheDocument()
+  })
+
+  it('fills teal at or above 80%', () => {
+    render(<HealthBar rate={80} />)
+    expect(document.querySelector('[data-fill]')).toHaveClass('bg-primary')
+  })
+
+  it('fills amber between 50% and 79%', () => {
+    render(<HealthBar rate={50} />)
+    expect(document.querySelector('[data-fill]')).toHaveClass('bg-secondary')
+  })
+
+  it('fills coral below 50%', () => {
+    render(<HealthBar rate={49} />)
+    expect(document.querySelector('[data-fill]')).toHaveClass('bg-destructive')
+  })
+
+  it('sets the fill width from the rate', () => {
+    render(<HealthBar rate={37} />)
+    expect(document.querySelector('[data-fill]')).toHaveStyle({ width: '37%' })
+  })
+
+  it('still shows a visible sliver of color at 0% rather than an invisible bar', () => {
+    render(<HealthBar rate={0} />)
+    const fill = document.querySelector('[data-fill]')
+    expect(fill).toHaveClass('bg-destructive')
+    expect(fill).not.toHaveStyle({ width: '0%' })
+  })
+})
+
+describe('healthLabel', () => {
+  it('labels rates at or above 80% as Healthy', () => {
+    expect(healthLabel(84)).toBe('Healthy')
+    expect(healthLabel(80)).toBe('Healthy')
+  })
+
+  it('labels rates between 50% and 79% as In progress', () => {
+    expect(healthLabel(79)).toBe('In progress')
+    expect(healthLabel(50)).toBe('In progress')
+  })
+
+  it('labels rates below 50% as At risk', () => {
+    expect(healthLabel(49)).toBe('At risk')
+    expect(healthLabel(0)).toBe('At risk')
+  })
+})
+
+describe('StatusPill', () => {
+  it('renders the healthy band with its tint classes', () => {
+    render(<StatusPill rate={84} />)
+    const pill = screen.getByText('Healthy')
+    expect(pill).toHaveClass('bg-status-healthy-bg', 'text-status-healthy-fg')
+  })
+
+  it('renders the in-progress band with its tint classes', () => {
+    render(<StatusPill rate={60} />)
+    const pill = screen.getByText('In progress')
+    expect(pill).toHaveClass('bg-status-progress-bg', 'text-status-progress-fg')
+  })
+
+  it('renders the at-risk band with its tint classes', () => {
+    render(<StatusPill rate={30} />)
+    const pill = screen.getByText('At risk')
+    expect(pill).toHaveClass('bg-status-risk-bg', 'text-status-risk-fg')
+  })
+
+  it('renders "No runs yet" in the neutral tint when rate is null', () => {
+    render(<StatusPill rate={null} />)
+    const pill = screen.getByText('No runs yet')
+    expect(pill).toHaveClass('bg-status-neutral-bg', 'text-status-neutral-fg')
+  })
+})
+
+describe('ProgressBar', () => {
+  it('fills the bar by rate, without a percentage label', () => {
+    render(<ProgressBar rate={37} />)
+    const fill = document.querySelector('[data-fill]')
+    expect(fill).toHaveStyle({ width: '37%' })
+    expect(screen.queryByText('37%')).not.toBeInTheDocument()
+  })
+
+  it('colors the fill by the same bands as HealthBar', () => {
+    render(<ProgressBar rate={84} />)
+    expect(document.querySelector('[data-fill]')).toHaveClass('bg-primary')
+  })
+
+  it('renders an empty dashed track when rate is null, with no fill', () => {
+    render(<ProgressBar rate={null} />)
+    expect(document.querySelector('[data-fill]')).not.toBeInTheDocument()
+    expect(document.querySelector('[data-track]')).toHaveClass('border-dashed')
+  })
+})
+
+describe('statusDotClass', () => {
+  it('matches the same bands as ProgressBar/StatusPill', () => {
+    expect(statusDotClass(84)).toBe('bg-primary')
+    expect(statusDotClass(60)).toBe('bg-secondary')
+    expect(statusDotClass(30)).toBe('bg-destructive')
+    expect(statusDotClass(null)).toBe('bg-muted-foreground/40')
+  })
+})
+
+describe('statusBorderClass', () => {
+  it('matches the same bands as StatusPill', () => {
+    expect(statusBorderClass(84)).toBe('border-l-primary')
+    expect(statusBorderClass(60)).toBe('border-l-secondary')
+    expect(statusBorderClass(30)).toBe('border-l-destructive')
+    expect(statusBorderClass(null)).toBe('border-l-border')
+  })
+})
+
+describe('statusTextClass', () => {
+  it('matches the same tint tokens as StatusPill, as a text color', () => {
+    expect(statusTextClass(84)).toBe('text-status-healthy-fg')
+    expect(statusTextClass(60)).toBe('text-status-progress-fg')
+    expect(statusTextClass(30)).toBe('text-status-risk-fg')
+    expect(statusTextClass(null)).toBe('text-status-neutral-fg')
+  })
+})

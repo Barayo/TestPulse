@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/db"
+	"github.com/Barayo/TestPulse/apps/api/internal/service"
 )
 
 // Pool returns a pooled connection to a per-suffix database with a freshly
@@ -63,4 +64,23 @@ func Pool(t *testing.T, suffix string) *pgxpool.Pool {
 		t.Fatalf("migrating: %v", err)
 	}
 	return pool
+}
+
+// AuthCookie bootstraps an admin user (if the instance has none yet) and
+// logs in via the given service, returning a ready "session=<id>" Cookie
+// header value — so HTTP-level tests can authenticate as an admin without
+// going through the login endpoint themselves for every test (task 5.1,
+// add-identity-basics).
+func AuthCookie(t *testing.T, svc *service.Service) string {
+	t.Helper()
+	ctx := context.Background()
+	const email, password = "test-admin@example.com", "correcthorse1"
+	if err := svc.BootstrapAdmin(ctx, email, password); err != nil {
+		t.Fatalf("bootstrap admin: %v", err)
+	}
+	sess, _, err := svc.Login(ctx, email, password)
+	if err != nil {
+		t.Fatalf("login as bootstrap admin: %v", err)
+	}
+	return "session=" + sess.ID
 }

@@ -44,11 +44,16 @@ recorded in the OpenSpec change `establish-architecture` (see
   `TESTPULSE_*` environment variables — the same mechanism under compose,
   Helm, or a bare binary. Missing required values fail fast at startup, naming
   the variable.
-- **AI-native by design.** Agents will be first-class actors: scoped API
-  tokens (never SSO), their own identity in RBAC and audit logs, and an MCP
-  server compiled into the same binary, sharing the service layer with REST.
-  The service layer landed with `add-core-domain`; identity and MCP itself
-  are the next two v0.1 changes (see [ROADMAP](../ROADMAP.md)).
+- **AI-native by design.** Agents are first-class actors (`add-identity-basics`):
+  every request resolves to an `Actor` — a human via session cookie, or an
+  agent via scoped API token — carried through `context.Context` (mirroring
+  the JSON-request-scoped-value pattern used elsewhere) rather than threaded
+  through every service method's parameters. A token acts as its own actor,
+  never impersonating the human who created it, at that human's role. Two
+  instance-wide roles (`admin`/`member`) for now; per-project RBAC and OIDC
+  SSO are v0.2. An append-only audit log records every write's actor. MCP
+  itself (`add-mcp-server`, next v0.1 change) will authenticate agents via
+  the same tokens (see [ROADMAP](../ROADMAP.md)).
 - **Minimalist design system.** A small, deliberate teal palette
   (`background`/`surface`/`ink`/`primary`/`warn`/`fail`) implemented as CSS
   custom properties in `apps/web/src/index.css`; `primary` is pulled directly
@@ -97,9 +102,11 @@ Test cases are **immutably versioned**; a run pins each case to the version
 current at run creation (or when added to an open run) — never at execution
 time. Run items carry a current status
 (`pending / pass / failed / skipped / blocked / retest`) plus an append-only
-result log `{actor, timestamp, verdict, comment}` where the actor is
-currently a free-text field (real human/agent identity arrives with
-`add-identity-basics`). Full schema and rationale: [database.md](database.md).
+result log `{actor, timestamp, verdict, comment}` where the actor is still a
+free-text field independent of `add-identity-basics`'s real `Actor` concept
+(linking the two — pre-filling `actor` from the authenticated caller — is
+unstarted follow-up work, not part of that change). Full schema and
+rationale: [database.md](database.md).
 
 Implementation layout inside `apps/api/internal/`:
 

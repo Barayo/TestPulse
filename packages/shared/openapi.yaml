@@ -117,7 +117,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       operationId: updateProject
-      summary: Rename or archive a project
+      summary: Rename, describe, assign an owner to, or archive a project
       tags: [projects]
       requestBody:
         required: true
@@ -132,6 +132,24 @@ paths:
               schema: { $ref: "#/components/schemas/Project" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectId}/favorite:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: starProject
+      summary: Star a project for the calling user
+      tags: [projects]
+      responses:
+        "204": { description: Project is now favorited by the caller }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: unstarProject
+      summary: Unstar a project for the calling user
+      tags: [projects]
+      responses:
+        "204": { description: Project is no longer favorited by the caller }
+        "400": { $ref: "#/components/responses/ValidationError" }
   /api/v1/projects/{projectId}/cases:
     parameters:
       - { name: projectId, in: path, required: true, schema: { type: string } }
@@ -470,6 +488,158 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RunSummary" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      summary: Authenticate with email and password, starting a session
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginInput" }
+      responses:
+        "200":
+          description: Authenticated; a session cookie is set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: End the current session
+      tags: [auth]
+      responses:
+        "204": { description: Logged out }
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      summary: List all users
+      tags: [users]
+      responses:
+        "200":
+          description: All users
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createUser
+      summary: Create a user (admin only)
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserInput" }
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/users/me:
+    get:
+      operationId: getCurrentUser
+      summary: The currently authenticated actor, as a user record
+      tags: [users]
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/users/{userId}:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updateUser
+      summary: Change a user's role or deactivate them (admin only)
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/tokens:
+    get:
+      operationId: listTokens
+      summary: List API tokens (own tokens, or another user's via userId — admin only)
+      tags: [tokens]
+      parameters:
+        - name: userId
+          in: query
+          schema: { type: string }
+          description: Omit to list the caller's own tokens.
+      responses:
+        "200":
+          description: Tokens (never the full secret value, only name and prefix)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ApiToken" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createToken
+      summary: Create an API token for an agent — the full value is returned once and never again
+      tags: [tokens]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenInput" }
+      responses:
+        "201":
+          description: Created token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiTokenCreated" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/tokens/{tokenId}:
+    parameters:
+      - { name: tokenId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: revokeToken
+      summary: Revoke a token (its own creator, or an admin)
+      tags: [tokens]
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/audit:
+    get:
+      operationId: listAuditEntries
+      summary: Audit history for a specific entity, oldest first
+      tags: [audit]
+      parameters:
+        - { name: entityType, in: query, required: true, schema: { type: string } }
+        - { name: entityId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Audit entries for the entity
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 components:
   responses:
     ValidationError:
@@ -479,6 +649,16 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
     NotFound:
       description: Entity does not exist
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, invalid, or expired authentication
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated, but not permitted to perform this action
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
@@ -546,21 +726,27 @@ components:
           description: Required — only the root folder (auto-created with the project) may have no parent.
     Project:
       type: object
-      required: [id, name, archived, createdAt]
+      required: [id, name, archived, description, ownerId, createdAt]
       properties:
         id: { type: string }
         name: { type: string }
         archived: { type: boolean }
+        description: { type: string }
+        ownerId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
     ProjectInput:
       type: object
       required: [name]
       properties:
         name: { type: string }
+        description: { type: string }
+        ownerId: { type: string }
     ProjectUpdate:
       type: object
       properties:
         name: { type: string }
+        description: { type: string }
+        ownerId: { type: string }
         archived: { type: boolean }
     TestCase:
       type: object
@@ -671,7 +857,7 @@ components:
           additionalProperties: { type: integer }
     ProjectSummary:
       type: object
-      required: [projectId, suiteCount, caseCount, passRate]
+      required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite]
       properties:
         projectId: { type: string }
         suiteCount: { type: integer }
@@ -680,6 +866,14 @@ components:
           type: integer
           nullable: true
           description: From the project's most recently created run only; null if it has no runs yet.
+        lastRunAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the project's most recently created run was started; null if it has no runs yet.
+        isFavorite:
+          type: boolean
+          description: Whether the calling user has starred this project.
     HealthStatus:
       type: object
       required: [status]
@@ -700,3 +894,82 @@ components:
         version:
           type: string
           example: 0.0.1
+    Role:
+      type: string
+      enum: [admin, member]
+    User:
+      type: object
+      required: [id, email, role, createdAt]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+        deactivatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+    UserInput:
+      type: object
+      required: [email, password, role]
+      properties:
+        email: { type: string }
+        password: { type: string }
+        role: { $ref: "#/components/schemas/Role" }
+    UserUpdate:
+      type: object
+      properties:
+        role: { $ref: "#/components/schemas/Role" }
+        deactivate:
+          type: boolean
+          description: Set true to deactivate the user. There is no reactivation in v0.1.
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    ApiToken:
+      type: object
+      required: [id, createdBy, name, prefix, createdAt]
+      properties:
+        id: { type: string }
+        createdBy: { type: string }
+        name: { type: string }
+        prefix:
+          type: string
+          description: Short, non-secret prefix of the token, for identification only.
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+    ApiTokenCreated:
+      allOf:
+        - $ref: "#/components/schemas/ApiToken"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: The full secret token value. Shown only in this response, never again.
+    TokenInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    ActorKind:
+      type: string
+      enum: [user, agent]
+    AuditEntry:
+      type: object
+      required: [id, actorKind, actorId, actorName, action, entityType, entityId, occurredAt]
+      properties:
+        id: { type: string }
+        actorKind: { $ref: "#/components/schemas/ActorKind" }
+        actorId: { type: string }
+        actorName: { type: string }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        occurredAt: { type: string, format: date-time }

@@ -122,3 +122,55 @@ func TestProjectNameRequired(t *testing.T) {
 		t.Errorf("error %q does not name the field", err)
 	}
 }
+
+func TestRoleValidation(t *testing.T) {
+	for _, valid := range []string{"admin", "member"} {
+		if _, err := ParseRole(valid); err != nil {
+			t.Errorf("ParseRole(%q) = %v, want nil", valid, err)
+		}
+	}
+	for _, invalid := range []string{"", "superadmin", "ADMIN"} {
+		if _, err := ParseRole(invalid); err == nil {
+			t.Errorf("ParseRole(%q) = nil error, want error", invalid)
+		}
+	}
+}
+
+func TestPasswordValidation(t *testing.T) {
+	if err := ValidatePassword("longenough"); err != nil {
+		t.Errorf("valid password rejected: %v", err)
+	}
+	err := ValidatePassword("short")
+	if err == nil {
+		t.Fatal("password under 8 characters accepted")
+	}
+	if !strings.Contains(err.Error(), "8 characters") {
+		t.Errorf("error %q does not explain the minimum length", err)
+	}
+}
+
+func TestEmailRequired(t *testing.T) {
+	if err := ValidateEmail("a@b.com"); err != nil {
+		t.Errorf("valid email rejected: %v", err)
+	}
+	err := ValidateEmail("")
+	if err == nil {
+		t.Fatal("empty email accepted")
+	}
+	if !strings.Contains(err.Error(), "email") {
+		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+func TestTokenNameRequired(t *testing.T) {
+	if err := ValidateTokenName("ci-agent"); err != nil {
+		t.Errorf("valid token name rejected: %v", err)
+	}
+	err := ValidateTokenName("")
+	if err == nil {
+		t.Fatal("empty token name accepted")
+	}
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("error %q does not name the field", err)
+	}
+}

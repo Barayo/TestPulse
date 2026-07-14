@@ -29,7 +29,7 @@ func wantValidation(t *testing.T, err error, field string) {
 }
 
 func TestCreateProjectRequiresName(t *testing.T) {
-	_, err := nilService().CreateProject(context.Background(), "")
+	_, err := nilService().CreateProject(context.Background(), ProjectInput{})
 	wantValidation(t, err, "name")
 }
 
@@ -83,4 +83,22 @@ func TestUpdateItemValidatesStatus(t *testing.T) {
 
 	err = s.UpdateItem(context.Background(), "i1", ItemUpdate{})
 	wantValidation(t, err, "")
+}
+
+func TestCreateUserValidatesEmailPasswordRole(t *testing.T) {
+	s := nilService()
+	_, err := s.CreateUser(context.Background(), "", "longenough", domain.RoleMember)
+	wantValidation(t, err, "email")
+
+	_, err = s.CreateUser(context.Background(), "a@b.com", "short", domain.RoleMember)
+	wantValidation(t, err, "8 characters")
+
+	_, err = s.CreateUser(context.Background(), "a@b.com", "longenough", domain.Role("superadmin"))
+	wantValidation(t, err, "role")
+}
+
+func TestCreateTokenValidatesName(t *testing.T) {
+	s := nilService()
+	_, _, err := s.CreateToken(context.Background(), domain.Actor{ID: "u1", Role: domain.RoleMember}, "")
+	wantValidation(t, err, "name")
 }

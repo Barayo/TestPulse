@@ -10,6 +10,7 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_DATABASE_URL` | **yes** | — | PostgreSQL connection string, e.g. `postgres://user:pass@host:5432/testpulse?sslmode=require` |
 | `TESTPULSE_ADDR` | no | `:8080` | HTTP listen address |
 | `TESTPULSE_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, or `error` (JSON logs on stdout) |
+| `TESTPULSE_ADMIN_EMAIL`, `TESTPULSE_ADMIN_PASSWORD` | no | — | Seed one admin on first startup, only if the `users` table is empty; ignored on any later startup once users exist |
 
 The process exits immediately with an error naming the variable if a required
 value is missing. Schema migrations run automatically and idempotently at
@@ -84,13 +85,20 @@ restart — this is intentional.
 
 ## Security status
 
-**As of `add-core-domain`, the domain API (`/api/v1/projects`, `/cases`,
-`/suites`, `/runs`, ...) has no authentication or authorization — every
-endpoint is open to anyone who can reach the network address.** This is
-expected for the current stage of v0.1 (see [ROADMAP.md](../ROADMAP.md)):
-identity and access control are the very next change, `add-identity-basics`.
+**As of `add-identity-basics`, every domain endpoint requires an
+authenticated actor** — a local user via session cookie, or an agent via a
+scoped API token (`docs/api.md#authentication`). Two instance-wide roles
+(`admin`/`member`); per-project RBAC and OIDC SSO are v0.2.
+
+**The connection itself is still plain HTTP — there is no TLS termination
+yet** (tracked as backlog: "Add HTTPS/TLS support"). The session cookie is
+`HttpOnly` and becomes `Secure` automatically once a request arrives over
+TLS, but without TLS in front of it, session cookies and credentials travel
+the network in clear text and are interceptable, exactly like any other
+auth mechanism would be on an unencrypted connection.
 
 **Do not expose a TestPulse instance beyond this stage to an untrusted
 network.** For local evaluation (docker-compose on localhost, or a Helm
 install behind a private network/VPN) this is fine; do not put it on the
-public internet or an untrusted shared network until identity lands.
+public internet or an untrusted shared network until TLS termination is in
+place.

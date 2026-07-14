@@ -1,22 +1,6 @@
 import { FolderIcon, LayersIcon, CirclePlayIcon } from 'lucide-react'
 import type { LandingFolder, LandingSuite, LandingRun } from '@/lib/useProjectLanding'
-
-function healthColor(rate: number): string {
-  if (rate >= 80) return 'bg-primary'
-  if (rate >= 50) return 'bg-secondary'
-  return 'bg-destructive'
-}
-
-function HealthBar({ rate }: { rate: number }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="inline-block h-1 w-9 overflow-hidden rounded-full bg-muted">
-        <span className={`block h-full ${healthColor(rate)}`} style={{ width: `${rate}%` }} />
-      </span>
-      {rate}%
-    </span>
-  )
-}
+import { HealthBar } from '@/components/HealthBar'
 
 function PanelShell({
   icon,

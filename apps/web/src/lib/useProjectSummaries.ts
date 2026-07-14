@@ -6,9 +6,14 @@ import { useDataRevision } from '@/lib/DataRevision'
 export type ProjectSummary = {
   id: string
   name: string
+  description: string
+  ownerId: string | null
+  createdAt: string
   suiteCount: number
   caseCount: number
   passRate: number | null
+  lastRunAt: string | null
+  isFavorite: boolean
 }
 
 // Per-project suite/case counts and latest-run pass rate, fetched in one
@@ -37,9 +42,14 @@ export function useProjectSummaries(): ProjectSummary[] {
           return {
             id: p.id,
             name: p.name,
+            description: p.description ?? '',
+            ownerId: p.ownerId ?? null,
+            createdAt: p.createdAt,
             suiteCount: stat?.suiteCount ?? 0,
             caseCount: stat?.caseCount ?? 0,
             passRate: stat?.passRate ?? null,
+            lastRunAt: stat?.lastRunAt ?? null,
+            isFavorite: stat?.isFavorite ?? false,
           }
         })
         if (!cancelled) setSummaries(results)

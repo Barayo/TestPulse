@@ -42,10 +42,12 @@ tables below are a quick map, not the source of truth.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/projects` | List projects |
-| POST | `/api/v1/projects` | Create a project (`name`) |
-| GET | `/api/v1/projects/summaries` | Suite count, case count, and latest-run pass rate for every non-archived project, in one request — computed server-side (2-3 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
+| POST | `/api/v1/projects` | Create a project (`name`; optional `description`, `ownerId`) |
+| GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), and whether the calling user has favorited it, for every non-archived project, in one request — computed server-side (4 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
 | GET | `/api/v1/projects/{projectId}` | Get a project |
-| PATCH | `/api/v1/projects/{projectId}` | Rename and/or archive |
+| PATCH | `/api/v1/projects/{projectId}` | Rename, describe, assign an owner to, and/or archive |
+| POST | `/api/v1/projects/{projectId}/favorite` | Star the project for the calling user (idempotent) |
+| DELETE | `/api/v1/projects/{projectId}/favorite` | Unstar the project for the calling user (idempotent) |
 
 **Test cases** — every edit creates a new immutable version; see
 [Database](database.md) for the versioning model.
@@ -88,15 +90,49 @@ exactly one folder, defaulting to the project's root; see
 | GET | `/api/v1/runs/{runId}/summary` | Item counts by current status |
 
 Validation errors return `400 {"error": "..."}` naming the offending field;
-missing entities return `404 {"error": "not found"}`.
+missing entities return `404 {"error": "not found"}`. Unauthenticated
+requests return `401 {"error": "unauthorized"}`; authenticated requests
+lacking permission return `403 {"error": "..."}`.
+
+**Identity**
+
+| Method | Path | Description |
+|---|---|---|
+| POST | `/api/v1/auth/login` | Log in with `email`/`password`; sets an `HttpOnly` session cookie (30-day sliding expiry) |
+| POST | `/api/v1/auth/logout` | End the current session |
+| GET | `/api/v1/users/me` | The currently authenticated actor, as a user record |
+| GET | `/api/v1/users` | List users |
+| POST | `/api/v1/users` | Create a user (`email`, `password`, `role`) — admin only |
+| PATCH | `/api/v1/users/{userId}` | Change `role` and/or `deactivate` — admin only |
+| GET | `/api/v1/tokens` | List API tokens — own tokens, or `?userId=` for another user's (admin only) |
+| POST | `/api/v1/tokens` | Create an API token (`name`) for an agent; the full value is returned once and never again |
+| DELETE | `/api/v1/tokens/{tokenId}` | Revoke a token — its own creator, or an admin |
+| GET | `/api/v1/audit?entityType=&entityId=` | Audit history for a specific entity, oldest first |
 
 ## Authentication
 
-None yet — endpoints are open. Local users, sessions, and scoped agent API
-tokens arrive in `add-identity-basics`; OIDC SSO in v0.2. **Do not expose
-this API on an untrusted network until then** — see the warning in
-[Deployment](deployment.md#security-status). This page will grow the auth
-section in that change.
+Local users (bcrypt-hashed passwords) and scoped API tokens for agents
+(`add-identity-basics`); OIDC SSO arrives in v0.2. Every request to a domain
+route (projects, cases, suites, runs, folders and their sub-resources) must
+resolve to an authenticated actor:
+
+- **Web UI**: session cookie set by `POST /api/v1/auth/login`. The cookie is
+  `HttpOnly`, `SameSite=Lax`, and `Secure` whenever the request itself
+  arrived over TLS — see [Deployment](deployment.md#security-status) for the
+  current HTTPS status.
+- **Agents**: `Authorization: Bearer tp_<token>`, created via
+  `POST /api/v1/tokens` by any authenticated user. A token acts as its own
+  actor — distinct from, and never impersonating, the human who created it
+  — at that human's role.
+
+Two instance-wide roles: `admin` (the above, plus user management) and
+`member` (full read/write on domain data). Every write is recorded in an
+append-only audit log naming the acting actor (human or agent), queryable
+per entity via `GET /api/v1/audit`.
+
+A fresh instance seeds one admin from `TESTPULSE_ADMIN_EMAIL` /
+`TESTPULSE_ADMIN_PASSWORD` on first startup (skipped once any user exists —
+see [Development](development.md)).
 
 ## Versioning policy
 

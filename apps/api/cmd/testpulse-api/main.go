@@ -49,6 +49,14 @@ func run() error {
 	logger.Info("migrations applied", "status", "current")
 
 	svc := service.New(store.New(pool))
+
+	if err := svc.BootstrapAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword); err != nil {
+		return fmt.Errorf("bootstrapping admin: %w", err)
+	}
+	if err := svc.CleanupExpiredSessions(ctx); err != nil {
+		logger.Warn("clearing expired sessions at startup", "error", err)
+	}
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.New(logger, db.NewHealth(pool), svc),

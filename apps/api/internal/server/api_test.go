@@ -23,10 +23,32 @@ type ok struct{}
 
 func (ok) Ready(context.Context) error { return nil }
 
+// apiServer builds a server backed by a real database and wraps it so
+// every request authenticates as a bootstrap admin unless the test sets
+// its own Cookie header — existing scenario tests exercise domain
+// behavior, not auth, so they get authentication for free (task 5.2,
+// add-identity-basics). Tests specifically about auth/authorization use
+// apiServerWithAdmin (identity_api_test.go) instead.
 func apiServer(t *testing.T) http.Handler {
 	t.Helper()
 	pool := testutil.Pool(t, "server")
-	return server.New(slog.New(slog.DiscardHandler), ok{}, service.New(store.New(pool)))
+	svc := service.New(store.New(pool))
+	cookie := testutil.AuthCookie(t, svc)
+	return authInjectingHandler{inner: server.New(slog.New(slog.DiscardHandler), ok{}, svc), cookie: cookie}
+}
+
+// authInjectingHandler attaches a fixed Cookie header to any request that
+// doesn't already carry one.
+type authInjectingHandler struct {
+	inner  http.Handler
+	cookie string
+}
+
+func (a authInjectingHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("Cookie") == "" {
+		r.Header.Set("Cookie", a.cookie)
+	}
+	a.inner.ServeHTTP(w, r)
 }
 
 // call performs a JSON request and decodes the response into out (if non-nil).

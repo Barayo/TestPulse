@@ -52,6 +52,33 @@ touches whatever `TESTPULSE_DATABASE_URL` points at — same as `make dev-api`,
 never a real deployment. Used throughout the `redesign-ui` change to validate
 layout decisions against realistic content density instead of toy data.
 
+## Logging in locally
+
+Every domain route requires authentication (`add-identity-basics`). A fresh
+database has no users, so set `TESTPULSE_ADMIN_EMAIL` /
+`TESTPULSE_ADMIN_PASSWORD` before first startup — the API seeds one admin
+from them if (and only if) the `users` table is empty, then never touches
+them again on later restarts:
+
+```bash
+export TESTPULSE_ADMIN_EMAIL=admin@example.com
+export TESTPULSE_ADMIN_PASSWORD=correcthorsebatterystaple
+make dev-api   # or docker compose, which already sets these for the
+               # evaluation stack — see deploy/compose/docker-compose.yml
+```
+
+Then log in at `/login` with those credentials, or via `curl`:
+
+```bash
+curl -i -c cookies.txt -X POST http://localhost:8080/api/v1/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"admin@example.com","password":"correcthorsebatterystaple"}'
+curl -b cookies.txt http://localhost:8080/api/v1/projects
+```
+
+An admin can create further users at `/settings/users`; any authenticated
+user can create scoped API tokens for agents at `/settings/tokens`.
+
 ## The contract workflow
 
 1. Change the API surface → edit `packages/shared/openapi.yaml` **and** the Go

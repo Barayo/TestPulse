@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -11,20 +12,20 @@ type ProjectRepo struct {
 	pool *pgxpool.Pool
 }
 
-func (r *ProjectRepo) Create(ctx context.Context, name string) (domain.Project, error) {
+func (r *ProjectRepo) Create(ctx context.Context, name, description string, ownerID *string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO projects (name) VALUES ($1)
-		 RETURNING id, name, archived, created_at`, name,
-	).Scan(&p.ID, &p.Name, &p.Archived, &p.CreatedAt)
+		`INSERT INTO projects (name, description, owner_id) VALUES ($1, $2, $3)
+		 RETURNING id, name, archived, description, owner_id, created_at`, name, description, ownerID,
+	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.OwnerID, &p.CreatedAt)
 	return p, err
 }
 
 func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, name, archived, created_at FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Name, &p.Archived, &p.CreatedAt)
+		`SELECT id, name, archived, description, owner_id, created_at FROM projects WHERE id = $1`, id,
+	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.OwnerID, &p.CreatedAt)
 	if err != nil {
 		return domain.Project{}, ErrNotFound
 	}
@@ -33,7 +34,7 @@ func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error
 
 func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, name, archived, created_at FROM projects ORDER BY created_at`)
+		`SELECT id, name, archived, description, owner_id, created_at FROM projects ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -42,7 +43,7 @@ func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	projects := []domain.Project{}
 	for rows.Next() {
 		var p domain.Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Archived, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.OwnerID, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)
@@ -61,11 +62,61 @@ func (r *ProjectRepo) Rename(ctx context.Context, id, name string) error {
 	return nil
 }
 
+func (r *ProjectRepo) SetDescription(ctx context.Context, id, description string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE projects SET description = $2 WHERE id = $1`, id, description)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetOwner sets the project's owner; a nil ownerID clears it (unowned).
+func (r *ProjectRepo) SetOwner(ctx context.Context, id string, ownerID *string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE projects SET owner_id = $2 WHERE id = $1`, id, ownerID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Star marks a project as one of the caller's favorites. Idempotent — a
+// second star from the same user is a no-op, not an error.
+func (r *ProjectRepo) Star(ctx context.Context, userID, projectID string) error {
+	_, err := r.pool.Exec(ctx,
+		`INSERT INTO project_favorites (user_id, project_id) VALUES ($1, $2)
+		 ON CONFLICT (user_id, project_id) DO NOTHING`, userID, projectID)
+	return err
+}
+
+// Unstar removes a project from the caller's favorites. A no-op, not an
+// error, when the project wasn't favorited.
+func (r *ProjectRepo) Unstar(ctx context.Context, userID, projectID string) error {
+	_, err := r.pool.Exec(ctx,
+		`DELETE FROM project_favorites WHERE user_id = $1 AND project_id = $2`, userID, projectID)
+	return err
+}
+
+func (r *ProjectRepo) IsFavorite(ctx context.Context, userID, projectID string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (SELECT 1 FROM project_favorites WHERE user_id = $1 AND project_id = $2)`,
+		userID, projectID,
+	).Scan(&exists)
+	return exists, err
+}
+
 // Summaries returns, per non-archived project, its suite count, case count,
-// and latest-run pass rate — as three grouped queries (design.md), not one
-// query per project, so the cost stays O(1) in the number of HTTP round
-// trips regardless of how many projects exist.
-func (r *ProjectRepo) Summaries(ctx context.Context) ([]domain.ProjectSummary, error) {
+// latest-run pass rate, and whether userID has favorited it — as four
+// grouped queries (design.md D3), not one query per project, so the cost
+// stays O(1) in the number of HTTP round trips regardless of how many
+// projects exist.
+func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.ProjectSummary, error) {
 	ids, err := r.pool.Query(ctx, `SELECT id FROM projects WHERE NOT archived ORDER BY created_at`)
 	if err != nil {
 		return nil, err
@@ -130,32 +181,57 @@ func (r *ProjectRepo) Summaries(ctx context.Context) ([]domain.ProjectSummary, e
 
 	passRates, err := r.pool.Query(ctx,
 		`SELECT r.project_id,
+		        r.created_at,
 		        count(i.id) AS total,
 		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
 		 FROM (
-		     SELECT DISTINCT ON (project_id) id, project_id
+		     SELECT DISTINCT ON (project_id) id, project_id, created_at
 		     FROM test_runs
 		     ORDER BY project_id, created_at DESC
 		 ) r
-		 JOIN test_run_items i ON i.run_id = r.id
-		 GROUP BY r.project_id`)
+		 LEFT JOIN test_run_items i ON i.run_id = r.id
+		 GROUP BY r.project_id, r.created_at`)
 	if err != nil {
 		return nil, err
 	}
 	for passRates.Next() {
 		var projectID string
+		var lastRunAt time.Time
 		var total, passCount int
-		if err := passRates.Scan(&projectID, &total, &passCount); err != nil {
+		if err := passRates.Scan(&projectID, &lastRunAt, &total, &passCount); err != nil {
 			passRates.Close()
 			return nil, err
 		}
-		if s, ok := summaries[projectID]; ok && total > 0 {
-			rate := int(float64(passCount) / float64(total) * 100)
-			s.PassRate = &rate
+		if s, ok := summaries[projectID]; ok {
+			s.LastRunAt = &lastRunAt
+			if total > 0 {
+				rate := int(float64(passCount) / float64(total) * 100)
+				s.PassRate = &rate
+			}
 		}
 	}
 	passRates.Close()
 	if err := passRates.Err(); err != nil {
+		return nil, err
+	}
+
+	favorites, err := r.pool.Query(ctx,
+		`SELECT project_id FROM project_favorites WHERE user_id = $1`, userID)
+	if err != nil {
+		return nil, err
+	}
+	for favorites.Next() {
+		var projectID string
+		if err := favorites.Scan(&projectID); err != nil {
+			favorites.Close()
+			return nil, err
+		}
+		if s, ok := summaries[projectID]; ok {
+			s.IsFavorite = true
+		}
+	}
+	favorites.Close()
+	if err := favorites.Err(); err != nil {
 		return nil, err
 	}
 

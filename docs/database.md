@@ -34,6 +34,8 @@ erDiagram
         uuid id PK
         text name
         boolean archived
+        text description
+        uuid owner_id FK "nullable, references users"
     }
     TEST_CASE_FOLDERS {
         uuid id PK
@@ -94,7 +96,10 @@ Two independent groupings sit on top of `test_cases`, deliberately orthogonal: *
 ## Tables
 
 ### `projects`
-The top-level container for all test assets. `archived` is a soft flag, not a delete. A `projects_create_root_folder` trigger fires on every insert, creating that project's root folder in the same transaction — the root's existence is a database guarantee, not an application convention.
+The top-level container for all test assets. `archived` is a soft flag, not a delete. A `projects_create_root_folder` trigger fires on every insert, creating that project's root folder in the same transaction — the root's existence is a database guarantee, not an application convention. `description` is free text, defaulting to `''`. `owner_id` is a nullable FK to `users` with `ON DELETE SET NULL` — unlike `audit_log`'s denormalized actor, "current owner" is a live fact with no reason to survive the owner's own deletion; a deactivated (not deleted) owner still displays normally, since the row still exists.
+
+### `project_favorites`
+Per-user starred projects (`enrich-project-list`), added alongside the identity tables in `00003_identity.sql` since both its FKs reference `users`. Composite PK `(user_id, project_id)`; both FKs `ON DELETE CASCADE` — a favorite has no meaning once either side is gone, unlike audit or result history, which must survive deletion.
 
 ### `test_case_folders`
 A self-referencing tree per project for **organizing** cases (independent of suites, which are for **executing** them). Exactly one row per project has `parent_folder_id IS NULL` — the auto-created root — enforced by a partial unique index (`test_case_folders_one_root_idx`). Every other folder requires an explicit parent; the API never allows creating a second root. Deleting a non-root folder reparents its direct child folders and cases to its own parent (never orphans, never cascades destructively); the root folder cannot be deleted.

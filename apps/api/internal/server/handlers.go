@@ -13,16 +13,18 @@ import (
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 )
 
-// mountAPI registers the domain routes under /api/v1.
-func mountAPI(r chi.Router, logger *slog.Logger, svc *service.Service) {
-	h := &api{logger: logger, svc: svc}
-
+// mountAPI registers the domain routes under /api/v1. The caller mounts it
+// behind the authenticate middleware (server.go) — every domain route
+// requires an authenticated actor (authentication spec).
+func mountAPI(r chi.Router, h *api) {
 	r.Route("/projects", func(r chi.Router) {
 		r.Get("/", h.listProjects)
 		r.Get("/summaries", h.projectSummaries)
 		r.Post("/", h.createProject)
 		r.Get("/{projectID}", h.getProject)
 		r.Patch("/{projectID}", h.updateProject)
+		r.Post("/{projectID}/favorite", h.starProject)
+		r.Delete("/{projectID}/favorite", h.unstarProject)
 		r.Get("/{projectID}/cases", h.listCases)
 		r.Post("/{projectID}/cases", h.createCase)
 		r.Get("/{projectID}/folders", h.listFolders)
@@ -66,9 +68,15 @@ type api struct {
 func (h *api) respond(w http.ResponseWriter, status int, v any, err error) {
 	if err != nil {
 		var verr *service.ValidationError
+		var uerr *service.UnauthorizedError
+		var ferr *service.ForbiddenError
 		switch {
 		case errors.As(err, &verr):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		case errors.As(err, &uerr):
+			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		case errors.As(err, &ferr):
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
 		case errors.Is(err, store.ErrNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		case errors.Is(err, store.ErrRootFolder):
@@ -112,13 +120,17 @@ func (h *api) projectSummaries(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) createProject(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name string `json:"name"`
+		Name        string  `json:"name"`
+		Description string  `json:"description"`
+		OwnerID     *string `json:"ownerId"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
 		return
 	}
-	p, err := h.svc.CreateProject(r.Context(), body.Name)
+	p, err := h.svc.CreateProject(r.Context(), service.ProjectInput{
+		Name: body.Name, Description: body.Description, OwnerID: body.OwnerID,
+	})
 	h.respond(w, http.StatusCreated, p, err)
 }
 
@@ -129,16 +141,31 @@ func (h *api) getProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name     *string `json:"name"`
-		Archived *bool   `json:"archived"`
+		Name        *string `json:"name"`
+		Description *string `json:"description"`
+		OwnerID     *string `json:"ownerId"`
+		Archived    *bool   `json:"archived"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
 		return
 	}
 	p, err := h.svc.UpdateProject(r.Context(), chi.URLParam(r, "projectID"),
-		service.ProjectUpdate{Name: body.Name, Archived: body.Archived})
+		service.ProjectUpdate{
+			Name: body.Name, Description: body.Description,
+			OwnerID: body.OwnerID, Archived: body.Archived,
+		})
 	h.respond(w, http.StatusOK, p, err)
+}
+
+func (h *api) starProject(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.StarProject(r.Context(), chi.URLParam(r, "projectID"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) unstarProject(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.UnstarProject(r.Context(), chi.URLParam(r, "projectID"))
+	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 // --- Cases ---

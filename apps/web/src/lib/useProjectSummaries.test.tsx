@@ -21,6 +21,8 @@ function manyProjects(count: number) {
     id: `p${i}`,
     name: `Project ${i}`,
     archived: false,
+    description: '',
+    ownerId: null,
     createdAt: '',
   }))
 }
@@ -37,6 +39,7 @@ function mockBatchedAPI(projectCount: number) {
           suiteCount: i,
           caseCount: i * 2,
           passRate: i === 0 ? null : 50,
+          isFavorite: false,
         })),
         response: { ok: true },
       })
@@ -60,8 +63,81 @@ describe('useProjectSummaries', () => {
     const { result } = renderHook(() => useProjectSummaries(), { wrapper })
     await waitFor(() => expect(result.current).toHaveLength(2))
 
-    expect(result.current[0]).toEqual({ id: 'p0', name: 'Project 0', suiteCount: 0, caseCount: 0, passRate: null })
-    expect(result.current[1]).toEqual({ id: 'p1', name: 'Project 1', suiteCount: 1, caseCount: 2, passRate: 50 })
+    expect(result.current[0]).toEqual({
+      id: 'p0',
+      name: 'Project 0',
+      description: '',
+      ownerId: null,
+      createdAt: '',
+      suiteCount: 0,
+      caseCount: 0,
+      passRate: null,
+      lastRunAt: null,
+      isFavorite: false,
+    })
+    expect(result.current[1]).toEqual({
+      id: 'p1',
+      name: 'Project 1',
+      description: '',
+      ownerId: null,
+      createdAt: '',
+      suiteCount: 1,
+      caseCount: 2,
+      passRate: 50,
+      lastRunAt: null,
+      isFavorite: false,
+    })
+  })
+
+  it('passes through description, ownerId, and isFavorite from the API', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects') {
+        return Promise.resolve({
+          data: [
+            {
+              id: 'p0',
+              name: 'Project 0',
+              archived: false,
+              description: 'a description',
+              ownerId: 'u1',
+              createdAt: '2026-01-01T00:00:00Z',
+            },
+          ],
+          response: { ok: true },
+        })
+      }
+      if (path === '/api/v1/projects/summaries') {
+        return Promise.resolve({
+          data: [
+            {
+              projectId: 'p0',
+              suiteCount: 1,
+              caseCount: 2,
+              passRate: 90,
+              lastRunAt: '2026-01-02T00:00:00Z',
+              isFavorite: true,
+            },
+          ],
+          response: { ok: true },
+        })
+      }
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    const { result } = renderHook(() => useProjectSummaries(), { wrapper })
+    await waitFor(() => expect(result.current).toHaveLength(1))
+
+    expect(result.current[0]).toEqual({
+      id: 'p0',
+      name: 'Project 0',
+      description: 'a description',
+      ownerId: 'u1',
+      createdAt: '2026-01-01T00:00:00Z',
+      suiteCount: 1,
+      caseCount: 2,
+      passRate: 90,
+      lastRunAt: '2026-01-02T00:00:00Z',
+      isFavorite: true,
+    })
   })
 
   it('aborts in-flight requests when the component unmounts', async () => {

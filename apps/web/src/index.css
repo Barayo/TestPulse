@@ -35,6 +35,14 @@
     --color-secondary: var(--secondary);
     --color-primary-foreground: var(--primary-foreground);
     --color-primary: var(--primary);
+    --color-status-healthy-fg: var(--status-healthy-fg);
+    --color-status-healthy-bg: var(--status-healthy-bg);
+    --color-status-progress-fg: var(--status-progress-fg);
+    --color-status-progress-bg: var(--status-progress-bg);
+    --color-status-risk-fg: var(--status-risk-fg);
+    --color-status-risk-bg: var(--status-risk-bg);
+    --color-status-neutral-fg: var(--status-neutral-fg);
+    --color-status-neutral-bg: var(--status-neutral-bg);
     --color-popover-foreground: var(--popover-foreground);
     --color-popover: var(--popover);
     --color-card-foreground: var(--card-foreground);
@@ -97,6 +105,20 @@
     --sidebar-accent-foreground: #0B2E2C;
     --sidebar-border: #E1E8E7;
     --sidebar-ring: #14B8A6;
+
+    /* Status pill bands (enrich-project-list) — tinted bg + darker-same-hue
+       fg per healthLabel band, matching the approved mockup exactly rather
+       than reusing --primary/--secondary/--destructive directly, since
+       those tokens are tuned for solid fills (buttons, bars), not the
+       lighter tint + darker text a badge needs for contrast. */
+    --status-healthy-bg: oklch(0.93 0.03 175);
+    --status-healthy-fg: oklch(0.4 0.1 175);
+    --status-progress-bg: oklch(0.94 0.04 85);
+    --status-progress-fg: oklch(0.45 0.1 85);
+    --status-risk-bg: oklch(0.94 0.04 25);
+    --status-risk-fg: oklch(0.45 0.14 25);
+    --status-neutral-bg: oklch(0.92 0.005 240);
+    --status-neutral-fg: oklch(0.45 0.01 240);
 }
 
 .dark {
@@ -131,6 +153,19 @@
     --sidebar-accent-foreground: #E6F5F3;
     --sidebar-border: #1D524C;
     --sidebar-ring: #2DD4BF;
+
+    /* Dark-mode status pills: same hues, inverted lightness relationship
+       (darker tinted bg, brighter fg) — the conventional dark-theme badge
+       treatment, consistent with how --primary/--secondary/--destructive
+       themselves get brighter (not just inverted) in this theme block. */
+    --status-healthy-bg: oklch(0.28 0.05 175);
+    --status-healthy-fg: oklch(0.85 0.08 175);
+    --status-progress-bg: oklch(0.3 0.06 85);
+    --status-progress-fg: oklch(0.85 0.1 85);
+    --status-risk-bg: oklch(0.3 0.07 25);
+    --status-risk-fg: oklch(0.85 0.12 25);
+    --status-neutral-bg: oklch(0.32 0.005 240);
+    --status-neutral-fg: oklch(0.75 0.01 240);
 }
 
 @layer base {

@@ -14,6 +14,11 @@ services:
     environment:
       TESTPULSE_DATABASE_URL: postgres://testpulse:testpulse@db:5432/testpulse
       TESTPULSE_LOG_LEVEL: info
+      # Seeds one admin on first startup only (skipped once any user exists —
+      # see add-identity-basics design.md); fixed credentials are fine here,
+      # this compose file is the local/E2E evaluation stack, not production.
+      TESTPULSE_ADMIN_EMAIL: admin@example.com
+      TESTPULSE_ADMIN_PASSWORD: correcthorsebatterystaple
     depends_on:
       db:
         condition: service_healthy

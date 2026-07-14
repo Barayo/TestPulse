@@ -4,6 +4,7 @@
 package domain
 
 import (
+	"context"
 	"fmt"
 	"time"
 )
@@ -153,10 +154,12 @@ func (f NewFolder) Validate() error {
 // Entity types returned by stores and services.
 
 type Project struct {
-	ID        string    `json:"id"`
-	Name      string    `json:"name"`
-	Archived  bool      `json:"archived"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Archived    bool      `json:"archived"`
+	Description string    `json:"description"`
+	OwnerID     *string   `json:"ownerId"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 type TestCase struct {
@@ -233,8 +236,129 @@ type RunSummary struct {
 // server-side in a small fixed number of queries regardless of how many
 // projects exist (add-project-stats-endpoint).
 type ProjectSummary struct {
-	ProjectID  string `json:"projectId"`
-	SuiteCount int    `json:"suiteCount"`
-	CaseCount  int    `json:"caseCount"`
-	PassRate   *int   `json:"passRate"`
+	ProjectID  string     `json:"projectId"`
+	SuiteCount int        `json:"suiteCount"`
+	CaseCount  int        `json:"caseCount"`
+	PassRate   *int       `json:"passRate"`
+	LastRunAt  *time.Time `json:"lastRunAt"`
+	IsFavorite bool       `json:"isFavorite"`
+}
+
+// --- Identity (add-identity-basics) ---
+
+// Role is a user's instance-wide role. There is no per-project scoping yet
+// (that arrives with add-project-rbac) — every role can fully read/write
+// domain data; only RoleAdmin can manage user accounts (design D4).
+type Role string
+
+const (
+	RoleAdmin  Role = "admin"
+	RoleMember Role = "member"
+)
+
+var validRoles = map[Role]bool{RoleAdmin: true, RoleMember: true}
+
+func ParseRole(s string) (Role, error) {
+	r := Role(s)
+	if !validRoles[r] {
+		return "", fmt.Errorf("invalid role %q: must be one of admin, member", s)
+	}
+	return r, nil
+}
+
+type User struct {
+	ID            string     `json:"id"`
+	Email         string     `json:"email"`
+	Role          Role       `json:"role"`
+	DeactivatedAt *time.Time `json:"deactivatedAt"`
+	CreatedAt     time.Time  `json:"createdAt"`
+}
+
+func ValidatePassword(password string) error {
+	if len(password) < 8 {
+		return fmt.Errorf("password must be at least 8 characters")
+	}
+	return nil
+}
+
+func ValidateEmail(email string) error {
+	if email == "" {
+		return fmt.Errorf("email is required")
+	}
+	return nil
+}
+
+type Session struct {
+	ID        string    `json:"-"` // never serialized: it is the session secret itself
+	UserID    string    `json:"userId"`
+	CreatedAt time.Time `json:"createdAt"`
+	ExpiresAt time.Time `json:"expiresAt"`
+}
+
+// ApiToken is a scoped credential an authenticated user issues for an agent.
+// Only Prefix is ever shown again after creation — the full token value is
+// returned once by the service layer and never persisted (design D3).
+type ApiToken struct {
+	ID        string     `json:"id"`
+	CreatedBy string     `json:"createdBy"`
+	Name      string     `json:"name"`
+	Prefix    string     `json:"prefix"`
+	RevokedAt *time.Time `json:"revokedAt"`
+	CreatedAt time.Time  `json:"createdAt"`
+}
+
+func ValidateTokenName(name string) error {
+	if name == "" {
+		return fmt.Errorf("name is required")
+	}
+	return nil
+}
+
+// ActorKind distinguishes a human user from an agent authenticated via API
+// token in the audit log — an agent's actions are never recorded as if
+// performed directly by the human who created its token (design D1/D6).
+type ActorKind string
+
+const (
+	ActorKindUser  ActorKind = "user"
+	ActorKindAgent ActorKind = "agent"
+)
+
+// Actor is whoever is making an authenticated request: a human user via
+// session cookie, or an agent via API token. It is the "who" behind every
+// audit entry.
+type Actor struct {
+	ID          string
+	Kind        ActorKind
+	DisplayName string
+	Role        Role // the permission level the actor acts at
+}
+
+// AuditEntry records one write, denormalizing the actor's display name so
+// history remains readable even after the actor itself is deleted (design
+// D5).
+type AuditEntry struct {
+	ID         string    `json:"id"`
+	ActorKind  ActorKind `json:"actorKind"`
+	ActorID    string    `json:"actorId"`
+	ActorName  string    `json:"actorName"`
+	Action     string    `json:"action"`
+	EntityType string    `json:"entityType"`
+	EntityID   string    `json:"entityId"`
+	OccurredAt time.Time `json:"occurredAt"`
+}
+
+// actorContextKey is unexported so only WithActor/ActorFromContext can set
+// or read the request's resolved Actor (design D1: resolved once by auth
+// middleware, threaded through context.Context like other request-scoped
+// values in this codebase).
+type actorContextKey struct{}
+
+func WithActor(ctx context.Context, actor Actor) context.Context {
+	return context.WithValue(ctx, actorContextKey{}, actor)
+}
+
+func ActorFromContext(ctx context.Context) (Actor, bool) {
+	actor, ok := ctx.Value(actorContextKey{}).(Actor)
+	return actor, ok
 }

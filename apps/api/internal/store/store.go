@@ -12,20 +12,28 @@ import (
 )
 
 type Store struct {
-	Projects *ProjectRepo
-	Folders  *FolderRepo
-	Cases    *CaseRepo
-	Suites   *SuiteRepo
-	Runs     *RunRepo
+	Projects  *ProjectRepo
+	Folders   *FolderRepo
+	Cases     *CaseRepo
+	Suites    *SuiteRepo
+	Runs      *RunRepo
+	Users     *UserRepo
+	Sessions  *SessionRepo
+	ApiTokens *ApiTokenRepo
+	Audit     *AuditRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{
-		Projects: &ProjectRepo{pool: pool},
-		Folders:  &FolderRepo{pool: pool},
-		Cases:    &CaseRepo{pool: pool},
-		Suites:   &SuiteRepo{pool: pool},
-		Runs:     &RunRepo{pool: pool},
+		Projects:  &ProjectRepo{pool: pool},
+		Folders:   &FolderRepo{pool: pool},
+		Cases:     &CaseRepo{pool: pool},
+		Suites:    &SuiteRepo{pool: pool},
+		Runs:      &RunRepo{pool: pool},
+		Users:     &UserRepo{pool: pool},
+		Sessions:  &SessionRepo{pool: pool},
+		ApiTokens: &ApiTokenRepo{pool: pool},
+		Audit:     &AuditRepo{pool: pool},
 	}
 }
 

@@ -27,9 +27,17 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) 
 	r.Get("/healthz", handleLiveness)
 	r.Get("/readyz", handleReadiness(logger, readiness))
 
+	h := &api{logger: logger, svc: svc}
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/meta", handleMeta)
-		mountAPI(r, logger, svc)
+		mountAuth(r, h)
+
+		r.Group(func(r chi.Router) {
+			r.Use(authenticate(svc))
+			mountAPI(r, h)
+			mountIdentity(r, h)
+		})
 	})
 
 	// Everything else is the embedded web UI (SPA fallback included).

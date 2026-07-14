@@ -21,6 +21,12 @@ function mockReadyz(ok: boolean) {
         data: { name: 'TestPulse', version: '0.0.1' },
       })
     }
+    if (path === '/api/v1/users/me') {
+      return Promise.resolve({
+        response: { ok: true },
+        data: { id: 'u1', email: 'admin@example.com', role: 'admin' },
+      })
+    }
     // ProjectsPage's own data fetch (irrelevant to these health-badge tests).
     return Promise.resolve({ response: { ok: true }, data: [] })
   })
@@ -28,6 +34,10 @@ function mockReadyz(ok: boolean) {
 
 beforeEach(() => {
   mockGET.mockReset()
+  // RequireAuth's redirect to /login uses real browser history (BrowserRouter);
+  // reset it so an unauthenticated test doesn't leak its navigation into the
+  // next test, which typically assumes it starts at "/".
+  window.history.pushState({}, '', '/')
 })
 
 describe('App health status', () => {
@@ -55,10 +65,20 @@ describe('App health status', () => {
     expect(await screen.findByText('API unavailable')).toBeInTheDocument()
   })
 
-  it('shows a checking state while the request is in flight', () => {
-    mockGET.mockReturnValue(new Promise(() => {})) // never resolves
+  it('shows a checking state while the request is in flight', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') {
+        // Resolve the session check quickly so the authenticated shell (and
+        // its health badge) renders; /readyz itself is what stays pending.
+        return Promise.resolve({
+          response: { ok: true },
+          data: { id: 'u1', email: 'admin@example.com', role: 'admin' },
+        })
+      }
+      return new Promise(() => {}) // never resolves
+    })
     render(<App />)
-    expect(screen.getByText('Checking…')).toBeInTheDocument()
+    expect(await screen.findByText('Checking…')).toBeInTheDocument()
   })
 })
 
@@ -67,6 +87,11 @@ function mockProjectData() {
     if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
     if (path === '/api/v1/meta')
       return Promise.resolve({ response: { ok: true }, data: { name: 'TestPulse', version: '0.0.1' } })
+    if (path === '/api/v1/users/me')
+      return Promise.resolve({
+        response: { ok: true },
+        data: { id: 'u1', email: 'admin@example.com', role: 'admin' },
+      })
     if (path === '/api/v1/projects')
       return Promise.resolve({
         response: { ok: true },
@@ -133,15 +158,16 @@ describe('App shell', () => {
   it('renders the product title and the projects page at /', async () => {
     mockProjectData()
     render(<App />)
-    expect(screen.getByText('TestPulse')).toBeInTheDocument()
+    expect(await screen.findByText('TestPulse')).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /new project/i })).toBeInTheDocument()
     await screen.findByText('System ready') // avoid act() warnings
   })
 
-  it('shows a placeholder on the project switcher at / (no active project)', async () => {
+  it('hides the project switcher on the project list itself — it would be redundant there', async () => {
     mockProjectData()
     render(<App />)
-    expect(await screen.findByRole('button', { name: /Select project/ })).toBeInTheDocument()
+    await screen.findByText('TestPulse')
+    expect(screen.queryByRole('button', { name: /Select project/ })).not.toBeInTheDocument()
   })
 
   it('shows the active project name on the switcher on a project route', async () => {

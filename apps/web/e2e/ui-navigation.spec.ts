@@ -253,4 +253,22 @@ test.describe('Requirement: Project list with permission-ready create action', (
     await page.goto('/')
     await expect(page.getByText(name)).toBeVisible()
   })
+
+  test('Scenario: Manual view choice persists across reloads', async ({ page }) => {
+    await createProject(page, 'View Toggle Project')
+    await page.goto('/')
+    await page.getByRole('button', { name: /compact view/i }).click()
+    await expect(page.getByRole('button', { name: /compact view/i })).toHaveAttribute('aria-pressed', 'true')
+
+    await page.reload()
+    await expect(page.getByRole('button', { name: /compact view/i })).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  test('Scenario: Searching filters by name', async ({ page }) => {
+    const findable = await createProject(page, 'Findable Alpha')
+    await page.goto('/')
+    await page.getByRole('button', { name: /compact view/i }).click()
+    await page.getByLabel(/search projects/i).fill('Findable Alpha')
+    await expect(page.getByText(findable)).toBeVisible()
+  })
 })
