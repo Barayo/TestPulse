@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { StarIcon } from 'lucide-react'
+import { StarIcon, Grid2x2, Grid3x3 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -14,11 +14,20 @@ import { useAuth } from '@/lib/useAuth'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useViewModeOverride } from '@/lib/useViewModeOverride'
 import { resolveViewMode } from '@/lib/viewMode'
+import { useSortOverride } from '@/lib/useSortOverride'
+import { sortProjects, DEFAULT_SORT_DIRECTION, type SortKey } from '@/lib/sortProjects'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 
 type StatusFilter = 'Healthy' | 'In progress' | 'At risk' | 'No runs yet'
 const STATUS_FILTERS: StatusFilter[] = ['Healthy', 'In progress', 'At risk', 'No runs yet']
+
+const SORT_KEY_LABELS: Record<SortKey, string> = {
+  name: 'Name',
+  suites: 'Suites',
+  cases: 'Cases',
+  created: 'Created',
+}
 
 function statusOf(p: ProjectSummary): StatusFilter {
   return p.passRate === null ? 'No runs yet' : healthLabel(p.passRate)
@@ -41,7 +50,7 @@ function Pill({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
+      className={`whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
         active
           ? 'border-foreground bg-foreground text-background'
           : 'border-border bg-card text-muted-foreground hover:text-foreground'
@@ -67,6 +76,7 @@ export default function ProjectsPage() {
   const isMobile = useIsMobile()
   const [manualOverride, setManualOverride] = useViewModeOverride()
   const viewMode = resolveViewMode(projects.length, isMobile, manualOverride)
+  const [sort, setSort] = useSortOverride()
 
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
@@ -134,11 +144,12 @@ export default function ProjectsPage() {
 
   if (skipToSingleProject) return null
 
-  const visible = projects.filter(
+  const filtered = projects.filter(
     (p) =>
       (search.trim() === '' || p.name.toLowerCase().includes(search.trim().toLowerCase())) &&
       (statusFilter === null || statusOf(p) === statusFilter),
   )
+  const visible = sortProjects(filtered, sort.key, sort.direction)
 
   const favorites = viewMode === 'expanded' ? visible.filter((p) => p.isFavorite) : []
   const rest = viewMode === 'expanded' ? visible.filter((p) => !p.isFavorite) : visible
@@ -210,32 +221,92 @@ export default function ProjectsPage() {
       )}
 
       {projects.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-col gap-3">
           <Input
             aria-label="Search projects"
             placeholder="Search projects"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="min-w-48 flex-1 rounded-[10px]"
+            className="rounded-[10px]"
           />
-          <Pill active={statusFilter === null} onClick={() => setStatusFilter(null)}>
-            All
-          </Pill>
-          {STATUS_FILTERS.map((s) => (
-            <Pill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-              {s}
-            </Pill>
-          ))}
-          {!isMobile && (
-            <div role="group" aria-label="View mode" className="ml-2 flex items-center gap-1.5">
-              <Pill active={viewMode === 'expanded'} onClick={() => setManualOverride('expanded')}>
-                Expanded view
+
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
+              <Pill active={statusFilter === null} onClick={() => setStatusFilter(null)}>
+                All
               </Pill>
-              <Pill active={viewMode === 'compact'} onClick={() => setManualOverride('compact')}>
-                Compact view
-              </Pill>
+              {STATUS_FILTERS.map((s) => (
+                <Pill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+                  {s}
+                </Pill>
+              ))}
             </div>
-          )}
+
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                <Label htmlFor="project-sort-key" className="tp-label">
+                  Sort by
+                </Label>
+                <select
+                  id="project-sort-key"
+                  value={sort.key}
+                  onChange={(e) => {
+                    const key = e.target.value as SortKey
+                    setSort({ key, direction: DEFAULT_SORT_DIRECTION[key] })
+                  }}
+                  className="h-9 rounded-[10px] border border-input bg-card px-2.5 text-sm font-semibold"
+                >
+                  {(Object.keys(SORT_KEY_LABELS) as SortKey[]).map((key) => (
+                    <option key={key} value={key}>
+                      {SORT_KEY_LABELS[key]}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  aria-label="Toggle sort direction"
+                  aria-pressed={sort.direction === 'desc'}
+                  onClick={() => setSort({ key: sort.key, direction: sort.direction === 'asc' ? 'desc' : 'asc' })}
+                  className="flex size-9 items-center justify-center rounded-[10px] border border-input bg-card text-foreground hover:border-primary/40"
+                >
+                  {sort.direction === 'asc' ? '↑' : '↓'}
+                </button>
+              </div>
+
+              {!isMobile && (
+                <div role="group" aria-label="View mode" className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    title="Expanded view"
+                    aria-label="Expanded view"
+                    aria-pressed={viewMode === 'expanded'}
+                    onClick={() => setManualOverride('expanded')}
+                    className={`flex size-9 items-center justify-center rounded-full border transition-colors ${
+                      viewMode === 'expanded'
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Grid2x2 className="size-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Compact view"
+                    aria-label="Compact view"
+                    aria-pressed={viewMode === 'compact'}
+                    onClick={() => setManualOverride('compact')}
+                    className={`flex size-9 items-center justify-center rounded-full border transition-colors ${
+                      viewMode === 'compact'
+                        ? 'border-foreground bg-foreground text-background'
+                        : 'border-border bg-card text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    <Grid3x3 className="size-4" aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       )}
 

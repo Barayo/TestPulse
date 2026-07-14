@@ -98,9 +98,9 @@ describe('ProjectsPage', () => {
     mockProjectsList([project()], [summary({ suiteCount: 7, caseCount: 70, passRate: 84 })])
     renderPage()
     expect(await screen.findByText('7')).toBeInTheDocument()
-    expect(screen.getByText(/suites/i)).toBeInTheDocument()
+    expect(screen.getByText(/suites/i, { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText('70')).toBeInTheDocument()
-    expect(screen.getByText(/cases/i)).toBeInTheDocument()
+    expect(screen.getByText(/cases/i, { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText('Healthy', { selector: 'span' })).toBeInTheDocument()
   })
 
@@ -347,7 +347,7 @@ describe('ProjectsPage', () => {
       expect(screen.getByText('7 suites · 70 cases')).toBeInTheDocument()
       expect(screen.queryByText('A dense banking project')).not.toBeInTheDocument()
       expect(screen.queryByText(/owner@example.com/)).not.toBeInTheDocument()
-      expect(screen.queryByText(/created/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/created \d/i)).not.toBeInTheDocument()
     })
   })
 
@@ -415,6 +415,103 @@ describe('ProjectsPage', () => {
       await userEvent.type(screen.getByLabelText(/search projects/i), 'Project 1')
       expect(screen.getByText('Project 1')).toBeInTheDocument()
       expect(screen.queryByText('Project 0')).not.toBeInTheDocument()
+    })
+  })
+
+  it('never wraps a multi-word filter pill label onto multiple lines', async () => {
+    mockProjectsList(manyProjects(11), manySummaries(11))
+    renderPage()
+    await screen.findByText('Project 0')
+    expect(screen.getByRole('button', { name: 'No runs yet' })).toHaveClass('whitespace-nowrap')
+  })
+
+  describe('sorting', () => {
+    it('defaults to sorting by name ascending', async () => {
+      const projects = [
+        project({ id: 'p1', name: 'Charlie' }),
+        project({ id: 'p2', name: 'Alpha' }),
+        project({ id: 'p3', name: 'Bravo' }),
+      ]
+      mockProjectsList(projects, projects.map((p) => summary({ projectId: p.id })))
+      renderPage()
+      await screen.findByText('Alpha')
+      const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+      expect(titles).toEqual(['Alpha', 'Bravo', 'Charlie'])
+    })
+
+    it('defaults a numeric key to most-first when first selected', async () => {
+      const projects = manyProjects(3)
+      const summaries = [
+        summary({ projectId: 'p0', suiteCount: 2 }),
+        summary({ projectId: 'p1', suiteCount: 20 }),
+        summary({ projectId: 'p2', suiteCount: 8 }),
+      ]
+      mockProjectsList(projects, summaries)
+      renderPage()
+      await screen.findByText('Project 0')
+
+      await userEvent.selectOptions(screen.getByLabelText(/sort by/i), 'suites')
+      const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+      expect(titles).toEqual(['Project 1', 'Project 2', 'Project 0'])
+    })
+
+    it('toggles direction for the current sort key', async () => {
+      const projects = [
+        project({ id: 'p1', name: 'Charlie' }),
+        project({ id: 'p2', name: 'Alpha' }),
+        project({ id: 'p3', name: 'Bravo' }),
+      ]
+      mockProjectsList(projects, projects.map((p) => summary({ projectId: p.id })))
+      renderPage()
+      await screen.findByText('Alpha')
+
+      await userEvent.click(screen.getByRole('button', { name: /toggle sort direction/i }))
+      const titles = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent)
+      expect(titles).toEqual(['Charlie', 'Bravo', 'Alpha'])
+    })
+
+    it('applies the same sort within Favorites and the main list', async () => {
+      const projects = [project({ id: 'p1', name: 'Charlie' }), project({ id: 'p2', name: 'Alpha' })]
+      const summaries = [
+        summary({ projectId: 'p1', isFavorite: true }),
+        summary({ projectId: 'p2', isFavorite: true }),
+      ]
+      mockProjectsList(projects, summaries)
+      renderPage()
+      await screen.findByText('Alpha')
+
+      const favSection = screen.getByRole('region', { name: 'Favorites' })
+      const before = favSection.textContent ?? ''
+      expect(before.indexOf('Alpha')).toBeLessThan(before.indexOf('Charlie'))
+
+      await userEvent.click(screen.getByRole('button', { name: /toggle sort direction/i }))
+      const after = screen.getByRole('region', { name: 'Favorites' }).textContent ?? ''
+      expect(after.indexOf('Charlie')).toBeLessThan(after.indexOf('Alpha'))
+    })
+
+    it('keeps the sort control visible on mobile, unlike the view-mode toggle', async () => {
+      window.matchMedia = vi.fn().mockReturnValue({
+        matches: true,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })
+      mockProjectsList(manyProjects(3), manySummaries(3))
+      renderPage()
+      await screen.findByText('Project 0')
+      expect(screen.queryByRole('button', { name: /expanded view/i })).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/sort by/i)).toBeInTheDocument()
+    })
+
+    it('persists the sort choice across a remount', async () => {
+      mockProjectsList(manyProjects(3), manySummaries(3))
+      const { unmount } = renderPage()
+      await screen.findByText('Project 0')
+      await userEvent.selectOptions(screen.getByLabelText(/sort by/i), 'created')
+      unmount()
+
+      renderPage()
+      await screen.findByText('Project 0')
+      expect(screen.getByLabelText(/sort by/i)).toHaveValue('created')
     })
   })
 

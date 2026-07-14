@@ -16,6 +16,8 @@ A project's landing page (`/projects/{id}`) is three independent panels — **Li
 
 Everything lives inside a project. Create one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{id}`); the UI surfaces archived status but archiving itself is API-only in this release. **+ New project** lives in its own header row, separate from the project list, so a future role gate (`add-project-rbac`) can hide it for non-admins without a layout change.
 
+The project list can be ordered by name, suite count, case count, or creation date, in either direction, via the **Sort by** control in the toolbar — the choice is remembered in your browser across visits, applies the same way in both view modes, and stays available on mobile.
+
 ## The library
 
 Click "see all"/"go to Library" on the landing's Library panel (or any row shown there) to open the explorer: a section tree on the left for navigation, and the selected section's direct contents — subsections *and* any cases that live directly in it — on the right. This two-pane layout is deliberate: a single indented tree breaks down once a section has real content (tens of cases), while splitting "where am I" from "what's here" scales without a redesign.
