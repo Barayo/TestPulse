@@ -16,6 +16,18 @@ describe('ProjectSwitcher', () => {
     expect(screen.getByRole('button', { name: /Banca Móvil/ })).toBeInTheDocument()
   })
 
+  it('never wraps or grows unbounded for a long project name — truncates instead', () => {
+    render(
+      <ProjectSwitcher
+        projects={[{ id: 'p1', name: 'A Very Long Project Name That Should Not Wrap', suiteCount: 0, caseCount: 0, passRate: null }]}
+        activeProjectId="p1"
+        onSelectProject={vi.fn()}
+      />,
+    )
+    const label = screen.getByText('A Very Long Project Name That Should Not Wrap')
+    expect(label).toHaveClass('truncate')
+  })
+
   it('shows a placeholder label when no project is active', () => {
     render(<ProjectSwitcher projects={projects} onSelectProject={vi.fn()} />)
     expect(screen.getByRole('button', { name: /Select project/ })).toBeInTheDocument()

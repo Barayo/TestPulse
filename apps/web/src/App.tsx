@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { ProjectSwitcher } from '@/components/ProjectSwitcher'
 import { HealthBadge } from '@/components/HealthBadge'
 import { useActiveProjectId } from '@/lib/useActiveProject'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
 import { DataRevisionProvider } from '@/lib/DataRevision'
 import { AuthProvider, useAuth } from '@/lib/useAuth'
@@ -23,6 +24,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   const activeProjectId = useActiveProjectId()
   const projects = useProjectSummaries()
   const { user, logout } = useAuth()
+  const isMobile = useIsMobile()
   // The switcher exists to jump between projects while inside one; on the
   // project list itself it would just duplicate the page's own purpose.
   const isProjectsListPage = location.pathname === '/'
@@ -35,9 +37,9 @@ function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="min-h-screen bg-background text-foreground">
       <header className="border-b">
-        <div className="flex items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-6">
-            <Link to="/" className="tp-heading text-xl">
+        <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+            <Link to="/" className="tp-heading shrink-0 text-xl">
               TestPulse
             </Link>
             {!isProjectsListPage && (
@@ -48,20 +50,20 @@ function Layout({ children }: { children: React.ReactNode }) {
               />
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <HealthBadge />
-            {user && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <span>{user.email}</span>
-                <Button variant="ghost" size="sm" onClick={() => void handleLogout()}>
-                  Log out
-                </Button>
-              </div>
-            )}
-          </div>
+          {user && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              {!isMobile && <span>{user.email}</span>}
+              <Button variant="ghost" size="sm" onClick={() => void handleLogout()}>
+                Log out
+              </Button>
+            </div>
+          )}
         </div>
       </header>
       <main className="px-6 py-8">{children}</main>
+      <footer className="flex justify-center border-t px-4 py-3 sm:px-6">
+        <HealthBadge />
+      </footer>
     </div>
   )
 }

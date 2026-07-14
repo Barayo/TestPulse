@@ -38,6 +38,13 @@ beforeEach(() => {
   // reset it so an unauthenticated test doesn't leak its navigation into the
   // next test, which typically assumes it starts at "/".
   window.history.pushState({}, '', '/')
+  // Default every test to desktop; tests exercising mobile-only behavior
+  // override this themselves (matches the pattern in ProjectsPage.test.tsx).
+  window.matchMedia = vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })
 })
 
 describe('App health status', () => {
@@ -228,6 +235,33 @@ describe('App shell', () => {
     render(<App />)
     expect(await screen.findByRole('button', { name: /Banca Móvil/ })).toBeInTheDocument()
     window.history.pushState({}, '', '/')
+  })
+
+  it('hides the user email on mobile but keeps the Log out button, so the header does not overflow', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({
+      matches: true,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })
+    mockProjectData()
+    render(<App />)
+    await screen.findByText('TestPulse')
+    expect(screen.queryByText('admin@example.com')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
+  })
+
+  it('shows the health status and version in a footer, not the header — plenty of room there regardless of viewport', async () => {
+    mockProjectData()
+    render(<App />)
+    const footer = await screen.findByRole('contentinfo')
+    expect(await within(footer).findByText('System ready')).toBeInTheDocument()
+    expect(within(footer).getByText('v0.0.1')).toBeInTheDocument()
+  })
+
+  it('shows the user email on desktop', async () => {
+    mockProjectData()
+    render(<App />)
+    expect(await screen.findByText('admin@example.com')).toBeInTheDocument()
   })
 
   it('falls back to no active project when resolving it from a run route fails', async () => {

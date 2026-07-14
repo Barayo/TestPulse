@@ -45,11 +45,11 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
     <>
       <button
         type="button"
-        className="flex items-center gap-2 rounded-md border px-3 py-1.5 text-sm"
+        className="flex max-w-[9rem] items-center gap-2 rounded-md border px-3 py-1.5 text-sm sm:max-w-[16rem]"
         onClick={() => setOpen(true)}
       >
-        {activeProject?.name ?? 'Select project'}
-        <span className="text-muted-foreground">▾</span>
+        <span className="truncate">{activeProject?.name ?? 'Select project'}</span>
+        <span className="shrink-0 text-muted-foreground">▾</span>
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
