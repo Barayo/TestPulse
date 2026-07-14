@@ -136,7 +136,7 @@ in the suite.
 - **THEN** the case is no longer a member of that suite, but the case itself still exists
 
 ### Requirement: Project list with permission-ready create action
-Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list.
+Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section.
 
 #### Scenario: Listing projects
 - **WHEN** a user navigates to the project list with no project selected
@@ -185,3 +185,27 @@ Without an active project selected, the web UI SHALL show a list of all projects
 #### Scenario: Filtering by status
 - **WHEN** a user selects the "At risk" status filter
 - **THEN** only projects whose status label is "At risk" remain visible
+
+#### Scenario: Default sort order
+- **WHEN** a user opens the project list with no prior sort preference stored
+- **THEN** projects are ordered by name, ascending
+
+#### Scenario: Sorting by a numeric key uses its sensible default direction
+- **WHEN** a user selects "Suites" or "Cases" as the sort key for the first time
+- **THEN** the list orders with the highest count first, without the user needing to also toggle direction
+
+#### Scenario: Toggling sort direction
+- **WHEN** a user toggles the sort direction control for the current sort key
+- **THEN** the list re-orders to the opposite direction for that key
+
+#### Scenario: Sort order applies within Favorites too
+- **WHEN** a user changes the sort order in expanded view with starred projects present
+- **THEN** the Favorites section and the main list both reflect the new order, not just one of them
+
+#### Scenario: Sort preference persists across reloads
+- **WHEN** a user chooses a sort key and direction and later reloads the page in the same browser
+- **THEN** the list renders with the previously chosen sort, not the default
+
+#### Scenario: Sort control is available on mobile
+- **WHEN** the list is viewed on a mobile-width viewport
+- **THEN** the sort control remains visible and usable, unlike the view-mode toggle which is desktop-only
