@@ -8,7 +8,7 @@ A walkthrough of TestPulse's core workflow: projects, test cases, suites, runs, 
 
 ## Finding your way around
 
-TestPulse assumes you work in one project at a time. A compact header element always shows the active project; click it (or press **⌘K**/**Ctrl+K** from anywhere) to open a searchable switcher listing every project with its suite/case counts and latest pass rate.
+TestPulse assumes you work in one project at a time. The header shows `TestPulse › {active project}`: the project name is a direct link to that project's own page, and — once your account has more than one project — a small switch icon next to it (or **⌘K**/**Ctrl+K** from anywhere) opens a searchable palette listing every other project with its suite/case counts and latest pass rate. The palette closes on Escape or an outside click, like any command palette.
 
 A project's landing page (`/projects/{id}`) is three independent panels — **Library**, **Suites**, **Recent runs** — each showing its top few items with a "see all" link to the full view, so opening a project shows top-level structure at a glance rather than everything at once. Each panel's entire header (not just "see all") is clickable to the same destination, and every row shown is itself a direct link to that item — never just a name. Each panel has its own empty state (with a working link to its full page) when a project has nothing in it yet. A breadcrumb trail at the top of the main content (`Projects › {project} › …`) reinforces where you are, with every ancestor segment clickable to go back up — including intermediate section names when browsing nested sections.
 

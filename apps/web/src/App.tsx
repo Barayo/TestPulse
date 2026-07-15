@@ -35,19 +35,28 @@ function Layout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b">
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex min-w-0 items-center gap-3 sm:gap-6">
+          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+            {/* Matches assets/brand/testpulse-logo-horizontal.svg's own
+                Test/Pulse color split, so the header wordmark finally
+                agrees with the committed logo file. */}
             <Link to="/" className="tp-heading shrink-0 text-xl">
-              TestPulse
+              <span className="text-foreground">Test</span>
+              <span className="text-primary">Pulse</span>
             </Link>
             {!isProjectsListPage && (
-              <ProjectSwitcher
-                projects={projects}
-                activeProjectId={activeProjectId}
-                onSelectProject={(id) => navigate(`/projects/${id}`)}
-              />
+              <>
+                <span aria-hidden="true" className="font-mono text-sm text-muted-foreground">
+                  ›
+                </span>
+                <ProjectSwitcher
+                  projects={projects}
+                  activeProjectId={activeProjectId}
+                  onSelectProject={(id) => navigate(`/projects/${id}`)}
+                />
+              </>
             )}
           </div>
           {user && (
@@ -60,7 +69,7 @@ function Layout({ children }: { children: React.ReactNode }) {
           )}
         </div>
       </header>
-      <main className="px-6 py-8">{children}</main>
+      <main className="flex-1 px-6 py-8">{children}</main>
       <footer className="flex justify-center border-t px-4 py-3 sm:px-6">
         <HealthBadge />
       </footer>

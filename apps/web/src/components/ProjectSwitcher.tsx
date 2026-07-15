@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
+import { ArrowLeftRight } from 'lucide-react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
@@ -20,6 +22,8 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const activeProject = projects.find((p) => p.id === activeProjectId)
+  // Nothing to jump to with 0-1 projects — the icon would just be noise.
+  const canSwitch = projects.length > 1
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -43,17 +47,32 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
 
   return (
     <>
-      <button
-        type="button"
-        className="flex max-w-[9rem] items-center gap-2 rounded-md border px-3 py-1.5 text-sm sm:max-w-[16rem]"
-        onClick={() => setOpen(true)}
-      >
-        <span className="truncate">{activeProject?.name ?? 'Select project'}</span>
-        <span className="shrink-0 text-muted-foreground">▾</span>
-      </button>
+      <div className="flex min-w-0 max-w-[9rem] items-center gap-0.5 sm:max-w-[16rem]">
+        {activeProject ? (
+          <Link
+            to={`/projects/${activeProject.id}`}
+            className="-mx-1 -my-1 min-w-0 truncate rounded-md px-1 py-1 text-sm font-bold text-foreground hover:text-primary hover:underline"
+          >
+            {activeProject.name}
+          </Link>
+        ) : (
+          <span className="truncate text-sm font-bold text-muted-foreground">Select project</span>
+        )}
+        {canSwitch && (
+          <button
+            type="button"
+            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-primary"
+            onClick={() => setOpen(true)}
+            title="Switch project (⌘K)"
+            aria-label="Switch project"
+          >
+            <ArrowLeftRight className="size-3.5" />
+          </button>
+        )}
+      </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md" showCloseButton={false}>
           <DialogTitle className="sr-only">Switch project</DialogTitle>
           <Input
             autoFocus
@@ -66,14 +85,14 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
               <li key={p.id}>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between rounded-md px-2 py-2 text-left text-sm hover:bg-accent"
+                  className="block w-full rounded-md px-2 py-2 text-left hover:bg-accent"
                   onClick={() => {
                     onSelectProject(p.id)
                     setOpen(false)
                   }}
                 >
-                  <span className="font-medium">{p.name}</span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="block truncate text-sm font-medium">{p.name}</span>
+                  <span className="block font-mono text-xs text-muted-foreground">
                     {p.suiteCount} suites · {p.caseCount} cases ·{' '}
                     {p.passRate === null ? 'no runs' : `${p.passRate}% pass`}
                   </span>

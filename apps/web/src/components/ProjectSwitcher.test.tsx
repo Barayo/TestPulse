@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { ProjectSwitcher, type SwitcherProject } from './ProjectSwitcher'
 
 const projects: SwitcherProject[] = [
@@ -8,37 +9,58 @@ const projects: SwitcherProject[] = [
   { id: 'p2', name: 'Desktop App', suiteCount: 3, caseCount: 20, passRate: null },
 ]
 
+function renderSwitcher(props: Partial<React.ComponentProps<typeof ProjectSwitcher>> = {}) {
+  return render(
+    <MemoryRouter>
+      <ProjectSwitcher projects={projects} onSelectProject={vi.fn()} {...props} />
+    </MemoryRouter>,
+  )
+}
+
 describe('ProjectSwitcher', () => {
-  it('shows the active project name on the trigger', () => {
-    render(
-      <ProjectSwitcher projects={projects} activeProjectId="p1" onSelectProject={vi.fn()} />,
-    )
-    expect(screen.getByRole('button', { name: /Banca Móvil/ })).toBeInTheDocument()
+  it('renders the active project name as a link to its own page', () => {
+    renderSwitcher({ activeProjectId: 'p1' })
+    const link = screen.getByRole('link', { name: 'Banca Móvil' })
+    expect(link).toHaveAttribute('href', '/projects/p1')
   })
 
   it('never wraps or grows unbounded for a long project name — truncates instead', () => {
-    render(
-      <ProjectSwitcher
-        projects={[{ id: 'p1', name: 'A Very Long Project Name That Should Not Wrap', suiteCount: 0, caseCount: 0, passRate: null }]}
-        activeProjectId="p1"
-        onSelectProject={vi.fn()}
-      />,
-    )
+    renderSwitcher({
+      projects: [{ id: 'p1', name: 'A Very Long Project Name That Should Not Wrap', suiteCount: 0, caseCount: 0, passRate: null }],
+      activeProjectId: 'p1',
+    })
     const label = screen.getByText('A Very Long Project Name That Should Not Wrap')
     expect(label).toHaveClass('truncate')
   })
 
-  it('shows a placeholder label when no project is active', () => {
-    render(<ProjectSwitcher projects={projects} onSelectProject={vi.fn()} />)
-    expect(screen.getByRole('button', { name: /Select project/ })).toBeInTheDocument()
+  it('shows a placeholder label, not a link, when no project is active', () => {
+    renderSwitcher()
+    expect(screen.getByText('Select project')).toBeInTheDocument()
+    expect(screen.queryByRole('link')).not.toBeInTheDocument()
   })
 
-  it('opens the palette with every project and its stats when clicked', async () => {
+  it('shows the switch-project icon when there is more than one project', () => {
+    renderSwitcher({ activeProjectId: 'p1' })
+    expect(screen.getByRole('button', { name: /switch project/i })).toBeInTheDocument()
+  })
+
+  it('hides the switch-project icon when there is only one project — nothing to switch to', () => {
+    renderSwitcher({
+      projects: [{ id: 'p1', name: 'Banca Móvil', suiteCount: 7, caseCount: 51, passRate: 78 }],
+      activeProjectId: 'p1',
+    })
+    expect(screen.queryByRole('button', { name: /switch project/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the switch-project icon when there are no projects at all', () => {
+    renderSwitcher({ projects: [] })
+    expect(screen.queryByRole('button', { name: /switch project/i })).not.toBeInTheDocument()
+  })
+
+  it('opens the palette with every project and its stats when the switch icon is clicked', async () => {
     const user = userEvent.setup()
-    render(
-      <ProjectSwitcher projects={projects} activeProjectId="p1" onSelectProject={vi.fn()} />,
-    )
-    await user.click(screen.getByRole('button', { name: /Banca Móvil/ }))
+    renderSwitcher({ activeProjectId: 'p1' })
+    await user.click(screen.getByRole('button', { name: /switch project/i }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Banca Móvil')).toBeInTheDocument()
     expect(within(dialog).getByText(/7 suites/)).toBeInTheDocument()
@@ -48,11 +70,36 @@ describe('ProjectSwitcher', () => {
     expect(within(dialog).getByText(/no runs/i)).toBeInTheDocument()
   })
 
+  it('shows a project name and its stats on separate lines in the search list, so long names never crowd the stats', async () => {
+    const user = userEvent.setup()
+    renderSwitcher({
+      projects: [
+        { id: 'p1', name: 'Version History Project 1784040597335-x5tn7', suiteCount: 0, caseCount: 1, passRate: null },
+        { id: 'p2', name: 'Desktop App', suiteCount: 3, caseCount: 20, passRate: null },
+      ],
+      activeProjectId: 'p2',
+    })
+    await user.click(screen.getByRole('button', { name: /switch project/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    const name = within(dialog).getByText('Version History Project 1784040597335-x5tn7')
+    expect(name).toHaveClass('truncate')
+    expect(name).toHaveClass('block')
+    const stats = within(dialog).getByText(/0 suites/)
+    expect(stats).toHaveClass('block')
+  })
+
+  it('does not render a close (×) button on the dialog — dismiss via Escape or an outside click, like a command palette', async () => {
+    const user = userEvent.setup()
+    renderSwitcher({ activeProjectId: 'p1' })
+    await user.click(screen.getByRole('button', { name: /switch project/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: /close/i })).not.toBeInTheDocument()
+  })
+
   it('opens the palette via the keyboard shortcut from anywhere', async () => {
     const user = userEvent.setup()
-    render(
-      <ProjectSwitcher projects={projects} activeProjectId="p1" onSelectProject={vi.fn()} />,
-    )
+    renderSwitcher({ activeProjectId: 'p1' })
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     await user.keyboard('{Meta>}k{/Meta}')
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
@@ -60,10 +107,8 @@ describe('ProjectSwitcher', () => {
 
   it('filters the project list as the user types', async () => {
     const user = userEvent.setup()
-    render(
-      <ProjectSwitcher projects={projects} activeProjectId="p1" onSelectProject={vi.fn()} />,
-    )
-    await user.click(screen.getByRole('button', { name: /Banca Móvil/ }))
+    renderSwitcher({ activeProjectId: 'p1' })
+    await user.click(screen.getByRole('button', { name: /switch project/i }))
     const dialog = await screen.findByRole('dialog')
     await user.type(within(dialog).getByRole('textbox'), 'desktop')
     expect(within(dialog).getByText('Desktop App')).toBeInTheDocument()
@@ -73,10 +118,8 @@ describe('ProjectSwitcher', () => {
   it('selects a project and closes the palette', async () => {
     const user = userEvent.setup()
     const onSelectProject = vi.fn()
-    render(
-      <ProjectSwitcher projects={projects} activeProjectId="p1" onSelectProject={onSelectProject} />,
-    )
-    await user.click(screen.getByRole('button', { name: /Banca Móvil/ }))
+    renderSwitcher({ activeProjectId: 'p1', onSelectProject })
+    await user.click(screen.getByRole('button', { name: /switch project/i }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByText('Desktop App'))
     expect(onSelectProject).toHaveBeenCalledWith('p2')

@@ -165,23 +165,42 @@ describe('App shell', () => {
   it('renders the product title and the projects page at /', async () => {
     mockProjectData()
     render(<App />)
-    expect(await screen.findByText('TestPulse')).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'TestPulse' })).toBeInTheDocument()
     expect(await screen.findByRole('button', { name: /new project/i })).toBeInTheDocument()
     await screen.findByText('System ready') // avoid act() warnings
+  })
+
+  it('renders the wordmark in two colors, matching the brand logo\'s Test/Pulse split', async () => {
+    mockProjectData()
+    render(<App />)
+    const test = await screen.findByText('Test')
+    const pulse = screen.getByText('Pulse')
+    expect(test).toHaveClass('text-foreground')
+    expect(pulse).toHaveClass('text-primary')
+  })
+
+  it('separates the wordmark from the active project with a breadcrumb-style ›, matching Breadcrumbs.tsx', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/projects/p1')
+    render(<App />)
+    await screen.findByRole('link', { name: 'Banca Móvil' })
+    const header = screen.getByRole('banner')
+    expect(within(header).getByText('›')).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
   })
 
   it('hides the project switcher on the project list itself — it would be redundant there', async () => {
     mockProjectData()
     render(<App />)
-    await screen.findByText('TestPulse')
-    expect(screen.queryByRole('button', { name: /Select project/ })).not.toBeInTheDocument()
+    await screen.findByRole('link', { name: 'TestPulse' })
+    expect(screen.queryByText('Select project')).not.toBeInTheDocument()
   })
 
   it('shows the active project name on the switcher on a project route', async () => {
     mockProjectData()
     window.history.pushState({}, '', '/projects/p1')
     render(<App />)
-    expect(await screen.findByRole('button', { name: /Banca Móvil/ })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Banca Móvil' })).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 
@@ -190,7 +209,8 @@ describe('App shell', () => {
     window.history.pushState({}, '', '/projects/p1')
     const user = userEvent.setup()
     render(<App />)
-    await user.click(await screen.findByRole('button', { name: /Banca Móvil/ }))
+    await screen.findByRole('link', { name: 'Banca Móvil' })
+    await user.click(screen.getByRole('button', { name: /switch project/i }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Banca Móvil')).toBeInTheDocument()
     expect(within(dialog).getByText(/1 suites/)).toBeInTheDocument()
@@ -206,10 +226,11 @@ describe('App shell', () => {
     window.history.pushState({}, '', '/projects/p1')
     const user = userEvent.setup()
     render(<App />)
-    await user.click(await screen.findByRole('button', { name: /Banca Móvil/ }))
+    await screen.findByRole('link', { name: 'Banca Móvil' })
+    await user.click(screen.getByRole('button', { name: /switch project/i }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByText('Desktop App'))
-    expect(await screen.findByRole('button', { name: /Desktop App/ })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Desktop App' })).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 
@@ -233,7 +254,7 @@ describe('App shell', () => {
     })
     window.history.pushState({}, '', '/runs/r1')
     render(<App />)
-    expect(await screen.findByRole('button', { name: /Banca Móvil/ })).toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: 'Banca Móvil' })).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 
@@ -245,7 +266,7 @@ describe('App shell', () => {
     })
     mockProjectData()
     render(<App />)
-    await screen.findByText('TestPulse')
+    await screen.findByRole('link', { name: 'TestPulse' })
     expect(screen.queryByText('admin@example.com')).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
   })
@@ -272,7 +293,7 @@ describe('App shell', () => {
     })
     window.history.pushState({}, '', '/runs/r1')
     render(<App />)
-    expect(await screen.findByRole('button', { name: /Select project/ })).toBeInTheDocument()
+    expect(await screen.findByText('Select project')).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 })
