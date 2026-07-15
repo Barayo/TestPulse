@@ -1,6 +1,6 @@
 import { FolderIcon, LayersIcon, CirclePlayIcon } from 'lucide-react'
 import type { LandingFolder, LandingSuite, LandingRun } from '@/lib/useProjectLanding'
-import { HealthBar } from '@/components/HealthBar'
+import { HealthBar, statusBorderClass } from '@/components/HealthBar'
 
 function PanelShell({
   icon,
@@ -22,14 +22,14 @@ function PanelShell({
   children: React.ReactNode
 }) {
   return (
-    <div className="rounded-lg border bg-card">
+    <div className="overflow-hidden rounded-2xl border border-border bg-card">
       <button
         type="button"
         aria-label={seeAllAriaLabel}
-        className="flex w-full items-center justify-between border-b bg-muted/40 px-3 py-2 text-left hover:bg-muted/60"
+        className="flex w-full items-center justify-between border-b border-border bg-muted/40 px-4 py-3 text-left hover:bg-muted/60"
         onClick={onSeeAll}
       >
-        <span className="flex items-center gap-1.5 text-sm font-semibold">
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-foreground">
           {icon}
           {title}
         </span>
@@ -66,7 +66,7 @@ export function FoldersPanel({
       emptyLabel="No sections yet · create the first one to organize your test cases."
     >
       {folders.map((f) => (
-        <li key={f.id} className="border-b px-3 py-2 text-sm last:border-b-0">
+        <li key={f.id} className="border-b border-border px-4 py-2.5 text-sm last:border-b-0">
           <button
             type="button"
             className="flex w-full items-center justify-between text-left hover:text-foreground"
@@ -103,7 +103,7 @@ export function SuitesPanel({
       emptyLabel="No suites yet · create the first one to group test cases."
     >
       {suites.map((s) => (
-        <li key={s.id} className="border-b px-3 py-2 text-sm last:border-b-0">
+        <li key={s.id} className="border-b border-border px-4 py-2.5 text-sm last:border-b-0">
           <button
             type="button"
             className="flex w-full items-center justify-between text-left hover:text-foreground"
@@ -140,7 +140,10 @@ export function RunsPanel({
       emptyLabel="No runs yet."
     >
       {runs.map((r) => (
-        <li key={r.id} className="border-b px-3 py-2 text-sm last:border-b-0">
+        <li
+          key={r.id}
+          className={`border-b border-l-2 border-border px-4 py-2.5 text-sm last:border-b-0 ${statusBorderClass(r.passRate)}`}
+        >
           <button
             type="button"
             className="flex w-full items-center justify-between text-left hover:text-foreground"

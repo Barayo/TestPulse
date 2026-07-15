@@ -9,14 +9,26 @@ export type LandingRun = { id: string; name: string; createdAt: string; passRate
 export type ProjectLanding = {
   folders: LandingFolder[]
   totalFolders: number
+  totalCases: number
   suites: LandingSuite[]
   totalSuites: number
   runs: LandingRun[]
   totalRuns: number
 }
 
-const TOP_N = 4
-const empty: ProjectLanding = { folders: [], totalFolders: 0, suites: [], totalSuites: 0, runs: [], totalRuns: 0 }
+// Raised from 4 (enrich-project-landing design.md) now that the summary
+// strip above the panels carries the "how healthy is this project" signal —
+// the panels themselves can afford to show a bit more without feeling dense.
+const TOP_N = 5
+const empty: ProjectLanding = {
+  folders: [],
+  totalFolders: 0,
+  totalCases: 0,
+  suites: [],
+  totalSuites: 0,
+  runs: [],
+  totalRuns: 0,
+}
 
 // Top-level folders (children of root) with a recursive case count, top
 // suites by creation order with their case count, and the most recent runs
@@ -71,6 +83,16 @@ export function useProjectLanding(projectId: string | undefined): ProjectLanding
           return { id: f.id, name: f.name, caseCount }
         })
 
+        // Cases created before any subsection existed default into root,
+        // which has no row of its own here otherwise — surface them as a
+        // pseudo-row so they're never invisible (move-cases-between-folders
+        // design.md). Prepended, so it competes for the TOP_N slot like any
+        // other row rather than being exempted from the cap.
+        const rootCaseCount = root ? cases.filter((c) => c.folderId === root.id).length : 0
+        if (root && rootCaseCount > 0) {
+          landingFolders.unshift({ id: root.id, name: 'Unsectioned', caseCount: rootCaseCount })
+        }
+
         const landingSuites: LandingSuite[] = suites
           .slice(0, TOP_N)
           .map((s) => ({ id: s.id, name: s.name, caseCount: s.caseIds.length }))
@@ -96,6 +118,7 @@ export function useProjectLanding(projectId: string | undefined): ProjectLanding
           setLanding({
             folders: landingFolders.slice(0, TOP_N),
             totalFolders: topLevel.length,
+            totalCases: cases.length,
             suites: landingSuites,
             totalSuites: suites.length,
             runs: landingRuns,
