@@ -203,7 +203,7 @@ describe('App shell', () => {
     mockProjectData()
     render(<App />)
     const wordmarkLink = await screen.findByRole('link', { name: 'TestPulse' })
-    expect(wordmarkLink).toHaveClass('-ml-4')
+    expect(wordmarkLink).toHaveClass('-ml-6')
   })
 
   it('separates the wordmark from the active project with a breadcrumb-style ›, matching Breadcrumbs.tsx', async () => {

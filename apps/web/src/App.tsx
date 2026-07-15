@@ -42,11 +42,11 @@ function Layout({ children }: { children: React.ReactNode }) {
             {/* Matches assets/brand/testpulse-icon.svg (icon tile, EKG
                 stroke) and testpulse-logo-horizontal.svg (Test/Pulse color
                 split) — the header brand mark previously matched neither. */}
-            {/* -ml-4: a partial hanging indent — pulling the icon fully
+            {/* -ml-6: a partial hanging indent — pulling the icon fully
                 flush with the page content below it clipped it against the
-                header's own padding, so this only closes part of the gap
-                between the icon's edge and the wordmark text's edge. */}
-            <Link to="/" className="-ml-4 flex shrink-0 items-center gap-1.5 text-2xl">
+                header's own padding, so this closes most (not all) of the
+                gap between the icon's edge and the wordmark text's edge. */}
+            <Link to="/" className="-ml-6 flex shrink-0 items-center gap-1.5 text-2xl">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 200 200"
