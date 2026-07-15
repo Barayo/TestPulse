@@ -190,6 +190,15 @@ describe('App shell', () => {
     expect(icon).toBeInTheDocument()
   })
 
+  it('sizes the wordmark and icon a step larger, so the brand mark reads with real presence', async () => {
+    mockProjectData()
+    render(<App />)
+    const wordmarkLink = await screen.findByRole('link', { name: 'TestPulse' })
+    expect(wordmarkLink).toHaveClass('text-2xl')
+    const icon = wordmarkLink.querySelector('svg[aria-hidden="true"]')
+    expect(icon).toHaveClass('size-[26px]')
+  })
+
   it('separates the wordmark from the active project with a breadcrumb-style ›, matching Breadcrumbs.tsx', async () => {
     mockProjectData()
     window.history.pushState({}, '', '/projects/p1')

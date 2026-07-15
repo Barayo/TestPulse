@@ -38,15 +38,15 @@ function Layout({ children }: { children: React.ReactNode }) {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="border-b">
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 py-3 sm:px-6 sm:py-4">
-          <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
+          <div className="flex min-w-0 items-baseline gap-1.5 sm:gap-2">
             {/* Matches assets/brand/testpulse-icon.svg (icon tile, EKG
                 stroke) and testpulse-logo-horizontal.svg (Test/Pulse color
                 split) — the header brand mark previously matched neither. */}
-            <Link to="/" className="flex shrink-0 items-center gap-1.5 text-xl">
+            <Link to="/" className="flex shrink-0 items-center gap-1.5 text-2xl">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 200 200"
-                className="size-[22px] shrink-0 rounded-[5px]"
+                className="size-[26px] shrink-0 rounded-[5px]"
               >
                 <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#tp-wordmark-gradient)" />
                 <defs>
