@@ -39,12 +39,35 @@ function Layout({ children }: { children: React.ReactNode }) {
       <header className="border-b">
         <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 py-3 sm:px-6 sm:py-4">
           <div className="flex min-w-0 items-center gap-1.5 sm:gap-2">
-            {/* Matches assets/brand/testpulse-logo-horizontal.svg's own
-                Test/Pulse color split, so the header wordmark finally
-                agrees with the committed logo file. */}
-            <Link to="/" className="tp-heading shrink-0 text-xl">
-              <span className="text-foreground">Test</span>
-              <span className="text-primary">Pulse</span>
+            {/* Matches assets/brand/testpulse-icon.svg (icon tile, EKG
+                stroke) and testpulse-logo-horizontal.svg (Test/Pulse color
+                split) — the header brand mark previously matched neither. */}
+            <Link to="/" className="flex shrink-0 items-center gap-1.5 text-xl">
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 200 200"
+                className="size-[22px] shrink-0 rounded-[5px]"
+              >
+                <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#tp-wordmark-gradient)" />
+                <defs>
+                  <linearGradient id="tp-wordmark-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stopColor="#14B8A6" />
+                    <stop offset="100%" stopColor="#0D6E6A" />
+                  </linearGradient>
+                </defs>
+                <path
+                  d="M35,112 L62,112 L78,74 L94,140 L112,112 L122,112 L138,130 L172,64"
+                  fill="none"
+                  stroke="#FFFFFF"
+                  strokeWidth={14}
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <span>
+                <span className="text-foreground tp-wordmark-test">Test</span>
+                <span className="text-primary tp-wordmark-pulse">Pulse</span>
+              </span>
             </Link>
             {!isProjectsListPage && (
               <>

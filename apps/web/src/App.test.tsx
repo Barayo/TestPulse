@@ -170,13 +170,24 @@ describe('App shell', () => {
     await screen.findByText('System ready') // avoid act() warnings
   })
 
-  it('renders the wordmark in two colors, matching the brand logo\'s Test/Pulse split', async () => {
+  it('renders the wordmark in two colors and two Recursive-axis treatments, matching the brand logo\'s Test/Pulse split', async () => {
     mockProjectData()
     render(<App />)
     const test = await screen.findByText('Test')
     const pulse = screen.getByText('Pulse')
     expect(test).toHaveClass('text-foreground')
+    expect(test).toHaveClass('tp-wordmark-test')
     expect(pulse).toHaveClass('text-primary')
+    expect(pulse).toHaveClass('tp-wordmark-pulse')
+  })
+
+  it('shows the brand icon tile next to the wordmark, matching assets/brand/testpulse-icon.svg', async () => {
+    mockProjectData()
+    render(<App />)
+    await screen.findByRole('link', { name: 'TestPulse' })
+    const header = screen.getByRole('banner')
+    const icon = header.querySelector('svg[aria-hidden="true"]')
+    expect(icon).toBeInTheDocument()
   })
 
   it('separates the wordmark from the active project with a breadcrumb-style ›, matching Breadcrumbs.tsx', async () => {

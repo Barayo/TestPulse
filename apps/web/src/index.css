@@ -3,6 +3,7 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
+@import "@fontsource-variable/recursive/full.css";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -184,6 +185,8 @@
  * Typography treatment (redesign-ui design D2): no new display typeface —
  * personality comes from weight/tracking on the already-loaded Geist Sans,
  * and Geist Mono for labels/data/breadcrumbs (uppercase, wide-tracked).
+ * Still true for headings generally; the brand wordmark itself is the one
+ * carve-out (add-wordmark-icon) — see .tp-wordmark-* below.
  */
 @layer utilities {
   .tp-heading {
@@ -191,5 +194,24 @@
   }
   .tp-label {
     @apply font-mono text-xs uppercase tracking-widest text-muted-foreground;
+  }
+}
+
+/*
+ * Brand wordmark only (add-wordmark-icon) — Recursive's MONO/CASL axes let
+ * one family embody both halves of the product name: "Test" technical and
+ * monospaced, "Pulse" rounder and alive. Weight (520/470) chosen by
+ * comparing at actual header size, not just hero/display size, where a
+ * heavier cut read noisy rather than precise.
+ */
+@layer utilities {
+  .tp-wordmark-test {
+    font-family: 'Recursive Variable', ui-sans-serif, sans-serif;
+    font-variation-settings: 'MONO' 1, 'CASL' 0, 'wght' 520, 'slnt' 0, 'CRSV' 0;
+    letter-spacing: -0.01em;
+  }
+  .tp-wordmark-pulse {
+    font-family: 'Recursive Variable', ui-sans-serif, sans-serif;
+    font-variation-settings: 'MONO' 0, 'CASL' 1, 'wght' 470, 'slnt' 0, 'CRSV' 0.4;
   }
 }
