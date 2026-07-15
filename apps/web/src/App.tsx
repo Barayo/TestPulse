@@ -42,21 +42,24 @@ function Layout({ children }: { children: React.ReactNode }) {
             {/* Matches assets/brand/testpulse-icon.svg (icon tile, EKG
                 stroke) and testpulse-logo-horizontal.svg (Test/Pulse color
                 split) — the header brand mark previously matched neither. */}
-            {/* -ml-6: a partial hanging indent — pulling the icon fully
+            {/* -ml-5: a partial hanging indent — pulling the icon fully
                 flush with the page content below it clipped it against the
                 header's own padding, so this closes most (not all) of the
-                gap between the icon's edge and the wordmark text's edge. */}
-            {/* text-[32px]: Recursive Variable renders far more compact per
-                font-size unit than Geist — at 24px the wordmark's rendered
-                box height (29px) barely beat the 14px bold project name's
-                (28px), so the "size bump" never actually produced visual
-                dominance. 32px/34px was checked against real rendered box
-                heights, not just the CSS number, before landing here. */}
-            <Link to="/" className="-ml-6 flex shrink-0 items-center gap-1.5 text-[32px]">
+                gap between the icon's edge and the wordmark text's edge.
+                Left ~4px of breathing room from the true viewport edge
+                rather than going fully flush (0px), which read as too
+                tight at full page width. */}
+            {/* text-[24px]: Recursive Variable renders more compact per
+                font-size unit than Geist, so at this size the wordmark's
+                rendered box height already lands close to the project
+                name's own bumped size below (ProjectSwitcher.tsx) — the
+                lead comes from color/weight, not from the wordmark
+                dwarfing the project name. */}
+            <Link to="/" className="-ml-5 flex shrink-0 items-center gap-1.5 text-[24px] leading-none">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 200 200"
-                className="size-[34px] shrink-0 rounded-[5px]"
+                className="size-[26px] shrink-0 rounded-[5px]"
               >
                 <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#tp-wordmark-gradient)" />
                 <defs>
@@ -81,7 +84,16 @@ function Layout({ children }: { children: React.ReactNode }) {
             </Link>
             {!isProjectsListPage && (
               <>
-                <span aria-hidden="true" className="font-mono text-sm text-muted-foreground">
+                {/* text-[20px] + relative -top-1.5: sized up to match the
+                    now-larger wordmark/project name either side of it.
+                    Verified against getBoundingClientRect() center, not
+                    just a visual glance — a smaller crop had made an
+                    earlier (wrong-direction) offset look aligned when it
+                    measured 10px off. */}
+                <span
+                  aria-hidden="true"
+                  className="relative -top-1.5 font-mono text-[20px] text-muted-foreground"
+                >
                   ›
                 </span>
                 <ProjectSwitcher

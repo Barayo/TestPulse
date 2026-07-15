@@ -24,6 +24,12 @@ describe('ProjectSwitcher', () => {
     expect(link).toHaveAttribute('href', '/projects/p1')
   })
 
+  it('sizes the project name up from the base text size, so it reads closer to the wordmark next to it', () => {
+    renderSwitcher({ activeProjectId: 'p1' })
+    const link = screen.getByRole('link', { name: 'Banca Móvil' })
+    expect(link).toHaveClass('text-[20px]')
+  })
+
   it('never wraps or grows unbounded for a long project name — truncates instead', () => {
     renderSwitcher({
       projects: [{ id: 'p1', name: 'A Very Long Project Name That Should Not Wrap', suiteCount: 0, caseCount: 0, passRate: null }],

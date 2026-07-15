@@ -51,22 +51,35 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
         {activeProject ? (
           <Link
             to={`/projects/${activeProject.id}`}
-            className="-mx-1 -my-1 min-w-0 truncate rounded-md px-1 py-1 text-sm font-bold text-foreground hover:text-primary hover:underline"
+            // text-[20px]: bumped from the base text-sm (14px) so the
+            // project name reads closer to the wordmark's own presence,
+            // rather than looking like an afterthought next to it.
+            // leading-none + relative -top-1: Geist Variable's line-box
+            // sits noticeably lower/taller than Recursive's at a similar
+            // font-size, so items-baseline alone (App.tsx) wasn't enough
+            // once the two were closer in size — calibrated live against
+            // the wordmark next to it.
+            className="relative -top-1 -mx-1 -my-1 min-w-0 truncate rounded-md px-1 py-1 text-[20px] leading-none font-bold text-foreground hover:text-primary hover:underline"
           >
             {activeProject.name}
           </Link>
         ) : (
-          <span className="truncate text-sm font-bold text-muted-foreground">Select project</span>
+          <span className="relative -top-1 truncate text-[20px] leading-none font-bold text-muted-foreground">
+            Select project
+          </span>
         )}
         {canSwitch && (
+          // relative -top-0.5: sized up alongside the wordmark/project name
+          // bumps above; a plain button's own alignment sat a touch low
+          // next to the now-larger text, calibrated live.
           <button
             type="button"
-            className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-primary"
+            className="relative -top-0.5 flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-primary"
             onClick={() => setOpen(true)}
             title="Switch project (⌘K)"
             aria-label="Switch project"
           >
-            <ArrowLeftRight className="size-3.5" />
+            <ArrowLeftRight className="size-[22px]" />
           </button>
         )}
       </div>
