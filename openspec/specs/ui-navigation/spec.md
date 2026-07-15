@@ -73,14 +73,23 @@ same full view, and every item row shown SHALL itself link directly to that item
 to the panel's own full-list view. The Library panel SHALL include a visible entry for
 test cases that live directly in the project's root section, not only for named
 subsections, so a case created before any subsection existed is never invisible there.
+Above the panels, the landing SHALL show a summary of the project's own status — status
+label, pass-rate bar, suite/case totals, and last-run time — matching the same
+presentation used on the project list. Each Recent runs row SHALL be color-coded by its
+pass-rate band so an at-risk run is distinguishable at a glance, without reading its
+percentage.
 
 #### Scenario: Dense project stays legible
 - **WHEN** a project has more sections, suites, or runs than fit in a panel
 - **THEN** each panel shows only its top items plus a link to the full list, not the full list inline
 
 #### Scenario: Empty project shows per-panel empty states
-- **WHEN** a project has no sections, suites, or runs yet
-- **THEN** each panel shows its own empty-state message and call to action, independent of the other panels
+- **WHEN** a project has cases or suites already, but one panel (e.g. Suites) has nothing in it yet
+- **THEN** that panel shows its own empty-state message and call to action, independent of the other panels
+
+#### Scenario: Entirely empty project shows a getting-started checklist instead of three empty panels
+- **WHEN** a project has no sections with cases, no suites, and no runs at all
+- **THEN** the landing shows a single getting-started checklist in place of the three panels, rather than three independent empty states
 
 #### Scenario: Panel header is clickable beyond "see all"
 - **WHEN** a user clicks anywhere on a panel's header (its icon or title), not only the "see all" text
@@ -93,6 +102,18 @@ subsections, so a case created before any subsection existed is never invisible 
 #### Scenario: Root-level cases are visible on the landing page
 - **WHEN** a project has one or more test cases living directly in its root section (not inside any named subsection)
 - **THEN** the Library panel shows a row representing them, distinct from named subsections, that navigates to the root section's contents when clicked
+
+#### Scenario: Summary strip shows the project's own status
+- **WHEN** a user opens a project's landing page
+- **THEN** a summary strip above the panels shows the project's status label, pass-rate bar, suite count, case count, and time since its last run — the same data and presentation the project list already shows for it
+
+#### Scenario: Summary strip omits last-run when the project has never run
+- **WHEN** a project has no runs yet
+- **THEN** the summary strip shows "No runs yet" instead of a pass rate or last-run time, matching the project list's own treatment
+
+#### Scenario: Recent runs are color-coded by risk
+- **WHEN** a project's Recent runs panel shows a run with a pass rate below 50%
+- **THEN** that row is visually distinguished (e.g. a colored accent) from a healthy run's row, not just differentiated by its printed percentage
 
 ### Requirement: Library with two-pane navigation
 The web UI SHALL provide a library browsing view — labeled "Library" for the project's
