@@ -90,14 +90,20 @@ test.describe('Requirement: Breadcrumb trail', () => {
 })
 
 test.describe('Requirement: Project switcher', () => {
-  test('Scenario: Switching project via the header', async ({ page }) => {
+  test('Scenario: Navigating to the active project via the header', async ({ page }) => {
+    const name = await createProject(page, 'Header Link Project')
+    const projectUrl = page.url()
+    await openFolderExplorer(page)
+    await page.getByRole('banner').getByRole('link', { name }).click()
+    await expect(page).toHaveURL(projectUrl)
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+  })
+
+  test('Scenario: Switching project via the header icon', async ({ page }) => {
     const first = await createProject(page, 'Switcher First Project')
     await createProject(page, 'Switcher Second Project')
 
-    await page
-      .getByRole('button', { name: /select project|switcher second/i })
-      .first()
-      .click()
+    await page.getByRole('button', { name: /switch project/i }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(first)).toBeVisible()
     await dialog.getByText(first).click()
@@ -109,6 +115,14 @@ test.describe('Requirement: Project switcher', () => {
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await page.keyboard.press('Control+k')
     await expect(page.getByRole('dialog')).toBeVisible()
+  })
+})
+
+test.describe('Requirement: Brand wordmark', () => {
+  test('Scenario: Wordmark links home', async ({ page }) => {
+    await createProject(page, 'Wordmark Home Project')
+    await page.getByRole('link', { name: 'TestPulse' }).click()
+    await expect(page).toHaveURL('/')
   })
 })
 
