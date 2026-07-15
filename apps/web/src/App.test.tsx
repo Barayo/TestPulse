@@ -199,6 +199,13 @@ describe('App shell', () => {
     expect(icon).toHaveClass('size-[26px]')
   })
 
+  it('hangs the wordmark icon slightly left, so the readable text lines up closer to the page content below it', async () => {
+    mockProjectData()
+    render(<App />)
+    const wordmarkLink = await screen.findByRole('link', { name: 'TestPulse' })
+    expect(wordmarkLink).toHaveClass('-ml-4')
+  })
+
   it('separates the wordmark from the active project with a breadcrumb-style ›, matching Breadcrumbs.tsx', async () => {
     mockProjectData()
     window.history.pushState({}, '', '/projects/p1')
