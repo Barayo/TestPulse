@@ -15,7 +15,13 @@ type Props = {
   onNewFolderValueChange?: (value: string) => void
   onConfirmNewFolder?: () => void
   onCancelNewFolder?: () => void
+  onDropCase?: (caseId: string, folderId: string) => void
 }
+
+// Shared with FolderExplorerPage's case rows and its inline subsection
+// rows, so every drag source/drop target in the library explorer agrees
+// on the same MIME type for the dragged case id.
+export const CASE_ID_MIME = 'application/x-testpulse-case-id'
 
 function InlineNewFolderRow({
   depth,
@@ -103,11 +109,13 @@ function TreeNode({
   onNewFolderValueChange,
   onConfirmNewFolder,
   onCancelNewFolder,
+  onDropCase,
 }: {
   folder: TreeFolder
   depth: number
 } & Omit<Props, 'folders' | 'rootId'> & { folders: TreeFolder[] }) {
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const children = folders.filter((f) => f.parentFolderId === folder.id)
   const isExpanded = expanded.has(folder.id)
   const isSelected = folder.id === selectedId
@@ -115,11 +123,22 @@ function TreeNode({
   return (
     <div>
       <div
-        className={`flex items-center gap-1.5 py-1 text-sm ${isSelected ? 'bg-accent font-medium' : ''}`}
+        className={`flex items-center gap-1.5 py-1 text-sm ${isSelected ? 'bg-accent font-medium' : ''} ${dragOver ? 'bg-primary/10' : ''}`}
         style={{ paddingLeft: 8 + depth * 16 }}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY })
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          setDragOver(true)
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          e.preventDefault()
+          setDragOver(false)
+          const caseId = e.dataTransfer.getData(CASE_ID_MIME)
+          if (caseId) onDropCase?.(caseId, folder.id)
         }}
       >
         {children.length > 0 ? (
@@ -155,6 +174,7 @@ function TreeNode({
             onNewFolderValueChange={onNewFolderValueChange}
             onConfirmNewFolder={onConfirmNewFolder}
             onCancelNewFolder={onCancelNewFolder}
+            onDropCase={onDropCase}
           />
         ))}
       {isExpanded && creatingIn === folder.id && (
@@ -191,6 +211,7 @@ export function FolderTree({
   onNewFolderValueChange,
   onConfirmNewFolder,
   onCancelNewFolder,
+  onDropCase,
 }: Props) {
   const topLevel = folders.filter((f) => f.parentFolderId === rootId)
   return (
@@ -211,6 +232,7 @@ export function FolderTree({
           onNewFolderValueChange={onNewFolderValueChange}
           onConfirmNewFolder={onConfirmNewFolder}
           onCancelNewFolder={onCancelNewFolder}
+          onDropCase={onDropCase}
         />
       ))}
     </nav>

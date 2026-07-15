@@ -1,9 +1,21 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import FolderExplorerPage from './FolderExplorerPage'
 import { api } from '@/lib/api'
+
+// jsdom has no real drag-and-drop; the standard pattern is driving the
+// handlers directly with a minimal DataTransfer stub.
+function makeDataTransfer() {
+  const store: Record<string, string> = {}
+  return {
+    setData: (type: string, data: string) => {
+      store[type] = data
+    },
+    getData: (type: string) => store[type] ?? '',
+  }
+}
 
 vi.mock('@/lib/api', () => ({
   api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() },
@@ -76,8 +88,9 @@ describe('FolderExplorerPage', () => {
   it('shows the selected folder’s direct subfolders and cases', async () => {
     mockExplorerAPI()
     renderExplorer()
-    expect(await screen.findByText('Nacionales')).toBeInTheDocument()
-    expect(screen.getByText('Daily transfer limit')).toBeInTheDocument()
+    const list = await screen.findByRole('list', { name: 'Section contents' })
+    expect(within(list).getByText('Nacionales')).toBeInTheDocument()
+    expect(within(list).getByText('Daily transfer limit')).toBeInTheDocument()
   })
 
   it('reflects folder depth in the breadcrumb, with Library as the root crumb', async () => {
@@ -100,7 +113,8 @@ describe('FolderExplorerPage', () => {
   it('navigates into a subfolder when clicked', async () => {
     mockExplorerAPI()
     renderExplorer()
-    await userEvent.click(await screen.findByText('Nacionales'))
+    const list = await screen.findByRole('list', { name: 'Section contents' })
+    await userEvent.click(within(list).getByText('Nacionales'))
     await waitFor(() => {
       const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
       expect(within(nav).getByText('Nacionales')).toBeInTheDocument()
@@ -114,7 +128,7 @@ describe('FolderExplorerPage', () => {
       response: { ok: true },
     })
     renderExplorer()
-    await screen.findByText('Nacionales')
+    await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
     await userEvent.click(screen.getByRole('button', { name: /new section/i }))
     await userEvent.type(screen.getByLabelText(/new section name/i), 'Internacionales{Enter}')
 
@@ -157,7 +171,7 @@ describe('FolderExplorerPage', () => {
     mockExplorerAPI()
     mockPOST.mockResolvedValue({ data: limitCase, response: { ok: true } })
     renderExplorer()
-    await screen.findByText('Nacionales')
+    await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
     await userEvent.click(screen.getByRole('button', { name: /new test case/i }))
     await userEvent.type(screen.getByLabelText(/title/i), 'New case')
     await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
@@ -180,6 +194,101 @@ describe('FolderExplorerPage', () => {
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Smoke')).toBeInTheDocument()
     expect(within(dialog).getByRole('list', { name: /version history/i })).toBeInTheDocument()
+  })
+
+  describe('moving a case', () => {
+    it('moves a case by dragging it onto a section shown in the tree', async () => {
+      mockExplorerAPI()
+      mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      const tree = screen.getByRole('navigation', { name: 'Section tree' })
+      const targetNode = within(tree).getByText('Nacionales').closest('div') as HTMLElement
+
+      const dt = makeDataTransfer()
+      fireEvent.dragStart(caseRow, { dataTransfer: dt })
+      fireEvent.dragOver(targetNode, { dataTransfer: dt })
+      fireEvent.drop(targetNode, { dataTransfer: dt })
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseId}/folder',
+          expect.objectContaining({ params: { path: { caseId: 'c1' } }, body: { folderId: 'nacionales' } }),
+        )
+      })
+    })
+
+    it('moves a case by dragging it onto a subsection row shown inline in the content list', async () => {
+      mockExplorerAPI()
+      mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      const list = screen.getByRole('list', { name: 'Section contents' })
+      const targetRow = within(list).getByText('Nacionales').closest('li') as HTMLElement
+
+      const dt = makeDataTransfer()
+      fireEvent.dragStart(caseRow, { dataTransfer: dt })
+      fireEvent.dragOver(targetRow, { dataTransfer: dt })
+      fireEvent.drop(targetRow, { dataTransfer: dt })
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseId}/folder',
+          expect.objectContaining({ params: { path: { caseId: 'c1' } }, body: { folderId: 'nacionales' } }),
+        )
+      })
+    })
+
+    it('does nothing when a case is dropped onto the section it already belongs to', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      const tree = screen.getByRole('navigation', { name: 'Section tree' })
+      const currentFolderNode = within(tree).getByText('Transferencias').closest('div') as HTMLElement
+
+      const dt = makeDataTransfer()
+      fireEvent.dragStart(caseRow, { dataTransfer: dt })
+      fireEvent.dragOver(currentFolderNode, { dataTransfer: dt })
+      fireEvent.drop(currentFolderNode, { dataTransfer: dt })
+
+      await new Promise((r) => setTimeout(r, 0))
+      expect(mockPUT).not.toHaveBeenCalled()
+    })
+
+    it('moves a case via the "Move to…" picker, listing every folder with its full path', async () => {
+      mockExplorerAPI()
+      mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /move to/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
+      expect(within(dialog).getByText('Library')).toBeInTheDocument()
+
+      await userEvent.click(within(dialog).getByText('Library / Transferencias / Nacionales'))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseId}/folder',
+          expect.objectContaining({ params: { path: { caseId: 'c1' } }, body: { folderId: 'nacionales' } }),
+        )
+      })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('does nothing when the current folder is reselected in the picker', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /move to/i }))
+      const dialog = await screen.findByRole('dialog')
+
+      await userEvent.click(within(dialog).getByText('Library / Transferencias'))
+
+      await new Promise((r) => setTimeout(r, 0))
+      expect(mockPUT).not.toHaveBeenCalled()
+    })
   })
 
   it('editing a case calls PUT and refreshes the list', async () => {

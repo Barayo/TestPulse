@@ -2,8 +2,10 @@ import { useCallback, useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
-import { FolderTree } from '@/components/FolderTree'
+import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { CaseDrawer, type CaseVersionSummary, type Step } from '@/components/CaseDrawer'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import type { components } from '@testpulse/shared/api'
 
@@ -24,6 +26,13 @@ function ancestorChain(folders: Folder[], folderId: string): Folder[] {
   return chain
 }
 
+// Full path for the Move-to picker, so same-named sections at different
+// depths aren't ambiguous — e.g. "Library / Transferencias / Nacionales".
+function folderPath(folders: Folder[], folderId: string, rootId: string): string {
+  if (folderId === rootId) return 'Library'
+  return ['Library', ...ancestorChain(folders, folderId).map((f) => f.name)].join(' / ')
+}
+
 // The project's auto-created root folder is surfaced to users as "Library" —
 // a UI label only, not a rename of the underlying entity (still literally
 // named "Root" in the database).
@@ -42,6 +51,9 @@ export default function FolderExplorerPage() {
   const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
+  const [movingCaseId, setMovingCaseId] = useState<string | null>(null)
+  const [moveQuery, setMoveQuery] = useState('')
   const [treeCreatingIn, setTreeCreatingIn] = useState<string | null>(null)
   const [contentCreatingFolder, setContentCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -89,6 +101,19 @@ export default function FolderExplorerPage() {
     await api.POST('/api/v1/projects/{projectId}/folders', {
       params: { path: { projectId } },
       body: { name: name.trim(), parentFolderId: parentId },
+    })
+    await load()
+    bumpLanding()
+  }
+
+  // Dropping onto the case's own current folder is a no-op — not an error,
+  // just nothing to do (design.md, move-cases-between-folders).
+  async function moveCase(caseId: string, targetFolderId: string) {
+    const current = cases.find((c) => c.id === caseId)
+    if (!current || current.folderId === targetFolderId) return
+    await api.PUT('/api/v1/cases/{caseId}/folder', {
+      params: { path: { caseId } },
+      body: { folderId: targetFolderId },
     })
     await load()
     bumpLanding()
@@ -168,6 +193,7 @@ export default function FolderExplorerPage() {
             setTreeCreatingIn(null)
           }}
           onCancelNewFolder={() => setTreeCreatingIn(null)}
+          onDropCase={(caseId, folderId) => void moveCase(caseId, folderId)}
         />
 
         <div className="flex-1 space-y-3">
@@ -217,7 +243,21 @@ export default function FolderExplorerPage() {
             ) : (
               <ul aria-label="Section contents">
                 {subfolders.map((f) => (
-                  <li key={f.id} className="border-b px-3 py-2 text-sm last:border-b-0">
+                  <li
+                    key={f.id}
+                    className={`border-b px-3 py-2 text-sm last:border-b-0 ${dragOverFolderId === f.id ? 'bg-primary/10' : ''}`}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      setDragOverFolderId(f.id)
+                    }}
+                    onDragLeave={() => setDragOverFolderId(null)}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      setDragOverFolderId(null)
+                      const caseId = e.dataTransfer.getData(CASE_ID_MIME)
+                      if (caseId) void moveCase(caseId, f.id)
+                    }}
+                  >
                     <button
                       type="button"
                       className="flex w-full items-center gap-2 text-left"
@@ -229,7 +269,12 @@ export default function FolderExplorerPage() {
                   </li>
                 ))}
                 {casesHere.map((c) => (
-                  <li key={c.id} className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0">
+                  <li
+                    key={c.id}
+                    draggable
+                    onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.id)}
+                    className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
+                  >
                     <button
                       type="button"
                       className="flex flex-1 items-center gap-2 text-left"
@@ -246,6 +291,16 @@ export default function FolderExplorerPage() {
                         {name}
                       </span>
                     ))}
+                    <button
+                      type="button"
+                      className="rounded-md border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => {
+                        setMoveQuery('')
+                        setMovingCaseId(c.id)
+                      }}
+                    >
+                      Move to…
+                    </button>
                   </li>
                 ))}
               </ul>
@@ -253,6 +308,37 @@ export default function FolderExplorerPage() {
           </div>
         </div>
       </div>
+
+      <Dialog open={movingCaseId !== null} onOpenChange={(open) => !open && setMovingCaseId(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Move to…</DialogTitle>
+          <Input
+            autoFocus
+            placeholder="Search sections…"
+            value={moveQuery}
+            onChange={(e) => setMoveQuery(e.target.value)}
+          />
+          <ul className="max-h-80 space-y-1 overflow-y-auto">
+            {folders
+              .map((f) => ({ id: f.id, path: folderPath(folders, f.id, root.id) }))
+              .filter((f) => f.path.toLowerCase().includes(moveQuery.toLowerCase()))
+              .map((f) => (
+                <li key={f.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-md px-2 py-2 text-left text-sm hover:bg-accent"
+                    onClick={() => {
+                      if (movingCaseId) void moveCase(movingCaseId, f.id)
+                      setMovingCaseId(null)
+                    }}
+                  >
+                    {f.path}
+                  </button>
+                </li>
+              ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
 
       {drawer?.mode === 'create' && (
         <CaseDrawer
