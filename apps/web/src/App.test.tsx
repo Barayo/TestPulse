@@ -190,13 +190,13 @@ describe('App shell', () => {
     expect(icon).toBeInTheDocument()
   })
 
-  it('sizes the wordmark and icon a step larger, so the brand mark reads with real presence', async () => {
+  it('sizes the wordmark and icon large enough to actually dominate the project name, not just by CSS font-size number', async () => {
     mockProjectData()
     render(<App />)
     const wordmarkLink = await screen.findByRole('link', { name: 'TestPulse' })
-    expect(wordmarkLink).toHaveClass('text-2xl')
+    expect(wordmarkLink).toHaveClass('text-[32px]')
     const icon = wordmarkLink.querySelector('svg[aria-hidden="true"]')
-    expect(icon).toHaveClass('size-[26px]')
+    expect(icon).toHaveClass('size-[34px]')
   })
 
   it('hangs the wordmark icon slightly left, so the readable text lines up closer to the page content below it', async () => {

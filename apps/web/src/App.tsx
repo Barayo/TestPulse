@@ -46,11 +46,17 @@ function Layout({ children }: { children: React.ReactNode }) {
                 flush with the page content below it clipped it against the
                 header's own padding, so this closes most (not all) of the
                 gap between the icon's edge and the wordmark text's edge. */}
-            <Link to="/" className="-ml-6 flex shrink-0 items-center gap-1.5 text-2xl">
+            {/* text-[32px]: Recursive Variable renders far more compact per
+                font-size unit than Geist — at 24px the wordmark's rendered
+                box height (29px) barely beat the 14px bold project name's
+                (28px), so the "size bump" never actually produced visual
+                dominance. 32px/34px was checked against real rendered box
+                heights, not just the CSS number, before landing here. */}
+            <Link to="/" className="-ml-6 flex shrink-0 items-center gap-1.5 text-[32px]">
               <svg
                 aria-hidden="true"
                 viewBox="0 0 200 200"
-                className="size-[26px] shrink-0 rounded-[5px]"
+                className="size-[34px] shrink-0 rounded-[5px]"
               >
                 <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#tp-wordmark-gradient)" />
                 <defs>
