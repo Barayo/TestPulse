@@ -84,6 +84,11 @@ type CaseContent struct {
 	ExpectedResult string   `json:"expectedResult"`
 	Priority       Priority `json:"priority"`
 	Tags           []string `json:"tags"`
+	// Platform and TestType are free text — see add-case-classification-fields
+	// design.md for why these aren't enums like Priority.
+	Platform  string `json:"platform"`
+	TestType  string `json:"testType"`
+	Automated bool   `json:"automated"`
 }
 
 // Step is a single test case step.

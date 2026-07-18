@@ -3,7 +3,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
-import { CaseDrawer, type CaseVersionSummary, type Step } from '@/components/CaseDrawer'
+import { CaseDrawer, type CaseVersionSummary, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useBumpDataRevision } from '@/lib/DataRevision'
@@ -128,21 +128,45 @@ export default function FolderExplorerPage() {
     setDrawer({ mode: 'view', caseId, versions })
   }
 
-  async function createCase(input: { title: string; steps: Step[] }) {
+  async function createCase(input: { title: string; steps: Step[] } & ClassificationFields) {
     if (!projectId || !selectedFolderId) return
     await api.POST('/api/v1/projects/{projectId}/cases', {
       params: { path: { projectId } },
-      body: { title: input.title, folderId: selectedFolderId, steps: input.steps },
+      body: {
+        title: input.title,
+        folderId: selectedFolderId,
+        steps: input.steps,
+        priority: input.priority,
+        tags: input.tags,
+        platform: input.platform,
+        testType: input.testType,
+        automated: input.automated,
+      },
     })
     setDrawer(null)
     await load()
     bumpLanding()
   }
 
-  async function saveCaseEdit(caseId: string, input: { title: string; steps: Step[] }) {
+  // The drawer only edits title/steps/priority/tags/platform/testType/automated —
+  // description and expectedResult are preserved from the case's current content so
+  // an edit never silently wipes fields the drawer has no controls for (PUT replaces
+  // the whole content, per D1 immutable versioning; there is no partial update).
+  async function saveCaseEdit(caseId: string, input: { title: string; steps: Step[] } & ClassificationFields) {
+    const current = cases.find((c) => c.id === caseId)?.content
     await api.PUT('/api/v1/cases/{caseId}', {
       params: { path: { caseId } },
-      body: { title: input.title, steps: input.steps },
+      body: {
+        title: input.title,
+        steps: input.steps,
+        description: current?.description ?? '',
+        expectedResult: current?.expectedResult ?? '',
+        priority: input.priority,
+        tags: input.tags,
+        platform: input.platform,
+        testType: input.testType,
+        automated: input.automated,
+      },
     })
     await load()
     bumpLanding()
@@ -360,6 +384,11 @@ export default function FolderExplorerPage() {
           steps={(activeCase.content.steps ?? []).map((s) => ({ action: s.action, expected: s.expected ?? '' }))}
           suiteNames={suiteNamesFor(activeCase.id)}
           versions={drawer.versions}
+          priority={activeCase.content.priority ?? 'medium'}
+          tags={activeCase.content.tags ?? []}
+          platform={activeCase.content.platform ?? ''}
+          testType={activeCase.content.testType ?? ''}
+          automated={activeCase.content.automated ?? false}
           onSaveEdit={(input) => void saveCaseEdit(activeCase.id, input)}
         />
       )}

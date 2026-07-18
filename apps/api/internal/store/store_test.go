@@ -108,6 +108,54 @@ func TestEditingCreatesNewVersionAndPreservesOld(t *testing.T) {
 	}
 }
 
+func TestCaseClassificationFieldsDefaultWhenOmitted(t *testing.T) {
+	s := testStore(t)
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+
+	if c.Content.Platform != "" || c.Content.TestType != "" || c.Content.Automated {
+		t.Errorf("Content = %+v, want empty platform/testType and automated=false", c.Content)
+	}
+}
+
+func TestCaseClassificationFieldsRoundTripOnCreateAndUpdate(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	content := defaultContent("Login works")
+	content.Platform = "web"
+	content.TestType = "e2e"
+	content.Automated = true
+	c, err := s.Cases.Create(ctx, p.ID, "", content)
+	if err != nil {
+		t.Fatalf("create case: %v", err)
+	}
+	if c.Content.Platform != "web" || c.Content.TestType != "e2e" || !c.Content.Automated {
+		t.Fatalf("Content after create = %+v, want platform=web testType=e2e automated=true", c.Content)
+	}
+
+	got, err := s.Cases.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("get case: %v", err)
+	}
+	if got.Content.Platform != "web" || got.Content.TestType != "e2e" || !got.Content.Automated {
+		t.Fatalf("Content after Get = %+v, want platform=web testType=e2e automated=true", got.Content)
+	}
+
+	edited := got.Content
+	edited.Platform = "iOS"
+	edited.TestType = "unit"
+	edited.Automated = false
+	c2, err := s.Cases.NewVersion(ctx, c.ID, edited)
+	if err != nil {
+		t.Fatalf("new version: %v", err)
+	}
+	if c2.Content.Platform != "iOS" || c2.Content.TestType != "unit" || c2.Content.Automated {
+		t.Fatalf("Content after NewVersion = %+v, want platform=iOS testType=unit automated=false", c2.Content)
+	}
+}
+
 func TestSoftDeleteHidesFromListKeepsVersions(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

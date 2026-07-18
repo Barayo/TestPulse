@@ -63,6 +63,9 @@ CREATE TABLE test_case_versions (
     priority        text NOT NULL DEFAULT 'medium'
                     CHECK (priority IN ('low', 'medium', 'high', 'critical')),
     tags            text[] NOT NULL DEFAULT '{}',
+    platform        text NOT NULL DEFAULT '',
+    test_type       text NOT NULL DEFAULT '',
+    automated       boolean NOT NULL DEFAULT false,
     created_at      timestamptz NOT NULL DEFAULT now(),
     PRIMARY KEY (case_id, version)
 );

@@ -18,3 +18,11 @@ The system SHALL let users create test cases within a project with title, descri
 #### Scenario: Classification fields can be set later
 - **WHEN** a user updates an existing case with a platform, testType, and automated status
 - **THEN** the case reflects all three on subsequent reads
+
+#### Scenario: Classification fields are editable from the case authoring drawer
+- **WHEN** a user creates or edits a case in the web UI
+- **THEN** the drawer shows editable controls for priority, tags, platform, test type, and automated status, not just title and steps
+
+#### Scenario: Editing a case from the UI preserves fields the drawer doesn't show
+- **WHEN** a user edits a case's title or steps from the UI without changing its description or expected result
+- **THEN** the case's description and expected result are unchanged in the new version, not reset to empty

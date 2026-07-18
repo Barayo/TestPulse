@@ -112,7 +112,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 	rows, err := r.pool.Query(ctx,
 		`SELECT i.id, i.run_id, i.case_id, i.case_version, i.assignee, i.current_status, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
 		 FROM test_run_items i
 		 JOIN test_cases c ON c.id = i.case_id
 		 JOIN test_case_versions v ON v.case_id = i.case_id AND v.version = i.case_version
@@ -131,13 +131,15 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 			priority                     string
 			stepsJSON                    []byte
 			tags                         []string
+			platform, testType           string
+			automated                    bool
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseVersion,
 			&it.Assignee, &it.CurrentStatus, &it.CreatedAt, &it.NewerVersion,
-			&title, &description, &stepsJSON, &expected, &priority, &tags); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
 		if err != nil {
 			return nil, err
 		}

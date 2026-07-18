@@ -697,6 +697,15 @@ components:
         tags:
           type: array
           items: { type: string }
+        platform:
+          type: string
+          description: Free text — target platform (e.g. "web", "iOS"). No fixed taxonomy.
+        testType:
+          type: string
+          description: Free text — kind of test (e.g. "unit", "e2e"). No fixed taxonomy.
+        automated:
+          type: boolean
+          description: Defaults to false — every case is manual until marked otherwise.
     CaseCreateInput:
       allOf:
         - $ref: "#/components/schemas/CaseContent"

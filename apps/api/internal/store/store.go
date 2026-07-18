@@ -41,7 +41,7 @@ func New(pool *pgxpool.Pool) *Store {
 var ErrNotFound = fmt.Errorf("not found")
 
 // contentColumns is the shared SELECT list for test_case_versions content.
-const contentColumns = "title, description, steps, expected_result, priority, tags"
+const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated"
 
 func marshalSteps(steps []domain.Step) ([]byte, error) {
 	if steps == nil {
@@ -50,7 +50,7 @@ func marshalSteps(steps []domain.Step) ([]byte, error) {
 	return json.Marshal(steps)
 }
 
-func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string) func() (domain.CaseContent, error) {
+func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool) func() (domain.CaseContent, error) {
 	return func() (domain.CaseContent, error) {
 		var steps []domain.Step
 		if err := json.Unmarshal(*stepsJSON, &steps); err != nil {
@@ -63,6 +63,9 @@ func scanContent(title, description *string, stepsJSON *[]byte, expected *string
 			ExpectedResult: *expected,
 			Priority:       domain.Priority(*priority),
 			Tags:           *tags,
+			Platform:       *platform,
+			TestType:       *testType,
+			Automated:      *automated,
 		}, nil
 	}
 }

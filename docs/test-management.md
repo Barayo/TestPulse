@@ -30,6 +30,8 @@ Click **+ New test case** in the library explorer to open a side drawer: a title
 
 **Every edit creates a new version.** Click **Edit**, change the title or steps, **Save changes** — the case's current version increments (`v1` → `v2`), the old content is never lost, and both versions are listed in the drawer's version history (backed by `GET /api/v1/cases/{id}/versions`). This matters because of what happens next.
 
+A case can also carry `priority` (low/medium/high/critical), `tags` (freeform keywords), `platform` and `testType` (free text — no fixed taxonomy, since these vary too much team to team), and `automated` (boolean, defaults to `false`). All five are optional and editable from the same drawer used for title and steps — priority via a dropdown, tags as a comma-separated list, platform/testType as free text, automated as a checkbox — and are shown as badges/labels once a case is saved. Editing a case only ever touches the fields the drawer shows; its description and expected result (no UI for those two yet) carry over unchanged.
+
 ## Suites
 
 Click "see all"/"go to Suites" on the landing's Suites panel to reach the full suites page: a clean list (name + case count) plus a **New suite** form. Click a suite row to open its own drawer with full case membership — add cases via the dropdown + **Add**; remove with the **Remove** button next to a case in the drawer's list. Removing from a suite never deletes the case itself, since suite membership is just an n:m relationship (`suite_cases`). Clicking a suite row on the landing's Suites panel opens straight to that suite's drawer instead of the plain list.

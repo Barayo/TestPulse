@@ -580,6 +580,12 @@ export interface components {
             expectedResult?: string;
             priority?: components["schemas"]["Priority"];
             tags?: string[];
+            /** @description Free text — target platform (e.g. "web", "iOS"). No fixed taxonomy. */
+            platform?: string;
+            /** @description Free text — kind of test (e.g. "unit", "e2e"). No fixed taxonomy. */
+            testType?: string;
+            /** @description Defaults to false — every case is manual until marked otherwise. */
+            automated?: boolean;
         };
         CaseCreateInput: components["schemas"]["CaseContent"] & {
             /** @description Defaults to the project's root folder when omitted. */

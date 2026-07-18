@@ -44,10 +44,11 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 		return domain.TestCase{}, err
 	}
 	_, err = tx.Exec(ctx,
-		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags)
-		 VALUES ($1, 1, $2, $3, $4, $5, $6, $7)`,
+		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated)
+		 VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		c.ID, content.Title, content.Description, steps, content.ExpectedResult,
-		defaultPriority(content.Priority), tagsOrEmpty(content.Tags))
+		defaultPriority(content.Priority), tagsOrEmpty(content.Tags),
+		content.Platform, content.TestType, content.Automated)
 	if err != nil {
 		return domain.TestCase{}, err
 	}
@@ -83,10 +84,11 @@ func (r *CaseRepo) NewVersion(ctx context.Context, caseID string, content domain
 		return domain.TestCase{}, err
 	}
 	_, err = tx.Exec(ctx,
-		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
 		c.ID, c.CurrentVersion, content.Title, content.Description, steps,
-		content.ExpectedResult, defaultPriority(content.Priority), tagsOrEmpty(content.Tags))
+		content.ExpectedResult, defaultPriority(content.Priority), tagsOrEmpty(content.Tags),
+		content.Platform, content.TestType, content.Automated)
 	if err != nil {
 		return domain.TestCase{}, err
 	}
@@ -104,22 +106,24 @@ func (r *CaseRepo) Get(ctx context.Context, caseID string) (domain.TestCase, err
 		priority                     string
 		stepsJSON                    []byte
 		tags                         []string
+		platform, testType           string
+		automated                    bool
 	)
 	err := r.pool.QueryRow(ctx,
 		`SELECT c.id, c.project_id, c.folder_id, c.current_version, c.created_at,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
 		 FROM test_cases c
 		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = c.current_version
 		 WHERE c.id = $1 AND NOT c.deleted`, caseID,
 	).Scan(&c.ID, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt,
-		&title, &description, &stepsJSON, &expected, &priority, &tags)
+		&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.TestCase{}, ErrNotFound
 	}
 	if err != nil {
 		return domain.TestCase{}, err
 	}
-	content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags)()
+	content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
 	if err != nil {
 		return domain.TestCase{}, err
 	}
@@ -130,7 +134,7 @@ func (r *CaseRepo) Get(ctx context.Context, caseID string) (domain.TestCase, err
 func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCase, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT c.id, c.project_id, c.folder_id, c.current_version, c.created_at,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
 		 FROM test_cases c
 		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = c.current_version
 		 WHERE c.project_id = $1 AND NOT c.deleted
@@ -148,12 +152,14 @@ func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCas
 			priority                     string
 			stepsJSON                    []byte
 			tags                         []string
+			platform, testType           string
+			automated                    bool
 		)
 		if err := rows.Scan(&c.ID, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt,
-			&title, &description, &stepsJSON, &expected, &priority, &tags); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
 		if err != nil {
 			return nil, err
 		}
@@ -180,12 +186,14 @@ func (r *CaseRepo) Versions(ctx context.Context, caseID string) ([]domain.CaseVe
 			priority                     string
 			stepsJSON                    []byte
 			tags                         []string
+			platform, testType           string
+			automated                    bool
 		)
 		if err := rows.Scan(&v.CaseID, &v.Version, &v.CreatedAt,
-			&title, &description, &stepsJSON, &expected, &priority, &tags); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
 		if err != nil {
 			return nil, err
 		}

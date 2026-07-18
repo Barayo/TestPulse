@@ -35,11 +35,14 @@ const limitCase = {
   currentVersion: 2,
   content: {
     title: 'Daily transfer limit',
-    description: '',
+    description: 'Ensures over-threshold transfers are blocked',
     steps: [{ action: 'Start a transfer over the limit', expected: 'Blocked' }],
-    expectedResult: '',
-    priority: 'medium',
-    tags: [],
+    expectedResult: 'Transfer blocked',
+    priority: 'high',
+    tags: ['smoke'],
+    platform: 'web',
+    testType: 'e2e',
+    automated: true,
   },
   createdAt: '',
 }
@@ -181,7 +184,45 @@ describe('FolderExplorerPage', () => {
         '/api/v1/projects/{projectId}/cases',
         expect.objectContaining({
           params: { path: { projectId: 'p1' } },
-          body: expect.objectContaining({ title: 'New case', folderId: 'transferencias' }),
+          body: expect.objectContaining({
+            title: 'New case',
+            folderId: 'transferencias',
+            priority: 'medium',
+            tags: [],
+            platform: '',
+            testType: '',
+            automated: false,
+          }),
+        }),
+      )
+    })
+  })
+
+  it('creates a test case with classification fields set in the drawer', async () => {
+    mockExplorerAPI()
+    mockPOST.mockResolvedValue({ data: limitCase, response: { ok: true } })
+    renderExplorer()
+    await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
+    await userEvent.click(screen.getByRole('button', { name: /new test case/i }))
+    await userEvent.type(screen.getByLabelText(/title/i), 'New case')
+    await userEvent.selectOptions(screen.getByLabelText(/priority/i), 'critical')
+    await userEvent.type(screen.getByLabelText(/^tags/i), 'smoke, regression')
+    await userEvent.type(screen.getByLabelText(/platform/i), 'iOS')
+    await userEvent.type(screen.getByLabelText(/test type/i), 'unit')
+    await userEvent.click(screen.getByLabelText(/automated/i))
+    await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectId}/cases',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            priority: 'critical',
+            tags: ['smoke', 'regression'],
+            platform: 'iOS',
+            testType: 'unit',
+            automated: true,
+          }),
         }),
       )
     })
@@ -306,6 +347,55 @@ describe('FolderExplorerPage', () => {
       expect(mockPUT).toHaveBeenCalledWith(
         '/api/v1/cases/{caseId}',
         expect.objectContaining({ params: { path: { caseId: 'c1' } } }),
+      )
+    })
+  })
+
+  it('editing a case preserves description and expected result, which the drawer has no controls for', async () => {
+    mockExplorerAPI()
+    mockPUT.mockResolvedValue({
+      data: { ...limitCase, currentVersion: 3 },
+      response: { ok: true },
+    })
+    renderExplorer()
+    await userEvent.click(await screen.findByText('Daily transfer limit'))
+    await userEvent.click(await screen.findByRole('button', { name: /^edit$/i }))
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/cases/{caseId}',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            description: 'Ensures over-threshold transfers are blocked',
+            expectedResult: 'Transfer blocked',
+          }),
+        }),
+      )
+    })
+  })
+
+  it('editing a case sends changed classification fields alongside preserved title and steps', async () => {
+    mockExplorerAPI()
+    mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
+    renderExplorer()
+    await userEvent.click(await screen.findByText('Daily transfer limit'))
+    await userEvent.click(await screen.findByRole('button', { name: /^edit$/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/priority/i), 'low')
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/cases/{caseId}',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            priority: 'low',
+            tags: ['smoke'],
+            platform: 'web',
+            testType: 'e2e',
+            automated: true,
+          }),
+        }),
       )
     })
   })

@@ -19,6 +19,11 @@ describe('CaseDrawer — create mode', () => {
     expect(onCreate).toHaveBeenCalledWith({
       title: 'Daily transfer limit',
       steps: [{ action: 'Start a transfer over the limit', expected: 'The system blocks the transfer' }],
+      priority: 'medium',
+      tags: [],
+      platform: '',
+      testType: '',
+      automated: false,
     })
   })
 
@@ -43,7 +48,39 @@ describe('CaseDrawer — create mode', () => {
     render(<CaseDrawer mode="create" open folderName="Transferencias" onClose={vi.fn()} onCreate={onCreate} />)
     await userEvent.type(screen.getByLabelText(/title/i), 'Case with empty step')
     await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
-    expect(onCreate).toHaveBeenCalledWith({ title: 'Case with empty step', steps: [] })
+    expect(onCreate).toHaveBeenCalledWith({
+      title: 'Case with empty step',
+      steps: [],
+      priority: 'medium',
+      tags: [],
+      platform: '',
+      testType: '',
+      automated: false,
+    })
+  })
+
+  it('defaults priority to medium and lets a user set priority, tags, platform, test type, and automated', async () => {
+    const onCreate = vi.fn()
+    render(<CaseDrawer mode="create" open folderName="Transferencias" onClose={vi.fn()} onCreate={onCreate} />)
+    expect(screen.getByLabelText(/priority/i)).toHaveValue('medium')
+
+    await userEvent.type(screen.getByLabelText(/title/i), 'Login works')
+    await userEvent.selectOptions(screen.getByLabelText(/priority/i), 'critical')
+    await userEvent.type(screen.getByLabelText(/^tags/i), 'smoke, regression')
+    await userEvent.type(screen.getByLabelText(/platform/i), 'web')
+    await userEvent.type(screen.getByLabelText(/test type/i), 'e2e')
+    await userEvent.click(screen.getByLabelText(/automated/i))
+    await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
+
+    expect(onCreate).toHaveBeenCalledWith({
+      title: 'Login works',
+      steps: [],
+      priority: 'critical',
+      tags: ['smoke', 'regression'],
+      platform: 'web',
+      testType: 'e2e',
+      automated: true,
+    })
   })
 })
 
@@ -61,6 +98,11 @@ describe('CaseDrawer — view mode', () => {
       { version: 2, createdAt: '2026-02-01T00:00:00Z' },
       { version: 1, createdAt: '2026-01-01T00:00:00Z' },
     ],
+    priority: 'high' as const,
+    tags: ['smoke', 'regression'],
+    platform: 'web',
+    testType: 'e2e',
+    automated: true,
     onSaveEdit: vi.fn(),
   }
 
@@ -82,6 +124,22 @@ describe('CaseDrawer — view mode', () => {
     expect(within(history).getByText(/current/i)).toBeInTheDocument()
   })
 
+  it('shows priority, tags, platform, test type, and automated status', () => {
+    render(<CaseDrawer {...viewProps} />)
+    expect(screen.getByText('high')).toBeInTheDocument()
+    expect(screen.getByText('smoke')).toBeInTheDocument()
+    expect(screen.getByText('regression')).toBeInTheDocument()
+    expect(screen.getByText(/web/)).toBeInTheDocument()
+    expect(screen.getByText(/e2e/)).toBeInTheDocument()
+    expect(screen.getByText(/automated/i)).toBeInTheDocument()
+  })
+
+  it('omits platform/test type line and automated badge when unset', () => {
+    render(<CaseDrawer {...viewProps} platform="" testType="" automated={false} />)
+    expect(screen.queryByText(/platform/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/^automated$/i)).not.toBeInTheDocument()
+  })
+
   it('switches to editable steps when Edit is clicked, and saves', async () => {
     const onSaveEdit = vi.fn()
     render(<CaseDrawer {...viewProps} onSaveEdit={onSaveEdit} />)
@@ -91,7 +149,32 @@ describe('CaseDrawer — view mode', () => {
     expect(onSaveEdit).toHaveBeenCalledWith({
       title: 'Daily transfer limit',
       steps: [{ action: 'Start a transfer over the limit', expected: 'Blocked before confirming' }],
+      priority: 'high',
+      tags: ['smoke', 'regression'],
+      platform: 'web',
+      testType: 'e2e',
+      automated: true,
     })
+  })
+
+  it('pre-fills classification fields when editing and includes changes in onSaveEdit', async () => {
+    const onSaveEdit = vi.fn()
+    render(<CaseDrawer {...viewProps} onSaveEdit={onSaveEdit} />)
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+    expect(screen.getByLabelText(/priority/i)).toHaveValue('high')
+    expect(screen.getByLabelText(/^tags/i)).toHaveValue('smoke, regression')
+    expect(screen.getByLabelText(/platform/i)).toHaveValue('web')
+    expect(screen.getByLabelText(/test type/i)).toHaveValue('e2e')
+    expect(screen.getByLabelText(/automated/i)).toBeChecked()
+
+    await userEvent.selectOptions(screen.getByLabelText(/priority/i), 'low')
+    await userEvent.click(screen.getByLabelText(/automated/i))
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    expect(onSaveEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ priority: 'low', automated: false, platform: 'web', testType: 'e2e' }),
+    )
   })
 
   it('returns to read-only view (with version history visible again) after saving', async () => {

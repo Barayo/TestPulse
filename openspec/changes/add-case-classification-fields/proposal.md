@@ -15,6 +15,20 @@ pipeline at all.
 - `platform` and `testType` are free text, not fixed enums — testing
   taxonomies vary too much across teams to lock into one list (unlike
   `priority`, which already has a deliberately small, fixed set).
+- **Scope expanded post-implementation (2026-07-15):** the backend half
+  landed first with UI deliberately deferred, matching how `priority`
+  and `tags` already existed as API-only fields. The user flagged that
+  this left all five fields (the three new ones plus the two pre-existing
+  ones) unreachable by anyone using the actual product — so this change
+  now also adds `platform`/`testType`/`automated`/`priority`/`tags`
+  controls to the case authoring drawer (`CaseDrawer.tsx`), both for
+  creating and editing a case. Fixing this surfaced a related latent bug:
+  editing a case via the UI only ever sent `{title, steps}` to
+  `PUT /api/v1/cases/{id}`, which replaces a case's entire content —
+  silently resetting `priority` to its default and `tags`/`description`/
+  `expectedResult` to empty on every edit made through the UI. The edit
+  path now preserves `description` and `expectedResult` (still no UI for
+  those two) instead of discarding them.
 
 ## Capabilities
 
@@ -25,7 +39,9 @@ pipeline at all.
 ### Modified Capabilities
 
 - `test-authoring`: the "Test case creation" requirement's schema gains
-  `platform`, `testType`, and `automated`.
+  `platform`, `testType`, and `automated`; a new requirement covers
+  editing/creating with all five classification fields via the UI, and
+  editing no longer discards `description`/`expectedResult`.
 
 ## Impact
 
@@ -36,3 +52,11 @@ pipeline at all.
 - `apps/api/internal/db/migrations/` — amend the existing cases-related
   migration in place (pre-1.0 policy).
 - No new endpoints — reuses the existing case create/update API.
+- `apps/web/src/components/CaseDrawer.tsx` — gains Priority (select),
+  Tags (comma-separated text), Platform, Test type, and Automated
+  (checkbox) fields, shown in both create and edit modes and displayed
+  as badges/labels in read-only view mode.
+- `apps/web/src/pages/FolderExplorerPage.tsx` — `createCase`/`saveCaseEdit`
+  thread the five fields through to the API; `saveCaseEdit` now merges
+  onto the case's existing `description`/`expectedResult` rather than
+  dropping them.
