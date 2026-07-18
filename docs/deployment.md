@@ -10,7 +10,7 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_DATABASE_URL` | **yes** | — | PostgreSQL connection string, e.g. `postgres://user:pass@host:5432/testpulse?sslmode=require` |
 | `TESTPULSE_ADDR` | no | `:8080` | HTTP listen address |
 | `TESTPULSE_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, or `error` (JSON logs on stdout) |
-| `TESTPULSE_ADMIN_EMAIL`, `TESTPULSE_ADMIN_PASSWORD` | no | — | Seed one admin on first startup, only if the `users` table is empty; ignored on any later startup once users exist |
+| `TESTPULSE_ADMIN_EMAIL`, `TESTPULSE_ADMIN_PASSWORD` | no | — | Seed one Tenant Admin on first startup, only if the `users` table is empty; ignored on any later startup once users exist |
 
 The process exits immediately with an error naming the variable if a required
 value is missing. Schema migrations run automatically and idempotently at
@@ -87,8 +87,11 @@ restart — this is intentional.
 
 **As of `add-identity-basics`, every domain endpoint requires an
 authenticated actor** — a local user via session cookie, or an agent via a
-scoped API token (`docs/api.md#authentication`). Two instance-wide roles
-(`admin`/`member`); per-project RBAC and OIDC SSO are v0.2.
+scoped API token (`docs/api.md#authentication`). **As of `add-project-rbac`,
+access to a project is opt-in**: one instance-wide Tenant Admin flag plus
+three project-scoped roles (Tester/Contributor/Project Admin), assignable
+directly or via a team — a non-Tenant-Admin has no access to any project
+until explicitly assigned one. OIDC SSO is v0.2.
 
 **The connection itself is still plain HTTP — there is no TLS termination
 yet** (tracked as backlog: "Add HTTPS/TLS support"). The session cookie is

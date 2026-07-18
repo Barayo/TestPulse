@@ -19,14 +19,14 @@ function wrapper({ children }: { children: React.ReactNode }) {
 describe('useAuth', () => {
   it('starts loading, then resolves the current user from /users/me', async () => {
     mockGET.mockResolvedValue({
-      data: { id: 'u1', email: 'admin@example.com', role: 'admin' },
+      data: { id: 'u1', email: 'admin@example.com', isTenantAdmin: true },
       response: { ok: true },
     })
     const { result } = renderHook(() => useAuth(), { wrapper })
     expect(result.current.loading).toBe(true)
 
     await waitFor(() => expect(result.current.loading).toBe(false))
-    expect(result.current.user).toEqual({ id: 'u1', email: 'admin@example.com', role: 'admin' })
+    expect(result.current.user).toEqual({ id: 'u1', email: 'admin@example.com', isTenantAdmin: true })
   })
 
   it('resolves no user when the session check fails', async () => {
@@ -48,7 +48,7 @@ describe('useAuth', () => {
   it('login sets the user on success', async () => {
     mockGET.mockResolvedValue({ data: undefined, response: { ok: false } })
     mockPOST.mockResolvedValue({
-      data: { id: 'u1', email: 'a@b.com', role: 'member' },
+      data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },
       response: { ok: true },
     })
     const { result } = renderHook(() => useAuth(), { wrapper })
@@ -59,7 +59,7 @@ describe('useAuth', () => {
       outcome = await result.current.login('a@b.com', 'correcthorse')
     })
     expect(outcome).toEqual({ ok: true })
-    expect(result.current.user).toEqual({ id: 'u1', email: 'a@b.com', role: 'member' })
+    expect(result.current.user).toEqual({ id: 'u1', email: 'a@b.com', isTenantAdmin: false })
   })
 
   it('login returns an error and does not set a user on failure', async () => {
@@ -79,7 +79,7 @@ describe('useAuth', () => {
 
   it('logout clears the user', async () => {
     mockGET.mockResolvedValue({
-      data: { id: 'u1', email: 'a@b.com', role: 'member' },
+      data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },
       response: { ok: true },
     })
     mockPOST.mockResolvedValue({ data: undefined, response: { ok: true } })

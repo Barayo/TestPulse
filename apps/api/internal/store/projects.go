@@ -12,20 +12,20 @@ type ProjectRepo struct {
 	pool *pgxpool.Pool
 }
 
-func (r *ProjectRepo) Create(ctx context.Context, name, description string, ownerID *string) (domain.Project, error) {
+func (r *ProjectRepo) Create(ctx context.Context, name, description string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO projects (name, description, owner_id) VALUES ($1, $2, $3)
-		 RETURNING id, name, archived, description, owner_id, created_at`, name, description, ownerID,
-	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.OwnerID, &p.CreatedAt)
+		`INSERT INTO projects (name, description) VALUES ($1, $2)
+		 RETURNING id, name, archived, description, created_at`, name, description,
+	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt)
 	return p, err
 }
 
 func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, name, archived, description, owner_id, created_at FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.OwnerID, &p.CreatedAt)
+		`SELECT id, name, archived, description, created_at FROM projects WHERE id = $1`, id,
+	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt)
 	if err != nil {
 		return domain.Project{}, ErrNotFound
 	}
@@ -34,7 +34,7 @@ func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error
 
 func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, name, archived, description, owner_id, created_at FROM projects ORDER BY created_at`)
+		`SELECT id, name, archived, description, created_at FROM projects ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +43,38 @@ func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	projects := []domain.Project{}
 	for rows.Next() {
 		var p domain.Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.OwnerID, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
+}
+
+// ListForMember returns every project userID has an effective role on —
+// directly assigned or via a team — for non-Tenant-Admins, whose project
+// list is scoped to membership (design.md D6). Tenant Admins use List
+// instead (implicit access to everything).
+func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domain.Project, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT p.id, p.name, p.archived, p.description, p.created_at
+		 FROM projects p
+		 WHERE p.id IN (SELECT project_id FROM project_members WHERE user_id = $1)
+		    OR p.id IN (
+		        SELECT ptr.project_id FROM project_team_roles ptr
+		        JOIN team_members tm ON tm.team_id = ptr.team_id
+		        WHERE tm.user_id = $1
+		    )
+		 ORDER BY p.created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	projects := []domain.Project{}
+	for rows.Next() {
+		var p domain.Project
+		if err := rows.Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)
@@ -64,18 +95,6 @@ func (r *ProjectRepo) Rename(ctx context.Context, id, name string) error {
 
 func (r *ProjectRepo) SetDescription(ctx context.Context, id, description string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE projects SET description = $2 WHERE id = $1`, id, description)
-	if err != nil {
-		return err
-	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
-}
-
-// SetOwner sets the project's owner; a nil ownerID clears it (unowned).
-func (r *ProjectRepo) SetOwner(ctx context.Context, id string, ownerID *string) error {
-	tag, err := r.pool.Exec(ctx, `UPDATE projects SET owner_id = $2 WHERE id = $1`, id, ownerID)
 	if err != nil {
 		return err
 	}

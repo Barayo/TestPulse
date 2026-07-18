@@ -16,7 +16,7 @@ beforeEach(() => {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
       return Promise.resolve({
-        data: { id: 'u1', email: 'me@example.com', role: 'member' },
+        data: { id: 'u1', email: 'me@example.com', isTenantAdmin: false },
         response: { ok: true },
       })
     }
@@ -71,6 +71,36 @@ describe('TokensPage', () => {
 
     expect(await screen.findByText('tp_XyZ1FullSecretValue')).toBeInTheDocument()
     expect(screen.getByText(/won't be shown again/i)).toBeInTheDocument()
+  })
+
+  it('copies the newly-created token to the clipboard', async () => {
+    mockPOST.mockResolvedValue({
+      data: {
+        id: 't2',
+        createdBy: 'u1',
+        name: 'new-agent',
+        prefix: 'tp_XyZ1',
+        revokedAt: null,
+        createdAt: '',
+        token: 'tp_XyZ1FullSecretValue',
+      },
+      response: { ok: true },
+    })
+    const user = userEvent.setup()
+    // Must come after userEvent.setup() — it installs its own clipboard
+    // stub (for its copy/cut/paste API), which would otherwise clobber this.
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: /new token/i }))
+    await user.type(screen.getByLabelText(/name/i), 'new-agent')
+    await user.click(screen.getByRole('button', { name: /create/i }))
+    await screen.findByText('tp_XyZ1FullSecretValue')
+
+    await user.click(screen.getByRole('button', { name: /copy/i }))
+    expect(writeText).toHaveBeenCalledWith('tp_XyZ1FullSecretValue')
+    expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument()
   })
 
   it('revokes a token', async () => {

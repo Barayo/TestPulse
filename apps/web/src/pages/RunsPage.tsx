@@ -17,6 +17,7 @@ export default function RunsPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const bumpLanding = useBumpDataRevision()
   const [project, setProject] = useState<Project>()
+  const [notFound, setNotFound] = useState(false)
   const [cases, setCases] = useState<TestCase[]>([])
   const [runs, setRuns] = useState<Run[]>([])
   const [runName, setRunName] = useState('')
@@ -24,12 +25,17 @@ export default function RunsPage() {
 
   const load = useCallback(async () => {
     if (!projectId) return
+    setNotFound(false)
     try {
       const [{ data: p }, { data: c }, { data: r }] = await Promise.all([
         api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
         api.GET('/api/v1/projects/{projectId}/cases', { params: { path: { projectId } } }),
         api.GET('/api/v1/projects/{projectId}/runs', { params: { path: { projectId } } }),
       ])
+      if (!p) {
+        setNotFound(true)
+        return
+      }
       setProject(p)
       setCases(c ?? [])
       setRuns(r ?? [])
@@ -58,6 +64,13 @@ export default function RunsPage() {
   }
 
   if (!projectId) return null
+  if (notFound) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+      </p>
+    )
+  }
 
   return (
     <div className="space-y-6">

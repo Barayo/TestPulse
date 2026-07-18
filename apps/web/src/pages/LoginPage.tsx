@@ -23,6 +23,12 @@ export default function LoginPage() {
       setError(result.error)
       return
     }
+    // Returns to wherever RequireAuth bounced the user from (e.g. a session
+    // timeout mid-task) rather than always the projects root — if that page
+    // turns out to be inaccessible to whoever just logged in, its own
+    // "not found" handling (add-project-rbac) covers that gracefully now,
+    // so there's no need to sacrifice the common case (same user, expired
+    // session) to guard against the rarer one (a different user).
     const from = (location.state as { from?: string } | null)?.from ?? '/'
     navigate(from, { replace: true })
   }

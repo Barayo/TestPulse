@@ -35,6 +35,19 @@ func scanFolder(row pgx.Row) (domain.Folder, error) {
 
 const folderColumns = "id, project_id, parent_folder_id, name, created_at"
 
+// ProjectID resolves the project a folder belongs to — used by
+// requirePermission's per-resource resolver (add-project-rbac design.md D5).
+func (r *FolderRepo) ProjectID(ctx context.Context, folderID string) (string, error) {
+	var projectID string
+	err := r.pool.QueryRow(ctx,
+		`SELECT project_id FROM test_case_folders WHERE id = $1`, folderID,
+	).Scan(&projectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return projectID, err
+}
+
 // Root returns a project's automatically-created root folder (design D8).
 func (r *FolderRepo) Root(ctx context.Context, projectID string) (domain.Folder, error) {
 	row := r.pool.QueryRow(ctx,

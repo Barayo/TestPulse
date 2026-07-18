@@ -6,6 +6,7 @@ package domain
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"time"
 )
 
@@ -163,7 +164,6 @@ type Project struct {
 	Name        string    `json:"name"`
 	Archived    bool      `json:"archived"`
 	Description string    `json:"description"`
-	OwnerID     *string   `json:"ownerId"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
@@ -251,32 +251,182 @@ type ProjectSummary struct {
 
 // --- Identity (add-identity-basics) ---
 
-// Role is a user's instance-wide role. There is no per-project scoping yet
-// (that arrives with add-project-rbac) — every role can fully read/write
-// domain data; only RoleAdmin can manage user accounts (design D4).
-type Role string
+// Permission is one independently-toggleable capability a Role can grant.
+// Routes check for a specific Permission, never for a role's identity or
+// rank directly (add-project-rbac design.md D10 — this replaced an
+// ordinal Tester < Contributor < ProjectAdmin scale once roles became
+// fully custom and could no longer be compared against a fixed reference).
+// Ten concrete, per-resource flags (design.md D11) replaced an earlier set
+// of five broader ones (read/execute/author/delete/manageProject) that each
+// bundled several unrelated actions under one switch.
+type Permission string
 
 const (
-	RoleAdmin  Role = "admin"
-	RoleMember Role = "member"
+	PermRead                Permission = "read"
+	PermCaseCreate          Permission = "caseCreate"
+	PermCaseEdit            Permission = "caseEdit"
+	PermCaseDelete          Permission = "caseDelete"
+	PermSectionCreate       Permission = "sectionCreate"
+	PermSectionDelete       Permission = "sectionDelete"
+	PermSuiteCreate         Permission = "suiteCreate"
+	PermSuiteEditMembership Permission = "suiteEditMembership"
+	PermRunCreate           Permission = "runCreate"
+	PermRunRecordResult     Permission = "runRecordResult"
+	PermManageProject       Permission = "manageProject"
 )
 
-var validRoles = map[Role]bool{RoleAdmin: true, RoleMember: true}
-
-func ParseRole(s string) (Role, error) {
-	r := Role(s)
-	if !validRoles[r] {
-		return "", fmt.Errorf("invalid role %q: must be one of admin, member", s)
-	}
-	return r, nil
+// Role is a Tenant-Admin-defined, instance-wide record: a name plus ten
+// independently toggleable permission flags. Rank is a display/sort-order
+// integer only — it is never compared in authorization decisions (design.md
+// D10); a user's effective permissions are the union of every role they
+// hold on a project (direct or via team), not "the highest-ranked role."
+type Role struct {
+	ID                     string    `json:"id"`
+	Name                   string    `json:"name"`
+	Rank                   int       `json:"rank"`
+	CanRead                bool      `json:"canRead"`
+	CanCaseCreate          bool      `json:"canCaseCreate"`
+	CanCaseEdit            bool      `json:"canCaseEdit"`
+	CanCaseDelete          bool      `json:"canCaseDelete"`
+	CanSectionCreate       bool      `json:"canSectionCreate"`
+	CanSectionDelete       bool      `json:"canSectionDelete"`
+	CanSuiteCreate         bool      `json:"canSuiteCreate"`
+	CanSuiteEditMembership bool      `json:"canSuiteEditMembership"`
+	CanRunCreate           bool      `json:"canRunCreate"`
+	CanRunRecordResult     bool      `json:"canRunRecordResult"`
+	CanManageProject       bool      `json:"canManageProject"`
+	CreatedAt              time.Time `json:"createdAt"`
 }
 
+// Has reports whether the role grants perm.
+func (r Role) Has(perm Permission) bool {
+	switch perm {
+	case PermRead:
+		return r.CanRead
+	case PermCaseCreate:
+		return r.CanCaseCreate
+	case PermCaseEdit:
+		return r.CanCaseEdit
+	case PermCaseDelete:
+		return r.CanCaseDelete
+	case PermSectionCreate:
+		return r.CanSectionCreate
+	case PermSectionDelete:
+		return r.CanSectionDelete
+	case PermSuiteCreate:
+		return r.CanSuiteCreate
+	case PermSuiteEditMembership:
+		return r.CanSuiteEditMembership
+	case PermRunCreate:
+		return r.CanRunCreate
+	case PermRunRecordResult:
+		return r.CanRunRecordResult
+	case PermManageProject:
+		return r.CanManageProject
+	default:
+		return false
+	}
+}
+
+func ValidateRoleName(name string) error {
+	if name == "" {
+		return fmt.Errorf("name is required")
+	}
+	return nil
+}
+
+// Permissions is a resolved, unioned set of flags — the result of OR-ing
+// every role a user holds on a particular project (design.md D3/D10).
+type Permissions struct {
+	Read                bool `json:"read"`
+	CaseCreate          bool `json:"caseCreate"`
+	CaseEdit            bool `json:"caseEdit"`
+	CaseDelete          bool `json:"caseDelete"`
+	SectionCreate       bool `json:"sectionCreate"`
+	SectionDelete       bool `json:"sectionDelete"`
+	SuiteCreate         bool `json:"suiteCreate"`
+	SuiteEditMembership bool `json:"suiteEditMembership"`
+	RunCreate           bool `json:"runCreate"`
+	RunRecordResult     bool `json:"runRecordResult"`
+	ManageProject       bool `json:"manageProject"`
+}
+
+// Has reports whether the resolved set includes perm.
+func (p Permissions) Has(perm Permission) bool {
+	switch perm {
+	case PermRead:
+		return p.Read
+	case PermCaseCreate:
+		return p.CaseCreate
+	case PermCaseEdit:
+		return p.CaseEdit
+	case PermCaseDelete:
+		return p.CaseDelete
+	case PermSectionCreate:
+		return p.SectionCreate
+	case PermSectionDelete:
+		return p.SectionDelete
+	case PermSuiteCreate:
+		return p.SuiteCreate
+	case PermSuiteEditMembership:
+		return p.SuiteEditMembership
+	case PermRunCreate:
+		return p.RunCreate
+	case PermRunRecordResult:
+		return p.RunRecordResult
+	case PermManageProject:
+		return p.ManageProject
+	default:
+		return false
+	}
+}
+
+// User.IsTenantAdmin replaces the old instance-wide admin/member Role
+// (add-project-rbac design.md D1) — a non-Tenant-Admin's access is entirely
+// determined by their per-project membership, not a flat instance role.
 type User struct {
 	ID            string     `json:"id"`
 	Email         string     `json:"email"`
-	Role          Role       `json:"role"`
+	IsTenantAdmin bool       `json:"isTenantAdmin"`
 	DeactivatedAt *time.Time `json:"deactivatedAt"`
 	CreatedAt     time.Time  `json:"createdAt"`
+}
+
+// Team is a named group of users with no scope of its own — it only gains
+// meaning once assigned a Role on one or more projects via ProjectTeamRole
+// (add-project-rbac design.md D7).
+type Team struct {
+	ID        string    `json:"id"`
+	Name      string    `json:"name"`
+	MemberIDs []string  `json:"memberIds"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+func ValidateTeamName(name string) error {
+	if name == "" {
+		return fmt.Errorf("name is required")
+	}
+	return nil
+}
+
+// ProjectMember is one user's direct role assignment on a project.
+type ProjectMember struct {
+	UserID string `json:"userId"`
+	RoleID string `json:"roleId"`
+}
+
+// ProjectTeamRole is one team's role assignment on a project — every member
+// of the team inherits this role's permissions on that project.
+type ProjectTeamRole struct {
+	TeamID string `json:"teamId"`
+	RoleID string `json:"roleId"`
+}
+
+// ProjectMembership is a project's full membership: its directly-assigned
+// users plus its assigned teams, each with a role (design.md D3).
+type ProjectMembership struct {
+	Users []ProjectMember   `json:"users"`
+	Teams []ProjectTeamRole `json:"teams"`
 }
 
 func ValidatePassword(password string) error {
@@ -286,9 +436,17 @@ func ValidatePassword(password string) error {
 	return nil
 }
 
+// emailPattern is deliberately simple — one `@`, no whitespace, at least one
+// `.` in the domain part — not a full RFC 5322 parser. It exists to catch
+// obvious typos, not to be the last word on what's deliverable.
+var emailPattern = regexp.MustCompile(`^[^\s@]+@[^\s@]+\.[^\s@]+$`)
+
 func ValidateEmail(email string) error {
 	if email == "" {
 		return fmt.Errorf("email is required")
+	}
+	if !emailPattern.MatchString(email) {
+		return fmt.Errorf("email must be a valid email address")
 	}
 	return nil
 }
@@ -331,12 +489,17 @@ const (
 
 // Actor is whoever is making an authenticated request: a human user via
 // session cookie, or an agent via API token. It is the "who" behind every
-// audit entry.
+// audit entry. EffectiveUserID and IsTenantAdmin are the "what can it do":
+// the user whose project memberships apply, and whether it bypasses
+// per-project checks entirely — for a human these are its own ID and flag;
+// for an agent they are its token's creator's, resolved fresh on every
+// request, never impersonated but never cached either (design.md D4).
 type Actor struct {
-	ID          string
-	Kind        ActorKind
-	DisplayName string
-	Role        Role // the permission level the actor acts at
+	ID              string
+	Kind            ActorKind
+	DisplayName     string
+	EffectiveUserID string
+	IsTenantAdmin   bool
 }
 
 // AuditEntry records one write, denormalizing the actor's display name so

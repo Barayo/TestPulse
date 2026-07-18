@@ -26,7 +26,12 @@ async function createProject(page: Page, label: string) {
 }
 
 async function openFolderExplorer(page: Page) {
-  await page.getByRole('button', { name: 'Go to Library' }).click()
+  // A brand-new, genuinely empty project shows the "Get started" checklist
+  // instead of the library panel (enrich-project-landing) — its first step
+  // routes to the same /library destination, so either control works here.
+  const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
+  const getStarted = page.getByRole('button', { name: /add your first test case/i })
+  await goToLibrary.or(getStarted).click()
   await page.waitForURL(/\/library/)
 }
 

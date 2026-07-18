@@ -39,4 +39,15 @@ describe('Breadcrumbs', () => {
     renderCrumbs([{ label: 'Projects', href: '/' }, { label: 'QA Platform', href: '/projects/p1' }])
     expect(screen.queryByRole('link', { name: 'QA Platform' })).not.toBeInTheDocument()
   })
+
+  it('renders nothing for a single segment — it would only repeat the page heading below it', () => {
+    renderCrumbs([{ label: 'Projects' }])
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
+    expect(screen.queryByText('Projects')).not.toBeInTheDocument()
+  })
+
+  it('renders nothing for an empty segment list', () => {
+    renderCrumbs([])
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
+  })
 })

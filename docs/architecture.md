@@ -49,11 +49,14 @@ recorded in the OpenSpec change `establish-architecture` (see
   agent via scoped API token — carried through `context.Context` (mirroring
   the JSON-request-scoped-value pattern used elsewhere) rather than threaded
   through every service method's parameters. A token acts as its own actor,
-  never impersonating the human who created it, at that human's role. Two
-  instance-wide roles (`admin`/`member`) for now; per-project RBAC and OIDC
-  SSO are v0.2. An append-only audit log records every write's actor. MCP
-  itself (`add-mcp-server`, next v0.1 change) will authenticate agents via
-  the same tokens (see [ROADMAP](../ROADMAP.md)).
+  never impersonating the human who created it, at that human's *current*
+  permission level, resolved fresh on every request (`add-project-rbac`).
+  One instance-wide `Tenant Admin` flag plus three project-scoped roles
+  (Tester < Contributor < Project Admin), assignable directly or via a
+  Team — see [Test management](test-management.md#project-roles-and-teams).
+  OIDC SSO is v0.2. An append-only audit log records every write's actor.
+  MCP itself (`add-mcp-server`, next v0.1 change) will authenticate agents
+  via the same tokens (see [ROADMAP](../ROADMAP.md)).
 - **Minimalist design system.** A small, deliberate teal palette
   (`background`/`surface`/`ink`/`primary`/`warn`/`fail`) implemented as CSS
   custom properties in `apps/web/src/index.css`; `primary` is pulled directly

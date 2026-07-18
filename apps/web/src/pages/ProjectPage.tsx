@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
-import { FolderIcon, LayersIcon, CirclePlayIcon } from 'lucide-react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { FolderIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
 import { StatusPill, ProgressBar } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
+import { useAuth } from '@/lib/useAuth'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
 
@@ -46,7 +47,9 @@ function GettingStartedStep({
 export default function ProjectPage() {
   const { projectId } = useParams<{ projectId: string }>()
   const navigate = useNavigate()
+  const { user } = useAuth()
   const [project, setProject] = useState<Project>()
+  const [notFound, setNotFound] = useState(false)
   const landing = useProjectLanding(projectId)
   const summaries = useProjectSummaries()
   const summary = summaries.find((s) => s.id === projectId)
@@ -54,10 +57,13 @@ export default function ProjectPage() {
   useEffect(() => {
     if (!projectId) return
     let cancelled = false
+    setNotFound(false)
     void api
       .GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } })
       .then(({ data }) => {
-        if (!cancelled) setProject(data)
+        if (cancelled) return
+        if (data) setProject(data)
+        else setNotFound(true)
       })
       .catch(() => {
         if (!cancelled) setProject(undefined)
@@ -68,17 +74,39 @@ export default function ProjectPage() {
   }, [projectId])
 
   if (!projectId) return null
+  if (notFound) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+      </p>
+    )
+  }
 
-  // Only treat the project as genuinely empty once we've actually loaded it —
-  // a failed fetch also leaves landing at its all-zero default, and showing a
-  // "let's get started" checklist during a network error would be misleading
-  // (the project may have plenty of content we just failed to load).
+  // Only treat the project as genuinely empty once its landing data has
+  // actually finished loading (not just "project is truthy") — landing
+  // starts at its all-zero default, so gating on `project` alone flashed
+  // the checklist the instant `project` resolved, for any project whose
+  // landing fetch was still in flight, even one with plenty of content.
+  // Until landing settles, the panels-with-empty-states view stays up
+  // (same fallback the project-fetch-failure case below already relies on)
+  // instead of flickering to the checklist and back.
   const isAllEmpty =
-    Boolean(project) && landing.totalCases === 0 && landing.totalSuites === 0 && landing.totalRuns === 0
+    Boolean(project) && landing.loaded && landing.totalCases === 0 && landing.totalSuites === 0 && landing.totalRuns === 0
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs segments={[{ label: 'Projects', href: '/' }, { label: project?.name ?? '' }]} />
+      <div className="flex items-center justify-between gap-4">
+        <Breadcrumbs segments={[{ label: 'Projects', href: '/' }, { label: project?.name ?? '' }]} />
+        {user?.isTenantAdmin && (
+          <Link
+            to={`/projects/${projectId}/members`}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+          >
+            <UsersIcon className="size-4" aria-hidden="true" />
+            Members
+          </Link>
+        )}
+      </div>
 
       {summary && (
         <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-card p-4">

@@ -22,7 +22,6 @@ function manyProjects(count: number) {
     name: `Project ${i}`,
     archived: false,
     description: '',
-    ownerId: null,
     createdAt: '',
   }))
 }
@@ -67,7 +66,6 @@ describe('useProjectSummaries', () => {
       id: 'p0',
       name: 'Project 0',
       description: '',
-      ownerId: null,
       createdAt: '',
       suiteCount: 0,
       caseCount: 0,
@@ -79,7 +77,6 @@ describe('useProjectSummaries', () => {
       id: 'p1',
       name: 'Project 1',
       description: '',
-      ownerId: null,
       createdAt: '',
       suiteCount: 1,
       caseCount: 2,
@@ -89,7 +86,7 @@ describe('useProjectSummaries', () => {
     })
   })
 
-  it('passes through description, ownerId, and isFavorite from the API', async () => {
+  it('passes through description and isFavorite from the API', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/projects') {
         return Promise.resolve({
@@ -99,7 +96,6 @@ describe('useProjectSummaries', () => {
               name: 'Project 0',
               archived: false,
               description: 'a description',
-              ownerId: 'u1',
               createdAt: '2026-01-01T00:00:00Z',
             },
           ],
@@ -130,7 +126,6 @@ describe('useProjectSummaries', () => {
       id: 'p0',
       name: 'Project 0',
       description: 'a description',
-      ownerId: 'u1',
       createdAt: '2026-01-01T00:00:00Z',
       suiteCount: 1,
       caseCount: 2,

@@ -127,4 +127,15 @@ describe('RunsPage', () => {
     expect(await screen.findByText(/no runs yet/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /create run/i })).not.toBeDisabled()
   })
+
+  it('shows a not-found message instead of an empty, interactive project when the project does not exist', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects/{projectId}')
+        return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    renderRuns()
+    expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create run/i })).not.toBeInTheDocument()
+  })
 })

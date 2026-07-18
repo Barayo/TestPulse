@@ -102,12 +102,17 @@ func (s *Service) AuthenticateSession(ctx context.Context, sessionID string) (do
 	if err := s.store.Sessions.Extend(ctx, sessionID, time.Now().Add(sessionLifetime)); err != nil {
 		return domain.Actor{}, err
 	}
-	return domain.Actor{ID: user.ID, Kind: domain.ActorKindUser, DisplayName: user.Email, Role: user.Role}, nil
+	return domain.Actor{
+		ID: user.ID, Kind: domain.ActorKindUser, DisplayName: user.Email,
+		EffectiveUserID: user.ID, IsTenantAdmin: user.IsTenantAdmin,
+	}, nil
 }
 
 // AuthenticateToken resolves a bearer token to its own Actor — an agent
-// acting at its creator's role, never impersonating the human who created
-// it (design D1/D3.1).
+// acting at its creator's permission level, never impersonating the human
+// who created it, resolved fresh from the creator's *current* state on
+// every request rather than a value cached at token-creation time (design
+// D1/D3.1, extended by add-project-rbac design.md D4).
 func (s *Service) AuthenticateToken(ctx context.Context, rawToken string) (domain.Actor, error) {
 	tok, err := s.store.ApiTokens.GetByHash(ctx, hashToken(rawToken))
 	if errors.Is(err, store.ErrNotFound) {
@@ -120,12 +125,16 @@ func (s *Service) AuthenticateToken(ctx context.Context, rawToken string) (domai
 	if err != nil {
 		return domain.Actor{}, err
 	}
-	return domain.Actor{ID: tok.ID, Kind: domain.ActorKindAgent, DisplayName: tok.Name, Role: creator.Role}, nil
+	return domain.Actor{
+		ID: tok.ID, Kind: domain.ActorKindAgent, DisplayName: tok.Name,
+		EffectiveUserID: creator.ID, IsTenantAdmin: creator.IsTenantAdmin,
+	}, nil
 }
 
-// BootstrapAdmin creates the first admin from env-provided credentials if
-// (and only if) the users table is empty — never re-seeds an instance that
-// already has users (design.md's bootstrap mitigation).
+// BootstrapAdmin creates the first user, as a Tenant Admin, from
+// env-provided credentials if (and only if) the users table is empty —
+// never re-seeds an instance that already has users (design.md's bootstrap
+// mitigation).
 func (s *Service) BootstrapAdmin(ctx context.Context, email, password string) error {
 	if email == "" || password == "" {
 		return nil
@@ -137,27 +146,24 @@ func (s *Service) BootstrapAdmin(ctx context.Context, email, password string) er
 	if len(users) > 0 {
 		return nil
 	}
-	_, err = s.CreateUser(ctx, email, password, domain.RoleAdmin)
+	_, err = s.CreateUser(ctx, email, password, true)
 	return err
 }
 
 // --- Users ---
 
-func (s *Service) CreateUser(ctx context.Context, email, password string, role domain.Role) (domain.User, error) {
+func (s *Service) CreateUser(ctx context.Context, email, password string, isTenantAdmin bool) (domain.User, error) {
 	if err := domain.ValidateEmail(email); err != nil {
 		return domain.User{}, invalid("%s", err)
 	}
 	if err := domain.ValidatePassword(password); err != nil {
 		return domain.User{}, invalid("%s", err)
 	}
-	if _, err := domain.ParseRole(string(role)); err != nil {
-		return domain.User{}, invalid("%s", err)
-	}
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return domain.User{}, err
 	}
-	user, err := s.store.Users.Create(ctx, email, string(hash), role)
+	user, err := s.store.Users.Create(ctx, email, string(hash), isTenantAdmin)
 	if isUniqueViolation(err) {
 		return domain.User{}, invalid("email already in use")
 	}
@@ -176,11 +182,8 @@ func (s *Service) GetUser(ctx context.Context, id string) (domain.User, error) {
 	return s.store.Users.Get(ctx, id)
 }
 
-func (s *Service) UpdateUserRole(ctx context.Context, userID string, role domain.Role) error {
-	if _, err := domain.ParseRole(string(role)); err != nil {
-		return invalid("%s", err)
-	}
-	if err := s.store.Users.UpdateRole(ctx, userID, role); err != nil {
+func (s *Service) SetTenantAdmin(ctx context.Context, userID string, isTenantAdmin bool) error {
+	if err := s.store.Users.SetTenantAdmin(ctx, userID, isTenantAdmin); err != nil {
 		return err
 	}
 	s.audit(ctx, "update_role", "user", userID)
@@ -192,6 +195,14 @@ func (s *Service) DeactivateUser(ctx context.Context, userID string) error {
 		return err
 	}
 	s.audit(ctx, "deactivate", "user", userID)
+	return nil
+}
+
+func (s *Service) ReactivateUser(ctx context.Context, userID string) error {
+	if err := s.store.Users.Reactivate(ctx, userID); err != nil {
+		return err
+	}
+	s.audit(ctx, "reactivate", "user", userID)
 	return nil
 }
 
@@ -225,21 +236,21 @@ func (s *Service) ListOwnTokens(ctx context.Context, actor domain.Actor) ([]doma
 }
 
 // ListTokensForUser returns a specific user's tokens — restricted to that
-// user themselves or an admin (design D3.1 / authorization spec).
+// user themselves or a Tenant Admin (design D3.1 / authorization spec).
 func (s *Service) ListTokensForUser(ctx context.Context, actor domain.Actor, userID string) ([]domain.ApiToken, error) {
-	if actor.ID != userID && actor.Role != domain.RoleAdmin {
+	if actor.ID != userID && !actor.IsTenantAdmin {
 		return nil, forbidden("cannot list another user's tokens")
 	}
 	return s.store.ApiTokens.ListByCreator(ctx, userID)
 }
 
-// RevokeToken allows a token's own creator, or an admin, to revoke it.
+// RevokeToken allows a token's own creator, or a Tenant Admin, to revoke it.
 func (s *Service) RevokeToken(ctx context.Context, actor domain.Actor, tokenID string) error {
 	tok, err := s.store.ApiTokens.Get(ctx, tokenID)
 	if err != nil {
 		return err
 	}
-	if tok.CreatedBy != actor.ID && actor.Role != domain.RoleAdmin {
+	if tok.CreatedBy != actor.ID && !actor.IsTenantAdmin {
 		return forbidden("cannot revoke another user's token")
 	}
 	if err := s.store.ApiTokens.Revoke(ctx, tokenID); err != nil {

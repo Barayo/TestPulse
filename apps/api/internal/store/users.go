@@ -13,21 +13,21 @@ type UserRepo struct {
 	pool *pgxpool.Pool
 }
 
-func (r *UserRepo) Create(ctx context.Context, email, passwordHash string, role domain.Role) (domain.User, error) {
+func (r *UserRepo) Create(ctx context.Context, email, passwordHash string, isTenantAdmin bool) (domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ($1, $2, $3)
-		 RETURNING id, email, role, deactivated_at, created_at`,
-		email, passwordHash, role,
-	).Scan(&u.ID, &u.Email, &u.Role, &u.DeactivatedAt, &u.CreatedAt)
+		`INSERT INTO users (email, password_hash, is_tenant_admin) VALUES ($1, $2, $3)
+		 RETURNING id, email, is_tenant_admin, deactivated_at, created_at`,
+		email, passwordHash, isTenantAdmin,
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DeactivatedAt, &u.CreatedAt)
 	return u, err
 }
 
 func (r *UserRepo) Get(ctx context.Context, id string) (domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, role, deactivated_at, created_at FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.Role, &u.DeactivatedAt, &u.CreatedAt)
+		`SELECT id, email, is_tenant_admin, deactivated_at, created_at FROM users WHERE id = $1`, id,
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DeactivatedAt, &u.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, ErrNotFound
 	}
@@ -44,9 +44,9 @@ func (r *UserRepo) GetByEmailWithHash(ctx context.Context, email string) (domain
 	var u domain.User
 	var hash string
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, role, deactivated_at, created_at, password_hash
+		`SELECT id, email, is_tenant_admin, deactivated_at, created_at, password_hash
 		 FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.Email, &u.Role, &u.DeactivatedAt, &u.CreatedAt, &hash)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DeactivatedAt, &u.CreatedAt, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, "", ErrNotFound
 	}
@@ -58,7 +58,7 @@ func (r *UserRepo) GetByEmailWithHash(ctx context.Context, email string) (domain
 
 func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, email, role, deactivated_at, created_at FROM users ORDER BY created_at`)
+		`SELECT id, email, is_tenant_admin, deactivated_at, created_at FROM users ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -67,7 +67,7 @@ func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {
 	users := []domain.User{}
 	for rows.Next() {
 		var u domain.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.Role, &u.DeactivatedAt, &u.CreatedAt); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DeactivatedAt, &u.CreatedAt); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -75,8 +75,8 @@ func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {
 	return users, rows.Err()
 }
 
-func (r *UserRepo) UpdateRole(ctx context.Context, id string, role domain.Role) error {
-	tag, err := r.pool.Exec(ctx, `UPDATE users SET role = $2 WHERE id = $1`, id, role)
+func (r *UserRepo) SetTenantAdmin(ctx context.Context, id string, isTenantAdmin bool) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE users SET is_tenant_admin = $2 WHERE id = $1`, id, isTenantAdmin)
 	if err != nil {
 		return err
 	}
@@ -88,6 +88,17 @@ func (r *UserRepo) UpdateRole(ctx context.Context, id string, role domain.Role) 
 
 func (r *UserRepo) Deactivate(ctx context.Context, id string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE users SET deactivated_at = now() WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *UserRepo) Reactivate(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE users SET deactivated_at = NULL WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

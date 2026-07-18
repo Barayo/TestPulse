@@ -1,10 +1,12 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
+import type { ReactNode } from 'react'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import ProjectPage from './ProjectPage'
 import { api } from '@/lib/api'
 import { DataRevisionProvider } from '@/lib/DataRevision'
+import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
@@ -23,6 +25,11 @@ const caseInOnboarding = {
 
 function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
   mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/users/me')
+      return Promise.resolve({
+        data: overrides.me ?? { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true },
+        response: { ok: true },
+      })
     if (path === '/api/v1/projects/{projectId}')
       return Promise.resolve({
         data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
@@ -63,16 +70,23 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
   })
 }
 
-function renderProject() {
+function renderWithRoutes(extraRoutes?: ReactNode) {
   return render(
     <DataRevisionProvider>
       <MemoryRouter initialEntries={['/projects/p1']}>
-        <Routes>
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/projects/:projectId" element={<ProjectPage />} />
+            {extraRoutes}
+          </Routes>
+        </AuthProvider>
       </MemoryRouter>
     </DataRevisionProvider>,
   )
+}
+
+function renderProject() {
+  return renderWithRoutes()
 }
 
 beforeEach(() => {
@@ -86,6 +100,20 @@ describe('ProjectPage landing', () => {
     const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
     expect(within(nav).getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/')
     expect(await within(nav).findByText('QA Platform')).toBeInTheDocument()
+  })
+
+  it('shows a Members link to a Tenant Admin (add-project-rbac — the only way to assign roles on a project)', async () => {
+    mockProjectAPI()
+    renderProject()
+    await screen.findByText('QA Platform')
+    expect(screen.getByRole('link', { name: /members/i })).toHaveAttribute('href', '/projects/p1/members')
+  })
+
+  it('hides the Members link from a non-Tenant-Admin', async () => {
+    mockProjectAPI({ me: { id: 'u1', email: 'member@example.com', isTenantAdmin: false } })
+    renderProject()
+    await screen.findByText('QA Platform')
+    expect(screen.queryByRole('link', { name: /members/i })).not.toBeInTheDocument()
   })
 
   it('shows the top-level folder with its total case count', async () => {
@@ -110,16 +138,7 @@ describe('ProjectPage landing', () => {
     it('navigates to the root section when the Unsectioned row is clicked', async () => {
       const rootCase = { ...caseInOnboarding, id: 'c2', folderId: 'root' }
       mockProjectAPI({ cases: [caseInOnboarding, rootCase] })
-      render(
-        <DataRevisionProvider>
-          <MemoryRouter initialEntries={['/projects/p1']}>
-            <Routes>
-              <Route path="/projects/:projectId" element={<ProjectPage />} />
-              <Route path="/projects/:projectId/library/:folderId" element={<div>library stub</div>} />
-            </Routes>
-          </MemoryRouter>
-        </DataRevisionProvider>,
-      )
+      renderWithRoutes(<Route path="/projects/:projectId/library/:folderId" element={<div>library stub</div>} />)
       await userEvent.click(await screen.findByText('Unsectioned'))
       expect(await screen.findByText('library stub')).toBeInTheDocument()
     })
@@ -158,6 +177,39 @@ describe('ProjectPage landing', () => {
     expect(row).toHaveClass('border-l-destructive')
   })
 
+  it('does not flash the get-started checklist before landing data has loaded, for a project that turns out to have real content', async () => {
+    let resolveFolders!: (v: { data: unknown[]; response: { ok: true } }) => void
+    const foldersPromise = new Promise((resolve) => {
+      resolveFolders = resolve
+    })
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me')
+        return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectId}')
+        return Promise.resolve({ data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
+      if (path === '/api/v1/projects/summaries') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectId}/folders') return foldersPromise
+      if (path === '/api/v1/projects/{projectId}/cases') return Promise.resolve({ data: [caseInOnboarding], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectId}/suites') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectId}/runs') return Promise.resolve({ data: [], response: { ok: true } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    renderProject()
+
+    // `project` has resolved but the landing fetch (folders/cases/suites/
+    // runs) is still in flight, so `landing` is still sitting at its
+    // all-zero default. The page must not jump to the get-started checklist
+    // during this window — this project will turn out to have real content
+    // (a root folder with cases) once landing loads, and flashing the
+    // checklist first would be actively misleading, not just cosmetic.
+    await screen.findByText('QA Platform')
+    expect(screen.queryByText(/get started/i)).not.toBeInTheDocument()
+
+    resolveFolders({ data: [rootFolder, onboarding], response: { ok: true } })
+    expect(await screen.findByText('Onboarding')).toBeInTheDocument()
+    expect(screen.queryByText(/get started/i)).not.toBeInTheDocument()
+  })
+
   it('shows a getting-started checklist instead of three empty panels when the project has nothing at all', async () => {
     mockProjectAPI({ folders: [rootFolder], cases: [], suites: [], runs: [] })
     renderProject()
@@ -187,15 +239,8 @@ describe('ProjectPage landing', () => {
 
   it('navigates to the library route when a section row is clicked', async () => {
     mockProjectAPI()
-    render(
-      <DataRevisionProvider>
-      <MemoryRouter initialEntries={['/projects/p1']}>
-        <Routes>
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/projects/:projectId/library/:folderId" element={<div>library explorer stub</div>} />
-        </Routes>
-      </MemoryRouter>
-      </DataRevisionProvider>,
+    renderWithRoutes(
+      <Route path="/projects/:projectId/library/:folderId" element={<div>library explorer stub</div>} />,
     )
     await userEvent.click(await screen.findByText('Onboarding'))
     expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
@@ -203,17 +248,12 @@ describe('ProjectPage landing', () => {
 
   it('navigates to the full library/suites/runs pages via each panel\'s "see all" link', async () => {
     mockProjectAPI()
-    render(
-      <DataRevisionProvider>
-      <MemoryRouter initialEntries={['/projects/p1']}>
-        <Routes>
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/projects/:projectId/library" element={<div>library page stub</div>} />
-          <Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />
-          <Route path="/projects/:projectId/runs" element={<div>runs page stub</div>} />
-        </Routes>
-      </MemoryRouter>
-      </DataRevisionProvider>,
+    renderWithRoutes(
+      <>
+        <Route path="/projects/:projectId/library" element={<div>library page stub</div>} />
+        <Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />
+        <Route path="/projects/:projectId/runs" element={<div>runs page stub</div>} />
+      </>,
     )
     await userEvent.click(await screen.findByRole('button', { name: 'Go to Library' }))
     expect(await screen.findByText('library page stub')).toBeInTheDocument()
@@ -221,64 +261,28 @@ describe('ProjectPage landing', () => {
 
   it('navigates to the suites page via its "see all" link', async () => {
     mockProjectAPI()
-    render(
-      <DataRevisionProvider>
-      <MemoryRouter initialEntries={['/projects/p1']}>
-        <Routes>
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />
-        </Routes>
-      </MemoryRouter>
-      </DataRevisionProvider>,
-    )
+    renderWithRoutes(<Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Go to Suites' }))
     expect(await screen.findByText('suites page stub')).toBeInTheDocument()
   })
 
   it('navigates to the runs page via its "see all" link', async () => {
     mockProjectAPI()
-    render(
-      <DataRevisionProvider>
-      <MemoryRouter initialEntries={['/projects/p1']}>
-        <Routes>
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/projects/:projectId/runs" element={<div>runs page stub</div>} />
-        </Routes>
-      </MemoryRouter>
-      </DataRevisionProvider>,
-    )
+    renderWithRoutes(<Route path="/projects/:projectId/runs" element={<div>runs page stub</div>} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Go to Runs' }))
     expect(await screen.findByText('runs page stub')).toBeInTheDocument()
   })
 
   it('navigates directly to a suite when its row is clicked', async () => {
     mockProjectAPI()
-    render(
-      <DataRevisionProvider>
-      <MemoryRouter initialEntries={['/projects/p1']}>
-        <Routes>
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />
-        </Routes>
-      </MemoryRouter>
-      </DataRevisionProvider>,
-    )
+    renderWithRoutes(<Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />)
     await userEvent.click(await screen.findByText('Smoke'))
     expect(await screen.findByText('suites page stub')).toBeInTheDocument()
   })
 
   it('navigates directly to a run when its row is clicked', async () => {
     mockProjectAPI()
-    render(
-      <DataRevisionProvider>
-      <MemoryRouter initialEntries={['/projects/p1']}>
-        <Routes>
-          <Route path="/projects/:projectId" element={<ProjectPage />} />
-          <Route path="/runs/:runId" element={<div>run page stub</div>} />
-        </Routes>
-      </MemoryRouter>
-      </DataRevisionProvider>,
-    )
+    renderWithRoutes(<Route path="/runs/:runId" element={<div>run page stub</div>} />)
     await userEvent.click(await screen.findByText('Sprint 1'))
     expect(await screen.findByText('run page stub')).toBeInTheDocument()
   })
@@ -289,6 +293,20 @@ describe('ProjectPage landing', () => {
     const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
     expect(within(nav).getByRole('link', { name: 'Projects' })).toBeInTheDocument()
     expect(await screen.findByText(/no sections yet/i)).toBeInTheDocument()
+  })
+
+  it('shows a not-found message instead of an empty, interactive project when the project does not exist or is not accessible', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me')
+        return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectId}')
+        return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    renderProject()
+    expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /go to library/i })).not.toBeInTheDocument()
+    expect(screen.queryByText(/get started/i)).not.toBeInTheDocument()
   })
 
   it('counts cases from a grandchild folder toward its top-level ancestor', async () => {

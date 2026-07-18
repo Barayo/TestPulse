@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { useLocation, useParams } from 'react-router-dom'
+import { Link, useLocation, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +19,7 @@ export default function SuitesPage() {
   const location = useLocation()
   const bumpLanding = useBumpDataRevision()
   const [project, setProject] = useState<Project>()
+  const [notFound, setNotFound] = useState(false)
   const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [suiteName, setSuiteName] = useState('')
@@ -28,12 +29,17 @@ export default function SuitesPage() {
 
   const load = useCallback(async () => {
     if (!projectId) return
+    setNotFound(false)
     try {
       const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
         api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
         api.GET('/api/v1/projects/{projectId}/cases', { params: { path: { projectId } } }),
         api.GET('/api/v1/projects/{projectId}/suites', { params: { path: { projectId } } }),
       ])
+      if (!p) {
+        setNotFound(true)
+        return
+      }
       setProject(p)
       setCases(c ?? [])
       setSuites(s ?? [])
@@ -72,6 +78,13 @@ export default function SuitesPage() {
   }
 
   if (!projectId) return null
+  if (notFound) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+      </p>
+    )
+  }
 
   const openSuite = suites.find((s) => s.id === openSuiteId)
 

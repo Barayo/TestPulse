@@ -16,7 +16,7 @@ func testStore(t *testing.T) *store.Store {
 
 func mustProject(t *testing.T, s *store.Store) domain.Project {
 	t.Helper()
-	p, err := s.Projects.Create(context.Background(), "QA", "", nil)
+	p, err := s.Projects.Create(context.Background(), "QA", "")
 	if err != nil {
 		t.Fatalf("create project: %v", err)
 	}

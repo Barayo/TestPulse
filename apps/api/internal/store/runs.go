@@ -13,6 +13,34 @@ type RunRepo struct {
 	pool *pgxpool.Pool
 }
 
+// ProjectID resolves the project a run belongs to — used by
+// requirePermission's per-resource resolver (add-project-rbac design.md D5).
+func (r *RunRepo) ProjectID(ctx context.Context, runID string) (string, error) {
+	var projectID string
+	err := r.pool.QueryRow(ctx,
+		`SELECT project_id FROM test_runs WHERE id = $1`, runID,
+	).Scan(&projectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return projectID, err
+}
+
+// ItemProjectID resolves the project a run item belongs to, via its run —
+// used by requirePermission's per-resource resolver (design.md D5).
+func (r *RunRepo) ItemProjectID(ctx context.Context, itemID string) (string, error) {
+	var projectID string
+	err := r.pool.QueryRow(ctx,
+		`SELECT tr.project_id FROM test_run_items tri
+		 JOIN test_runs tr ON tr.id = tri.run_id
+		 WHERE tri.id = $1`, itemID,
+	).Scan(&projectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return projectID, err
+}
+
 // Create inserts a run and pins each case to its current version (D2), all
 // in one transaction.
 func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []string) (domain.Run, error) {

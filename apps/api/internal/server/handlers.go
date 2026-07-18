@@ -15,47 +15,58 @@ import (
 
 // mountAPI registers the domain routes under /api/v1. The caller mounts it
 // behind the authenticate middleware (server.go) — every domain route
-// requires an authenticated actor (authentication spec).
+// requires an authenticated actor (authentication spec). Beyond that,
+// requireTenantAdmin/requirePermission gate each route per the enforcement
+// matrix in design.md D6/D11: read routes need `read`, each write route
+// needs the one concrete per-resource flag that names it (e.g. `caseCreate`,
+// `suiteEditMembership`, `runRecordResult`), project settings need
+// `manageProject`, and project creation plus membership/role assignment
+// are Tenant-Admin-only.
 func mountAPI(r chi.Router, h *api) {
 	r.Route("/projects", func(r chi.Router) {
 		r.Get("/", h.listProjects)
 		r.Get("/summaries", h.projectSummaries)
-		r.Post("/", h.createProject)
-		r.Get("/{projectID}", h.getProject)
-		r.Patch("/{projectID}", h.updateProject)
-		r.Post("/{projectID}/favorite", h.starProject)
-		r.Delete("/{projectID}/favorite", h.unstarProject)
-		r.Get("/{projectID}/cases", h.listCases)
-		r.Post("/{projectID}/cases", h.createCase)
-		r.Get("/{projectID}/folders", h.listFolders)
-		r.Post("/{projectID}/folders", h.createFolder)
-		r.Get("/{projectID}/suites", h.listSuites)
-		r.Post("/{projectID}/suites", h.createSuite)
-		r.Get("/{projectID}/runs", h.listRuns)
-		r.Post("/{projectID}/runs", h.createRun)
+		r.With(requireTenantAdmin).Post("/", h.createProject)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}", h.getProject)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Patch("/{projectID}", h.updateProject)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Post("/{projectID}/favorite", h.starProject)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/{projectID}/favorite", h.unstarProject)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/cases", h.listCases)
+		r.With(h.requirePermission(domain.PermCaseCreate, projectIDParam)).Post("/{projectID}/cases", h.createCase)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/folders", h.listFolders)
+		r.With(h.requirePermission(domain.PermSectionCreate, projectIDParam)).Post("/{projectID}/folders", h.createFolder)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/suites", h.listSuites)
+		r.With(h.requirePermission(domain.PermSuiteCreate, projectIDParam)).Post("/{projectID}/suites", h.createSuite)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/runs", h.listRuns)
+		r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/{projectID}/runs", h.createRun)
+		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/members", h.getProjectMembership)
+		r.With(requireTenantAdmin).Put("/{projectID}/members/{userID}", h.setProjectMember)
+		r.With(requireTenantAdmin).Delete("/{projectID}/members/{userID}", h.removeProjectMember)
+		r.With(requireTenantAdmin).Put("/{projectID}/teams/{teamID}", h.setProjectTeamRole)
+		r.With(requireTenantAdmin).Delete("/{projectID}/teams/{teamID}", h.removeProjectTeamRole)
 	})
 	r.Route("/cases/{caseID}", func(r chi.Router) {
-		r.Get("/", h.getCase)
-		r.Put("/", h.editCase)
-		r.Delete("/", h.deleteCase)
-		r.Get("/versions", h.listCaseVersions)
-		r.Put("/folder", h.moveCase)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/", h.getCase)
+		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/", h.editCase)
+		r.With(h.requirePermission(domain.PermCaseDelete, projectIDFromCase)).Delete("/", h.deleteCase)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/versions", h.listCaseVersions)
+		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
 	})
-	r.Delete("/folders/{folderID}", h.deleteFolder)
+	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
 	r.Route("/suites/{suiteID}/cases/{caseID}", func(r chi.Router) {
-		r.Put("/", h.addCaseToSuite)
-		r.Delete("/", h.removeCaseFromSuite)
+		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Put("/", h.addCaseToSuite)
+		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Delete("/", h.removeCaseFromSuite)
 	})
 	r.Route("/runs/{runID}", func(r chi.Router) {
-		r.Get("/", h.getRun)
-		r.Get("/items", h.listRunItems)
-		r.Post("/items", h.addRunItem)
-		r.Get("/summary", h.runSummary)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.getRun)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/items", h.listRunItems)
+		r.With(h.requirePermission(domain.PermRunCreate, projectIDFromRun)).Post("/items", h.addRunItem)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/summary", h.runSummary)
 	})
 	r.Route("/items/{itemID}", func(r chi.Router) {
-		r.Get("/results", h.listResults)
-		r.Post("/results", h.recordResult)
-		r.Put("/status", h.updateItem)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/results", h.listResults)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Post("/results", h.recordResult)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Put("/status", h.updateItem)
 	})
 }
 
@@ -120,16 +131,15 @@ func (h *api) projectSummaries(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) createProject(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name        string  `json:"name"`
-		Description string  `json:"description"`
-		OwnerID     *string `json:"ownerId"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
 		return
 	}
 	p, err := h.svc.CreateProject(r.Context(), service.ProjectInput{
-		Name: body.Name, Description: body.Description, OwnerID: body.OwnerID,
+		Name: body.Name, Description: body.Description,
 	})
 	h.respond(w, http.StatusCreated, p, err)
 }
@@ -143,7 +153,6 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
 		Name        *string `json:"name"`
 		Description *string `json:"description"`
-		OwnerID     *string `json:"ownerId"`
 		Archived    *bool   `json:"archived"`
 	}](r)
 	if err != nil {
@@ -152,8 +161,7 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	}
 	p, err := h.svc.UpdateProject(r.Context(), chi.URLParam(r, "projectID"),
 		service.ProjectUpdate{
-			Name: body.Name, Description: body.Description,
-			OwnerID: body.OwnerID, Archived: body.Archived,
+			Name: body.Name, Description: body.Description, Archived: body.Archived,
 		})
 	h.respond(w, http.StatusOK, p, err)
 }
@@ -165,6 +173,51 @@ func (h *api) starProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) unstarProject(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.UnstarProject(r.Context(), chi.URLParam(r, "projectID"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+// --- Project membership (add-project-rbac) ---
+
+func (h *api) getProjectMembership(w http.ResponseWriter, r *http.Request) {
+	m, err := h.svc.ProjectMembership(r.Context(), chi.URLParam(r, "projectID"))
+	h.respond(w, http.StatusOK, m, err)
+}
+
+func (h *api) setProjectMember(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	in, err := decode[struct {
+		RoleID string `json:"roleId"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	err = h.svc.SetProjectMember(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "userID"), in.RoleID)
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) removeProjectMember(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	err := h.svc.RemoveProjectMember(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "userID"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) setProjectTeamRole(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	in, err := decode[struct {
+		RoleID string `json:"roleId"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	err = h.svc.SetProjectTeamRole(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "teamID"), in.RoleID)
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) removeProjectTeamRole(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	err := h.svc.RemoveProjectTeamRole(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "teamID"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 

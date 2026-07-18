@@ -2,8 +2,9 @@
 
 A walkthrough of TestPulse's core workflow: projects, test cases, suites, runs, and the execution board.
 
-> **Security note**: as of this writing there is no authentication — anyone
-> who can reach the API can do all of this. See
+> **Security note**: every action described below requires authentication,
+> and most require a specific project role — see
+> [Project roles and teams](#project-roles-and-teams) below and
 > [Deployment: security status](deployment.md#security-status).
 
 ## Finding your way around
@@ -12,11 +13,27 @@ TestPulse assumes you work in one project at a time. The header shows `TestPulse
 
 A project's landing page (`/projects/{id}`) opens with a summary strip — the same status pill/pass-rate bar/suite+case totals/last-run shown on the project's card in the project list — so the health signal you used to pick this project is still there once you're inside it, instead of only living on the list you came from. Below that are three independent panels — **Library**, **Suites**, **Recent runs** — each showing its top few items with a "see all" link to the full view, so opening a project shows top-level structure at a glance rather than everything at once. Each panel's entire header (not just "see all") is clickable to the same destination, and every row shown is itself a direct link to that item — never just a name. Recent runs rows are color-coded by pass rate (the same teal/amber/coral bands used elsewhere), so a failing run stands out without opening it. Each panel has its own empty state (with a working link to its full page) when a project has nothing in it yet — except when the *whole project* is empty (no cases, no suites, no runs at all), in which case the three panels are replaced by a single **Get started** checklist: three steps (add a case, group it into a suite, run the suite), each with an icon and a short explanatory tip, so a brand-new project reads as an onboarding flow rather than three empty boxes. A breadcrumb trail at the top of the main content (`Projects › {project} › …`) reinforces where you are, with every ancestor segment clickable to go back up — including intermediate section names when browsing nested sections.
 
+## Project roles and teams
+
+Access to a project is opt-in. A **Tenant Admin** (instance-wide) creates projects, manages user accounts, teams, and roles, and assigns project membership — with implicit access to every project regardless of membership. Everyone else needs an explicit role on a project, assigned directly or via a **team** (a named group managed at `/settings/teams`); a user with neither has no access to that project at all, not even read.
+
+Roles are fully custom and instance-wide, managed by the Tenant Admin at `/settings/roles`: create, rename, or delete a role, and toggle ten independent, concrete permission flags on it — **Read**; **Create/Edit/Delete Case**; **Create/Delete Section**; **Create Suite**; **Edit Suite Membership** (add/remove a case from a suite); **Create Run**; **Record Result** (log a verdict or mark retest); and **Manage Project** (edit the project's own settings — rename, description, archive). Each flag names one concrete action rather than a broad bucket, so a role can (for example) create cases without being able to delete them, or run tests without being able to author suites. A `rank` field is a display/sort order only; there is no fixed hierarchy between roles. A fresh instance is seeded with three default roles that reproduce the previous fixed model's net behavior exactly, so an instance that never visits `/settings/roles` sees no behavior change:
+
+A **Reset to defaults** button on the Roles page restores Tester/Contributor/Project Admin to these factory flags, behind a confirmation dialog stating exactly what it does. This is scoped to those three names only, not a wipe: an existing role named Tester/Contributor/Project Admin has its flags overwritten back to the defaults *in place* (any project or team already assigned it keeps that assignment), and any of the three that's missing gets recreated. Any other role — custom-named, or renamed away from a default — and every project/team assignment anywhere, is left untouched.
+
+| Seeded role | Flags |
+|---|---|
+| **Tester** | Read, Create Run, Record Result |
+| **Contributor** | Tester's flags + Create/Edit Case, Create Section, Create Suite, Edit Suite Membership |
+| **Project Admin** | Contributor's flags + Delete Case, Delete Section, Manage Project |
+
+A user's effective permissions on a project are the **union** of every role granted to them — directly or via any team they belong to — not just the "highest" one; there's no ranking to pick a winner from once roles are fully custom. So a user holding two different roles on the same project (e.g. one direct, one via a team) gets every permission flag either role grants. Assigning project membership itself — deciding who holds which role on a given project — is Tenant-Admin-only; a role with Manage Project can administer the project's settings but not reassign who's on it. Users and teams are assigned per project at `/projects/{id}/members`. Deleting a role removes it from every project/team assignment that referenced it, immediately revoking any access that depended solely on it. An API token (agent) always acts at its creator's current permission level, resolved fresh on every request — never its own separate access.
+
 ## Projects
 
-Everything lives inside a project. Create one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{id}`); the UI surfaces archived status but archiving itself is API-only in this release. **+ New project** lives in its own header row, separate from the project list, so a future role gate (`add-project-rbac`) can hide it for non-admins without a layout change.
+Everything lives inside a project. A Tenant Admin creates one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet — both are hidden for everyone else, since project creation is Tenant-Admin-only. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{id}`, Project Admin or above); the UI surfaces archived status but archiving itself is API-only in this release.
 
-The project list can be ordered by name, suite count, case count, or creation date, in either direction, via the **Sort by** control in the toolbar — the choice is remembered in your browser across visits, applies the same way in both view modes, and stays available on mobile.
+The project list can be ordered by name, suite count, case count, or creation date, in either direction, via the **Sort by** control in the toolbar — the choice is remembered in your browser across visits, applies the same way in both view modes, and stays available on mobile. The list itself only ever shows projects you have a role on (or every project, if you're a Tenant Admin).
 
 ## The library
 
@@ -26,6 +43,8 @@ Every case lives in exactly one **section** — a project-level, nestable tree, 
 
 ## Test cases and versioning
 
+Creating a case requires Create Case; editing or moving one requires Edit Case; creating a section requires Create Section (the seeded Contributor/Project Admin roles have all three). Deleting a case or section requires Delete Case/Delete Section respectively (seeded Project Admin only). Reading requires only Read (every seeded role has it).
+
 Click **+ New test case** in the library explorer to open a side drawer: a title and a list of steps, each with a required **Action** and an optional **Expected result**. Click an existing case to view it read-only — title, version, the suites it belongs to, its steps, and its full version history — with an **Edit** button that switches the steps back to editable.
 
 **Every edit creates a new version.** Click **Edit**, change the title or steps, **Save changes** — the case's current version increments (`v1` → `v2`), the old content is never lost, and both versions are listed in the drawer's version history (backed by `GET /api/v1/cases/{id}/versions`). This matters because of what happens next.
@@ -34,9 +53,13 @@ A case can also carry `priority` (low/medium/high/critical), `tags` (freeform ke
 
 ## Suites
 
+Creating a suite requires Create Suite; adding or removing a case from one requires Edit Suite Membership.
+
 Click "see all"/"go to Suites" on the landing's Suites panel to reach the full suites page: a clean list (name + case count) plus a **New suite** form. Click a suite row to open its own drawer with full case membership — add cases via the dropdown + **Add**; remove with the **Remove** button next to a case in the drawer's list. Removing from a suite never deletes the case itself, since suite membership is just an n:m relationship (`suite_cases`). Clicking a suite row on the landing's Suites panel opens straight to that suite's drawer instead of the plain list.
 
 ## Runs: version pinning in practice
+
+Creating a run requires Create Run; recording a verdict or marking retest requires Record Result — the seeded Tester role, the least-privileged default, already has both.
 
 Click "see all"/"go to Runs" on the landing's Recent runs panel to reach the full runs page and create one (**New run** form) — it includes *all current test cases* in the project as of that moment. This is the versioning model made concrete:
 

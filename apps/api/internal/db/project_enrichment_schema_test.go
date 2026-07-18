@@ -6,12 +6,13 @@ import (
 )
 
 // Schema integration tests for the project-enrichment migration
-// (enrich-project-list): projects.description/owner_id and the
-// project_favorites table. Placed in 00003_identity.sql, not
-// 00002_core_domain.sql, because owner_id references users — which 00002
-// runs before by filename order.
+// (enrich-project-list): projects.description and the project_favorites
+// table. The owner_id column that originally lived alongside description
+// was removed by add-project-rbac (amended in place, pre-1.0 policy) —
+// project access is now entirely membership-based, not a single nominal
+// owner.
 
-func TestProjectsGainDescriptionAndOwnerColumns(t *testing.T) {
+func TestProjectsGainDescriptionColumn(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
 	if err := Migrate(context.Background(), pool); err != nil {
@@ -19,33 +20,21 @@ func TestProjectsGainDescriptionAndOwnerColumns(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	var userID string
-	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ('owner@b.com', 'h', 'member') RETURNING id`,
-	).Scan(&userID); err != nil {
-		t.Fatal(err)
-	}
-
 	var projectID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (name, description, owner_id) VALUES ('QA', 'a project', $1) RETURNING id`,
-		userID,
+		`INSERT INTO projects (name, description) VALUES ('QA', 'a project') RETURNING id`,
 	).Scan(&projectID); err != nil {
-		t.Fatalf("insert project with description/owner: %v", err)
+		t.Fatalf("insert project with description: %v", err)
 	}
 
 	var description string
-	var ownerID *string
 	if err := pool.QueryRow(ctx,
-		`SELECT description, owner_id FROM projects WHERE id = $1`, projectID,
-	).Scan(&description, &ownerID); err != nil {
+		`SELECT description FROM projects WHERE id = $1`, projectID,
+	).Scan(&description); err != nil {
 		t.Fatalf("select: %v", err)
 	}
 	if description != "a project" {
 		t.Errorf("description = %q, want %q", description, "a project")
-	}
-	if ownerID == nil || *ownerID != userID {
-		t.Errorf("owner_id = %v, want %q", ownerID, userID)
 	}
 
 	// description defaults to '' when omitted.
@@ -53,46 +42,16 @@ func TestProjectsGainDescriptionAndOwnerColumns(t *testing.T) {
 	if err := pool.QueryRow(ctx,
 		`INSERT INTO projects (name) VALUES ('No metadata') RETURNING id`,
 	).Scan(&defaultID); err != nil {
-		t.Fatalf("insert project without description/owner: %v", err)
+		t.Fatalf("insert project without description: %v", err)
 	}
 	var defaultDescription string
-	var defaultOwner *string
 	if err := pool.QueryRow(ctx,
-		`SELECT description, owner_id FROM projects WHERE id = $1`, defaultID,
-	).Scan(&defaultDescription, &defaultOwner); err != nil {
+		`SELECT description FROM projects WHERE id = $1`, defaultID,
+	).Scan(&defaultDescription); err != nil {
 		t.Fatal(err)
 	}
 	if defaultDescription != "" {
 		t.Errorf("default description = %q, want empty", defaultDescription)
-	}
-	if defaultOwner != nil {
-		t.Errorf("default owner_id = %v, want nil", defaultOwner)
-	}
-
-	// Deactivating (not deleting) the owner must not affect the FK.
-	if _, err := pool.Exec(ctx, `UPDATE users SET deactivated_at = now() WHERE id = $1`, userID); err != nil {
-		t.Fatalf("deactivate owner: %v", err)
-	}
-	if err := pool.QueryRow(ctx,
-		`SELECT owner_id FROM projects WHERE id = $1`, projectID,
-	).Scan(&ownerID); err != nil {
-		t.Fatal(err)
-	}
-	if ownerID == nil || *ownerID != userID {
-		t.Errorf("owner_id after deactivation = %v, want %q still set", ownerID, userID)
-	}
-
-	// Deleting the owner sets owner_id to NULL rather than failing (D4).
-	if _, err := pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, userID); err != nil {
-		t.Fatalf("delete owner: %v", err)
-	}
-	if err := pool.QueryRow(ctx,
-		`SELECT owner_id FROM projects WHERE id = $1`, projectID,
-	).Scan(&ownerID); err != nil {
-		t.Fatal(err)
-	}
-	if ownerID != nil {
-		t.Errorf("owner_id after owner deletion = %v, want nil", ownerID)
 	}
 }
 
@@ -106,7 +65,7 @@ func TestProjectFavoritesTableAndCascade(t *testing.T) {
 
 	var userID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ('fav@b.com', 'h', 'member') RETURNING id`,
+		`INSERT INTO users (email, password_hash) VALUES ('fav@b.com', 'h') RETURNING id`,
 	).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}

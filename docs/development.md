@@ -52,13 +52,21 @@ touches whatever `TESTPULSE_DATABASE_URL` points at — same as `make dev-api`,
 never a real deployment. Used throughout the `redesign-ui` change to validate
 layout decisions against realistic content density instead of toy data.
 
+It creates no users of its own, only projects/cases/suites/runs via the
+service layer — so under `add-project-rbac`'s project-scoped access, the
+seeded projects stay fully visible to whichever Tenant Admin ran it
+(implicit access to every project) with no extra setup. If a future change
+adds non-Tenant-Admin seed users, remember they'll need explicit
+`project_members`/`project_team_roles` rows (or they'll see an empty
+project list) — see [Test management](test-management.md#project-roles-and-teams).
+
 ## Logging in locally
 
 Every domain route requires authentication (`add-identity-basics`). A fresh
 database has no users, so set `TESTPULSE_ADMIN_EMAIL` /
-`TESTPULSE_ADMIN_PASSWORD` before first startup — the API seeds one admin
-from them if (and only if) the `users` table is empty, then never touches
-them again on later restarts:
+`TESTPULSE_ADMIN_PASSWORD` before first startup — the API seeds one Tenant
+Admin from them if (and only if) the `users` table is empty, then never
+touches them again on later restarts:
 
 ```bash
 export TESTPULSE_ADMIN_EMAIL=admin@example.com
@@ -76,8 +84,18 @@ curl -i -c cookies.txt -X POST http://localhost:8080/api/v1/auth/login \
 curl -b cookies.txt http://localhost:8080/api/v1/projects
 ```
 
-An admin can create further users at `/settings/users`; any authenticated
-user can create scoped API tokens for agents at `/settings/tokens`.
+A Tenant Admin can create further users at `/settings/users` and teams at
+`/settings/teams` (both linked from the header's account menu); any
+authenticated user can create scoped API tokens for agents at
+`/settings/tokens`. A newly-created user has no project access until a
+Tenant Admin assigns them a role on a project (directly, or via a team) —
+see [Test management](test-management.md#project-roles-and-teams).
+
+Amending `00003_identity.sql` in place (this change's schema work — see the
+pre-1.0 migration policy in `CLAUDE.md`) means an existing local/compose
+Postgres volume needs a full reset to pick it up: `docker compose down -v`
+before `make compose-up` again, or drop and recreate your local `dev-api`
+database.
 
 ## The contract workflow
 

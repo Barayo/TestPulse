@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { CopyIcon, CheckIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -19,6 +20,7 @@ export default function TokensPage() {
   const [name, setName] = useState('')
   const [justCreated, setJustCreated] = useState<string>()
   const [error, setError] = useState<string>()
+  const [copied, setCopied] = useState(false)
 
   async function load() {
     const { data } = await api.GET('/api/v1/tokens')
@@ -41,12 +43,19 @@ export default function TokensPage() {
     setCreating(false)
     const full = (data as { token?: string } | undefined)?.token
     if (full) setJustCreated(full)
+    setCopied(false)
     await load()
   }
 
   async function handleRevoke(tokenId: string) {
     await api.DELETE('/api/v1/tokens/{tokenId}', { params: { path: { tokenId } } })
     await load()
+  }
+
+  async function handleCopy() {
+    if (!justCreated) return
+    await navigator.clipboard.writeText(justCreated)
+    setCopied(true)
   }
 
   return (
@@ -61,7 +70,22 @@ export default function TokensPage() {
         <Card className="border-amber-500">
           <CardContent className="space-y-2 pt-6">
             <p className="text-sm font-medium">Copy this token now — it won&apos;t be shown again.</p>
-            <code className="block rounded bg-muted p-2 text-sm break-all">{justCreated}</code>
+            <div className="flex items-center gap-2">
+              <code className="block flex-1 rounded bg-muted p-2 text-sm break-all">{justCreated}</code>
+              <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
+                {copied ? (
+                  <>
+                    <CheckIcon className="size-4" aria-hidden="true" />
+                    Copied
+                  </>
+                ) : (
+                  <>
+                    <CopyIcon className="size-4" aria-hidden="true" />
+                    Copy
+                  </>
+                )}
+              </Button>
+            </div>
             <Button variant="ghost" size="sm" onClick={() => setJustCreated(undefined)}>
               Done
             </Button>

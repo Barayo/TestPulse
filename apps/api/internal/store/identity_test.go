@@ -9,9 +9,9 @@ import (
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 )
 
-func mustUser(t *testing.T, s *store.Store, email string, role domain.Role) domain.User {
+func mustUser(t *testing.T, s *store.Store, email string, isTenantAdmin bool) domain.User {
 	t.Helper()
-	u, err := s.Users.Create(context.Background(), email, "bcrypt-hash", role)
+	u, err := s.Users.Create(context.Background(), email, "bcrypt-hash", isTenantAdmin)
 	if err != nil {
 		t.Fatalf("create user %s: %v", email, err)
 	}
@@ -24,9 +24,9 @@ func TestUserCreateAndGetByEmailWithHash(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 
-	created := mustUser(t, s, "admin@example.com", domain.RoleAdmin)
-	if created.Role != domain.RoleAdmin {
-		t.Errorf("Role = %q, want admin", created.Role)
+	created := mustUser(t, s, "admin@example.com", true)
+	if !created.IsTenantAdmin {
+		t.Errorf("IsTenantAdmin = %v, want true", created.IsTenantAdmin)
 	}
 
 	got, hash, err := s.Users.GetByEmailWithHash(ctx, "admin@example.com")
@@ -40,7 +40,7 @@ func TestUserCreateAndGetByEmailWithHash(t *testing.T) {
 
 func TestUserGetByID(t *testing.T) {
 	s := testStore(t)
-	created := mustUser(t, s, "byid@example.com", domain.RoleMember)
+	created := mustUser(t, s, "byid@example.com", false)
 
 	got, err := s.Users.Get(context.Background(), created.ID)
 	if err != nil || got.Email != "byid@example.com" {
@@ -58,36 +58,57 @@ func TestUserGetByEmailNotFound(t *testing.T) {
 	}
 }
 
-func TestUserListAndUpdateRoleAndDeactivate(t *testing.T) {
+func TestUserListAndSetTenantAdminAndDeactivate(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u := mustUser(t, s, "member@example.com", domain.RoleMember)
+	u := mustUser(t, s, "member@example.com", false)
 
 	list, err := s.Users.List(ctx)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("List = %d, %v; want 1", len(list), err)
 	}
 
-	if err := s.Users.UpdateRole(ctx, u.ID, domain.RoleAdmin); err != nil {
-		t.Fatalf("UpdateRole: %v", err)
+	if err := s.Users.SetTenantAdmin(ctx, u.ID, true); err != nil {
+		t.Fatalf("SetTenantAdmin: %v", err)
 	}
 	if err := s.Users.Deactivate(ctx, u.ID); err != nil {
 		t.Fatalf("Deactivate: %v", err)
 	}
 
 	list, _ = s.Users.List(ctx)
-	if list[0].Role != domain.RoleAdmin {
-		t.Errorf("Role after update = %q, want admin", list[0].Role)
+	if !list[0].IsTenantAdmin {
+		t.Errorf("IsTenantAdmin after update = %v, want true", list[0].IsTenantAdmin)
 	}
 	if list[0].DeactivatedAt == nil {
 		t.Error("DeactivatedAt = nil, want set after Deactivate")
 	}
 }
 
+func TestUserReactivate(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "reactivate@example.com", false)
+
+	if err := s.Users.Deactivate(ctx, u.ID); err != nil {
+		t.Fatalf("Deactivate: %v", err)
+	}
+	if err := s.Users.Reactivate(ctx, u.ID); err != nil {
+		t.Fatalf("Reactivate: %v", err)
+	}
+
+	got, err := s.Users.Get(ctx, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.DeactivatedAt != nil {
+		t.Errorf("DeactivatedAt after Reactivate = %v, want nil", got.DeactivatedAt)
+	}
+}
+
 func TestUserCreateDuplicateEmailRejected(t *testing.T) {
 	s := testStore(t)
-	mustUser(t, s, "dup@example.com", domain.RoleMember)
-	if _, err := s.Users.Create(context.Background(), "dup@example.com", "hash", domain.RoleMember); err == nil {
+	mustUser(t, s, "dup@example.com", false)
+	if _, err := s.Users.Create(context.Background(), "dup@example.com", "hash", false); err == nil {
 		t.Error("duplicate email accepted, want error")
 	}
 }
@@ -97,7 +118,7 @@ func TestUserCreateDuplicateEmailRejected(t *testing.T) {
 func TestSessionCreateGetExtendDelete(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u := mustUser(t, s, "a@example.com", domain.RoleMember)
+	u := mustUser(t, s, "a@example.com", false)
 
 	expires := time.Now().Add(30 * 24 * time.Hour)
 	sess, err := s.Sessions.Create(ctx, "sess-1", u.ID, expires)
@@ -133,7 +154,7 @@ func TestSessionCreateGetExtendDelete(t *testing.T) {
 func TestSessionExpiredIsNotFound(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u := mustUser(t, s, "b@example.com", domain.RoleMember)
+	u := mustUser(t, s, "b@example.com", false)
 
 	if _, err := s.Sessions.Create(ctx, "expired-sess", u.ID, time.Now().Add(-time.Hour)); err != nil {
 		t.Fatalf("Create: %v", err)
@@ -146,7 +167,7 @@ func TestSessionExpiredIsNotFound(t *testing.T) {
 func TestSessionDeleteExpiredCleansUpOnlyExpired(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u := mustUser(t, s, "c@example.com", domain.RoleMember)
+	u := mustUser(t, s, "c@example.com", false)
 
 	if _, err := s.Sessions.Create(ctx, "still-valid", u.ID, time.Now().Add(time.Hour)); err != nil {
 		t.Fatal(err)
@@ -178,7 +199,7 @@ func TestSessionDeleteExpiredCleansUpOnlyExpired(t *testing.T) {
 func TestApiTokenCreateGetByHashAndRevoke(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u := mustUser(t, s, "creator@example.com", domain.RoleMember)
+	u := mustUser(t, s, "creator@example.com", false)
 
 	tok, err := s.ApiTokens.Create(ctx, u.ID, "ci-agent", "hash-abc", "tp_ab")
 	if err != nil {
@@ -204,8 +225,8 @@ func TestApiTokenCreateGetByHashAndRevoke(t *testing.T) {
 func TestApiTokenListByCreator(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u1 := mustUser(t, s, "u1@example.com", domain.RoleMember)
-	u2 := mustUser(t, s, "u2@example.com", domain.RoleMember)
+	u1 := mustUser(t, s, "u1@example.com", false)
+	u2 := mustUser(t, s, "u2@example.com", false)
 
 	if _, err := s.ApiTokens.Create(ctx, u1.ID, "t1", "h1", "tp_1"); err != nil {
 		t.Fatal(err)
@@ -225,7 +246,7 @@ func TestApiTokenListByCreator(t *testing.T) {
 func TestAuditAppendAndListByEntity(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u := mustUser(t, s, "actor@example.com", domain.RoleMember)
+	u := mustUser(t, s, "actor@example.com", false)
 
 	entry := domain.AuditEntry{
 		ActorKind:  domain.ActorKindUser,
@@ -255,7 +276,7 @@ func TestAuditAppendAndListByEntity(t *testing.T) {
 func TestAuditEntrySurvivesActorDeletionAtStoreLevel(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	u := mustUser(t, s, "deleteme@example.com", domain.RoleMember)
+	u := mustUser(t, s, "deleteme@example.com", false)
 
 	if err := s.Audit.Append(ctx, domain.AuditEntry{
 		ActorKind: domain.ActorKindUser, ActorID: u.ID, ActorName: u.Email,

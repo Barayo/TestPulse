@@ -85,20 +85,17 @@ func TestUpdateItemValidatesStatus(t *testing.T) {
 	wantValidation(t, err, "")
 }
 
-func TestCreateUserValidatesEmailPasswordRole(t *testing.T) {
+func TestCreateUserValidatesEmailPassword(t *testing.T) {
 	s := nilService()
-	_, err := s.CreateUser(context.Background(), "", "longenough", domain.RoleMember)
+	_, err := s.CreateUser(context.Background(), "", "longenough", false)
 	wantValidation(t, err, "email")
 
-	_, err = s.CreateUser(context.Background(), "a@b.com", "short", domain.RoleMember)
+	_, err = s.CreateUser(context.Background(), "a@b.com", "short", false)
 	wantValidation(t, err, "8 characters")
-
-	_, err = s.CreateUser(context.Background(), "a@b.com", "longenough", domain.Role("superadmin"))
-	wantValidation(t, err, "role")
 }
 
 func TestCreateTokenValidatesName(t *testing.T) {
 	s := nilService()
-	_, _, err := s.CreateToken(context.Background(), domain.Actor{ID: "u1", Role: domain.RoleMember}, "")
+	_, _, err := s.CreateToken(context.Background(), domain.Actor{ID: "u1", EffectiveUserID: "u1"}, "")
 	wantValidation(t, err, "name")
 }

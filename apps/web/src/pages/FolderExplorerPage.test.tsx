@@ -88,6 +88,23 @@ beforeEach(() => {
 })
 
 describe('FolderExplorerPage', () => {
+  it('shows a not-found message instead of a blank/empty interactive page when the project does not exist or is not accessible', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects/{projectId}')
+        return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    render(
+      <MemoryRouter initialEntries={['/projects/p1/library']}>
+        <Routes>
+          <Route path="/projects/:projectId/library" element={<FolderExplorerPage />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
+    expect(screen.queryByText(/new test case/i)).not.toBeInTheDocument()
+  })
+
   it('shows the selected folder’s direct subfolders and cases', async () => {
     mockExplorerAPI()
     renderExplorer()

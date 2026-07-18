@@ -14,6 +14,19 @@ type CaseRepo struct {
 	pool *pgxpool.Pool
 }
 
+// ProjectID resolves the project a case belongs to — used by
+// requirePermission's per-resource resolver (add-project-rbac design.md D5).
+func (r *CaseRepo) ProjectID(ctx context.Context, caseID string) (string, error) {
+	var projectID string
+	err := r.pool.QueryRow(ctx,
+		`SELECT project_id FROM test_cases WHERE id = $1`, caseID,
+	).Scan(&projectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return projectID, err
+}
+
 // Create inserts a case and its version 1 in one transaction. An empty
 // folderID resolves to the project's root folder (design D8).
 func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, content domain.CaseContent) (domain.TestCase, error) {

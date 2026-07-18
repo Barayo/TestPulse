@@ -18,7 +18,12 @@ async function createProjectWithCase(page: Page, label: string): Promise<string>
   await page.waitForURL(/\/projects\//)
   const projectId = new URL(page.url()).pathname.split('/')[2]
 
-  await page.getByRole('button', { name: 'Go to Library' }).click()
+  // A brand-new, genuinely empty project shows the "Get started" checklist
+  // instead of the library panel (enrich-project-landing) — its first step
+  // routes to the same /library destination, so either control works here.
+  const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
+  const getStarted = page.getByRole('button', { name: /add your first test case/i })
+  await goToLibrary.or(getStarted).click()
   await page.getByRole('button', { name: /new test case/i }).click()
   await page.getByLabel(/^title$/i).fill('Login works')
   await page.getByRole('button', { name: /create test case/i }).click()

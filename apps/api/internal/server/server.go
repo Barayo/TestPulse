@@ -37,6 +37,8 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) 
 			r.Use(authenticate(svc))
 			mountAPI(r, h)
 			mountIdentity(r, h)
+			mountTeams(r, h)
+			mountRoles(r, h)
 		})
 	})
 

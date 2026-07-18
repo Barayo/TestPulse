@@ -117,7 +117,7 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     patch:
       operationId: updateProject
-      summary: Rename, describe, assign an owner to, or archive a project
+      summary: Rename, describe, or archive a project
       tags: [projects]
       requestBody:
         required: true
@@ -528,7 +528,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       operationId: createUser
-      summary: Create a user (admin only)
+      summary: Create a user (Tenant Admin only)
       tags: [users]
       requestBody:
         required: true
@@ -561,7 +561,7 @@ paths:
       - { name: userId, in: path, required: true, schema: { type: string } }
     patch:
       operationId: updateUser
-      summary: Change a user's role or deactivate them (admin only)
+      summary: Change a user's Tenant Admin flag, deactivate, or reactivate them (Tenant Admin only)
       tags: [users]
       requestBody:
         required: true
@@ -577,7 +577,7 @@ paths:
   /api/v1/tokens:
     get:
       operationId: listTokens
-      summary: List API tokens (own tokens, or another user's via userId — admin only)
+      summary: List API tokens (own tokens, or another user's via userId — Tenant Admin only)
       tags: [tokens]
       parameters:
         - name: userId
@@ -616,7 +616,7 @@ paths:
       - { name: tokenId, in: path, required: true, schema: { type: string } }
     delete:
       operationId: revokeToken
-      summary: Revoke a token (its own creator, or an admin)
+      summary: Revoke a token (its own creator, or a Tenant Admin)
       tags: [tokens]
       responses:
         "204": { description: Revoked }
@@ -640,6 +640,259 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/AuditEntry" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/teams:
+    get:
+      operationId: listTeams
+      summary: List teams
+      tags: [teams]
+      responses:
+        "200":
+          description: All teams
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createTeam
+      summary: Create a team (Tenant Admin only)
+      tags: [teams]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamInput" }
+      responses:
+        "201":
+          description: Created team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/teams/{teamId}:
+    parameters:
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: renameTeam
+      summary: Rename a team (Tenant Admin only)
+      tags: [teams]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamUpdate" }
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteTeam
+      summary: Delete a team (Tenant Admin only) — removes its membership and project role assignments
+      tags: [teams]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/teams/{teamId}/members/{userId}:
+    parameters:
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: addTeamMember
+      summary: Add a user to a team (Tenant Admin only)
+      tags: [teams]
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeTeamMember
+      summary: Remove a user from a team (Tenant Admin only)
+      tags: [teams]
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/roles:
+    get:
+      operationId: listRoles
+      summary: List all roles (add-project-rbac design.md D10 — fully custom, instance-wide)
+      tags: [roles]
+      responses:
+        "200":
+          description: All roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Role" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createRole
+      summary: Create a role (Tenant Admin only)
+      tags: [roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleInput" }
+      responses:
+        "201":
+          description: Created role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Role" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/roles/reset:
+    post:
+      operationId: resetRolesToDefaults
+      summary: >-
+        Restore Tester/Contributor/Project Admin to their factory permission
+        flags (Tenant Admin only). Selective, not a wipe (design.md D12): an
+        existing role with one of these three names is updated in place
+        (same id — every project/team assignment referencing it stays
+        valid); a missing one is recreated. Every other role, and every
+        assignment anywhere in the instance, is left untouched.
+      tags: [roles]
+      responses:
+        "200":
+          description: The three resulting default roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Role" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/roles/{roleId}:
+    parameters:
+      - { name: roleId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updateRole
+      summary: Update a role's name, rank, or permission flags (Tenant Admin only)
+      tags: [roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleInput" }
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Role" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteRole
+      summary: >-
+        Delete a role (Tenant Admin only). Any project membership or team
+        role assignment referencing it is removed too (CASCADE) — users
+        whose access depended solely on this role lose it immediately.
+      tags: [roles]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectId}/members:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getProjectMembership
+      summary: List a project's directly-assigned users and assigned teams, each with their role
+      tags: [projects]
+      responses:
+        "200":
+          description: The project's membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectMembership" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectId}/members/{userId}:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setProjectMember
+      summary: Assign a user a role on a project, or change it (Tenant Admin only)
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectRoleInput" }
+      responses:
+        "204": { description: Assigned }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeProjectMember
+      summary: Remove a user's direct role assignment on a project (Tenant Admin only)
+      tags: [projects]
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectId}/teams/{teamId}:
+    parameters:
+      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setProjectTeamRole
+      summary: Assign a team a role on a project, or change it (Tenant Admin only)
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectRoleInput" }
+      responses:
+        "204": { description: Assigned }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeProjectTeamRole
+      summary: Remove a team's role assignment on a project (Tenant Admin only)
+      tags: [projects]
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 components:
   responses:
     ValidationError:
@@ -735,13 +988,12 @@ components:
           description: Required — only the root folder (auto-created with the project) may have no parent.
     Project:
       type: object
-      required: [id, name, archived, description, ownerId, createdAt]
+      required: [id, name, archived, description, createdAt]
       properties:
         id: { type: string }
         name: { type: string }
         archived: { type: boolean }
         description: { type: string }
-        ownerId: { type: string, nullable: true }
         createdAt: { type: string, format: date-time }
     ProjectInput:
       type: object
@@ -749,13 +1001,11 @@ components:
       properties:
         name: { type: string }
         description: { type: string }
-        ownerId: { type: string }
     ProjectUpdate:
       type: object
       properties:
         name: { type: string }
         description: { type: string }
-        ownerId: { type: string }
         archived: { type: boolean }
     TestCase:
       type: object
@@ -903,16 +1153,13 @@ components:
         version:
           type: string
           example: 0.0.1
-    Role:
-      type: string
-      enum: [admin, member]
     User:
       type: object
-      required: [id, email, role, createdAt]
+      required: [id, email, isTenantAdmin, createdAt]
       properties:
         id: { type: string }
         email: { type: string }
-        role: { $ref: "#/components/schemas/Role" }
+        isTenantAdmin: { type: boolean }
         deactivatedAt:
           type: string
           format: date-time
@@ -920,18 +1167,117 @@ components:
         createdAt: { type: string, format: date-time }
     UserInput:
       type: object
-      required: [email, password, role]
+      required: [email, password]
       properties:
         email: { type: string }
         password: { type: string }
-        role: { $ref: "#/components/schemas/Role" }
+        isTenantAdmin: { type: boolean, default: false }
     UserUpdate:
       type: object
       properties:
-        role: { $ref: "#/components/schemas/Role" }
+        isTenantAdmin: { type: boolean }
         deactivate:
           type: boolean
-          description: Set true to deactivate the user. There is no reactivation in v0.1.
+          description: Set true to deactivate the user.
+        reactivate:
+          type: boolean
+          description: Set true to reactivate a previously-deactivated user.
+    Role:
+      type: object
+      description: >-
+        A fully custom, instance-wide role (add-project-rbac design.md D10):
+        the Tenant Admin creates/renames/deletes roles and toggles their
+        permission flags freely. A user's effective permissions on a project
+        are the union of every role granted to them directly or via a team
+        (not a single "highest" role — there is no fixed ranking). Ten
+        concrete, per-resource flags (design.md D11) rather than a handful
+        of broad ones — e.g. caseCreate is independent of caseDelete.
+      required:
+        [id, name, rank, canRead, canCaseCreate, canCaseEdit, canCaseDelete,
+         canSectionCreate, canSectionDelete, canSuiteCreate, canSuiteEditMembership,
+         canRunCreate, canRunRecordResult, canManageProject, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        rank:
+          type: integer
+          description: Tenant-Admin-set display/sort order only — never compared for authorization.
+        canRead: { type: boolean }
+        canCaseCreate: { type: boolean }
+        canCaseEdit: { type: boolean }
+        canCaseDelete: { type: boolean }
+        canSectionCreate: { type: boolean }
+        canSectionDelete: { type: boolean }
+        canSuiteCreate: { type: boolean }
+        canSuiteEditMembership: { type: boolean }
+        canRunCreate: { type: boolean }
+        canRunRecordResult: { type: boolean }
+        canManageProject: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    RoleInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        rank: { type: integer }
+        canRead: { type: boolean }
+        canCaseCreate: { type: boolean }
+        canCaseEdit: { type: boolean }
+        canCaseDelete: { type: boolean }
+        canSectionCreate: { type: boolean }
+        canSectionDelete: { type: boolean }
+        canSuiteCreate: { type: boolean }
+        canSuiteEditMembership: { type: boolean }
+        canRunCreate: { type: boolean }
+        canRunRecordResult: { type: boolean }
+        canManageProject: { type: boolean }
+    Team:
+      type: object
+      required: [id, name, memberIds, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        memberIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    TeamInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    TeamUpdate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    ProjectMember:
+      type: object
+      required: [userId, roleId]
+      properties:
+        userId: { type: string }
+        roleId: { type: string }
+    ProjectTeamRole:
+      type: object
+      required: [teamId, roleId]
+      properties:
+        teamId: { type: string }
+        roleId: { type: string }
+    ProjectMembership:
+      type: object
+      required: [users, teams]
+      properties:
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectMember" }
+        teams:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectTeamRole" }
+    ProjectRoleInput:
+      type: object
+      required: [roleId]
+      properties:
+        roleId: { type: string }
     LoginInput:
       type: object
       required: [email, password]

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
@@ -47,6 +47,7 @@ export default function FolderExplorerPage() {
   const bumpLanding = useBumpDataRevision()
 
   const [project, setProject] = useState<Project>()
+  const [notFound, setNotFound] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([])
   const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
@@ -61,12 +62,17 @@ export default function FolderExplorerPage() {
 
   const load = useCallback(async () => {
     if (!projectId) return
+    setNotFound(false)
     const [{ data: p }, { data: f }, { data: c }, { data: s }] = await Promise.all([
       api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
       api.GET('/api/v1/projects/{projectId}/folders', { params: { path: { projectId } } }),
       api.GET('/api/v1/projects/{projectId}/cases', { params: { path: { projectId } } }),
       api.GET('/api/v1/projects/{projectId}/suites', { params: { path: { projectId } } }),
     ])
+    if (!p) {
+      setNotFound(true)
+      return
+    }
     setProject(p)
     setFolders(f ?? [])
     setCases(c ?? [])
@@ -87,7 +93,15 @@ export default function FolderExplorerPage() {
     setExpanded((prev) => new Set([...prev, ...ancestors]))
   }, [selectedFolderId, folders])
 
-  if (!projectId || !root || !selectedFolderId) return null
+  if (!projectId) return null
+  if (notFound) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+      </p>
+    )
+  }
+  if (!root || !selectedFolderId) return null
 
   const subfolders = folders.filter((f) => f.parentFolderId === selectedFolderId)
   const casesHere = cases.filter((c) => c.folderId === selectedFolderId)

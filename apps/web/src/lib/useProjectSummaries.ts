@@ -7,7 +7,6 @@ export type ProjectSummary = {
   id: string
   name: string
   description: string
-  ownerId: string | null
   createdAt: string
   suiteCount: number
   caseCount: number
@@ -43,7 +42,6 @@ export function useProjectSummaries(): ProjectSummary[] {
             id: p.id,
             name: p.name,
             description: p.description ?? '',
-            ownerId: p.ownerId ?? null,
             createdAt: p.createdAt,
             suiteCount: stat?.suiteCount ?? 0,
             caseCount: stat?.caseCount ?? 0,

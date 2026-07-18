@@ -24,7 +24,7 @@ function mockReadyz(ok: boolean) {
     if (path === '/api/v1/users/me') {
       return Promise.resolve({
         response: { ok: true },
-        data: { id: 'u1', email: 'admin@example.com', role: 'admin' },
+        data: { id: 'u1', email: 'admin@example.com', isTenantAdmin: true },
       })
     }
     // ProjectsPage's own data fetch (irrelevant to these health-badge tests).
@@ -79,7 +79,7 @@ describe('App health status', () => {
         // its health badge) renders; /readyz itself is what stays pending.
         return Promise.resolve({
           response: { ok: true },
-          data: { id: 'u1', email: 'admin@example.com', role: 'admin' },
+          data: { id: 'u1', email: 'admin@example.com', isTenantAdmin: true },
         })
       }
       return new Promise(() => {}) // never resolves
@@ -97,7 +97,7 @@ function mockProjectData() {
     if (path === '/api/v1/users/me')
       return Promise.resolve({
         response: { ok: true },
-        data: { id: 'u1', email: 'admin@example.com', role: 'admin' },
+        data: { id: 'u1', email: 'admin@example.com', isTenantAdmin: true },
       })
     if (path === '/api/v1/projects')
       return Promise.resolve({
@@ -285,7 +285,7 @@ describe('App shell', () => {
     window.history.pushState({}, '', '/')
   })
 
-  it('hides the user email on mobile but keeps the Log out button, so the header does not overflow', async () => {
+  it('truncates the user menu trigger on mobile so a long email cannot overflow the header', async () => {
     window.matchMedia = vi.fn().mockReturnValue({
       matches: true,
       addEventListener: vi.fn(),
@@ -294,8 +294,8 @@ describe('App shell', () => {
     mockProjectData()
     render(<App />)
     await screen.findByRole('link', { name: 'TestPulse' })
-    expect(screen.queryByText('admin@example.com')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /log out/i })).toBeInTheDocument()
+    const trigger = screen.getByRole('button', { name: 'admin@example.com' })
+    expect(trigger).toHaveClass('truncate')
   })
 
   it('shows the health status and version in a footer, not the header — plenty of room there regardless of viewport', async () => {
@@ -321,6 +321,26 @@ describe('App shell', () => {
     window.history.pushState({}, '', '/runs/r1')
     render(<App />)
     expect(await screen.findByText('Select project')).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('shows "Administration" instead of the project switcher on an admin settings page, which has no project to select', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/settings/people')
+    render(<App />)
+    await screen.findByRole('link', { name: 'TestPulse' })
+    expect(await screen.findByText('Administration')).toBeInTheDocument()
+    expect(screen.queryByText('Select project')).not.toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('hides the project switcher on the personal tokens settings page too — not project-scoped, not an admin page either', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/settings/tokens')
+    render(<App />)
+    await screen.findByRole('link', { name: 'TestPulse' })
+    expect(screen.queryByText('Select project')).not.toBeInTheDocument()
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 })

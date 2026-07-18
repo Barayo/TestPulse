@@ -45,7 +45,7 @@ The differentiator ships first: the MCP server is *in* the MVP, because a generi
 ## v0.2 — Team-ready: "your whole team can log in"
 
 - `add-sso-oidc` — OIDC (Auth Code + PKCE) against any external IdP, JIT provisioning, claim→role mapping, SSO-only enforcement toggle.
-- `add-project-rbac` — full role model (admin/manager/tester/viewer) scoped per project, for humans and agents alike.
+- `add-project-rbac` — **shipped**, pulled forward: one instance-wide Tenant Admin flag plus three project-scoped roles (Tester < Contributor < Project Admin), assignable to a user directly or via a Team, for humans and agents alike (an agent inherits its creator's current permission level). Fixed permission sets for now — a later release lets Tenant Admin customize them.
 
 ## v0.3 — Insight: "it tells you things you didn't know"
 

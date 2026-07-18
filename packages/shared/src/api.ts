@@ -112,7 +112,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Rename, describe, assign an owner to, or archive a project */
+        /** Rename, describe, or archive a project */
         patch: operations["updateProject"];
         trace?: never;
     };
@@ -458,7 +458,7 @@ export interface paths {
         /** List all users */
         get: operations["listUsers"];
         put?: never;
-        /** Create a user (admin only) */
+        /** Create a user (Tenant Admin only) */
         post: operations["createUser"];
         delete?: never;
         options?: never;
@@ -498,7 +498,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change a user's role or deactivate them (admin only) */
+        /** Change a user's Tenant Admin flag, deactivate, or reactivate them (Tenant Admin only) */
         patch: operations["updateUser"];
         trace?: never;
     };
@@ -509,7 +509,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List API tokens (own tokens, or another user's via userId — admin only) */
+        /** List API tokens (own tokens, or another user's via userId — Tenant Admin only) */
         get: operations["listTokens"];
         put?: never;
         /** Create an API token for an agent — the full value is returned once and never again */
@@ -532,7 +532,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Revoke a token (its own creator, or an admin) */
+        /** Revoke a token (its own creator, or a Tenant Admin) */
         delete: operations["revokeToken"];
         options?: never;
         head?: never;
@@ -551,6 +551,181 @@ export interface paths {
         put?: never;
         post?: never;
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List teams */
+        get: operations["listTeams"];
+        put?: never;
+        /** Create a team (Tenant Admin only) */
+        post: operations["createTeam"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/teams/{teamId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a team (Tenant Admin only) — removes its membership and project role assignments */
+        delete: operations["deleteTeam"];
+        options?: never;
+        head?: never;
+        /** Rename a team (Tenant Admin only) */
+        patch: operations["renameTeam"];
+        trace?: never;
+    };
+    "/api/v1/teams/{teamId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add a user to a team (Tenant Admin only) */
+        post: operations["addTeamMember"];
+        /** Remove a user from a team (Tenant Admin only) */
+        delete: operations["removeTeamMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List all roles (add-project-rbac design.md D10 — fully custom, instance-wide) */
+        get: operations["listRoles"];
+        put?: never;
+        /** Create a role (Tenant Admin only) */
+        post: operations["createRole"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roles/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Tester/Contributor/Project Admin to their factory permission flags (Tenant Admin only). Selective, not a wipe (design.md D12): an existing role with one of these three names is updated in place (same id — every project/team assignment referencing it stays valid); a missing one is recreated. Every other role, and every assignment anywhere in the instance, is left untouched. */
+        post: operations["resetRolesToDefaults"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/roles/{roleId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roleId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a role (Tenant Admin only). Any project membership or team role assignment referencing it is removed too (CASCADE) — users whose access depended solely on this role lose it immediately. */
+        delete: operations["deleteRole"];
+        options?: never;
+        head?: never;
+        /** Update a role's name, rank, or permission flags (Tenant Admin only) */
+        patch: operations["updateRole"];
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        /** List a project's directly-assigned users and assigned teams, each with their role */
+        get: operations["getProjectMembership"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/members/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign a user a role on a project, or change it (Tenant Admin only) */
+        put: operations["setProjectMember"];
+        post?: never;
+        /** Remove a user's direct role assignment on a project (Tenant Admin only) */
+        delete: operations["removeProjectMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectId}/teams/{teamId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign a team a role on a project, or change it (Tenant Admin only) */
+        put: operations["setProjectTeamRole"];
+        post?: never;
+        /** Remove a team's role assignment on a project (Tenant Admin only) */
+        delete: operations["removeProjectTeamRole"];
         options?: never;
         head?: never;
         patch?: never;
@@ -610,19 +785,16 @@ export interface components {
             name: string;
             archived: boolean;
             description: string;
-            ownerId: string | null;
             /** Format: date-time */
             createdAt: string;
         };
         ProjectInput: {
             name: string;
             description?: string;
-            ownerId?: string;
         };
         ProjectUpdate: {
             name?: string;
             description?: string;
-            ownerId?: string;
             archived?: boolean;
         };
         TestCase: {
@@ -734,12 +906,10 @@ export interface components {
             /** @example 0.0.1 */
             version: string;
         };
-        /** @enum {string} */
-        Role: "admin" | "member";
         User: {
             id: string;
             email: string;
-            role: components["schemas"]["Role"];
+            isTenantAdmin: boolean;
             /** Format: date-time */
             deactivatedAt?: string | null;
             /** Format: date-time */
@@ -748,12 +918,78 @@ export interface components {
         UserInput: {
             email: string;
             password: string;
-            role: components["schemas"]["Role"];
+            /** @default false */
+            isTenantAdmin: boolean;
         };
         UserUpdate: {
-            role?: components["schemas"]["Role"];
-            /** @description Set true to deactivate the user. There is no reactivation in v0.1. */
+            isTenantAdmin?: boolean;
+            /** @description Set true to deactivate the user. */
             deactivate?: boolean;
+            /** @description Set true to reactivate a previously-deactivated user. */
+            reactivate?: boolean;
+        };
+        /** @description A fully custom, instance-wide role (add-project-rbac design.md D10): the Tenant Admin creates/renames/deletes roles and toggles their permission flags freely. A user's effective permissions on a project are the union of every role granted to them directly or via a team (not a single "highest" role — there is no fixed ranking). Ten concrete, per-resource flags (design.md D11) rather than a handful of broad ones — e.g. caseCreate is independent of caseDelete. */
+        Role: {
+            id: string;
+            name: string;
+            /** @description Tenant-Admin-set display/sort order only — never compared for authorization. */
+            rank: number;
+            canRead: boolean;
+            canCaseCreate: boolean;
+            canCaseEdit: boolean;
+            canCaseDelete: boolean;
+            canSectionCreate: boolean;
+            canSectionDelete: boolean;
+            canSuiteCreate: boolean;
+            canSuiteEditMembership: boolean;
+            canRunCreate: boolean;
+            canRunRecordResult: boolean;
+            canManageProject: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RoleInput: {
+            name: string;
+            rank?: number;
+            canRead?: boolean;
+            canCaseCreate?: boolean;
+            canCaseEdit?: boolean;
+            canCaseDelete?: boolean;
+            canSectionCreate?: boolean;
+            canSectionDelete?: boolean;
+            canSuiteCreate?: boolean;
+            canSuiteEditMembership?: boolean;
+            canRunCreate?: boolean;
+            canRunRecordResult?: boolean;
+            canManageProject?: boolean;
+        };
+        Team: {
+            id: string;
+            name: string;
+            memberIds: string[];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TeamInput: {
+            name: string;
+        };
+        TeamUpdate: {
+            name: string;
+        };
+        ProjectMember: {
+            userId: string;
+            roleId: string;
+        };
+        ProjectTeamRole: {
+            teamId: string;
+            roleId: string;
+        };
+        ProjectMembership: {
+            users: components["schemas"]["ProjectMember"][];
+            teams: components["schemas"]["ProjectTeamRole"][];
+        };
+        ProjectRoleInput: {
+            roleId: string;
         };
         LoginInput: {
             email: string;
@@ -1862,6 +2098,414 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    listTeams: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All teams */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamInput"];
+            };
+        };
+        responses: {
+            /** @description Created team */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    renameTeam: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated team */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    addTeamMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated team */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeTeamMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated team */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Team"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listRoles: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All roles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleInput"];
+            };
+        };
+        responses: {
+            /** @description Created role */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    resetRolesToDefaults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The three resulting default roles */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RoleInput"];
+            };
+        };
+        responses: {
+            /** @description Updated role */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Role"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getProjectMembership: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The project's membership */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectMembership"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setProjectMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRoleInput"];
+            };
+        };
+        responses: {
+            /** @description Assigned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeProjectMember: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setProjectTeamRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRoleInput"];
+            };
+        };
+        responses: {
+            /** @description Assigned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeProjectTeamRole: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

@@ -123,16 +123,84 @@ func TestProjectNameRequired(t *testing.T) {
 	}
 }
 
-func TestRoleValidation(t *testing.T) {
-	for _, valid := range []string{"admin", "member"} {
-		if _, err := ParseRole(valid); err != nil {
-			t.Errorf("ParseRole(%q) = %v, want nil", valid, err)
-		}
+func TestRoleHasPermission(t *testing.T) {
+	// design.md D11: ten concrete, per-resource flags — the seeded roles
+	// below reproduce the net permissions of the original three fixed
+	// roles, just expressed via the finer-grained flags.
+	tester := Role{Name: "Tester", CanRead: true, CanRunCreate: true, CanRunRecordResult: true}
+	contributor := Role{
+		Name: "Contributor", CanRead: true, CanRunCreate: true, CanRunRecordResult: true,
+		CanCaseCreate: true, CanCaseEdit: true, CanSectionCreate: true, CanSuiteCreate: true, CanSuiteEditMembership: true,
 	}
-	for _, invalid := range []string{"", "superadmin", "ADMIN"} {
-		if _, err := ParseRole(invalid); err == nil {
-			t.Errorf("ParseRole(%q) = nil error, want error", invalid)
-		}
+	projectAdmin := Role{
+		Name: "Project Admin", CanRead: true, CanRunCreate: true, CanRunRecordResult: true,
+		CanCaseCreate: true, CanCaseEdit: true, CanSectionCreate: true, CanSuiteCreate: true, CanSuiteEditMembership: true,
+		CanCaseDelete: true, CanSectionDelete: true, CanManageProject: true,
+	}
+
+	if !tester.Has(PermRead) || !tester.Has(PermRunCreate) || !tester.Has(PermRunRecordResult) {
+		t.Errorf("Tester = %+v, want read+runCreate+runRecordResult", tester)
+	}
+	if tester.Has(PermCaseCreate) || tester.Has(PermCaseDelete) || tester.Has(PermManageProject) {
+		t.Errorf("Tester = %+v, want no caseCreate/caseDelete/manageProject", tester)
+	}
+	if !contributor.Has(PermCaseCreate) || !contributor.Has(PermSuiteEditMembership) {
+		t.Errorf("Contributor = %+v, want caseCreate+suiteEditMembership", contributor)
+	}
+	if contributor.Has(PermCaseDelete) {
+		t.Errorf("Contributor = %+v, want no caseDelete", contributor)
+	}
+	if !projectAdmin.Has(PermCaseDelete) || !projectAdmin.Has(PermManageProject) {
+		t.Errorf("Project Admin = %+v, want caseDelete+manageProject", projectAdmin)
+	}
+}
+
+func TestPermissionsUnionAcrossRoles(t *testing.T) {
+	// A user holding two non-nested custom roles gets the union of both —
+	// not just the "higher" one (design.md D10: there's no ordinal ranking
+	// to pick a winner from once roles are fully custom).
+	var perms Permissions
+	roleA := Role{CanRead: true, CanCaseDelete: true}
+	roleB := Role{CanRead: true, CanCaseCreate: true}
+	for _, r := range []Role{roleA, roleB} {
+		perms.Read = perms.Read || r.CanRead
+		perms.CaseCreate = perms.CaseCreate || r.CanCaseCreate
+		perms.CaseDelete = perms.CaseDelete || r.CanCaseDelete
+	}
+	if !perms.Has(PermCaseCreate) {
+		t.Error("union should include CaseCreate from roleB")
+	}
+	if !perms.Has(PermCaseDelete) {
+		t.Error("union should include CaseDelete from roleA")
+	}
+	if perms.Has(PermManageProject) {
+		t.Error("union should not grant manageProject — neither role has it")
+	}
+}
+
+func TestRoleNameRequired(t *testing.T) {
+	if err := ValidateRoleName("QA Reviewer"); err != nil {
+		t.Errorf("valid name rejected: %v", err)
+	}
+	err := ValidateRoleName("")
+	if err == nil {
+		t.Fatal("empty role name accepted")
+	}
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+func TestTeamNameRequired(t *testing.T) {
+	if err := ValidateTeamName("QA Core"); err != nil {
+		t.Errorf("valid name rejected: %v", err)
+	}
+	err := ValidateTeamName("")
+	if err == nil {
+		t.Fatal("empty team name accepted")
+	}
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("error %q does not name the field", err)
 	}
 }
 
@@ -159,6 +227,24 @@ func TestEmailRequired(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "email") {
 		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+func TestEmailFormatValidation(t *testing.T) {
+	for _, valid := range []string{"a@b.com", "jane.doe+test@example.co.uk", "agent_1@sub.example.com"} {
+		if err := ValidateEmail(valid); err != nil {
+			t.Errorf("ValidateEmail(%q) = %v, want nil", valid, err)
+		}
+	}
+	for _, invalid := range []string{"not-an-email", "missing-domain@", "@missing-local.com", "no-at-sign.com", "spaces in@email.com"} {
+		err := ValidateEmail(invalid)
+		if err == nil {
+			t.Errorf("ValidateEmail(%q) accepted, want error", invalid)
+			continue
+		}
+		if !strings.Contains(err.Error(), "email") {
+			t.Errorf("error %q does not name the field", err)
+		}
 	}
 }
 

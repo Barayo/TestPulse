@@ -1,10 +1,10 @@
 import type { ReactNode } from 'react'
 import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
-import { Button } from '@/components/ui/button'
 import { ProjectSwitcher } from '@/components/ProjectSwitcher'
+import { AdminMenu } from '@/components/AdminMenu'
+import { UserMenu } from '@/components/UserMenu'
 import { HealthBadge } from '@/components/HealthBadge'
 import { useActiveProjectId } from '@/lib/useActiveProject'
-import { useIsMobile } from '@/lib/useIsMobile'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
 import { DataRevisionProvider } from '@/lib/DataRevision'
 import { AuthProvider, useAuth } from '@/lib/useAuth'
@@ -15,8 +15,10 @@ import RunsPage from '@/pages/RunsPage'
 import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import RunPage from '@/pages/RunPage'
 import LoginPage from '@/pages/LoginPage'
-import UsersPage from '@/pages/UsersPage'
+import PeoplePage from '@/pages/PeoplePage'
+import RolesPage from '@/pages/RolesPage'
 import TokensPage from '@/pages/TokensPage'
+import ProjectMembersPage from '@/pages/ProjectMembersPage'
 
 function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
@@ -24,10 +26,17 @@ function Layout({ children }: { children: React.ReactNode }) {
   const activeProjectId = useActiveProjectId()
   const projects = useProjectSummaries()
   const { user, logout } = useAuth()
-  const isMobile = useIsMobile()
-  // The switcher exists to jump between projects while inside one; on the
-  // project list itself it would just duplicate the page's own purpose.
-  const isProjectsListPage = location.pathname === '/'
+  // The switcher exists to jump between projects while inside one — it only
+  // makes sense on a route that is actually about a specific project
+  // (checked by route shape, not by whether resolution succeeded: a run
+  // whose project lookup failed is still a project-scoped page and should
+  // show "Select project", not hide the switcher outright).
+  const isProjectScopedPage = /^\/(projects|runs)\//.test(location.pathname)
+  // Tenant-Admin-only instance settings (People/Roles) aren't project-scoped
+  // either, but "Select project" is actively wrong there — there's nothing
+  // to select. /settings/tokens is deliberately excluded: it's personal
+  // (every user's own API tokens), not an admin concern.
+  const isAdminSettingsPage = /^\/settings\/(people|roles)(\/|$)/.test(location.pathname)
 
   async function handleLogout() {
     await logout()
@@ -82,7 +91,7 @@ function Layout({ children }: { children: React.ReactNode }) {
                 <span className="text-primary tp-wordmark-pulse">Pulse</span>
               </span>
             </Link>
-            {!isProjectsListPage && (
+            {(isProjectScopedPage || isAdminSettingsPage) && (
               <>
                 {/* text-[20px] + relative -top-1.5: sized up to match the
                     now-larger wordmark/project name either side of it.
@@ -96,20 +105,24 @@ function Layout({ children }: { children: React.ReactNode }) {
                 >
                   ›
                 </span>
-                <ProjectSwitcher
-                  projects={projects}
-                  activeProjectId={activeProjectId}
-                  onSelectProject={(id) => navigate(`/projects/${id}`)}
-                />
+                {isAdminSettingsPage ? (
+                  <span className="relative -top-1 truncate text-[20px] leading-none font-bold text-muted-foreground">
+                    Administration
+                  </span>
+                ) : (
+                  <ProjectSwitcher
+                    projects={projects}
+                    activeProjectId={activeProjectId}
+                    onSelectProject={(id) => navigate(`/projects/${id}`)}
+                  />
+                )}
               </>
             )}
           </div>
           {user && (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {!isMobile && <span>{user.email}</span>}
-              <Button variant="ghost" size="sm" onClick={() => void handleLogout()}>
-                Log out
-              </Button>
+              {user.isTenantAdmin && <AdminMenu />}
+              <UserMenu user={user} onLogout={() => void handleLogout()} />
             </div>
           )}
         </div>
@@ -125,7 +138,8 @@ function Layout({ children }: { children: React.ReactNode }) {
 // RequireAuth gates every non-login route on a resolved session (design
 // D6/D7): while the session check is in flight it renders nothing (avoids a
 // flash of protected content), then redirects to /login — preserving the
-// originally requested path so LoginPage can return the user there.
+// originally requested path so LoginPage can return the user there (e.g.
+// a session timeout mid-task shouldn't lose their place).
 function RequireAuth({ children }: { children: ReactNode }) {
   const { user, loading } = useAuth()
   const location = useLocation()
@@ -184,6 +198,14 @@ function App() {
               }
             />
             <Route
+              path="/projects/:projectId/members"
+              element={
+                <RequireAuth>
+                  <ProjectMembersPage />
+                </RequireAuth>
+              }
+            />
+            <Route
               path="/runs/:runId"
               element={
                 <RequireAuth>
@@ -192,10 +214,18 @@ function App() {
               }
             />
             <Route
-              path="/settings/users"
+              path="/settings/people"
               element={
                 <RequireAuth>
-                  <UsersPage />
+                  <PeoplePage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/settings/roles"
+              element={
+                <RequireAuth>
+                  <RolesPage />
                 </RequireAuth>
               }
             />

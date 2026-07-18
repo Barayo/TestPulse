@@ -121,22 +121,27 @@ func TestScenario_LogoutInvalidatesSessionOverHTTP(t *testing.T) {
 	callAs(t, h, cookie, "GET", "/api/v1/projects", nil, 401, &errBody)
 }
 
-func TestScenario_MemberHasFullDomainAccessAdminOnlyManagesUsers(t *testing.T) {
+// TestScenario_NonTenantAdminCannotCreateProjectOrManageUsers replaces the
+// old "member has full domain access" scenario — under add-project-rbac, a
+// non-Tenant-Admin has no access at all until granted project membership,
+// and can never create projects or manage user accounts regardless.
+func TestScenario_NonTenantAdminCannotCreateProjectOrManageUsers(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
 
 	var member jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/users",
-		jmap{"email": "member@example.com", "password": "correcthorse", "role": "member"}, 201, &member)
+		jmap{"email": "member@example.com", "password": "correcthorse"}, 201, &member)
+	if member["isTenantAdmin"] != false {
+		t.Errorf("created user = %+v, want isTenantAdmin=false by default", member)
+	}
 
 	memberCookie := loginCookie(t, h, "member@example.com", "correcthorse")
 
-	var p jmap
-	callAs(t, h, memberCookie, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-
 	var errBody jmap
+	callAs(t, h, memberCookie, "POST", "/api/v1/projects", jmap{"name": "QA"}, 403, &errBody)
 	callAs(t, h, memberCookie, "POST", "/api/v1/users",
-		jmap{"email": "other@example.com", "password": "correcthorse", "role": "member"}, 403, &errBody)
+		jmap{"email": "other@example.com", "password": "correcthorse"}, 403, &errBody)
 }
 
 func TestScenario_CreateAndAuthenticateTokenOverHTTP(t *testing.T) {
@@ -160,6 +165,26 @@ func TestScenario_CreateAndAuthenticateTokenOverHTTP(t *testing.T) {
 	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects", nil, 401, &errBody)
 }
 
+func TestScenario_DeactivateThenReactivateUser(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "member@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"deactivate": true}, 204, nil)
+	var errBody jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": "member@example.com", "password": "correcthorse"}, 401, &errBody)
+
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"reactivate": true}, 204, nil)
+	var loggedIn jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": "member@example.com", "password": "correcthorse"}, 200, &loggedIn)
+}
+
 func TestScenario_AuditHistoryQueryableForAnEntity(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
@@ -181,7 +206,7 @@ func TestScenario_CurrentUserReflectsSessionActor(t *testing.T) {
 
 	var me jmap
 	callAs(t, h, cookie, "GET", "/api/v1/users/me", nil, 200, &me)
-	if me["email"] != "admin@example.com" || me["role"] != "admin" {
+	if me["email"] != "admin@example.com" || me["isTenantAdmin"] != true {
 		t.Errorf("me = %+v", me)
 	}
 }

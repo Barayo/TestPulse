@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
 import { api } from '@/lib/api'
 
-export type AuthUser = { id: string; email: string; role: 'admin' | 'member' }
+export type AuthUser = { id: string; email: string; isTenantAdmin: boolean }
 
 type LoginResult = { ok: true } | { ok: false; error: string }
 

@@ -7,7 +7,6 @@ function project(overrides: Partial<ProjectSummary>): ProjectSummary {
     id: overrides.id ?? Math.random().toString(36),
     name: 'Project',
     description: '',
-    ownerId: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     suiteCount: 0,
     caseCount: 0,

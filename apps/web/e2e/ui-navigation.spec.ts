@@ -16,7 +16,12 @@ async function createProject(page: Page, label: string) {
 }
 
 async function openFolderExplorer(page: Page) {
-  await page.getByRole('button', { name: 'Go to Library' }).click()
+  // A brand-new, genuinely empty project shows the "Get started" checklist
+  // instead of the library panel (enrich-project-landing) — its first step
+  // routes to the same /library destination, so either control works here.
+  const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
+  const getStarted = page.getByRole('button', { name: /add your first test case/i })
+  await goToLibrary.or(getStarted).click()
   await page.waitForURL(/\/library/)
 }
 
@@ -140,6 +145,11 @@ test.describe('Requirement: Project landing shows top-level structure only', () 
     for (const name of ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo']) {
       await createFolderInOpenFolder(page, name)
     }
+    // Folders alone don't count toward "empty" (enrich-project-landing: only
+    // cases/suites/runs do) — without at least one case the landing page
+    // correctly shows the get-started checklist instead of the library
+    // panel this scenario means to exercise, so give it one case.
+    await createCase(page, 'Placeholder case')
     await page.goBack()
     await expect(page.getByRole('button', { name: 'Go to Library' })).toHaveText(/see all 5/)
   })

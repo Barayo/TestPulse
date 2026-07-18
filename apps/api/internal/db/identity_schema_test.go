@@ -36,7 +36,7 @@ func TestIdentityTablesExist(t *testing.T) {
 	}
 }
 
-func TestUserRoleConstraint(t *testing.T) {
+func TestUserIsTenantAdminDefaultsFalse(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
 	if err := Migrate(context.Background(), pool); err != nil {
@@ -44,16 +44,17 @@ func TestUserRoleConstraint(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ('a@b.com', 'h', 'admin')`); err != nil {
-		t.Errorf("valid role rejected: %v", err)
+	var isTenantAdmin bool
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash) VALUES ('a@b.com', 'h') RETURNING is_tenant_admin`,
+	).Scan(&isTenantAdmin); err != nil {
+		t.Fatalf("insert without is_tenant_admin rejected: %v", err)
+	}
+	if isTenantAdmin {
+		t.Error("is_tenant_admin default = true, want false")
 	}
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ('c@d.com', 'h', 'bogus')`); err == nil {
-		t.Error("invalid role accepted, want CHECK violation")
-	}
-	if _, err := pool.Exec(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ('a@b.com', 'h', 'member')`); err == nil {
+		`INSERT INTO users (email, password_hash, is_tenant_admin) VALUES ('a@b.com', 'h', true)`); err == nil {
 		t.Error("duplicate email accepted, want UNIQUE violation")
 	}
 }
@@ -68,7 +69,7 @@ func TestApiTokenHashUniqueAndAuditActorKindConstraint(t *testing.T) {
 
 	var userID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ('a@b.com', 'h', 'member') RETURNING id`,
+		`INSERT INTO users (email, password_hash) VALUES ('a@b.com', 'h') RETURNING id`,
 	).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +107,7 @@ func TestAuditEntrySurvivesUserDeletion(t *testing.T) {
 
 	var userID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO users (email, password_hash, role) VALUES ('a@b.com', 'h', 'member') RETURNING id`,
+		`INSERT INTO users (email, password_hash) VALUES ('a@b.com', 'h') RETURNING id`,
 	).Scan(&userID); err != nil {
 		t.Fatal(err)
 	}

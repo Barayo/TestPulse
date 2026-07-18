@@ -5,7 +5,6 @@ package service
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -45,22 +44,19 @@ func New(s *store.Store) *Service { return &Service{store: s} }
 // --- Projects ---
 
 // ProjectInput carries the fields needed to create a project. Description
-// and OwnerID are optional (design D4/proposal); OwnerID, when set, must
-// resolve to a real user.
+// is optional. There is no owner concept — access is entirely determined by
+// project membership (add-project-rbac), assigned by a Tenant Admin after
+// creation via /projects/{id}/members.
 type ProjectInput struct {
 	Name        string
 	Description string
-	OwnerID     *string
 }
 
 func (s *Service) CreateProject(ctx context.Context, in ProjectInput) (domain.Project, error) {
 	if err := domain.ValidateProjectName(in.Name); err != nil {
 		return domain.Project{}, invalid("%s", err)
 	}
-	if err := s.validateOwnerID(ctx, in.OwnerID); err != nil {
-		return domain.Project{}, err
-	}
-	p, err := s.store.Projects.Create(ctx, in.Name, in.Description, in.OwnerID)
+	p, err := s.store.Projects.Create(ctx, in.Name, in.Description)
 	if err != nil {
 		return domain.Project{}, err
 	}
@@ -72,31 +68,63 @@ func (s *Service) GetProject(ctx context.Context, id string) (domain.Project, er
 	return s.store.Projects.Get(ctx, id)
 }
 
+// ListProjects returns every project for a Tenant Admin, or only the
+// projects the caller has an effective role on otherwise (add-project-rbac
+// design.md D6) — non-Tenant-Admins never saw an unfiltered list again
+// after this change.
 func (s *Service) ListProjects(ctx context.Context) ([]domain.Project, error) {
-	return s.store.Projects.List(ctx)
+	actor, ok := domain.ActorFromContext(ctx)
+	if !ok {
+		return nil, unauthorized("authentication required")
+	}
+	if actor.IsTenantAdmin {
+		return s.store.Projects.List(ctx)
+	}
+	return s.store.Projects.ListForMember(ctx, actor.EffectiveUserID)
 }
 
 // ProjectSummaries returns the current actor's view of every non-archived
-// project, including which ones they've favorited (design D3).
+// project, including which ones they've favorited (design D3), filtered to
+// membership for non-Tenant-Admins (add-project-rbac design.md D6).
 func (s *Service) ProjectSummaries(ctx context.Context) ([]domain.ProjectSummary, error) {
 	actor, ok := domain.ActorFromContext(ctx)
 	if !ok {
 		return nil, unauthorized("authentication required")
 	}
-	return s.store.Projects.Summaries(ctx, actor.ID)
+	summaries, err := s.store.Projects.Summaries(ctx, actor.ID)
+	if err != nil {
+		return nil, err
+	}
+	if actor.IsTenantAdmin {
+		return summaries, nil
+	}
+	member, err := s.store.Projects.ListForMember(ctx, actor.EffectiveUserID)
+	if err != nil {
+		return nil, err
+	}
+	allowed := make(map[string]bool, len(member))
+	for _, p := range member {
+		allowed[p.ID] = true
+	}
+	filtered := make([]domain.ProjectSummary, 0, len(summaries))
+	for _, sum := range summaries {
+		if allowed[sum.ProjectID] {
+			filtered = append(filtered, sum)
+		}
+	}
+	return filtered, nil
 }
 
 // ProjectUpdate carries optional changes; nil fields are left untouched.
 type ProjectUpdate struct {
 	Name        *string
 	Description *string
-	OwnerID     *string
 	Archived    *bool
 }
 
 func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdate) (domain.Project, error) {
-	if upd.Name == nil && upd.Description == nil && upd.OwnerID == nil && upd.Archived == nil {
-		return domain.Project{}, invalid("nothing to update: provide name, description, ownerId, and/or archived")
+	if upd.Name == nil && upd.Description == nil && upd.Archived == nil {
+		return domain.Project{}, invalid("nothing to update: provide name, description, and/or archived")
 	}
 	if upd.Name != nil {
 		if err := domain.ValidateProjectName(*upd.Name); err != nil {
@@ -113,15 +141,6 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 		}
 		s.audit(ctx, "update_description", "project", id)
 	}
-	if upd.OwnerID != nil {
-		if err := s.validateOwnerID(ctx, upd.OwnerID); err != nil {
-			return domain.Project{}, err
-		}
-		if err := s.store.Projects.SetOwner(ctx, id, upd.OwnerID); err != nil {
-			return domain.Project{}, err
-		}
-		s.audit(ctx, "update_owner", "project", id)
-	}
 	if upd.Archived != nil && *upd.Archived {
 		if err := s.store.Projects.Archive(ctx, id); err != nil {
 			return domain.Project{}, err
@@ -129,19 +148,6 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 		s.audit(ctx, "archive", "project", id)
 	}
 	return s.store.Projects.Get(ctx, id)
-}
-
-func (s *Service) validateOwnerID(ctx context.Context, ownerID *string) error {
-	if ownerID == nil {
-		return nil
-	}
-	if _, err := s.store.Users.Get(ctx, *ownerID); err != nil {
-		if errors.Is(err, store.ErrNotFound) {
-			return invalid("ownerId does not reference an existing user")
-		}
-		return err
-	}
-	return nil
 }
 
 // StarProject and UnstarProject are only available to human users (design

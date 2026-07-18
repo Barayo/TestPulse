@@ -42,10 +42,10 @@ tables below are a quick map, not the source of truth.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/projects` | List projects |
-| POST | `/api/v1/projects` | Create a project (`name`; optional `description`, `ownerId`) |
+| POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only |
 | GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), and whether the calling user has favorited it, for every non-archived project, in one request — computed server-side (4 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
 | GET | `/api/v1/projects/{projectId}` | Get a project |
-| PATCH | `/api/v1/projects/{projectId}` | Rename, describe, assign an owner to, and/or archive |
+| PATCH | `/api/v1/projects/{projectId}` | Rename, describe, and/or archive — Project Admin+ |
 | POST | `/api/v1/projects/{projectId}/favorite` | Star the project for the calling user (idempotent) |
 | DELETE | `/api/v1/projects/{projectId}/favorite` | Unstar the project for the calling user (idempotent) |
 
@@ -102,12 +102,51 @@ lacking permission return `403 {"error": "..."}`.
 | POST | `/api/v1/auth/logout` | End the current session |
 | GET | `/api/v1/users/me` | The currently authenticated actor, as a user record |
 | GET | `/api/v1/users` | List users |
-| POST | `/api/v1/users` | Create a user (`email`, `password`, `role`) — admin only |
-| PATCH | `/api/v1/users/{userId}` | Change `role` and/or `deactivate` — admin only |
-| GET | `/api/v1/tokens` | List API tokens — own tokens, or `?userId=` for another user's (admin only) |
+| POST | `/api/v1/users` | Create a user (`email`, `password`, `isTenantAdmin`) — Tenant Admin only |
+| PATCH | `/api/v1/users/{userId}` | Change `isTenantAdmin` and/or `deactivate` — Tenant Admin only |
+| GET | `/api/v1/tokens` | List API tokens — own tokens, or `?userId=` for another user's (Tenant Admin only) |
 | POST | `/api/v1/tokens` | Create an API token (`name`) for an agent; the full value is returned once and never again |
-| DELETE | `/api/v1/tokens/{tokenId}` | Revoke a token — its own creator, or an admin |
+| DELETE | `/api/v1/tokens/{tokenId}` | Revoke a token — its own creator, or a Tenant Admin |
 | GET | `/api/v1/audit?entityType=&entityId=` | Audit history for a specific entity, oldest first |
+
+**Teams** (`add-project-rbac`, Tenant Admin only throughout)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/teams` | List teams |
+| POST | `/api/v1/teams` | Create a team (`name`) |
+| PATCH | `/api/v1/teams/{teamId}` | Rename a team |
+| DELETE | `/api/v1/teams/{teamId}` | Delete a team — cascades its membership and project role assignments |
+| POST | `/api/v1/teams/{teamId}/members/{userId}` | Add a user to a team |
+| DELETE | `/api/v1/teams/{teamId}/members/{userId}` | Remove a user from a team |
+
+**Roles** (`add-project-rbac`, fully custom and instance-wide — design.md D10, Tenant Admin only throughout)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/roles` | List all roles |
+| POST | `/api/v1/roles` | Create a role (`name`, `rank`, and the ten `can*` permission flags below) |
+| PATCH | `/api/v1/roles/{roleId}` | Update a role's name, rank, or permission flags |
+| DELETE | `/api/v1/roles/{roleId}` | Delete a role — cascades any project membership/team role assignment referencing it |
+| POST | `/api/v1/roles/reset` | Restore Tester/Contributor/Project Admin to their factory permission flags, in place — an existing one of the three keeps its `id` (so assignments referencing it stay valid), a missing one is recreated. Every other role, and every assignment, is untouched — not a wipe (design.md D12) |
+
+Each role carries ten independent boolean flags (design.md D11 — concrete,
+per-resource actions rather than a handful of broad ones): `canRead`,
+`canCaseCreate`, `canCaseEdit`, `canCaseDelete`, `canSectionCreate`,
+`canSectionDelete`, `canSuiteCreate`, `canSuiteEditMembership`,
+`canRunCreate`, `canRunRecordResult`, `canManageProject`. `rank` is a
+display/sort order only, never compared for authorization — see
+[Test management](test-management.md#project-roles-and-teams).
+
+**Project membership** (`add-project-rbac`)
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/projects/{projectId}/members` | List a project's directly-assigned users and assigned teams with their `roleId` — Read+ |
+| PUT | `/api/v1/projects/{projectId}/members/{userId}` | Assign/change a user's project role (`roleId`: a `Role.id`) — Tenant Admin only |
+| DELETE | `/api/v1/projects/{projectId}/members/{userId}` | Remove a user's direct project role assignment — Tenant Admin only |
+| PUT | `/api/v1/projects/{projectId}/teams/{teamId}` | Assign/change a team's project role (`roleId`) — Tenant Admin only |
+| DELETE | `/api/v1/projects/{projectId}/teams/{teamId}` | Remove a team's project role assignment — Tenant Admin only |
 
 ## Authentication
 
@@ -123,16 +162,25 @@ resolve to an authenticated actor:
 - **Agents**: `Authorization: Bearer tp_<token>`, created via
   `POST /api/v1/tokens` by any authenticated user. A token acts as its own
   actor — distinct from, and never impersonating, the human who created it
-  — at that human's role.
+  — at that human's *current* permission level, resolved fresh on every
+  request (`add-project-rbac`).
 
-Two instance-wide roles: `admin` (the above, plus user management) and
-`member` (full read/write on domain data). Every write is recorded in an
-append-only audit log naming the acting actor (human or agent), queryable
-per entity via `GET /api/v1/audit`.
+One instance-wide `Tenant Admin` flag (creates projects, manages user
+accounts, teams, and roles, assigns project membership, and has implicit
+access to every project) plus fully custom, instance-wide project-scoped
+roles (design.md D10) — the Tenant Admin creates/renames/deletes roles and
+toggles ten concrete, per-resource permission flags on each (design.md D11)
+— assignable to a user directly or via a team. A user's effective permissions on a project are the union of every
+role granted to them, not a single ranked role. A non-Tenant-Admin has no
+access to a project at all, including read, until explicitly assigned a
+role on it. See [Test management](test-management.md#project-roles-and-teams)
+for the full permission model. Every write is recorded in an append-only
+audit log naming the acting actor (human or agent), queryable per entity via
+`GET /api/v1/audit`.
 
-A fresh instance seeds one admin from `TESTPULSE_ADMIN_EMAIL` /
-`TESTPULSE_ADMIN_PASSWORD` on first startup (skipped once any user exists —
-see [Development](development.md)).
+A fresh instance seeds one user as Tenant Admin from `TESTPULSE_ADMIN_EMAIL`
+/ `TESTPULSE_ADMIN_PASSWORD` on first startup (skipped once any user exists
+— see [Development](development.md)).
 
 ## Versioning policy
 

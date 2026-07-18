@@ -62,12 +62,9 @@ function Pill({
   )
 }
 
-type UserOption = { id: string; email: string }
-
 // "+ New project" and the empty-state CTA are kept structurally separate
-// from the list itself (design.md D9), so add-project-rbac (v0.2) only has
-// to stop rendering those two elements for non-admins — no layout change.
-// v0.1 has no real roles yet, so everyone sees this admin-enabled version.
+// from the list itself (design.md D9) — add-project-rbac gates both behind
+// isTenantAdmin below, with no layout change from the always-shown version.
 export default function ProjectsPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -81,33 +78,19 @@ export default function ProjectsPage() {
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [ownerId, setOwnerId] = useState('')
-  const [userOptions, setUserOptions] = useState<UserOption[]>([])
   const [error, setError] = useState<string>()
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null)
 
-  const isAdmin = user?.role === 'admin'
-  // Design D6: a non-admin who can see exactly one project skips the list
-  // entirely — no per-project access control needed, this just reacts to
-  // whatever useProjectSummaries() already returns.
-  const skipToSingleProject = !isAdmin && projects.length === 1
+  const isTenantAdmin = user?.isTenantAdmin ?? false
+  // Design D6: a non-Tenant-Admin who can see exactly one project (now a
+  // real per-project membership list, add-project-rbac) skips the list
+  // entirely and lands straight on it.
+  const skipToSingleProject = !isTenantAdmin && projects.length === 1
 
   useEffect(() => {
     if (skipToSingleProject) navigate(`/projects/${projects[0].id}`, { replace: true })
   }, [skipToSingleProject, projects, navigate])
-
-  useEffect(() => {
-    let cancelled = false
-    void api.GET('/api/v1/users').then(({ data }) => {
-      if (!cancelled) setUserOptions((data as UserOption[] | undefined) ?? [])
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [])
-
-  const ownerEmailById = new Map(userOptions.map((u) => [u.id, u.email]))
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
@@ -120,7 +103,6 @@ export default function ProjectsPage() {
       body: {
         name,
         ...(description ? { description } : {}),
-        ...(ownerId ? { ownerId } : {}),
       },
     })
     if (apiError) {
@@ -129,7 +111,6 @@ export default function ProjectsPage() {
     }
     setName('')
     setDescription('')
-    setOwnerId('')
     if (data) navigate(`/projects/${data.id}`)
   }
 
@@ -167,7 +148,7 @@ export default function ProjectsPage() {
             </p>
           )}
         </div>
-        <Button onClick={() => setCreating(true)}>+ New project</Button>
+        {isTenantAdmin && <Button onClick={() => setCreating(true)}>+ New project</Button>}
       </div>
 
       {creating && (
@@ -197,22 +178,6 @@ export default function ProjectsPage() {
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="What this project covers (optional)"
                 />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="project-owner">Owner</Label>
-                <select
-                  id="project-owner"
-                  value={ownerId}
-                  onChange={(e) => setOwnerId(e.target.value)}
-                  className="h-9 rounded-[10px] border border-input bg-transparent px-2.5 text-sm"
-                >
-                  <option value="">No owner</option>
-                  {userOptions.map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.email}
-                    </option>
-                  ))}
-                </select>
               </div>
             </form>
             {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
@@ -312,11 +277,15 @@ export default function ProjectsPage() {
 
       {projects.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center">
-          <p className="mb-1 text-sm font-medium">No projects yet</p>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Create the first one to start organizing sections, suites, and runs.
+          <p className="mb-1 text-sm font-medium">
+            {isTenantAdmin ? 'No projects yet' : "You don't have access to any projects yet"}
           </p>
-          <Button onClick={() => setCreating(true)}>+ Create your first project</Button>
+          <p className="mb-4 text-sm text-muted-foreground">
+            {isTenantAdmin
+              ? 'Create the first one to start organizing sections, suites, and runs.'
+              : 'Ask a Tenant Admin to add you to a project.'}
+          </p>
+          {isTenantAdmin && <Button onClick={() => setCreating(true)}>+ Create your first project</Button>}
         </div>
       ) : (
         <>
@@ -341,7 +310,6 @@ export default function ProjectsPage() {
             {viewMode === 'expanded' ? (
               <ExpandedGrid
                 projects={rest}
-                ownerEmailById={ownerEmailById}
                 onNavigate={(id) => navigate(`/projects/${id}`)}
                 onToggleFavorite={toggleFavorite}
               />
@@ -412,23 +380,20 @@ function isValidDate(iso: string): boolean {
 }
 
 // Rich card grid for expanded view — every field the project has is worth
-// showing here: description, owner, when it was created, suite/case counts
-// as scannable stat tiles, alongside the status pill/bar (design D10).
+// showing here: description, when it was created, suite/case counts as
+// scannable stat tiles, alongside the status pill/bar (design D10).
 function ExpandedGrid({
   projects,
-  ownerEmailById,
   onNavigate,
   onToggleFavorite,
 }: {
   projects: ProjectSummary[]
-  ownerEmailById: Map<string, string>
   onNavigate: (id: string) => void
   onToggleFavorite: (p: ProjectSummary) => void
 }) {
   return (
     <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {projects.map((p) => {
-        const owner = p.ownerId ? ownerEmailById.get(p.ownerId) : undefined
         const created = isValidDate(p.createdAt) ? timeAgo(p.createdAt) : null
         const lastRun = p.lastRunAt && isValidDate(p.lastRunAt) ? timeAgo(p.lastRunAt) : null
         return (
@@ -460,14 +425,11 @@ function ExpandedGrid({
                   <StatTile value={p.caseCount} label="cases" />
                 </span>
 
-                {(owner || created || lastRun) && (
+                {(created || lastRun) && (
                   <span className="flex flex-col gap-0.5 text-xs text-muted-foreground">
-                    {owner && <span className="truncate">{owner}</span>}
-                    {(created || lastRun) && (
-                      <span className="truncate">
-                        {lastRun ? `Last run ${lastRun}` : `Created ${created}`}
-                      </span>
-                    )}
+                    <span className="truncate">
+                      {lastRun ? `Last run ${lastRun}` : `Created ${created}`}
+                    </span>
                   </span>
                 )}
               </button>
@@ -498,7 +460,7 @@ function ExpandedGrid({
 // Compact card grid (design D12, reverted from D10/D11 per direct
 // feedback): the same core card as ExpandedGrid — title, status pill,
 // progress bar, suite/case footer — just without the extras reserved for
-// expanded (description, owner, created date, stat-tile captions, the
+// expanded (description, created date, stat-tile captions, the
 // left accent bar). Same content shape as the original approved mockup
 // (D8), packed into a denser grid than expanded so density is still the
 // real difference between the two modes.

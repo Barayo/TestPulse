@@ -19,14 +19,14 @@ func mountAuth(r chi.Router, h *api) {
 }
 
 // mountIdentity registers the users/tokens/audit routes. The caller mounts
-// it behind the authenticate middleware (server.go); requireRole further
-// restricts user management to admins (authorization spec).
+// it behind the authenticate middleware (server.go); requireTenantAdmin
+// further restricts user management to Tenant Admins (authorization spec).
 func mountIdentity(r chi.Router, h *api) {
 	r.Route("/users", func(r chi.Router) {
 		r.Get("/", h.listUsers)
 		r.Get("/me", h.currentUser)
-		r.With(requireRole(domain.RoleAdmin)).Post("/", h.createUser)
-		r.With(requireRole(domain.RoleAdmin)).Patch("/{userId}", h.updateUser)
+		r.With(requireTenantAdmin).Post("/", h.createUser)
+		r.With(requireTenantAdmin).Patch("/{userId}", h.updateUser)
 	})
 	r.Route("/tokens", func(r chi.Router) {
 		r.Get("/", h.listTokens)
@@ -96,9 +96,9 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 // --- Users ---
 
 type userInput struct {
-	Email    string      `json:"email"`
-	Password string      `json:"password"`
-	Role     domain.Role `json:"role"`
+	Email         string `json:"email"`
+	Password      string `json:"password"`
+	IsTenantAdmin bool   `json:"isTenantAdmin"`
 }
 
 func (h *api) listUsers(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +113,7 @@ func (h *api) currentUser(w http.ResponseWriter, r *http.Request) {
 	if actor.Kind != domain.ActorKindUser {
 		// The web UI only ever authenticates via session cookie (design D7);
 		// a bearer-token actor hitting this route has no backing user row.
-		h.respond(w, http.StatusOK, domain.User{ID: actor.ID, Email: actor.DisplayName, Role: actor.Role}, nil)
+		h.respond(w, http.StatusOK, domain.User{ID: actor.ID, Email: actor.DisplayName, IsTenantAdmin: actor.IsTenantAdmin}, nil)
 		return
 	}
 	user, err := h.svc.GetUser(r.Context(), actor.ID)
@@ -126,13 +126,14 @@ func (h *api) createUser(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	user, err := h.svc.CreateUser(r.Context(), in.Email, in.Password, in.Role)
+	user, err := h.svc.CreateUser(r.Context(), in.Email, in.Password, in.IsTenantAdmin)
 	h.respond(w, http.StatusCreated, user, err)
 }
 
 type userUpdate struct {
-	Role       *domain.Role `json:"role"`
-	Deactivate bool         `json:"deactivate"`
+	IsTenantAdmin *bool `json:"isTenantAdmin"`
+	Deactivate    bool  `json:"deactivate"`
+	Reactivate    bool  `json:"reactivate"`
 }
 
 func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
@@ -142,14 +143,20 @@ func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	if in.Role != nil {
-		if err := h.svc.UpdateUserRole(r.Context(), userID, *in.Role); err != nil {
+	if in.IsTenantAdmin != nil {
+		if err := h.svc.SetTenantAdmin(r.Context(), userID, *in.IsTenantAdmin); err != nil {
 			h.respond(w, 0, nil, err)
 			return
 		}
 	}
 	if in.Deactivate {
 		if err := h.svc.DeactivateUser(r.Context(), userID); err != nil {
+			h.respond(w, 0, nil, err)
+			return
+		}
+	}
+	if in.Reactivate {
+		if err := h.svc.ReactivateUser(r.Context(), userID); err != nil {
 			h.respond(w, 0, nil, err)
 			return
 		}

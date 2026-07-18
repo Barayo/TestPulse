@@ -205,6 +205,16 @@ describe('Run execution board', () => {
     expect(screen.queryByText('Login works')).not.toBeInTheDocument()
   })
 
+  it('shows a not-found message instead of an empty, interactive board when the run does not exist or is not accessible', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/runs/{runId}')
+        return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderRun()
+    expect(await screen.findByText(/run not found/i)).toBeInTheDocument()
+  })
+
   it('offers retest on failed items', async () => {
     mockRunAPI([{ ...pendingItem, currentStatus: 'failed' }])
     mockPUT.mockResolvedValue({ response: { ok: true } })

@@ -11,30 +11,24 @@ const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 const mockDELETE = vi.mocked(api.DELETE)
 
-const ME_ADMIN = { id: 'admin1', email: 'admin@example.com', role: 'admin' }
-const ME_MEMBER = { id: 'member1', email: 'member@example.com', role: 'member' }
+const ME_TENANT_ADMIN = { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }
+const ME_NON_ADMIN = { id: 'member1', email: 'member@example.com', isTenantAdmin: false }
 
 function project(overrides: Record<string, unknown> = {}) {
-  return { id: 'p1', name: 'Banca Móvil', archived: false, description: '', ownerId: null, createdAt: '', ...overrides }
+  return { id: 'p1', name: 'Banca Móvil', archived: false, description: '', createdAt: '', ...overrides }
 }
 
 function summary(overrides: Record<string, unknown> = {}) {
   return { projectId: 'p1', suiteCount: 0, caseCount: 0, passRate: null, isFavorite: false, ...overrides }
 }
 
-function mockProjectsList(
-  projects: unknown[] = [],
-  summaries: unknown[] = [],
-  opts: { me?: unknown; users?: unknown[] } = {},
-) {
-  const me = opts.me ?? ME_ADMIN
-  const users = opts.users ?? []
+function mockProjectsList(projects: unknown[] = [], summaries: unknown[] = [], opts: { me?: unknown } = {}) {
+  const me = opts.me ?? ME_TENANT_ADMIN
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/projects') return Promise.resolve({ data: projects, response: { ok: true } })
     if (path === '/api/v1/projects/summaries')
       return Promise.resolve({ data: summaries, response: { ok: true } })
     if (path === '/api/v1/users/me') return Promise.resolve({ data: me, response: { ok: true } })
-    if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
     if (path === '/api/v1/runs/{runId}/summary')
       return Promise.resolve({ data: { runId: 'r1', total: 0, counts: {} }, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
@@ -79,12 +73,11 @@ afterEach(() => {
 })
 
 describe('ProjectsPage', () => {
-  it('shows a Projects breadcrumb with no link (it is the root)', () => {
+  it('shows no breadcrumb at the root — a single "Projects" segment would only repeat the heading below it', async () => {
     mockProjectsList()
     renderPage()
-    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
-    expect(within(nav).getByText('Projects')).toBeInTheDocument()
-    expect(within(nav).queryByRole('link')).not.toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Projects' })
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
   })
 
   it('lists every project with its stats, separate from the create action', async () => {
@@ -156,7 +149,7 @@ describe('ProjectsPage', () => {
   it('reveals the create form when "+ New project" is clicked, and creates a project', async () => {
     mockProjectsList([])
     mockPOST.mockResolvedValue({
-      data: { id: 'p2', name: 'New Proj', archived: false, description: '', ownerId: null, createdAt: '' },
+      data: { id: 'p2', name: 'New Proj', archived: false, description: '', createdAt: '' },
       response: { ok: true },
     })
     renderPage()
@@ -174,10 +167,10 @@ describe('ProjectsPage', () => {
     expect(await screen.findByText('Project page stub')).toBeInTheDocument()
   })
 
-  it('creates a project with an optional description and owner', async () => {
-    mockProjectsList([], [], { users: [{ id: 'u1', email: 'owner@example.com', role: 'member' }] })
+  it('creates a project with an optional description', async () => {
+    mockProjectsList([])
     mockPOST.mockResolvedValue({
-      data: { id: 'p2', name: 'Full Proj', archived: false, description: 'desc', ownerId: 'u1', createdAt: '' },
+      data: { id: 'p2', name: 'Full Proj', archived: false, description: 'desc', createdAt: '' },
       response: { ok: true },
     })
     renderPage()
@@ -185,13 +178,12 @@ describe('ProjectsPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
     await userEvent.type(screen.getByLabelText(/^name$/i), 'Full Proj')
     await userEvent.type(screen.getByLabelText(/description/i), 'desc')
-    await userEvent.selectOptions(await screen.findByLabelText(/owner/i), 'u1')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
         '/api/v1/projects',
-        expect.objectContaining({ body: { name: 'Full Proj', description: 'desc', ownerId: 'u1' } }),
+        expect.objectContaining({ body: { name: 'Full Proj', description: 'desc' } }),
       )
     })
   })
@@ -227,15 +219,10 @@ describe('ProjectsPage', () => {
     expect(await screen.findByText(/failed to create project/i)).toBeInTheDocument()
   })
 
-  it('shows description and owner on the card when present', async () => {
-    mockProjectsList(
-      [project({ description: 'A dense banking project', ownerId: 'u1' })],
-      [summary()],
-      { users: [{ id: 'u1', email: 'owner@example.com', role: 'member' }] },
-    )
+  it('shows description on the card when present', async () => {
+    mockProjectsList([project({ description: 'A dense banking project' })], [summary()])
     renderPage()
     expect(await screen.findByText('A dense banking project')).toBeInTheDocument()
-    expect(await screen.findByText(/owner@example.com/)).toBeInTheDocument()
   })
 
   describe('status labels', () => {
@@ -332,12 +319,11 @@ describe('ProjectsPage', () => {
       expect(screen.queryByRole('region', { name: 'Favorites' })).not.toBeInTheDocument()
     })
 
-    it('compact view shows the status pill, bar, and counts — but no description, owner, or created date', async () => {
+    it('compact view shows the status pill, bar, and counts — but no description or created date', async () => {
       window.localStorage.setItem('testpulse.projectListViewMode', 'compact')
       mockProjectsList(
-        [project({ description: 'A dense banking project', ownerId: 'u1', createdAt: '2026-01-01T00:00:00Z' })],
+        [project({ description: 'A dense banking project', createdAt: '2026-01-01T00:00:00Z' })],
         [summary({ suiteCount: 7, caseCount: 70, passRate: 84 })],
-        { users: [{ id: 'u1', email: 'owner@example.com', role: 'member' }] },
       )
       renderPage()
       await screen.findByText('Banca Móvil')
@@ -346,7 +332,6 @@ describe('ProjectsPage', () => {
       expect(document.querySelector('[data-track]')).toBeInTheDocument()
       expect(screen.getByText('7 suites · 70 cases')).toBeInTheDocument()
       expect(screen.queryByText('A dense banking project')).not.toBeInTheDocument()
-      expect(screen.queryByText(/owner@example.com/)).not.toBeInTheDocument()
       expect(screen.queryByText(/created \d/i)).not.toBeInTheDocument()
     })
   })
@@ -517,28 +502,52 @@ describe('ProjectsPage', () => {
 
   describe('single-project skip (design D6)', () => {
     it('navigates a non-admin directly into their only visible project', async () => {
-      mockProjectsList([project()], [summary()], { me: ME_MEMBER })
+      mockProjectsList([project()], [summary()], { me: ME_NON_ADMIN })
       renderPage()
       expect(await screen.findByText('Project page stub')).toBeInTheDocument()
     })
 
     it('still shows the list to an admin with only one project', async () => {
-      mockProjectsList([project()], [summary()], { me: ME_ADMIN })
+      mockProjectsList([project()], [summary()], { me: ME_TENANT_ADMIN })
       renderPage()
       expect(await screen.findByText('Banca Móvil')).toBeInTheDocument()
     })
 
     it('shows the list to a non-admin with multiple projects', async () => {
-      mockProjectsList(manyProjects(2), manySummaries(2), { me: ME_MEMBER })
+      mockProjectsList(manyProjects(2), manySummaries(2), { me: ME_NON_ADMIN })
       renderPage()
       expect(await screen.findByText('Project 0')).toBeInTheDocument()
       expect(screen.getByText('Project 1')).toBeInTheDocument()
     })
 
-    it('shows the empty state to a non-admin with zero projects', async () => {
-      mockProjectsList([], [], { me: ME_MEMBER })
+    it('shows a no-access empty state to a non-admin with zero projects, without a create CTA', async () => {
+      mockProjectsList([], [], { me: ME_NON_ADMIN })
+      renderPage()
+      expect(await screen.findByText(/don't have access to any projects/i)).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /create your first project/i })).not.toBeInTheDocument()
+    })
+
+    it('shows the create-project empty state to a Tenant Admin with zero projects', async () => {
+      mockProjectsList([], [], { me: ME_TENANT_ADMIN })
       renderPage()
       expect(await screen.findByText(/no projects yet/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /create your first project/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('project creation gated to Tenant Admin (add-project-rbac)', () => {
+    it('hides "+ New project" for a non-Tenant-Admin', async () => {
+      mockProjectsList(manyProjects(2), manySummaries(2), { me: ME_NON_ADMIN })
+      renderPage()
+      await screen.findByText('Project 0')
+      expect(screen.queryByRole('button', { name: /\+ new project/i })).not.toBeInTheDocument()
+    })
+
+    it('shows "+ New project" for a Tenant Admin', async () => {
+      mockProjectsList(manyProjects(2), manySummaries(2), { me: ME_TENANT_ADMIN })
+      renderPage()
+      await screen.findByText('Project 0')
+      expect(screen.getByRole('button', { name: /\+ new project/i })).toBeInTheDocument()
     })
   })
 })

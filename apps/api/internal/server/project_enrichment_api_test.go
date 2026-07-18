@@ -1,44 +1,36 @@
 package server_test
 
 import (
+	"context"
 	"testing"
+
+	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 )
 
-// HTTP-level scenarios for enrich-project-list: description/ownerId on
-// projects, and per-user favorites folded into the summaries response.
+// HTTP-level scenarios for enrich-project-list: description on projects,
+// and per-user favorites folded into the summaries response. The owner
+// concept (ownerId) was removed by add-project-rbac — project access is
+// now entirely determined by membership, not a single nominal owner.
 
-func TestScenario_ProjectDescriptionAndOwnerOptionalAtCreate(t *testing.T) {
+func TestScenario_ProjectDescriptionOptionalAtCreate(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
 
-	// "Description and owner are optional" scenario: name only.
 	var bare jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects", jmap{"name": "Bare"}, 201, &bare)
 	if bare["description"] != "" {
 		t.Errorf("description = %v, want empty", bare["description"])
 	}
-	if bare["ownerId"] != nil {
-		t.Errorf("ownerId = %v, want nil", bare["ownerId"])
-	}
-
-	// "Create a project" with description + owner set at creation.
-	var owner jmap
-	callAs(t, h, adminCookie, "POST", "/api/v1/users",
-		jmap{"email": "owner@example.com", "password": "correcthorse", "role": "member"}, 201, &owner)
-	ownerID, _ := owner["id"].(string)
 
 	var full jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects",
-		jmap{"name": "Full", "description": "a real project", "ownerId": ownerID}, 201, &full)
+		jmap{"name": "Full", "description": "a real project"}, 201, &full)
 	if full["description"] != "a real project" {
 		t.Errorf("description = %v, want %q", full["description"], "a real project")
 	}
-	if full["ownerId"] != ownerID {
-		t.Errorf("ownerId = %v, want %q", full["ownerId"], ownerID)
-	}
 }
 
-func TestScenario_ProjectDescriptionAndOwnerSetLater(t *testing.T) {
+func TestScenario_ProjectDescriptionSetLater(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
 
@@ -46,60 +38,17 @@ func TestScenario_ProjectDescriptionAndOwnerSetLater(t *testing.T) {
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
 	projectID, _ := p["id"].(string)
 
-	var owner jmap
-	callAs(t, h, adminCookie, "POST", "/api/v1/users",
-		jmap{"email": "later-owner@example.com", "password": "correcthorse", "role": "member"}, 201, &owner)
-	ownerID, _ := owner["id"].(string)
-
 	var updated jmap
 	callAs(t, h, adminCookie, "PATCH", "/api/v1/projects/"+projectID,
-		jmap{"description": "added afterwards", "ownerId": ownerID}, 200, &updated)
+		jmap{"description": "added afterwards"}, 200, &updated)
 	if updated["description"] != "added afterwards" {
 		t.Errorf("description = %v", updated["description"])
 	}
-	if updated["ownerId"] != ownerID {
-		t.Errorf("ownerId = %v, want %q", updated["ownerId"], ownerID)
-	}
 
 	var got jmap
 	callAs(t, h, adminCookie, "GET", "/api/v1/projects/"+projectID, nil, 200, &got)
-	if got["description"] != "added afterwards" || got["ownerId"] != ownerID {
+	if got["description"] != "added afterwards" {
 		t.Errorf("GET after update = %+v", got)
-	}
-}
-
-func TestScenario_UnknownOwnerIDRejected(t *testing.T) {
-	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
-	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
-
-	var errBody jmap
-	callAs(t, h, adminCookie, "POST", "/api/v1/projects",
-		jmap{"name": "QA", "ownerId": "00000000-0000-0000-0000-000000000000"}, 400, &errBody)
-	if errBody["error"] == "" || errBody["error"] == nil {
-		t.Errorf("expected validation error body, got %+v", errBody)
-	}
-}
-
-func TestScenario_OwnerStillShownAfterDeactivation(t *testing.T) {
-	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
-	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
-
-	var owner jmap
-	callAs(t, h, adminCookie, "POST", "/api/v1/users",
-		jmap{"email": "soon-deactivated@example.com", "password": "correcthorse", "role": "member"}, 201, &owner)
-	ownerID, _ := owner["id"].(string)
-
-	var p jmap
-	callAs(t, h, adminCookie, "POST", "/api/v1/projects",
-		jmap{"name": "QA", "ownerId": ownerID}, 201, &p)
-	projectID, _ := p["id"].(string)
-
-	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+ownerID, jmap{"deactivate": true}, 204, nil)
-
-	var got jmap
-	callAs(t, h, adminCookie, "GET", "/api/v1/projects/"+projectID, nil, 200, &got)
-	if got["ownerId"] != ownerID {
-		t.Errorf("ownerId after deactivation = %v, want %q still shown", got["ownerId"], ownerID)
 	}
 }
 
@@ -127,7 +76,7 @@ func TestScenario_StarAndUnstarProjectOverHTTP(t *testing.T) {
 }
 
 func TestScenario_FavoritesAreNotSharedAcrossUsers(t *testing.T) {
-	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	h, svc := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
 
 	var p jmap
@@ -136,8 +85,30 @@ func TestScenario_FavoritesAreNotSharedAcrossUsers(t *testing.T) {
 
 	var member jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/users",
-		jmap{"email": "member@example.com", "password": "correcthorse", "role": "member"}, 201, &member)
+		jmap{"email": "member@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
 	memberCookie := loginCookie(t, h, "member@example.com", "correcthorse")
+
+	// Grant the member Tester access — without any project membership the
+	// project wouldn't appear in their summaries at all (add-project-rbac
+	// design.md D6), which would defeat the point of this scenario.
+	adminActor := domain.Actor{IsTenantAdmin: true}
+	roles, err := svc.ListRoles(context.Background())
+	if err != nil {
+		t.Fatalf("ListRoles: %v", err)
+	}
+	var testerRoleID string
+	for _, r := range roles {
+		if r.Name == "Tester" {
+			testerRoleID = r.ID
+		}
+	}
+	if testerRoleID == "" {
+		t.Fatalf("no seeded Tester role found in %+v", roles)
+	}
+	if err := svc.SetProjectMember(context.Background(), adminActor, projectID, memberID, testerRoleID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
 
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects/"+projectID+"/favorite", nil, 204, nil)
 

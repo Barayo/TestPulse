@@ -13,6 +13,19 @@ type SuiteRepo struct {
 	pool *pgxpool.Pool
 }
 
+// ProjectID resolves the project a suite belongs to — used by
+// requirePermission's per-resource resolver (add-project-rbac design.md D5).
+func (r *SuiteRepo) ProjectID(ctx context.Context, suiteID string) (string, error) {
+	var projectID string
+	err := r.pool.QueryRow(ctx,
+		`SELECT project_id FROM test_suites WHERE id = $1`, suiteID,
+	).Scan(&projectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return projectID, err
+}
+
 func (r *SuiteRepo) Create(ctx context.Context, projectID, name string) (domain.Suite, error) {
 	var s domain.Suite
 	err := r.pool.QueryRow(ctx,

@@ -10,7 +10,7 @@ import (
 func TestProjectSummariesCountsSuitesAndCases(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	caller := mustUser(t, s, "stats-caller-1@b.com", domain.RoleMember)
+	caller := mustUser(t, s, "stats-caller-1@b.com", false)
 	p := mustProject(t, s)
 	mustCase(t, s, p.ID, "one")
 	mustCase(t, s, p.ID, "two")
@@ -34,7 +34,7 @@ func TestProjectSummariesCountsSuitesAndCases(t *testing.T) {
 func TestProjectSummariesPassRateNullWithNoRuns(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	caller := mustUser(t, s, "stats-caller-2@b.com", domain.RoleMember)
+	caller := mustUser(t, s, "stats-caller-2@b.com", false)
 	p := mustProject(t, s)
 	mustCase(t, s, p.ID, "one")
 
@@ -53,7 +53,7 @@ func TestProjectSummariesPassRateNullWithNoRuns(t *testing.T) {
 func TestProjectSummariesLastRunAtReflectsLatestRun(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	caller := mustUser(t, s, "stats-caller-5@b.com", domain.RoleMember)
+	caller := mustUser(t, s, "stats-caller-5@b.com", false)
 	p := mustProject(t, s)
 	c1 := mustCase(t, s, p.ID, "one")
 
@@ -84,7 +84,7 @@ func TestProjectSummariesLastRunAtReflectsLatestRun(t *testing.T) {
 func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	caller := mustUser(t, s, "stats-caller-3@b.com", domain.RoleMember)
+	caller := mustUser(t, s, "stats-caller-3@b.com", false)
 	p := mustProject(t, s)
 	c1 := mustCase(t, s, p.ID, "one")
 	c2 := mustCase(t, s, p.ID, "two")
@@ -125,7 +125,7 @@ func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
 func TestProjectSummariesExcludesArchivedProjects(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
-	caller := mustUser(t, s, "stats-caller-4@b.com", domain.RoleMember)
+	caller := mustUser(t, s, "stats-caller-4@b.com", false)
 	p := mustProject(t, s)
 	if err := s.Projects.Archive(ctx, p.ID); err != nil {
 		t.Fatalf("archive: %v", err)

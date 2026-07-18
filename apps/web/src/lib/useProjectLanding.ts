@@ -14,6 +14,7 @@ export type ProjectLanding = {
   totalSuites: number
   runs: LandingRun[]
   totalRuns: number
+  loaded: boolean
 }
 
 // Raised from 4 (enrich-project-landing design.md) now that the summary
@@ -28,6 +29,7 @@ const empty: ProjectLanding = {
   totalSuites: 0,
   runs: [],
   totalRuns: 0,
+  loaded: false,
 }
 
 // Top-level folders (children of root) with a recursive case count, top
@@ -123,11 +125,12 @@ export function useProjectLanding(projectId: string | undefined): ProjectLanding
             totalSuites: suites.length,
             runs: landingRuns,
             totalRuns: runs.length,
+            loaded: true,
           })
         }
       })
       .catch(() => {
-        if (!cancelled) setLanding(empty)
+        if (!cancelled) setLanding({ ...empty, loaded: true })
       })
 
     return () => {

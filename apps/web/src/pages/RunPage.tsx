@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -25,6 +25,7 @@ type Project = components['schemas']['Project']
 export default function RunPage() {
   const { runId } = useParams<{ runId: string }>()
   const [run, setRun] = useState<Run>()
+  const [notFound, setNotFound] = useState(false)
   const [project, setProject] = useState<Project>()
   const [items, setItems] = useState<RunItem[]>([])
   const [summary, setSummary] = useState<RunSummary>()
@@ -36,12 +37,17 @@ export default function RunPage() {
 
   const load = useCallback(async () => {
     if (!runId) return
+    setNotFound(false)
     try {
       const [{ data: r }, { data: i }, { data: s }] = await Promise.all([
         api.GET('/api/v1/runs/{runId}', { params: { path: { runId } } }),
         api.GET('/api/v1/runs/{runId}/items', { params: { path: { runId } } }),
         api.GET('/api/v1/runs/{runId}/summary', { params: { path: { runId } } }),
       ])
+      if (!r) {
+        setNotFound(true)
+        return
+      }
       setRun(r)
       setItems(i ?? [])
       setSummary(s)
@@ -109,6 +115,14 @@ export default function RunPage() {
       body: { status: 'retest' },
     })
     await refreshSelected(selected.id)
+  }
+
+  if (notFound) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Run not found. <Link to="/" className="underline">Go to Projects</Link>
+      </p>
+    )
   }
 
   return (

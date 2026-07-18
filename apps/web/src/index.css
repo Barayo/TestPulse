@@ -120,6 +120,18 @@
     --status-risk-fg: oklch(0.45 0.14 25);
     --status-neutral-bg: oklch(0.92 0.005 240);
     --status-neutral-fg: oklch(0.45 0.01 240);
+
+    /* Person/team avatar chips (merge-users-teams) — a small, muted,
+       deliberately-designed hue set (not brand teal, not a rainbow) a
+       person/team is assigned to deterministically by name/email, so
+       identity carries color instead of the row background having to.
+       Same tinted-bg + darker-fg technique as the status pills above. */
+    --avatar-1-bg: #CFEFEA; --avatar-1-fg: #0F6E63;
+    --avatar-2-bg: #DCEAFB; --avatar-2-fg: #1D5A96;
+    --avatar-3-bg: #E9E2FB; --avatar-3-fg: #5B3FA0;
+    --avatar-4-bg: #F5E7D0; --avatar-4-fg: #8A5A1E;
+    --avatar-5-bg: #FBE1E6; --avatar-5-fg: #A23A55;
+    --avatar-6-bg: #E4EEDD; --avatar-6-fg: #4B6B33;
 }
 
 .dark {
@@ -167,6 +179,13 @@
     --status-risk-fg: oklch(0.85 0.12 25);
     --status-neutral-bg: oklch(0.32 0.005 240);
     --status-neutral-fg: oklch(0.75 0.01 240);
+
+    --avatar-1-bg: #0F3B36; --avatar-1-fg: #7FE0D2;
+    --avatar-2-bg: #123253; --avatar-2-fg: #8FBBEF;
+    --avatar-3-bg: #2B2149; --avatar-3-fg: #C6B4F5;
+    --avatar-4-bg: #3A2C10; --avatar-4-fg: #EFC77C;
+    --avatar-5-bg: #3A1A21; --avatar-5-fg: #F2A6B6;
+    --avatar-6-bg: #243318; --avatar-6-fg: #B7D69A;
 }
 
 @layer base {
