@@ -6,9 +6,7 @@ Planning and executing test runs: pinning case versions at the moment a run
 is built, tracking each run item's status lifecycle, an append-only result
 log per item, assignment/filtering, run summaries, and the run execution
 board that ties it all together for a human tester.
-
 ## Requirements
-
 ### Requirement: Run creation pins case versions
 The system SHALL let users create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards.
 
@@ -91,3 +89,4 @@ status — not scoped to a single run the way the run execution board's item lis
 #### Scenario: A case with no execution history
 - **WHEN** a case has never been added to any run
 - **THEN** querying the case's executions returns an empty list, not an error
+

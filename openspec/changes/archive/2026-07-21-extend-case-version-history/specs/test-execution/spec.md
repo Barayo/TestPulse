@@ -1,4 +1,4 @@
-## ADDED Requirements
+## MODIFIED Requirements
 
 ### Requirement: Querying executions by case version
 The system SHALL let a caller list every execution (run item) that has ever pinned a given
