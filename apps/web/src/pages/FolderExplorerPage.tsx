@@ -1,11 +1,15 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { FolderIcon, FileTextIcon, FolderInputIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
+import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import type { components } from '@testpulse/shared/api'
 
@@ -26,13 +30,6 @@ function ancestorChain(folders: Folder[], folderId: string): Folder[] {
   return chain
 }
 
-// Full path for the Move-to picker, so same-named sections at different
-// depths aren't ambiguous — e.g. "Library / Transferencias / Nacionales".
-function folderPath(folders: Folder[], folderId: string, rootId: string): string {
-  if (folderId === rootId) return 'Library'
-  return ['Library', ...ancestorChain(folders, folderId).map((f) => f.name)].join(' / ')
-}
-
 // The project's auto-created root folder is surfaced to users as "Library" —
 // a UI label only, not a rename of the underlying entity (still literally
 // named "Root" in the database).
@@ -45,6 +42,7 @@ export default function FolderExplorerPage() {
   const { projectId, folderId } = useParams<{ projectId: string; folderId?: string }>()
   const navigate = useNavigate()
   const bumpLanding = useBumpDataRevision()
+  const isDesktop = useMediaQuery('(min-width: 768px)')
 
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
@@ -55,6 +53,8 @@ export default function FolderExplorerPage() {
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [movingCaseId, setMovingCaseId] = useState<string | null>(null)
   const [moveQuery, setMoveQuery] = useState('')
+  const [browsingSections, setBrowsingSections] = useState(false)
+  const [browseQuery, setBrowseQuery] = useState('')
   const [treeCreatingIn, setTreeCreatingIn] = useState<string | null>(null)
   const [contentCreatingFolder, setContentCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
@@ -173,177 +173,192 @@ export default function FolderExplorerPage() {
       <Breadcrumbs segments={breadcrumbSegments} />
 
       <div className="flex gap-4">
-        <FolderTree
-          folders={folders.map((f) => ({ id: f.id, name: f.name, parentFolderId: f.parentFolderId }))}
-          rootId={root.id}
-          selectedId={selectedFolderId}
-          expanded={expanded}
-          onSelect={(id) => navigate(`/projects/${projectId}/library/${id}`)}
-          onToggle={(id) =>
-            setExpanded((prev) => {
-              const next = new Set(prev)
-              if (next.has(id)) next.delete(id)
-              else next.add(id)
-              return next
-            })
-          }
-          onNewSubfolder={(parentId) => {
-            setExpanded((prev) => new Set(prev).add(parentId))
-            setTreeCreatingIn(parentId)
-            setNewFolderName('')
-          }}
-          creatingIn={treeCreatingIn}
-          newFolderValue={newFolderName}
-          onNewFolderValueChange={setNewFolderName}
-          onConfirmNewFolder={() => {
-            if (treeCreatingIn) void createFolder(treeCreatingIn, newFolderName)
-            setTreeCreatingIn(null)
-          }}
-          onCancelNewFolder={() => setTreeCreatingIn(null)}
-          onDropCase={(caseId, folderId) => void moveCase(caseId, folderId)}
-        />
+        {isDesktop && (
+          <FolderTree
+            folders={folders.map((f) => ({ id: f.id, name: f.name, parentFolderId: f.parentFolderId }))}
+            rootId={root.id}
+            selectedId={selectedFolderId}
+            expanded={expanded}
+            onSelect={(id) => navigate(`/projects/${projectId}/library/${id}`)}
+            onToggle={(id) =>
+              setExpanded((prev) => {
+                const next = new Set(prev)
+                if (next.has(id)) next.delete(id)
+                else next.add(id)
+                return next
+              })
+            }
+            onNewSubfolder={(parentId) => {
+              setExpanded((prev) => new Set(prev).add(parentId))
+              setTreeCreatingIn(parentId)
+              setNewFolderName('')
+            }}
+            creatingIn={treeCreatingIn}
+            newFolderValue={newFolderName}
+            onNewFolderValueChange={setNewFolderName}
+            onConfirmNewFolder={() => {
+              if (treeCreatingIn) void createFolder(treeCreatingIn, newFolderName)
+              setTreeCreatingIn(null)
+            }}
+            onCancelNewFolder={() => setTreeCreatingIn(null)}
+            onDropCase={(caseId, folderId) => void moveCase(caseId, folderId)}
+          />
+        )}
 
         <div className="flex-1 space-y-3">
           <div className="flex items-center justify-end gap-2">
-            <button
+            {!isDesktop && (
+              <Button
+                type="button"
+                variant="outline"
+                className="mr-auto"
+                onClick={() => {
+                  setBrowseQuery('')
+                  setBrowsingSections(true)
+                }}
+              >
+                Browse sections
+              </Button>
+            )}
+            <Button
               type="button"
-              className="rounded-md border px-3 py-1.5 text-sm"
+              variant="outline"
               onClick={() => {
                 setContentCreatingFolder(true)
                 setNewFolderName('')
               }}
             >
               + New section
-            </button>
-            <button
-              type="button"
-              className="rounded-md bg-primary px-3 py-1.5 text-sm text-primary-foreground"
-              onClick={() => setDrawer({ mode: 'create' })}
-            >
+            </Button>
+            <Button type="button" onClick={() => setDrawer({ mode: 'create' })}>
               + New test case
-            </button>
+            </Button>
           </div>
 
-          <div className="rounded-md border">
-            {contentCreatingFolder && (
-              <div className="flex items-center gap-2 border-b bg-accent px-3 py-2">
-                <input
-                  aria-label="New section name"
-                  autoFocus
-                  className="h-7 flex-1 rounded border px-2 text-sm"
-                  value={newFolderName}
-                  onChange={(e) => setNewFolderName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      void createFolder(selectedFolderId, newFolderName)
-                      setContentCreatingFolder(false)
-                    }
-                    if (e.key === 'Escape') setContentCreatingFolder(false)
-                  }}
-                />
-              </div>
-            )}
-            {subfolders.length === 0 && casesHere.length === 0 && !contentCreatingFolder ? (
-              <p className="p-4 text-center text-sm text-muted-foreground">
-                Nothing here yet in {displayFolderName(selectedFolder, root.id)}.
-              </p>
-            ) : (
-              <ul aria-label="Section contents">
-                {subfolders.map((f) => (
-                  <li
-                    key={f.id}
-                    className={`border-b px-3 py-2 text-sm last:border-b-0 ${dragOverFolderId === f.id ? 'bg-primary/10' : ''}`}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      setDragOverFolderId(f.id)
+          <Card>
+            <CardContent className="p-0">
+              {contentCreatingFolder && (
+                <div className="flex items-center gap-2 border-b bg-accent px-3 py-2">
+                  <input
+                    aria-label="New section name"
+                    autoFocus
+                    className="h-7 flex-1 rounded border px-2 text-sm"
+                    value={newFolderName}
+                    onChange={(e) => setNewFolderName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        void createFolder(selectedFolderId, newFolderName)
+                        setContentCreatingFolder(false)
+                      }
+                      if (e.key === 'Escape') setContentCreatingFolder(false)
                     }}
-                    onDragLeave={() => setDragOverFolderId(null)}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      setDragOverFolderId(null)
-                      const caseId = e.dataTransfer.getData(CASE_ID_MIME)
-                      if (caseId) void moveCase(caseId, f.id)
-                    }}
-                  >
-                    <button
-                      type="button"
-                      className="flex w-full items-center gap-2 text-left"
-                      onClick={() => navigate(`/projects/${projectId}/library/${f.id}`)}
-                    >
-                      <span aria-hidden="true">📁</span>
-                      <span>{f.name}</span>
-                    </button>
-                  </li>
-                ))}
-                {casesHere.map((c) => (
-                  <li
-                    key={c.id}
-                    draggable
-                    onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.id)}
-                    className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
-                  >
-                    <button
-                      type="button"
-                      className="flex flex-1 items-center gap-2 text-left"
-                      onClick={() => openCase(c.id)}
-                    >
-                      <span aria-hidden="true">📄</span>
-                      <span>{c.content.title}</span>
-                    </button>
-                    <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                      v{c.currentVersion}
-                    </span>
-                    {suiteNamesFor(c.id).map((name) => (
-                      <span key={name} className="rounded-full bg-accent px-2 py-0.5 text-xs">
-                        {name}
-                      </span>
-                    ))}
-                    <button
-                      type="button"
-                      className="rounded-md border px-2 py-1 text-xs text-muted-foreground hover:text-foreground"
-                      onClick={() => {
-                        setMoveQuery('')
-                        setMovingCaseId(c.id)
+                  />
+                </div>
+              )}
+              {subfolders.length === 0 && casesHere.length === 0 && !contentCreatingFolder ? (
+                <p className="p-4 text-center text-sm text-muted-foreground">
+                  Nothing here yet in {displayFolderName(selectedFolder, root.id)}.
+                </p>
+              ) : (
+                <ul aria-label="Section contents">
+                  {subfolders.map((f) => (
+                    <li
+                      key={f.id}
+                      className={`border-b px-3 py-2 text-sm last:border-b-0 ${dragOverFolderId === f.id ? 'bg-primary/10' : ''}`}
+                      onDragOver={(e) => {
+                        e.preventDefault()
+                        setDragOverFolderId(f.id)
+                      }}
+                      onDragLeave={() => setDragOverFolderId(null)}
+                      onDrop={(e) => {
+                        e.preventDefault()
+                        setDragOverFolderId(null)
+                        const caseId = e.dataTransfer.getData(CASE_ID_MIME)
+                        if (caseId) void moveCase(caseId, f.id)
                       }}
                     >
-                      Move to…
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+                      <button
+                        type="button"
+                        className="flex w-full items-center gap-2 text-left"
+                        onClick={() => navigate(`/projects/${projectId}/library/${f.id}`)}
+                      >
+                        <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                        <span>{f.name}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {casesHere.map((c) => (
+                    <li
+                      key={c.id}
+                      draggable
+                      onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.id)}
+                      className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
+                    >
+                      <button
+                        type="button"
+                        className="flex flex-1 items-center gap-2 text-left"
+                        onClick={() => openCase(c.id)}
+                      >
+                        <FileTextIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+                        <span>{c.content.title}</span>
+                      </button>
+                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                        v{c.currentVersion}
+                      </span>
+                      {suiteNamesFor(c.id).map((name) => (
+                        <span key={name} className="rounded-full bg-accent px-2 py-0.5 text-xs">
+                          {name}
+                        </span>
+                      ))}
+                      <button
+                        type="button"
+                        aria-label="Move to…"
+                        className="text-muted-foreground hover:text-foreground"
+                        onClick={() => {
+                          setMoveQuery('')
+                          setMovingCaseId(c.id)
+                        }}
+                      >
+                        <FolderInputIcon className="size-4" aria-hidden="true" />
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
 
       <Dialog open={movingCaseId !== null} onOpenChange={(open) => !open && setMovingCaseId(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>Move to…</DialogTitle>
-          <Input
-            autoFocus
-            placeholder="Search sections…"
-            value={moveQuery}
-            onChange={(e) => setMoveQuery(e.target.value)}
+          <FolderPicker
+            folders={folders}
+            rootId={root.id}
+            query={moveQuery}
+            onQueryChange={setMoveQuery}
+            onSelect={(targetFolderId) => {
+              if (movingCaseId) void moveCase(movingCaseId, targetFolderId)
+              setMovingCaseId(null)
+            }}
           />
-          <ul className="max-h-80 space-y-1 overflow-y-auto">
-            {folders
-              .map((f) => ({ id: f.id, path: folderPath(folders, f.id, root.id) }))
-              .filter((f) => f.path.toLowerCase().includes(moveQuery.toLowerCase()))
-              .map((f) => (
-                <li key={f.id}>
-                  <button
-                    type="button"
-                    className="w-full rounded-md px-2 py-2 text-left text-sm hover:bg-accent"
-                    onClick={() => {
-                      if (movingCaseId) void moveCase(movingCaseId, f.id)
-                      setMovingCaseId(null)
-                    }}
-                  >
-                    {f.path}
-                  </button>
-                </li>
-              ))}
-          </ul>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={browsingSections} onOpenChange={setBrowsingSections}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Browse sections</DialogTitle>
+          <FolderPicker
+            folders={folders}
+            rootId={root.id}
+            query={browseQuery}
+            onQueryChange={setBrowseQuery}
+            onSelect={(targetFolderId) => {
+              navigate(`/projects/${projectId}/library/${targetFolderId}`)
+              setBrowsingSections(false)
+            }}
+          />
         </DialogContent>
       </Dialog>
 

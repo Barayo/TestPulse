@@ -23,6 +23,22 @@ type Props = {
 // on the same MIME type for the dragged case id.
 export const CASE_ID_MIME = 'application/x-testpulse-case-id'
 
+// Indentation grows at the normal step for the first few levels (where it
+// carries real wayfinding value), then at a much smaller step beyond that —
+// at extreme depth, one more level of indentation adds little navigational
+// value but would otherwise keep consuming the fixed-width panel's space
+// (found via a real deeply-nested section tree: unbounded 16px/level left
+// almost no room for the name itself past depth ~7).
+const INDENT_BASE = 8
+const INDENT_STEP = 16
+const INDENT_CAP_DEPTH = 5
+const INDENT_REDUCED_STEP = 4
+
+function indentPx(depth: number): number {
+  if (depth <= INDENT_CAP_DEPTH) return INDENT_BASE + depth * INDENT_STEP
+  return INDENT_BASE + INDENT_CAP_DEPTH * INDENT_STEP + (depth - INDENT_CAP_DEPTH) * INDENT_REDUCED_STEP
+}
+
 function InlineNewFolderRow({
   depth,
   value,
@@ -37,7 +53,7 @@ function InlineNewFolderRow({
   onCancel: () => void
 }) {
   return (
-    <div className="flex items-center gap-1.5 py-1" style={{ paddingLeft: 8 + depth * 16 }}>
+    <div className="flex items-center gap-1.5 py-1" style={{ paddingLeft: indentPx(depth) }}>
       <span className="w-3 shrink-0" />
       <input
         aria-label="New section name"
@@ -124,7 +140,7 @@ function TreeNode({
     <div>
       <div
         className={`flex items-center gap-1.5 py-1 text-sm ${isSelected ? 'bg-accent font-medium' : ''} ${dragOver ? 'bg-primary/10' : ''}`}
-        style={{ paddingLeft: 8 + depth * 16 }}
+        style={{ paddingLeft: indentPx(depth) }}
         onContextMenu={(e) => {
           e.preventDefault()
           setMenu({ x: e.clientX, y: e.clientY })
@@ -153,7 +169,7 @@ function TreeNode({
         ) : (
           <span className="w-3 shrink-0" />
         )}
-        <button type="button" className="truncate text-left" onClick={() => onSelect(folder.id)}>
+        <button type="button" title={folder.name} className="truncate text-left" onClick={() => onSelect(folder.id)}>
           {folder.name}
         </button>
       </div>

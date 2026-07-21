@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
@@ -89,8 +89,28 @@ function renderExplorer(path = '/projects/p1/library/transferencias') {
   )
 }
 
+function mockViewport(matches: boolean) {
+  vi.spyOn(window, 'matchMedia').mockReturnValue({
+    matches,
+    media: '(min-width: 768px)',
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  } as unknown as MediaQueryList)
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
+  // useMediaQuery('(min-width: 768px)') defaults to matches:false (the
+  // shared jsdom matchMedia stub in src/test/setup.ts), which reads as
+  // "mobile" for a min-width query — the opposite of useIsMobile's
+  // max-width semantics that default was written for. Tests unrelated to
+  // responsive behavior assume desktop, matching this page's pre-refactor
+  // behavior; the "responsive layout" describe block overrides per test.
+  mockViewport(true)
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
 })
 
 describe('FolderExplorerPage', () => {
@@ -339,6 +359,21 @@ describe('FolderExplorerPage', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
+    it('filters the "Move to…" picker list by the search query', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /move to/i }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText('Library')).toBeInTheDocument()
+      expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
+
+      await userEvent.type(within(dialog).getByPlaceholderText(/search sections/i), 'Nacionales')
+
+      expect(within(dialog).queryByText('Library')).not.toBeInTheDocument()
+      expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
+    })
+
     it('does nothing when the current folder is reselected in the picker', async () => {
       mockExplorerAPI()
       renderExplorer()
@@ -353,4 +388,57 @@ describe('FolderExplorerPage', () => {
     })
   })
 
+  describe('responsive layout', () => {
+    it('renders both the section tree and the content list side by side at ≥768px', async () => {
+      mockViewport(true)
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.getByRole('navigation', { name: 'Section tree' })).toBeInTheDocument()
+    })
+
+    it('hides the section tree and shows only the full-width content list below 768px', async () => {
+      mockViewport(false)
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('navigation', { name: 'Section tree' })).not.toBeInTheDocument()
+    })
+
+    it('still navigates up via a breadcrumb segment below 768px', async () => {
+      mockViewport(false)
+      mockExplorerAPI()
+      renderExplorer()
+      await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+      await userEvent.click(within(nav).getByText('Library'))
+      await waitFor(() => {
+        expect(within(screen.getByRole('list', { name: 'Section contents' })).getByText('Transferencias')).toBeInTheDocument()
+      })
+    })
+
+    it('shows a "Browse sections" action below 768px that navigates to a non-ancestor section via the picker', async () => {
+      mockViewport(false)
+      mockExplorerAPI()
+      renderExplorer()
+      await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
+      await userEvent.click(screen.getByRole('button', { name: /browse sections/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByText('Library / Transferencias / Nacionales'))
+
+      await waitFor(() => {
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+        expect(within(nav).getByText('Nacionales')).toBeInTheDocument()
+      })
+    })
+
+    it('does not show "Browse sections" at ≥768px', async () => {
+      mockViewport(true)
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('button', { name: /browse sections/i })).not.toBeInTheDocument()
+    })
+  })
 })

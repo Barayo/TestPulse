@@ -166,10 +166,10 @@ language, gated behind an explicit confirm click — never a bare click-to-delet
 `lucide-react` exclusively for UI icons — no emoji. (`FolderExplorerPage.tsx`'s emoji
 folder/case icons predate this and are a known inconsistency, tracked separately.)
 
-## Breadcrumbs: the last segment truncates, earlier ones never wrap
+## Breadcrumbs: the last segment truncates, earlier ones never wrap — until depth forces a collapse
 
 `Breadcrumbs.tsx`'s flex row gives every non-last segment `shrink-0 whitespace-nowrap` and the
-last (current-page) segment `min-w-0 flex-1 truncate`. This isn't decorative — a plain
+last (current-page) segment `min-w-16 flex-1 truncate`. This isn't decorative — a plain
 `flex items-center` row with no shrink/wrap handling breaks badly on mobile: flex items default
 to a `min-width` equal to their own min-content size, and when a long final segment (e.g. a
 case title) can't fit, the browser doesn't just overflow the row — it shrinks the segment below
@@ -177,6 +177,54 @@ its natural width and starts wrapping individual words, producing a vertical col
 clipped at the screen edge (found via a real mobile screenshot). Any future multi-segment,
 variable-length trail (breadcrumbs, tabs, chip rows) needs this same treatment: fixed segments
 don't shrink or wrap, the one variable-length segment takes remaining space and truncates.
+
+**The truncating segment also needs a non-zero `min-width` floor, not `min-w-0`.** `flex-1` on a
+flex item defaults its flex-basis to `0%`, so once the `shrink-0` segments ahead of it alone
+already exceed the nav's width, the remaining space clamps to zero and a `min-w-0` last segment
+renders at exactly 0px — invisible, not just narrow (found via `polish-library-page`'s e2e run:
+a long project name pushed a section-name crumb to zero width on a 375px viewport). `min-w-16`
+(4rem) gives truncated text a guaranteed renderable box; once the row's total content still
+can't fit, `overflow-x-auto` on the `nav` lets it scroll instead of collapsing the last segment
+away. Any `flex-1 truncate` item competing against `shrink-0` siblings needs this same floor.
+
+**Beyond 5 segments, the middle collapses behind a menu — `shrink-0` alone doesn't scale to
+arbitrary depth.** Both fixes above assume a *moderate* number of `shrink-0` segments (a few
+short structural labels plus one long final one). They stop being enough once a hierarchy gets
+genuinely deep: real usage turned up a 7+ level nested section tree where the whole row grew
+wide enough to need horizontal scrolling, and — critically — the scrollbar defaults to showing
+the *start* of the path, hiding the current page (the one thing a breadcrumb exists to show)
+off-screen. Unbounded `shrink-0` segments were never going to fix this; capping how many render
+was the actual fix. Past `MAX_VISIBLE_SEGMENTS` (5 — chosen so the common real case, `Projects ›
+{Project} › Library › one section › current page`, is unaffected), `Breadcrumbs.tsx` shows only
+the first two segments (entry point + project, for orientation) and the last two (immediate
+parent + current page, for location), collapsing everything between behind a "…" button. That
+button is a real, `aria-haspopup="menu"` control — click it and the hidden segments list as
+links in order, same click-outside/Escape-to-close pattern `AdminMenu.tsx` already established
+elsewhere in the app, not a new interaction model. Once collapsed, *every* visible non-last
+segment also gets a `max-w-32 truncate` cap, not just the last one — the second-to-last segment
+(the immediate parent folder) is now a freeform, potentially-long name too, not necessarily a
+short structural label the way "Library" or "Projects" reliably are.
+
+This pattern — bounded visible count, collapse the middle behind a revealable control, never
+require scrolling to see current location — is the standard answer for arbitrary-depth
+breadcrumbs (VS Code's editor breadcrumb, macOS Finder's path bar, GitHub's file breadcrumb all
+converge on it). Reach for it before reaching for a resizable panel or a responsive width
+calculation — those add real interaction/state complexity and still don't bound the worst case
+the way a fixed collapse threshold does.
+
+## Tree indentation: cap the per-level step past a certain depth
+
+`FolderTree.tsx`'s `indentPx(depth)` grows at the normal 16px/level for the first five levels
+(where relative nesting is genuinely useful to see), then drops to a 4px/level step beyond that
+— not a hard stop, which would erase all sense of "this is nested under that," but enough that
+extreme depth (found in the same real 7+ level tree that broke the breadcrumb) doesn't consume
+most of the fixed-width tree pane in pure indentation before a single character of the name
+renders. Paired with a `title` attribute carrying the full name on every tree row — cheap,
+works without any interaction, and means a visually truncated name is never actually
+unreadable, just requires a hover. Both together solve "I can't read this name" completely
+without touching layout; a resizable tree pane (raised, not built) would only help the *desktop,
+moderate-depth* slice of this problem and was deliberately deferred as separate, larger-scoped
+work (see the `resizable Library tree panel` backlog item).
 
 ## Multiline text fields for anything that can run long
 

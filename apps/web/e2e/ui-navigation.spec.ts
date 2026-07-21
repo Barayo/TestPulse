@@ -77,6 +77,32 @@ test.describe('Requirement: Breadcrumb trail', () => {
     await expect(nav.getByText('SEPA')).toBeVisible()
   })
 
+  test('Scenario: Deep section nesting collapses the middle of the trail', async ({ page }) => {
+    await createProject(page, 'Deep Nesting Project')
+    await openFolderExplorer(page)
+    for (const name of ['Transfers', 'National', 'SEPA', 'Domestic']) {
+      await createFolderInOpenFolder(page, name)
+      await content(page).getByText(name).click()
+    }
+
+    // 7 segments: Projects › {Project} › Library › Transfers › National › SEPA › Domestic
+    // exceeds the 5-segment threshold, so the trail must collapse.
+    const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
+    await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
+    await expect(nav.getByText('Domestic')).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Transfers' })).not.toBeVisible()
+
+    const trigger = nav.getByRole('button', { name: /hidden path segments/i })
+    await expect(trigger).toBeVisible()
+    await trigger.click()
+    const menu = page.getByRole('menu', { name: /hidden path segments/i })
+    await expect(menu.getByRole('menuitem', { name: 'Transfers' })).toBeVisible()
+    await expect(menu.getByRole('menuitem', { name: 'National' })).toBeVisible()
+
+    await menu.getByRole('menuitem', { name: 'Transfers' }).click()
+    await expect(content(page).getByText('National')).toBeVisible()
+  })
+
   test('Scenario: Breadcrumb on a run page', async ({ page }) => {
     const name = await createProject(page, 'Run Breadcrumb Project')
     await openFolderExplorer(page)
@@ -155,7 +181,7 @@ test.describe('Requirement: Project landing shows top-level structure only', () 
   })
 })
 
-test.describe('Requirement: Folder explorer with two-pane navigation', () => {
+test.describe('Requirement: Library with two-pane navigation', () => {
   test('Scenario: Navigating into a nested folder', async ({ page }) => {
     await createProject(page, 'Nested Nav Project')
     await openFolderExplorer(page)
@@ -172,6 +198,42 @@ test.describe('Requirement: Folder explorer with two-pane navigation', () => {
     await createCase(page, 'Daily limit')
     await expect(content(page).getByText('Transfers')).toBeVisible()
     await expect(content(page).getByText('Daily limit')).toBeVisible()
+  })
+
+  test('Scenario: Section tree is hidden below 768px', async ({ page }) => {
+    await createProject(page, 'Mobile Tree Hidden Project')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Transfers')
+
+    await page.setViewportSize({ width: 375, height: 800 })
+    await expect(page.getByRole('navigation', { name: 'Section tree' })).toBeHidden()
+    await expect(content(page).getByText('Transfers')).toBeVisible()
+  })
+
+  test('Scenario: Breadcrumbs cover upward navigation on mobile', async ({ page }) => {
+    await createProject(page, 'Mobile Breadcrumb Nav Project')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Transfers')
+    await content(page).getByText('Transfers').click()
+    await createFolderInOpenFolder(page, 'National')
+    await content(page).getByText('National').click()
+
+    await page.setViewportSize({ width: 375, height: 800 })
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByText('Transfers').click()
+    await expect(content(page).getByText('National')).toBeVisible()
+  })
+
+  test('Scenario: Browse sections covers sideways navigation on mobile', async ({ page }) => {
+    await createProject(page, 'Mobile Browse Sections Project')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Transfers')
+    await createFolderInOpenFolder(page, 'Cards')
+
+    await page.setViewportSize({ width: 375, height: 800 })
+    await page.getByRole('button', { name: /browse sections/i }).click()
+    await page.getByRole('dialog').getByText('Library / Cards').click()
+    await expect(content(page).getByText('Cards')).toHaveCount(0)
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByText('Cards')).toBeVisible()
   })
 })
 

@@ -177,6 +177,70 @@ describe('FolderTree', () => {
     expect(onCancelNewFolder).toHaveBeenCalled()
   })
 
+  it('carries the full folder name as a title attribute, so a truncated row is still readable on hover', () => {
+    render(
+      <FolderTree
+        folders={folders}
+        rootId="root"
+        selectedId="transferencias"
+        expanded={new Set()}
+        onSelect={vi.fn()}
+        onToggle={vi.fn()}
+        onNewSubfolder={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('Transferencias')).toHaveAttribute('title', 'Transferencias')
+  })
+
+  describe('indentation at extreme depth', () => {
+    // 7 levels deep — beyond the point where 16px/level indentation alone
+    // would consume most of the panel's fixed width before any text renders.
+    const deepFolders: TreeFolder[] = [
+      { id: 'root', name: 'Root', parentFolderId: undefined },
+      { id: 'd1', name: 'Depth 1', parentFolderId: 'root' },
+      { id: 'd2', name: 'Depth 2', parentFolderId: 'd1' },
+      { id: 'd3', name: 'Depth 3', parentFolderId: 'd2' },
+      { id: 'd4', name: 'Depth 4', parentFolderId: 'd3' },
+      { id: 'd5', name: 'Depth 5', parentFolderId: 'd4' },
+      { id: 'd6', name: 'Depth 6', parentFolderId: 'd5' },
+      { id: 'd7', name: 'Depth 7', parentFolderId: 'd6' },
+    ]
+    const allExpanded = new Set(['d1', 'd2', 'd3', 'd4', 'd5', 'd6'])
+
+    it('indents the first five levels at the normal 16px step', () => {
+      render(
+        <FolderTree
+          folders={deepFolders}
+          rootId="root"
+          selectedId="d7"
+          expanded={allExpanded}
+          onSelect={vi.fn()}
+          onToggle={vi.fn()}
+          onNewSubfolder={vi.fn()}
+        />,
+      )
+      // depth 4 (0-indexed: "Depth 5" is the 5th level, depth index 4) → 8 + 4*16 = 72
+      expect(screen.getByText('Depth 5').closest('div')).toHaveStyle({ paddingLeft: '72px' })
+    })
+
+    it('reduces the indentation step beyond depth 5, so extreme nesting does not consume the whole panel', () => {
+      render(
+        <FolderTree
+          folders={deepFolders}
+          rootId="root"
+          selectedId="d7"
+          expanded={allExpanded}
+          onSelect={vi.fn()}
+          onToggle={vi.fn()}
+          onNewSubfolder={vi.fn()}
+        />,
+      )
+      // depth index 6 ("Depth 7"): capped at depth 5 (8+5*16=88) + 1 extra level at 4px = 92,
+      // versus the uncapped 8+6*16=104 the old formula would have produced.
+      expect(screen.getByText('Depth 7').closest('div')).toHaveStyle({ paddingLeft: '92px' })
+    })
+  })
+
   it('closes the context menu when clicking outside it', async () => {
     render(
       <FolderTree
