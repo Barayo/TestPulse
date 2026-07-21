@@ -10,6 +10,18 @@ hidden segments on demand; the first two segments (entry point and project) and 
 two (immediate parent and current location) SHALL always remain visible and never require
 horizontal scrolling to see.
 
+#### Scenario: Breadcrumb on a project's landing page
+- **WHEN** a user opens a project's landing page
+- **THEN** the breadcrumb shows "Projects" and the project's name, with "Projects" linking back to the project list
+
+#### Scenario: Breadcrumb reflects section depth
+- **WHEN** a user navigates two levels deep into the library
+- **THEN** the breadcrumb shows the project name, a "Library" crumb for the root, and both ancestor section names, each linking back to that level
+
+#### Scenario: Breadcrumb on a run page
+- **WHEN** a user opens a run's execution board
+- **THEN** the breadcrumb shows "Projects", the run's project name, and the run's name, with the first two segments linking back appropriately
+
 #### Scenario: Deep section nesting collapses the middle of the trail
 - **WHEN** a user views a page whose breadcrumb trail exceeds five segments (e.g. several levels of nested sections)
 - **THEN** the trail shows the first two and last two segments, with the segments between them collapsed behind a single control, and the current page remains visible without scrolling
