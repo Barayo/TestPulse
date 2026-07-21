@@ -356,3 +356,66 @@ func TestRunSummaryCounts(t *testing.T) {
 		t.Errorf("summary = %+v", sum)
 	}
 }
+
+func TestExecutionsByCaseGroupedByVersion(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+
+	// Two runs pinning v1 (one pass, one failed), then a version bump, then a
+	// third run pinning v2.
+	run1, _ := s.Runs.Create(ctx, p.ID, "run 1", []string{c.ID})
+	run2, _ := s.Runs.Create(ctx, p.ID, "run 2", []string{c.ID})
+	items1, _ := s.Runs.Items(ctx, run1.ID, "")
+	items2, _ := s.Runs.Items(ctx, run2.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, items1[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Runs.AppendResult(ctx, items2[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}); err != nil {
+		t.Fatal(err)
+	}
+
+	edited := c.Content
+	edited.Title = "Login works (edited)"
+	if _, err := s.Cases.NewVersion(ctx, c.ID, edited); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Runs.Create(ctx, p.ID, "run 3", []string{c.ID}); err != nil {
+		t.Fatal(err)
+	}
+
+	execs, err := s.Runs.ExecutionsByCase(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("ExecutionsByCase: %v", err)
+	}
+	if len(execs) != 3 {
+		t.Fatalf("ExecutionsByCase = %d executions, want 3: %+v", len(execs), execs)
+	}
+	var v1Count, v2Count int
+	for _, e := range execs {
+		if e.RunName == "" || e.RunID == "" || e.RunItemID == "" {
+			t.Errorf("execution missing identifying fields: %+v", e)
+		}
+		switch e.CaseVersion {
+		case 1:
+			v1Count++
+		case 2:
+			v2Count++
+		default:
+			t.Errorf("unexpected pinned version %d", e.CaseVersion)
+		}
+	}
+	if v1Count != 2 || v2Count != 1 {
+		t.Errorf("v1Count=%d v2Count=%d, want 2 and 1", v1Count, v2Count)
+	}
+
+	empty, err := mustCase(t, s, p.ID, "Never run"), error(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	execs, err = s.Runs.ExecutionsByCase(ctx, empty.ID)
+	if err != nil || len(execs) != 0 {
+		t.Errorf("ExecutionsByCase for unrun case = %d, %v; want 0, nil", len(execs), err)
+	}
+}

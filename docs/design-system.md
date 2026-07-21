@@ -153,6 +153,103 @@ Prefer filled panels over hairline dividers for structural boundaries in this de
 reserve borders for internal separators within an already-bounded container (e.g. the divider
 between Properties and Results inside the sidebar panel itself).
 
+## Diffing two versions of the same content: field-by-field, not text-diff
+
+`VersionDetailDialog` (`apps/web/src/components/VersionDetailDialog.tsx`) shows what changed
+between two case versions by comparing each scalar field and each step by index and rendering
+old→new only for the ones that differ — not by running a text-diff algorithm over the whole
+content and highlighting character ranges. A case's content is a small, fixed set of named
+fields (title, description, steps, classification), not free-form prose; field-by-field
+comparison answers "what changed" completely and is far simpler to build, test, and reason
+about than word/character-level diffing. Reach for a text-diff library only if a future change
+needs to diff genuinely long free-form text where "the whole field changed" isn't already the
+useful signal.
+
+## Entity-detail page header: breadcrumb is the only source of "where," title row is only "what" + actions
+
+`CaseDetailPage.tsx`'s header went through three rounds of live review before settling — the
+canonical shape any future entity-detail page (a run, a suite, a project) should copy rather
+than re-deriving.
+
+**Round 1 — drop `Close`.** The header started with a `Close` button next to `Edit`, a
+leftover from when this page was `CaseDrawer`, a slide-over where "Close" is the natural
+label — never re-examined once the page was promoted to a real route with its own breadcrumb.
+Equal-weight and adjacent to `Edit`, it also risked mis-clicks between "leave" and "start
+editing," two actions of very different consequence. Every other detail page in the app
+(`RunPage`, `SuitesPage`, `ProjectPage`) already relies on the breadcrumb for "back" — `Close`
+was the one outlier.
+
+**Round 2 — the replacement can't just duplicate the breadcrumb, or be a worse copy of it.**
+The first fix added a standalone "← Back to Library" link above the title. Live review (with
+real seeded data, a case sitting inside a subfolder) caught that this duplicated the
+breadcrumb's own last clickable crumb — and did it *worse*: it always jumped to the library
+root, skipping past whatever folder the user actually stood in. Two controls stacked doing the
+same job, one visibly coarser, read as unintentional clutter, not two deliberate affordances.
+**Settled**: no standalone back line. A small `←` sits directly *inside the title row*, before
+the entity's own name — not a separate row — linking to the case's real parent folder
+(`folder ?? root`, matching the breadcrumb's own granularity), with an `aria-label` (e.g.
+`"Back to Transferencias"`) carrying the accessible name since the visible glyph alone isn't
+one. This keeps one explicit, header-anchored affordance (addressing "clicking a breadcrumb
+crumb might not be clear enough" for users unfamiliar with breadcrumb navigation as an exit
+mechanism) without duplicating or under-cutting what the breadcrumb already provides.
+
+**Round 3 — the arrow needs to look like it belongs to the title, and the subtitle line was
+still duplicating the breadcrumb.** Two more issues only showed up in a live, zoomed screenshot
+(not in a code read): the `←` had no explicit size, so it inherited ambient body text size
+instead of the heading's — rendering visibly smaller than and misaligned against the bold
+`text-2xl` title next to it. Fixed by sizing it `text-2xl leading-none` to match the heading's
+scale and baseline. Separately, the `in {folderName}` subtitle line below the title was *also*
+restating the breadcrumb's parent-folder crumb, one line up — dropped entirely. Unlike the
+back-arrow decision, this one wasn't a close call: "which folder is this in" is a *reading*
+task, not an *interaction* task — nobody has to recognize a crumb is clickable to read it, so
+there's no affordance risk in trusting the breadcrumb alone here, the way there was for "how
+do I leave this page."
+
+**The settled shape**: breadcrumb carries the full path (including the current item, as the
+final non-link crumb) and is the *only* thing that states "where." The title row carries only
+"what this is" (the entity name, with a same-scale back-arrow folded in) and the primary
+action (`Edit`, alone — never paired with a competing exit control). Nothing in the title row
+repeats a string the breadcrumb already shows.
+
+```tsx
+<Breadcrumbs segments={breadcrumbSegments} />
+<div className="flex items-center justify-between gap-4 border-b pb-4">
+  <div className="flex items-center gap-3">
+    <Link to={backHref} aria-label={`Back to ${parentName}`}
+          className="text-2xl leading-none text-primary hover:text-primary/70">
+      ←
+    </Link>
+    <h1 className="tp-heading text-2xl">{entity.title}</h1>
+  </div>
+  <Button onClick={...}>Edit</Button>
+</div>
+```
+
+Before adding any explicit "back" control next to a breadcrumb, check whether the breadcrumb's
+own last clickable segment already goes exactly where the new control would — if so, either
+drop the new control or make sure it matches the breadcrumb's granularity precisely. And check
+a live, zoomed screenshot before calling sizing/alignment done — a code read alone missed the
+arrow's size mismatch twice.
+
+**Round 4 — a touch of brand color on the arrow, deliberately nowhere else in the header.**
+Live review called the header "too gray." The breadcrumb and title text stay exactly as they
+are — near-black for the title (the highest-contrast, most important text on the page; teal
+would be a *lower*-contrast, worse choice there) and muted gray for the breadcrumb (it needs to
+recede, not compete with the title). The one legitimate target for color: the back arrow, tinted
+`text-primary` to match the brand teal used elsewhere on the same page (step-number badges,
+priority badge, `Edit` button) instead of flat `text-muted-foreground`. Two color-only variants
+were built live and compared side by side before deciding: a plain tint (`text-primary` on the
+glyph, no other change) versus a filled circular chip matching the step-badges' exact
+`rounded-full bg-primary/10` treatment. The chip looked stronger on paper — reusing an
+already-established motif — but rendered heavier than intended: a 36px circle taller than the
+text line, pushing the title over, overstating the visual importance of a secondary "go back"
+action. Settled on the plain tint — color signals "this is the brand," weight/size still
+signals "this is secondary," and the header's three-round trend toward less stays intact. Don't
+extend color to the breadcrumb or the title text itself: color should mark *meaningful*
+elements (actions, status, brand touches), not restate hierarchy that font-size/weight/contrast
+already communicate — diluting that is how the earlier gradient-badge experiment (see
+"Numbered sequences" above) went wrong too.
+
 ## Destructive-action confirmation
 
 Not introduced by this change, but the canonical pattern to reuse for any future delete

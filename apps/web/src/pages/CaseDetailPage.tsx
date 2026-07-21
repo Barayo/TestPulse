@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useParams } from 'react-router-dom'
 import { ListChecksIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
@@ -12,6 +12,7 @@ import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel } from '@/components/CaseResultsPanel'
 import { ClassificationEditor, type Priority } from '@/components/ClassificationEditor'
 import { StepEditor, type Step } from '@/components/StepEditor'
+import { VersionDetailDialog } from '@/components/VersionDetailDialog'
 import type { components } from '@testpulse/shared/api'
 
 type TestCase = components['schemas']['TestCase']
@@ -33,7 +34,6 @@ function textToTags(text: string): string[] {
 
 export default function CaseDetailPage() {
   const { projectId, caseId } = useParams<{ projectId: string; caseId: string }>()
-  const navigate = useNavigate()
 
   const [project, setProject] = useState<Project>()
   const [folders, setFolders] = useState<Folder[]>([])
@@ -42,6 +42,7 @@ export default function CaseDetailPage() {
   const [suites, setSuites] = useState<Suite[]>([])
   const [notFound, setNotFound] = useState(false)
 
+  const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [title, setTitle] = useState('')
   const [steps, setSteps] = useState<Step[]>([])
@@ -138,17 +139,20 @@ export default function CaseDetailPage() {
 
       <div className="flex items-center justify-between gap-4 border-b pb-4">
         <div>
-          <h1 className="tp-heading text-2xl">{testCase.content.title}</h1>
-          <p className="text-sm text-muted-foreground">in {folderName}</p>
-        </div>
-        {!isEditing && (
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => navigate(`/projects/${projectId}/library`)}>
-              Close
-            </Button>
-            <Button onClick={() => setIsEditing(true)}>Edit</Button>
+          <div className="flex items-center gap-3">
+            {!isEditing && (
+              <Link
+                to={`/projects/${projectId}/library/${(folder ?? root)?.id}`}
+                aria-label={`Back to ${folderName}`}
+                className="text-2xl leading-none text-primary hover:text-primary/70"
+              >
+                ←
+              </Link>
+            )}
+            <h1 className="tp-heading text-2xl">{testCase.content.title}</h1>
           </div>
-        )}
+        </div>
+        {!isEditing && <Button onClick={() => setIsEditing(true)}>Edit</Button>}
       </div>
 
       {isEditing ? (
@@ -254,21 +258,37 @@ export default function CaseDetailPage() {
             <CaseSidebarSection title="Version history">
               <ul aria-label="Version history" className="divide-y rounded-md border text-sm">
                 {versions.map((v) => (
-                  <li key={v.version} className="flex items-center justify-between px-2 py-1.5">
-                    <span>v{v.version}</span>
-                    {v.version === testCase.currentVersion ? (
-                      <Badge variant="default">current</Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(v.createdAt).toLocaleDateString()}
-                      </span>
-                    )}
+                  <li key={v.version}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-accent"
+                      onClick={() => setViewingVersion(v.version)}
+                    >
+                      <span>v{v.version}</span>
+                      {v.version === testCase.currentVersion ? (
+                        <Badge variant="default">current</Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(v.createdAt).toLocaleDateString()}
+                        </span>
+                      )}
+                    </button>
                   </li>
                 ))}
               </ul>
             </CaseSidebarSection>
           </div>
         </div>
+      )}
+
+      {viewingVersion !== null && (
+        <VersionDetailDialog
+          open
+          onOpenChange={(open) => !open && setViewingVersion(null)}
+          caseId={caseId}
+          version={viewingVersion}
+          versions={versions}
+        />
       )}
     </div>
   )

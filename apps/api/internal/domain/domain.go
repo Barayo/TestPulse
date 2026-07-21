@@ -220,6 +220,18 @@ type RunItem struct {
 	CreatedAt     time.Time   `json:"createdAt"`
 }
 
+// CaseExecution is one run item's outcome, viewed from the case's side
+// (across every run it was part of) rather than one run's side — the shape
+// `extend-case-version-history`'s "executions by version" query returns.
+type CaseExecution struct {
+	RunItemID   string    `json:"runItemId"`
+	RunID       string    `json:"runId"`
+	RunName     string    `json:"runName"`
+	CaseVersion int       `json:"caseVersion"`
+	Status      Status    `json:"status"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
 type Result struct {
 	ID        string    `json:"id"`
 	RunItemID string    `json:"runItemId"`

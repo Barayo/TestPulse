@@ -94,3 +94,30 @@ func TestInvalidJSONBodyIs400(t *testing.T) {
 		}
 	}
 }
+
+func TestScenario_CaseExecutionsGroupedByVersionOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c, run1, run2 struct{ ID string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.ID), jmap{"title": "Login works"}, 201, &c)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.ID), jmap{"name": "run 1", "caseIds": []string{c.ID}}, 201, &run1)
+	call(t, h, "PUT", "/api/v1/cases/"+c.ID, jmap{"title": "Login works v2"}, 200, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.ID), jmap{"name": "run 2", "caseIds": []string{c.ID}}, 201, &run2)
+
+	var execs []struct {
+		RunName     string `json:"runName"`
+		CaseVersion int    `json:"caseVersion"`
+		Status      string `json:"status"`
+	}
+	call(t, h, "GET", "/api/v1/cases/"+c.ID+"/executions", nil, 200, &execs)
+	if len(execs) != 2 {
+		t.Fatalf("executions = %d, want 2: %+v", len(execs), execs)
+	}
+	if execs[0].CaseVersion != 1 || execs[0].RunName != "run 1" || execs[0].Status != "pending" {
+		t.Errorf("execs[0] = %+v", execs[0])
+	}
+	if execs[1].CaseVersion != 2 || execs[1].RunName != "run 2" {
+		t.Errorf("execs[1] = %+v", execs[1])
+	}
+}

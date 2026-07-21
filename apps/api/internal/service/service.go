@@ -242,6 +242,10 @@ func (s *Service) CaseVersions(ctx context.Context, caseID string) ([]domain.Cas
 	return s.store.Cases.Versions(ctx, caseID)
 }
 
+func (s *Service) CaseExecutions(ctx context.Context, caseID string) ([]domain.CaseExecution, error) {
+	return s.store.Runs.ExecutionsByCase(ctx, caseID)
+}
+
 func (s *Service) DeleteCase(ctx context.Context, caseID string) error {
 	if err := s.store.Cases.SoftDelete(ctx, caseID); err != nil {
 		return err

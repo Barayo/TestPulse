@@ -254,6 +254,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{caseId}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        /** Every execution that has pinned this case, across all runs, grouped by version */
+        get: operations["listCaseExecutions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectId}/suites": {
         parameters: {
             query?: never;
@@ -810,6 +829,15 @@ export interface components {
             caseId: string;
             version: number;
             content: components["schemas"]["CaseContent"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CaseExecution: {
+            runItemId: string;
+            runId: string;
+            runName: string;
+            caseVersion: number;
+            status: components["schemas"]["Status"];
             /** Format: date-time */
             createdAt: string;
         };
@@ -1539,6 +1567,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseVersion"][];
+                };
+            };
+        };
+    };
+    listCaseExecutions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Executions ordered by pinned version, then by when they ran */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseExecution"][];
                 };
             };
         };

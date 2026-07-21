@@ -50,6 +50,7 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/", h.editCase)
 		r.With(h.requirePermission(domain.PermCaseDelete, projectIDFromCase)).Delete("/", h.deleteCase)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/versions", h.listCaseVersions)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/executions", h.listCaseExecutions)
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
 	})
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
@@ -264,6 +265,11 @@ func (h *api) deleteCase(w http.ResponseWriter, r *http.Request) {
 func (h *api) listCaseVersions(w http.ResponseWriter, r *http.Request) {
 	versions, err := h.svc.CaseVersions(r.Context(), chi.URLParam(r, "caseID"))
 	h.respond(w, http.StatusOK, versions, err)
+}
+
+func (h *api) listCaseExecutions(w http.ResponseWriter, r *http.Request) {
+	execs, err := h.svc.CaseExecutions(r.Context(), chi.URLParam(r, "caseID"))
+	h.respond(w, http.StatusOK, execs, err)
 }
 
 // --- Folders ---

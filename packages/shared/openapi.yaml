@@ -297,6 +297,21 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CaseVersion" }
+  /api/v1/cases/{caseId}/executions:
+    parameters:
+      - { name: caseId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCaseExecutions
+      summary: Every execution that has pinned this case, across all runs, grouped by version
+      tags: [cases]
+      responses:
+        "200":
+          description: Executions ordered by pinned version, then by when they ran
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseExecution" }
   /api/v1/projects/{projectId}/suites:
     parameters:
       - { name: projectId, in: path, required: true, schema: { type: string } }
@@ -1024,6 +1039,16 @@ components:
         caseId: { type: string }
         version: { type: integer }
         content: { $ref: "#/components/schemas/CaseContent" }
+        createdAt: { type: string, format: date-time }
+    CaseExecution:
+      type: object
+      required: [runItemId, runId, runName, caseVersion, status, createdAt]
+      properties:
+        runItemId: { type: string }
+        runId: { type: string }
+        runName: { type: string }
+        caseVersion: { type: integer }
+        status: { $ref: "#/components/schemas/Status" }
         createdAt: { type: string, format: date-time }
     Suite:
       type: object

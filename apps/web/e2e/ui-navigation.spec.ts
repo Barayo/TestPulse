@@ -317,6 +317,79 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await expect(history.getByText('v2')).toBeVisible()
   })
 
+  test('Scenario: Opening a version\'s detail dialog', async ({ page }) => {
+    await createProject(page, 'Version Dialog Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.getByRole('button', { name: /^edit$/i }).click()
+    await page.getByLabel(/^title$/i).fill('Login works v2')
+    await page.getByRole('button', { name: /save changes/i }).click()
+
+    await page.getByRole('list', { name: /version history/i }).getByText('v1').click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Version 1')).toBeVisible()
+  })
+
+  test('Scenario: Diff shows only changed fields', async ({ page }) => {
+    await createProject(page, 'Diff Fields Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.getByRole('button', { name: /^edit$/i }).click()
+    await page.getByLabel(/^title$/i).fill('Login works v2')
+    await page.getByRole('button', { name: /save changes/i }).click()
+
+    await page.getByRole('list', { name: /version history/i }).getByText('v2').click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Login works', { exact: true })).toBeVisible()
+    await expect(dialog.getByText('Login works v2', { exact: true })).toBeVisible()
+  })
+
+  test('Scenario: Oldest version has nothing to diff against', async ({ page }) => {
+    await createProject(page, 'Oldest Version Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+
+    await page.getByRole('list', { name: /version history/i }).getByText('v1').click()
+    await expect(page.getByRole('dialog').getByText(/no previous version/i)).toBeVisible()
+  })
+
+  test('Scenario: Executions list and Flaky flag reflect mixed results for the same version', async ({ page }) => {
+    await createProject(page, 'Flaky Version Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await expect(content(page).getByText('Login works')).toBeVisible()
+    const projectId = new URL(page.url()).pathname.split('/')[2]
+
+    await page.goto(`/projects/${projectId}/runs`)
+    await page.getByLabel(/^name$/i).fill('Run pass')
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.getByRole('link', { name: 'Run pass' }).click()
+    await page.getByText('Login works').first().click()
+    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /^pass$/i }).click()
+    await expect(page.getByTestId('item-detail').getByText('ana: pass')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs`)
+    await page.getByLabel(/^name$/i).fill('Run fail')
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.getByRole('link', { name: 'Run fail' }).click()
+    await page.getByText('Login works').first().click()
+    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /^failed$/i }).click()
+    await expect(page.getByTestId('item-detail').getByText('ana: failed')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/library`)
+    await page.getByText('Login works').click()
+    await page.getByRole('list', { name: /version history/i }).getByText('v1').click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText('Run pass')).toBeVisible()
+    await expect(dialog.getByText('Run fail')).toBeVisible()
+    await expect(dialog.getByText(/flaky/i)).toBeVisible()
+  })
+
   test('Scenario: Opening a case navigates to its own route', async ({ page }) => {
     await createProject(page, 'Case Route Project')
     await openFolderExplorer(page)
@@ -380,7 +453,7 @@ test.describe('Requirement: Editing a test case creates a new version', () => {
     await page.getByLabel(/^title$/i).fill('Login works v2')
     await page.getByRole('button', { name: /save changes/i }).click()
     await expect(page.getByRole('list', { name: /version history/i }).getByText('v2')).toBeVisible()
-    await page.getByRole('button', { name: 'Close' }).click()
+    await page.getByRole('link', { name: /back to library/i }).click()
     await expect(content(page).getByText('Login works v2')).toBeVisible()
   })
 })

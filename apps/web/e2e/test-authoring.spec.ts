@@ -78,8 +78,12 @@ test.describe('Requirement: Test case creation and immutable versioning', () => 
     await page.getByLabel(/^title$/i).fill('Login works v2')
     await page.getByRole('button', { name: /save changes/i }).click()
     await expect(page.getByRole('list', { name: /version history/i }).getByText('v2')).toBeVisible()
-    await page.getByRole('button', { name: 'Close' }).click()
-    await expect(page.getByText('Login works v2')).toBeVisible()
+    await page.getByRole('link', { name: /back to library/i }).click()
+    // Scoped to the content list, not a bare page-wide text search: during
+    // the transition back from case detail, its breadcrumb and heading both
+    // also carry the case title, so an unscoped locator is briefly (and
+    // under load, not-so-briefly) ambiguous between the two pages.
+    await expect(page.getByRole('list', { name: 'Section contents' }).getByText('Login works v2')).toBeVisible()
   })
 })
 

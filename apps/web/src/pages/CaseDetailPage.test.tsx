@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import CaseDetailPage from './CaseDetailPage'
 import { api } from '@/lib/api'
 
@@ -59,7 +59,8 @@ function mockDetailAPI() {
 }
 
 function LibraryProbe() {
-  return <p data-testid="library-probe">library</p>
+  const { folderId } = useParams<{ folderId?: string }>()
+  return <p data-testid="library-probe">library {folderId ?? ''}</p>
 }
 
 function renderDetail(path = '/projects/p1/cases/c1') {
@@ -68,6 +69,7 @@ function renderDetail(path = '/projects/p1/cases/c1') {
       <Routes>
         <Route path="/projects/:projectId/cases/:caseId" element={<CaseDetailPage />} />
         <Route path="/projects/:projectId/library" element={<LibraryProbe />} />
+        <Route path="/projects/:projectId/library/:folderId" element={<LibraryProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -95,12 +97,49 @@ describe('CaseDetailPage', () => {
     expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
   })
 
-  it('navigates to the Library when Close is clicked', async () => {
+  it('navigates back to the case\'s own folder — not always the library root — when the back arrow is clicked', async () => {
     mockDetailAPI()
     renderDetail()
     await screen.findByRole('heading', { name: 'Daily transfer limit' })
-    await userEvent.click(screen.getByRole('button', { name: /^close$/i }))
-    expect(await screen.findByTestId('library-probe')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('link', { name: /back to transferencias/i }))
+    expect(await screen.findByTestId('library-probe')).toHaveTextContent('library transferencias')
+  })
+
+  it('does not render a separate "Back to Library" line duplicating the breadcrumb', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.queryByText(/back to library/i)).not.toBeInTheDocument()
+  })
+
+  it('sizes the back arrow to match the heading, not the ambient body text', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.getByRole('link', { name: /back to transferencias/i })).toHaveClass('text-2xl')
+  })
+
+  it('tints the back arrow with the brand color, not flat gray', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    const backLink = screen.getByRole('link', { name: /back to transferencias/i })
+    expect(backLink).toHaveClass('text-primary')
+    expect(backLink).not.toHaveClass('text-muted-foreground')
+  })
+
+  it('does not render an "in {folder}" subtitle duplicating the breadcrumb\'s parent-folder crumb', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.queryByText(/^in transferencias$/i)).not.toBeInTheDocument()
+  })
+
+  it('does not render a Close button competing with Edit — the back link handles leaving the page', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.queryByRole('button', { name: /^close$/i })).not.toBeInTheDocument()
   })
 
   it('shows steps read-only and suite membership as a property', async () => {
@@ -207,6 +246,15 @@ describe('CaseDetailPage', () => {
     expect(within(history).getByText('v2')).toBeInTheDocument()
     expect(within(history).getByText('v1')).toBeInTheDocument()
     expect(within(history).getByText(/current/i)).toBeInTheDocument()
+  })
+
+  it('opens a version detail dialog when a version history row is clicked', async () => {
+    mockDetailAPI()
+    renderDetail()
+    const history = await screen.findByRole('list', { name: /version history/i })
+    await userEvent.click(within(history).getByText('v1'))
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog')).getByText('Version 1')).toBeInTheDocument()
   })
 
   it('renders properties as labeled Label: value pairs, except priority which is a badge', async () => {

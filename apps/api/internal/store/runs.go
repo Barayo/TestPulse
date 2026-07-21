@@ -177,6 +177,33 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 	return items, rows.Err()
 }
 
+// ExecutionsByCase lists every run item that has ever pinned the given case,
+// across every run — unlike Items, which is scoped to one run_id
+// (extend-case-version-history: "did a specific edit introduce flakiness"
+// needs the cross-run view).
+func (r *RunRepo) ExecutionsByCase(ctx context.Context, caseID string) ([]domain.CaseExecution, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT i.id, i.run_id, tr.name, i.case_version, i.current_status, i.created_at
+		 FROM test_run_items i
+		 JOIN test_runs tr ON tr.id = i.run_id
+		 WHERE i.case_id = $1
+		 ORDER BY i.case_version, i.created_at`, caseID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	execs := []domain.CaseExecution{}
+	for rows.Next() {
+		var e domain.CaseExecution
+		if err := rows.Scan(&e.RunItemID, &e.RunID, &e.RunName, &e.CaseVersion, &e.Status, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		execs = append(execs, e)
+	}
+	return execs, rows.Err()
+}
+
 // AppendResult inserts into the append-only log and updates the item's
 // current status in the same transaction (D3).
 func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.NewResult) (domain.Result, error) {

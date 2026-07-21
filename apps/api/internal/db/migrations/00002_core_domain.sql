@@ -108,6 +108,10 @@ CREATE TABLE test_run_items (
         REFERENCES test_case_versions (case_id, version)
 );
 CREATE INDEX test_run_items_run_idx ON test_run_items (run_id);
+-- Supports listing a case's executions grouped by pinned version, across
+-- every run (extend-case-version-history) — without this, that query is an
+-- unindexed scan of the whole table.
+CREATE INDEX test_run_items_case_version_idx ON test_run_items (case_id, case_version);
 
 -- Append-only: application code only ever INSERTs here (D3).
 CREATE TABLE test_run_results (

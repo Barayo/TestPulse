@@ -47,7 +47,7 @@ test.describe('Requirement: Run creation pins case versions', () => {
     await page.getByRole('button', { name: /^edit$/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works EDITED')
     await page.getByRole('button', { name: /save changes/i }).click()
-    await page.getByRole('button', { name: 'Close' }).click()
+    await page.getByRole('link', { name: /back to library/i }).click()
 
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByRole('link', { name: 'Sprint 1' }).click()
