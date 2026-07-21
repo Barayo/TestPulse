@@ -141,6 +141,28 @@ func (s *Service) ProjectIDForItem(ctx context.Context, itemID string) (string, 
 	return s.store.Runs.ItemProjectID(ctx, itemID)
 }
 
+// --- Human-readable key resolution (add-human-readable-keys D4) ---
+// Resolves a client-supplied key to its internal id, once, at the API
+// boundary — everything below this point (RBAC resolvers, other service
+// methods, every store method) keeps operating on the internal id
+// unchanged.
+
+func (s *Service) ProjectIDByKey(ctx context.Context, key string) (string, error) {
+	return s.store.Projects.IDByKey(ctx, key)
+}
+
+func (s *Service) CaseIDByKey(ctx context.Context, key string) (string, error) {
+	return s.store.Cases.IDByKey(ctx, key)
+}
+
+func (s *Service) RunIDByKey(ctx context.Context, key string) (string, error) {
+	return s.store.Runs.IDByKey(ctx, key)
+}
+
+func (s *Service) SuiteIDByKey(ctx context.Context, key string) (string, error) {
+	return s.store.Suites.IDByKey(ctx, key)
+}
+
 // --- Teams ---
 
 func (s *Service) CreateTeam(ctx context.Context, actor domain.Actor, name string) (domain.Team, error) {

@@ -16,6 +16,7 @@ const onboarding = { id: 'f1', projectId: 'p1', parentFolderId: 'root', name: 'O
 
 const caseInOnboarding = {
   id: 'c1',
+  key: 'p1-1',
   projectId: 'p1',
   folderId: 'f1',
   currentVersion: 1,
@@ -30,14 +31,14 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
         data: overrides.me ?? { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectId}')
+    if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
-        data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+        data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
     if (path === '/api/v1/projects')
       return Promise.resolve({
-        data: overrides.projects ?? [{ id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }],
+        data: overrides.projects ?? [{ id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' }],
         response: { ok: true },
       })
     if (path === '/api/v1/projects/summaries')
@@ -47,21 +48,21 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
         ],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectId}/folders')
+    if (path === '/api/v1/projects/{projectKey}/folders')
       return Promise.resolve({ data: overrides.folders ?? [rootFolder, onboarding], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/cases')
+    if (path === '/api/v1/projects/{projectKey}/cases')
       return Promise.resolve({ data: overrides.cases ?? [caseInOnboarding], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/suites')
+    if (path === '/api/v1/projects/{projectKey}/suites')
       return Promise.resolve({
-        data: overrides.suites ?? [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
+        data: overrides.suites ?? [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectId}/runs')
+    if (path === '/api/v1/projects/{projectKey}/runs')
       return Promise.resolve({
-        data: overrides.runs ?? [{ id: 'r1', projectId: 'p1', name: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z' }],
+        data: overrides.runs ?? [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z' }],
         response: { ok: true },
       })
-    if (path === '/api/v1/runs/{runId}/summary')
+    if (path === '/api/v1/runs/{runKey}/summary')
       return Promise.resolve({
         data: overrides.runSummary ?? { runId: 'r1', total: 2, counts: { pass: 2 } },
         response: { ok: true },
@@ -76,7 +77,7 @@ function renderWithRoutes(extraRoutes?: ReactNode) {
       <MemoryRouter initialEntries={['/projects/p1']}>
         <AuthProvider>
           <Routes>
-            <Route path="/projects/:projectId" element={<ProjectPage />} />
+            <Route path="/projects/:projectKey" element={<ProjectPage />} />
             {extraRoutes}
           </Routes>
         </AuthProvider>
@@ -138,7 +139,7 @@ describe('ProjectPage landing', () => {
     it('navigates to the root section when the Unsectioned row is clicked', async () => {
       const rootCase = { ...caseInOnboarding, id: 'c2', folderId: 'root' }
       mockProjectAPI({ cases: [caseInOnboarding, rootCase] })
-      renderWithRoutes(<Route path="/projects/:projectId/library/:folderId" element={<div>library stub</div>} />)
+      renderWithRoutes(<Route path="/projects/:projectKey/library/:folderId" element={<div>library stub</div>} />)
       await userEvent.click(await screen.findByText('Unsectioned'))
       expect(await screen.findByText('library stub')).toBeInTheDocument()
     })
@@ -166,7 +167,7 @@ describe('ProjectPage landing', () => {
 
   it('color-codes a Recent runs row by its pass-rate band, not just the printed percentage', async () => {
     mockProjectAPI({
-      runs: [{ id: 'r1', projectId: 'p1', name: 'Risky run', createdAt: '2026-01-01T00:00:00Z' }],
+      runs: [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Risky run', createdAt: '2026-01-01T00:00:00Z' }],
       runSummary: { runId: 'r1', total: 10, counts: { pass: 3 } },
     })
     renderProject()
@@ -185,13 +186,13 @@ describe('ProjectPage landing', () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/users/me')
         return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }, response: { ok: true } })
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/projects/summaries') return Promise.resolve({ data: [], response: { ok: true } })
-      if (path === '/api/v1/projects/{projectId}/folders') return foldersPromise
-      if (path === '/api/v1/projects/{projectId}/cases') return Promise.resolve({ data: [caseInOnboarding], response: { ok: true } })
-      if (path === '/api/v1/projects/{projectId}/suites') return Promise.resolve({ data: [], response: { ok: true } })
-      if (path === '/api/v1/projects/{projectId}/runs') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/folders') return foldersPromise
+      if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: [caseInOnboarding], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/runs') return Promise.resolve({ data: [], response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderProject()
@@ -240,7 +241,7 @@ describe('ProjectPage landing', () => {
   it('navigates to the library route when a section row is clicked', async () => {
     mockProjectAPI()
     renderWithRoutes(
-      <Route path="/projects/:projectId/library/:folderId" element={<div>library explorer stub</div>} />,
+      <Route path="/projects/:projectKey/library/:folderId" element={<div>library explorer stub</div>} />,
     )
     await userEvent.click(await screen.findByText('Onboarding'))
     expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
@@ -250,9 +251,9 @@ describe('ProjectPage landing', () => {
     mockProjectAPI()
     renderWithRoutes(
       <>
-        <Route path="/projects/:projectId/library" element={<div>library page stub</div>} />
-        <Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />
-        <Route path="/projects/:projectId/runs" element={<div>runs page stub</div>} />
+        <Route path="/projects/:projectKey/library" element={<div>library page stub</div>} />
+        <Route path="/projects/:projectKey/suites" element={<div>suites page stub</div>} />
+        <Route path="/projects/:projectKey/runs" element={<div>runs page stub</div>} />
       </>,
     )
     await userEvent.click(await screen.findByRole('button', { name: 'Go to Library' }))
@@ -261,28 +262,28 @@ describe('ProjectPage landing', () => {
 
   it('navigates to the suites page via its "see all" link', async () => {
     mockProjectAPI()
-    renderWithRoutes(<Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />)
+    renderWithRoutes(<Route path="/projects/:projectKey/suites" element={<div>suites page stub</div>} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Go to Suites' }))
     expect(await screen.findByText('suites page stub')).toBeInTheDocument()
   })
 
   it('navigates to the runs page via its "see all" link', async () => {
     mockProjectAPI()
-    renderWithRoutes(<Route path="/projects/:projectId/runs" element={<div>runs page stub</div>} />)
+    renderWithRoutes(<Route path="/projects/:projectKey/runs" element={<div>runs page stub</div>} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Go to Runs' }))
     expect(await screen.findByText('runs page stub')).toBeInTheDocument()
   })
 
   it('navigates directly to a suite when its row is clicked', async () => {
     mockProjectAPI()
-    renderWithRoutes(<Route path="/projects/:projectId/suites" element={<div>suites page stub</div>} />)
+    renderWithRoutes(<Route path="/projects/:projectKey/suites" element={<div>suites page stub</div>} />)
     await userEvent.click(await screen.findByText('Smoke'))
     expect(await screen.findByText('suites page stub')).toBeInTheDocument()
   })
 
   it('navigates directly to a run when its row is clicked', async () => {
     mockProjectAPI()
-    renderWithRoutes(<Route path="/runs/:runId" element={<div>run page stub</div>} />)
+    renderWithRoutes(<Route path="/runs/:runKey" element={<div>run page stub</div>} />)
     await userEvent.click(await screen.findByText('Sprint 1'))
     expect(await screen.findByText('run page stub')).toBeInTheDocument()
   })
@@ -299,7 +300,7 @@ describe('ProjectPage landing', () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/users/me')
         return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }, response: { ok: true } })
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
@@ -362,8 +363,8 @@ describe('ProjectPage landing', () => {
   it('shows the most recently created run first', async () => {
     mockProjectAPI({
       runs: [
-        { id: 'r1', projectId: 'p1', name: 'Older run', createdAt: '2026-01-01T00:00:00Z' },
-        { id: 'r2', projectId: 'p1', name: 'Newer run', createdAt: '2026-02-01T00:00:00Z' },
+        { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Older run', createdAt: '2026-01-01T00:00:00Z' },
+        { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Newer run', createdAt: '2026-02-01T00:00:00Z' },
       ],
     })
     renderProject()

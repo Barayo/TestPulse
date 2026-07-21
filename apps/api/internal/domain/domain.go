@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"regexp"
+	"strings"
 	"time"
 )
 
@@ -132,6 +133,50 @@ func ValidateProjectName(name string) error {
 	return nil
 }
 
+// nonAlphanumeric splits a project name into words for key derivation —
+// any run of non-letters/digits is a word boundary.
+var nonAlphanumeric = regexp.MustCompile(`[^A-Za-z0-9]+`)
+
+// DeriveProjectKey computes a project's auto-generated key candidate from
+// its name (add-human-readable-keys design.md D1): multi-word names take
+// the initial letter of each word (capped at 5); a single word takes its
+// first 4 letters; a name with no alphanumeric content at all falls back
+// to "PROJ". The caller (ProjectRepo.Create) is responsible for
+// disambiguating collisions with a numeric suffix — this function is pure
+// and always returns the same candidate for the same name.
+func DeriveProjectKey(name string) string {
+	words := nonAlphanumeric.Split(name, -1)
+	tokens := make([]string, 0, len(words))
+	for _, w := range words {
+		if w != "" {
+			tokens = append(tokens, w)
+		}
+	}
+
+	var key string
+	switch {
+	case len(tokens) >= 2:
+		if len(tokens) > 5 {
+			tokens = tokens[:5]
+		}
+		for _, t := range tokens {
+			key += string(t[0])
+		}
+	case len(tokens) == 1:
+		t := tokens[0]
+		if len(t) > 4 {
+			t = t[:4]
+		}
+		key = t
+	}
+
+	key = strings.ToUpper(key)
+	if len(key) < 2 {
+		return "PROJ"
+	}
+	return key
+}
+
 func ValidateFolderName(name string) error {
 	if name == "" {
 		return fmt.Errorf("name is required")
@@ -161,6 +206,7 @@ func (f NewFolder) Validate() error {
 
 type Project struct {
 	ID          string    `json:"id"`
+	Key         string    `json:"key"`
 	Name        string    `json:"name"`
 	Archived    bool      `json:"archived"`
 	Description string    `json:"description"`
@@ -169,6 +215,7 @@ type Project struct {
 
 type TestCase struct {
 	ID             string      `json:"id"`
+	Key            string      `json:"key"`
 	ProjectID      string      `json:"projectId"`
 	FolderID       string      `json:"folderId"`
 	CurrentVersion int         `json:"currentVersion"`
@@ -195,6 +242,7 @@ type CaseVersion struct {
 
 type Suite struct {
 	ID        string    `json:"id"`
+	Key       string    `json:"key"`
 	ProjectID string    `json:"projectId"`
 	Name      string    `json:"name"`
 	CaseIDs   []string  `json:"caseIds"`
@@ -202,10 +250,16 @@ type Suite struct {
 }
 
 type Run struct {
-	ID        string    `json:"id"`
-	ProjectID string    `json:"projectId"`
-	Name      string    `json:"name"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string `json:"id"`
+	Key       string `json:"key"`
+	ProjectID string `json:"projectId"`
+	// ProjectKey lets a client link back to the run's project without a
+	// second lookup — unlike a case/suite, a run's own route isn't nested
+	// under its project's, so the project's key isn't otherwise available
+	// from the URL (add-human-readable-keys).
+	ProjectKey string    `json:"projectKey"`
+	Name       string    `json:"name"`
+	CreatedAt  time.Time `json:"createdAt"`
 }
 
 type RunItem struct {

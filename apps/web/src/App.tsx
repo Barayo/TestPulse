@@ -159,7 +159,7 @@ function App() {
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<RequireAuth><ProjectsPage /></RequireAuth>} />
             <Route
-              path="/projects/:projectId"
+              path="/projects/:projectKey"
               element={
                 <RequireAuth>
                   <ProjectPage />
@@ -167,7 +167,7 @@ function App() {
               }
             />
             <Route
-              path="/projects/:projectId/suites"
+              path="/projects/:projectKey/suites"
               element={
                 <RequireAuth>
                   <SuitesPage />
@@ -175,7 +175,7 @@ function App() {
               }
             />
             <Route
-              path="/projects/:projectId/runs"
+              path="/projects/:projectKey/runs"
               element={
                 <RequireAuth>
                   <RunsPage />
@@ -183,7 +183,7 @@ function App() {
               }
             />
             <Route
-              path="/projects/:projectId/library"
+              path="/projects/:projectKey/library"
               element={
                 <RequireAuth>
                   <FolderExplorerPage />
@@ -191,7 +191,7 @@ function App() {
               }
             />
             <Route
-              path="/projects/:projectId/library/:folderId"
+              path="/projects/:projectKey/library/:folderId"
               element={
                 <RequireAuth>
                   <FolderExplorerPage />
@@ -199,7 +199,7 @@ function App() {
               }
             />
             <Route
-              path="/projects/:projectId/cases/:caseId"
+              path="/projects/:projectKey/cases/:caseKey"
               element={
                 <RequireAuth>
                   <CaseDetailPage />
@@ -207,7 +207,7 @@ function App() {
               }
             />
             <Route
-              path="/projects/:projectId/members"
+              path="/projects/:projectKey/members"
               element={
                 <RequireAuth>
                   <ProjectMembersPage />
@@ -215,7 +215,7 @@ function App() {
               }
             />
             <Route
-              path="/runs/:runId"
+              path="/runs/:runKey"
               element={
                 <RequireAuth>
                   <RunPage />

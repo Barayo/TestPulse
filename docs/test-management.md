@@ -7,11 +7,43 @@ A walkthrough of TestPulse's core workflow: projects, test cases, suites, runs, 
 > [Project roles and teams](#project-roles-and-teams) below and
 > [Deployment: security status](deployment.md#security-status).
 
+## Keys
+
+Every project, test case, run, and suite has a short, human-readable **key**
+alongside its internal id — the key is what appears in URLs, in request
+bodies wherever you reference one of these four resource types, and
+anywhere you'd type or say an identifier out loud (a CI config, a Slack
+message, `record_property()` in a test script). It's never a UUID.
+
+A **project key** is derived automatically from the project's name when it's
+created — a multi-word name takes the initial letter of each word (capped
+at five), e.g. "Customer Payments Api" → `CPA`; a single-word name takes its
+first four letters, e.g. "Checkout" → `CHEC`. If that candidate is already
+taken, a number is appended (`CPA`, `CPA2`, `CPA3`, …) until it's unique. A
+project's key is assigned once, at creation, and never changes — renaming
+the project afterward doesn't touch it, the same way a Jira project key
+survives the project being renamed.
+
+**Case, run, and suite keys** are sequential within their project, prefixed
+with the project's own key: a case gets the bare form
+`{projectKey}-{n}` (e.g. `CPA-42`), a run gets an `R` infix
+(`CPA-R14`), and a suite gets an `S` infix (`CPA-S3`) — each counts up
+independently, so a project's 42nd case and its 3rd run don't compete for
+the same number. Like the project key, these are assigned once and never
+reused or reassigned.
+
+Every URL in the web UI that identifies a project, case, run, or suite uses
+its key — `/projects/CPA`, `/projects/CPA/cases/CPA-42`, `/runs/CPA-R14` —
+not a UUID. A URL with an unrecognized key shows the same not-found state as
+any other broken link. Folders are the one exception: they stay addressed
+by their internal id, in both the API and the URL, since a folder's own
+identity was never part of this scheme.
+
 ## Finding your way around
 
 TestPulse assumes you work in one project at a time. The header shows `TestPulse › {active project}`: the project name is a direct link to that project's own page, and — once your account has more than one project — a small switch icon next to it (or **⌘K**/**Ctrl+K** from anywhere) opens a searchable palette listing every other project with its suite/case counts and latest pass rate. The palette closes on Escape or an outside click, like any command palette.
 
-A project's landing page (`/projects/{id}`) opens with a summary strip — the same status pill/pass-rate bar/suite+case totals/last-run shown on the project's card in the project list — so the health signal you used to pick this project is still there once you're inside it, instead of only living on the list you came from. Below that are three independent panels — **Library**, **Suites**, **Recent runs** — each showing its top few items with a "see all" link to the full view, so opening a project shows top-level structure at a glance rather than everything at once. Each panel's entire header (not just "see all") is clickable to the same destination, and every row shown is itself a direct link to that item — never just a name. Recent runs rows are color-coded by pass rate (the same teal/amber/coral bands used elsewhere), so a failing run stands out without opening it. Each panel has its own empty state (with a working link to its full page) when a project has nothing in it yet — except when the *whole project* is empty (no cases, no suites, no runs at all), in which case the three panels are replaced by a single **Get started** checklist: three steps (add a case, group it into a suite, run the suite), each with an icon and a short explanatory tip, so a brand-new project reads as an onboarding flow rather than three empty boxes. A breadcrumb trail at the top of the main content (`Projects › {project} › …`) reinforces where you are, with every ancestor segment clickable to go back up — including intermediate section names when browsing nested sections.
+A project's landing page (`/projects/{key}`) opens with a summary strip — the same status pill/pass-rate bar/suite+case totals/last-run shown on the project's card in the project list — so the health signal you used to pick this project is still there once you're inside it, instead of only living on the list you came from. Below that are three independent panels — **Library**, **Suites**, **Recent runs** — each showing its top few items with a "see all" link to the full view, so opening a project shows top-level structure at a glance rather than everything at once. Each panel's entire header (not just "see all") is clickable to the same destination, and every row shown is itself a direct link to that item — never just a name. Recent runs rows are color-coded by pass rate (the same teal/amber/coral bands used elsewhere), so a failing run stands out without opening it. Each panel has its own empty state (with a working link to its full page) when a project has nothing in it yet — except when the *whole project* is empty (no cases, no suites, no runs at all), in which case the three panels are replaced by a single **Get started** checklist: three steps (add a case, group it into a suite, run the suite), each with an icon and a short explanatory tip, so a brand-new project reads as an onboarding flow rather than three empty boxes. A breadcrumb trail at the top of the main content (`Projects › {project} › …`) reinforces where you are, with every ancestor segment clickable to go back up — including intermediate section names when browsing nested sections.
 
 ## Project roles and teams
 
@@ -27,11 +59,11 @@ A **Reset to defaults** button on the Roles page restores Tester/Contributor/Pro
 | **Contributor** | Tester's flags + Create/Edit Case, Create Section, Create Suite, Edit Suite Membership |
 | **Project Admin** | Contributor's flags + Delete Case, Delete Section, Manage Project |
 
-A user's effective permissions on a project are the **union** of every role granted to them — directly or via any team they belong to — not just the "highest" one; there's no ranking to pick a winner from once roles are fully custom. So a user holding two different roles on the same project (e.g. one direct, one via a team) gets every permission flag either role grants. Assigning project membership itself — deciding who holds which role on a given project — is Tenant-Admin-only; a role with Manage Project can administer the project's settings but not reassign who's on it. Users and teams are assigned per project at `/projects/{id}/members`. Deleting a role removes it from every project/team assignment that referenced it, immediately revoking any access that depended solely on it. An API token (agent) always acts at its creator's current permission level, resolved fresh on every request — never its own separate access.
+A user's effective permissions on a project are the **union** of every role granted to them — directly or via any team they belong to — not just the "highest" one; there's no ranking to pick a winner from once roles are fully custom. So a user holding two different roles on the same project (e.g. one direct, one via a team) gets every permission flag either role grants. Assigning project membership itself — deciding who holds which role on a given project — is Tenant-Admin-only; a role with Manage Project can administer the project's settings but not reassign who's on it. Users and teams are assigned per project at `/projects/{key}/members`. Deleting a role removes it from every project/team assignment that referenced it, immediately revoking any access that depended solely on it. An API token (agent) always acts at its creator's current permission level, resolved fresh on every request — never its own separate access.
 
 ## Projects
 
-Everything lives inside a project. A Tenant Admin creates one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet — both are hidden for everyone else, since project creation is Tenant-Admin-only. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{id}`, Project Admin or above); the UI surfaces archived status but archiving itself is API-only in this release.
+Everything lives inside a project. A Tenant Admin creates one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet — both are hidden for everyone else, since project creation is Tenant-Admin-only. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{key}`, Project Admin or above); the UI surfaces archived status but archiving itself is API-only in this release.
 
 The project list can be ordered by name, suite count, case count, or creation date, in either direction, via the **Sort by** control in the toolbar — the choice is remembered in your browser across visits, applies the same way in both view modes, and stays available on mobile. The list itself only ever shows projects you have a role on (or every project, if you're a Tenant Admin).
 
@@ -39,7 +71,7 @@ The project list can be ordered by name, suite count, case count, or creation da
 
 Click "see all"/"go to Library" on the landing's Library panel (or any row shown there) to open the explorer: a section tree on the left for navigation, and the selected section's direct contents — subsections *and* any cases that live directly in it — on the right. This two-pane layout is deliberate: a single indented tree breaks down once a section has real content (tens of cases), while splitting "where am I" from "what's here" scales without a redesign.
 
-Every case lives in exactly one **section** — a project-level, nestable tree, starting from an automatically-created root labeled **Library** in the UI (the root always exists and can't be deleted or renamed; that "Library" label is purely how it's displayed, not a separate concept to manage). Create a subsection two ways, both with no "parent" field to fill in (the parent is always wherever you triggered creation): click **+ New section** in the currently open section, or right-click a section in the tree and choose **New section** to add a child without navigating into it. Sections are deliberately independent of **suites**: moving a case to a different section never changes which suites it belongs to, and vice versa — sections answer "where does this case live," suites answer "what should run together." Move a case by dragging its row onto a section (in the tree or shown inline in the content list), or via each case's **Move to…** button, which opens a picker listing every section by its full path — both call the same underlying move (`PUT /api/v1/cases/{id}/folder`) and are no-ops if you drop onto the case's current section. Cases created before any section exists default into the root — the landing page's Library panel surfaces these as an **Unsectioned** row so they're never invisible there.
+Every case lives in exactly one **section** — a project-level, nestable tree, starting from an automatically-created root labeled **Library** in the UI (the root always exists and can't be deleted or renamed; that "Library" label is purely how it's displayed, not a separate concept to manage). Create a subsection two ways, both with no "parent" field to fill in (the parent is always wherever you triggered creation): click **+ New section** in the currently open section, or right-click a section in the tree and choose **New section** to add a child without navigating into it. Sections are deliberately independent of **suites**: moving a case to a different section never changes which suites it belongs to, and vice versa — sections answer "where does this case live," suites answer "what should run together." Move a case by dragging its row onto a section (in the tree or shown inline in the content list), or via each case's **Move to…** button, which opens a picker listing every section by its full path — both call the same underlying move (`PUT /api/v1/cases/{key}/folder`) and are no-ops if you drop onto the case's current section. Cases created before any section exists default into the root — the landing page's Library panel surfaces these as an **Unsectioned** row so they're never invisible there.
 
 Below a 768px viewport, the section tree pane is hidden entirely rather than squeezed alongside the content list — a two-pane split doesn't work single-handed on a phone. The content list still renders full width, and both directions of navigation stay reachable without the tree: **up**, via the breadcrumb trail (tapping any ancestor segment jumps straight to it, same as clicking it in the tree would on desktop), and **sideways**, via a **Browse sections** button that opens the same searchable picker "Move to…" uses — pick any section by its full path to jump there directly, not just an ancestor of the current one.
 
@@ -47,11 +79,11 @@ Below a 768px viewport, the section tree pane is hidden entirely rather than squ
 
 Creating a case requires Create Case; editing or moving one requires Edit Case; creating a section requires Create Section (the seeded Contributor/Project Admin roles have all three). Deleting a case or section requires Delete Case/Delete Section respectively (seeded Project Admin only). Reading requires only Read (every seeded role has it).
 
-Click **+ New test case** in the library explorer to open a side drawer: a title and a list of steps, each with a required **Action** and an optional **Expected result**. Click an existing case to open its own page (`/projects/{id}/cases/{caseId}`) instead of a drawer — title and steps run full-width as the main content, with a sidebar for properties, results, and version history alongside them, so the case definition itself gets real room rather than being squeezed into a fixed-width panel. Below 768px the sidebar's three sections collapse into stacked, independently-expandable groups in the same order, rather than a separate mobile layout. An **Edit** button switches the page into the same title/steps/classification editor the create drawer uses.
+Click **+ New test case** in the library explorer to open a side drawer: a title and a list of steps, each with a required **Action** and an optional **Expected result**. Click an existing case to open its own page (`/projects/{key}/cases/{caseKey}`) instead of a drawer — title and steps run full-width as the main content, with a sidebar for properties, results, and version history alongside them, so the case definition itself gets real room rather than being squeezed into a fixed-width panel. Below 768px the sidebar's three sections collapse into stacked, independently-expandable groups in the same order, rather than a separate mobile layout. An **Edit** button switches the page into the same title/steps/classification editor the create drawer uses.
 
-**Every edit creates a new version.** Click **Edit**, change the title or steps, **Save changes** — the case's current version increments (`v1` → `v2`), the old content is never lost, and both versions are listed in the page's version history (backed by `GET /api/v1/cases/{id}/versions`). This matters because of what happens next.
+**Every edit creates a new version.** Click **Edit**, change the title or steps, **Save changes** — the case's current version increments (`v1` → `v2`), the old content is never lost, and both versions are listed in the page's version history (backed by `GET /api/v1/cases/{key}/versions`). This matters because of what happens next.
 
-**Click a version to see what changed and where it ran.** A dialog opens showing a field-by-field diff against the previous version — title, description, expected result, classification fields, and steps (added/removed/changed) — with unchanged fields left out, not shown as noise; the very first version says there's nothing to compare it against. The same dialog lists every run execution that pinned that version (run name and verdict, backed by `GET /api/v1/cases/{id}/executions`), and marks the version **Flaky** when its executions include both a pass and a failed/blocked result — the fastest way to tell whether a specific edit introduced inconsistent behavior.
+**Click a version to see what changed and where it ran.** A dialog opens showing a field-by-field diff against the previous version — title, description, expected result, classification fields, and steps (added/removed/changed) — with unchanged fields left out, not shown as noise; the very first version says there's nothing to compare it against. The same dialog lists every run execution that pinned that version (run name and verdict, backed by `GET /api/v1/cases/{key}/executions`), and marks the version **Flaky** when its executions include both a pass and a failed/blocked result — the fastest way to tell whether a specific edit introduced inconsistent behavior.
 
 A case can also carry `priority` (low/medium/high/critical), `tags` (freeform keywords), `platform` and `testType` (free text — no fixed taxonomy, since these vary too much team to team), and `automated` (boolean, defaults to `false`). All five are optional and editable from the same editor used for title and steps — priority via a dropdown, tags as a comma-separated list, platform/testType as free text, automated as a checkbox. On the case detail page, every one of these renders as a `Label: value` row in the Properties sidebar section, except priority, which stays a badge (see [Design system](design-system.md) for the pattern). Editing a case only ever touches the fields the editor shows; its description and expected result (no UI for those two yet) carry over unchanged.
 
@@ -81,7 +113,7 @@ Nothing about the run silently changes when the case is edited later — what a 
 
 ## The run execution board
 
-Open a run (`/runs/{id}`) — this is the one screen in TestPulse designed for heavy daily use.
+Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for heavy daily use.
 
 - **Left**: the run's items, each with a status chip (`pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`) and a "(newer version available)" hint when applicable.
 - **Right** (after clicking an item): the pinned case's steps and expected result, a **Your name** / **Comment** form, and verdict buttons — **Pass**, **Failed**, **Blocked**, **Skipped**.
@@ -90,4 +122,4 @@ Open a run (`/runs/{id}`) — this is the one screen in TestPulse designed for h
 
 ## Run summary
 
-Each run page shows a live item count by status (e.g. "4 items — 2 pass, 1 failed, 1 pending"), backed by `GET /api/v1/runs/{id}/summary`. Deeper analytics (trends, flaky-test detection) arrive in `add-reporting` (v0.3) — see [ROADMAP.md](../ROADMAP.md).
+Each run page shows a live item count by status (e.g. "4 items — 2 pass, 1 failed, 1 pending"), backed by `GET /api/v1/runs/{key}/summary`. Deeper analytics (trends, flaky-test detection) arrive in `add-reporting` (v0.3) — see [ROADMAP.md](../ROADMAP.md).

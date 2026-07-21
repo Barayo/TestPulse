@@ -45,21 +45,21 @@ function GettingStartedStep({
 }
 
 export default function ProjectPage() {
-  const { projectId } = useParams<{ projectId: string }>()
+  const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
-  const landing = useProjectLanding(projectId)
+  const landing = useProjectLanding(projectKey)
   const summaries = useProjectSummaries()
-  const summary = summaries.find((s) => s.id === projectId)
+  const summary = summaries.find((s) => s.id === projectKey)
 
   useEffect(() => {
-    if (!projectId) return
+    if (!projectKey) return
     let cancelled = false
     setNotFound(false)
     void api
-      .GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } })
+      .GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
       .then(({ data }) => {
         if (cancelled) return
         if (data) setProject(data)
@@ -71,9 +71,9 @@ export default function ProjectPage() {
     return () => {
       cancelled = true
     }
-  }, [projectId])
+  }, [projectKey])
 
-  if (!projectId) return null
+  if (!projectKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -99,7 +99,7 @@ export default function ProjectPage() {
         <Breadcrumbs segments={[{ label: 'Projects', href: '/' }, { label: project?.name ?? '' }]} />
         {user?.isTenantAdmin && (
           <Link
-            to={`/projects/${projectId}/members`}
+            to={`/projects/${projectKey}/members`}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
           >
             <UsersIcon className="size-4" aria-hidden="true" />
@@ -135,19 +135,19 @@ export default function ProjectPage() {
               icon={<FolderIcon className="size-5" />}
               title="1. Add your first test case"
               tip="Describe the steps to follow and what you expect to happen. You can always edit it later — every change keeps its own version."
-              onClick={() => navigate(`/projects/${projectId}/library`)}
+              onClick={() => navigate(`/projects/${projectKey}/library`)}
             />
             <GettingStartedStep
               icon={<LayersIcon className="size-5" />}
               title="2. Group your cases into a suite"
               tip="Suites decide what runs together, independent of how cases are organized into sections."
-              onClick={() => navigate(`/projects/${projectId}/suites`)}
+              onClick={() => navigate(`/projects/${projectKey}/suites`)}
             />
             <GettingStartedStep
               icon={<CirclePlayIcon className="size-5" />}
               title="3. Run the suite"
               tip="Every run captures a pass or fail per case, so you can track quality over time."
-              onClick={() => navigate(`/projects/${projectId}/runs`)}
+              onClick={() => navigate(`/projects/${projectKey}/runs`)}
             />
           </div>
         </div>
@@ -156,19 +156,19 @@ export default function ProjectPage() {
           <FoldersPanel
             folders={landing.folders}
             totalCount={landing.totalFolders}
-            onSeeAll={() => navigate(`/projects/${projectId}/library`)}
-            onSelectFolder={(folderId) => navigate(`/projects/${projectId}/library/${folderId}`)}
+            onSeeAll={() => navigate(`/projects/${projectKey}/library`)}
+            onSelectFolder={(folderId) => navigate(`/projects/${projectKey}/library/${folderId}`)}
           />
           <SuitesPanel
             suites={landing.suites}
             totalCount={landing.totalSuites}
-            onSeeAll={() => navigate(`/projects/${projectId}/suites`)}
-            onSelectSuite={(suiteId) => navigate(`/projects/${projectId}/suites#suite-${suiteId}`)}
+            onSeeAll={() => navigate(`/projects/${projectKey}/suites`)}
+            onSelectSuite={(suiteId) => navigate(`/projects/${projectKey}/suites#suite-${suiteId}`)}
           />
           <RunsPanel
             runs={landing.runs}
             totalCount={landing.totalRuns}
-            onSeeAll={() => navigate(`/projects/${projectId}/runs`)}
+            onSeeAll={() => navigate(`/projects/${projectKey}/runs`)}
             onSelectRun={(runId) => navigate(`/runs/${runId}`)}
           />
         </div>

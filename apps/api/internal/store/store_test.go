@@ -2,6 +2,8 @@ package store_test
 
 import (
 	"context"
+	"errors"
+	"sync"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -42,7 +44,173 @@ func mustCase(t *testing.T, s *store.Store, projectID, title string) domain.Test
 	return c
 }
 
+// --- Human-readable keys (add-human-readable-keys, task 4.3) ---
+
+func TestCaseRunSuiteKeysAreSequentialAndPrefixed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p, err := s.Projects.Create(ctx, "Login Service", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	c1 := mustCase(t, s, p.ID, "case one")
+	if c1.Key != "LS-1" {
+		t.Errorf("first case Key = %q, want %q", c1.Key, "LS-1")
+	}
+	c2 := mustCase(t, s, p.ID, "case two")
+	if c2.Key != "LS-2" {
+		t.Errorf("second case Key = %q, want %q", c2.Key, "LS-2")
+	}
+
+	run, err := s.Runs.Create(ctx, p.ID, "sprint 1", nil)
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	if run.Key != "LS-R1" {
+		t.Errorf("run Key = %q, want %q (not LS-3 — runs count independently of cases)", run.Key, "LS-R1")
+	}
+
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+	if suite.Key != "LS-S1" {
+		t.Errorf("suite Key = %q, want %q", suite.Key, "LS-S1")
+	}
+}
+
+func TestConcurrentCaseCreationYieldsDistinctKeys(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p, err := s.Projects.Create(ctx, "Concurrency", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	const n = 10
+	keys := make(chan string, n)
+	errs := make(chan error, n)
+	var wg sync.WaitGroup
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			c, err := s.Cases.Create(ctx, p.ID, "", defaultContent("concurrent case"))
+			if err != nil {
+				errs <- err
+				return
+			}
+			keys <- c.Key
+		}()
+	}
+	wg.Wait()
+	close(keys)
+	close(errs)
+
+	for err := range errs {
+		t.Fatalf("concurrent create failed: %v", err)
+	}
+	seen := map[string]bool{}
+	for k := range keys {
+		if seen[k] {
+			t.Errorf("duplicate key %q assigned under concurrent creation", k)
+		}
+		seen[k] = true
+	}
+	if len(seen) != n {
+		t.Errorf("got %d distinct keys, want %d", len(seen), n)
+	}
+}
+
+func TestIDByKeyResolvesOrNotFound(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p, err := s.Projects.Create(ctx, "Resolve Me", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	c := mustCase(t, s, p.ID, "a case")
+	run, _ := s.Runs.Create(ctx, p.ID, "a run", nil)
+	suite, _ := s.Suites.Create(ctx, p.ID, "a suite")
+
+	if id, err := s.Projects.IDByKey(ctx, p.Key); err != nil || id != p.ID {
+		t.Errorf("Projects.IDByKey(%q) = %q, %v; want %q, nil", p.Key, id, err, p.ID)
+	}
+	if id, err := s.Cases.IDByKey(ctx, c.Key); err != nil || id != c.ID {
+		t.Errorf("Cases.IDByKey(%q) = %q, %v; want %q, nil", c.Key, id, err, c.ID)
+	}
+	if id, err := s.Runs.IDByKey(ctx, run.Key); err != nil || id != run.ID {
+		t.Errorf("Runs.IDByKey(%q) = %q, %v; want %q, nil", run.Key, id, err, run.ID)
+	}
+	if id, err := s.Suites.IDByKey(ctx, suite.Key); err != nil || id != suite.ID {
+		t.Errorf("Suites.IDByKey(%q) = %q, %v; want %q, nil", suite.Key, id, err, suite.ID)
+	}
+
+	if _, err := s.Projects.IDByKey(ctx, "NOPE"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Projects.IDByKey(unknown) = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Cases.IDByKey(ctx, "NOPE-1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Cases.IDByKey(unknown) = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Runs.IDByKey(ctx, "NOPE-R1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Runs.IDByKey(unknown) = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Suites.IDByKey(ctx, "NOPE-S1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Suites.IDByKey(unknown) = %v, want ErrNotFound", err)
+	}
+}
+
+func TestKeyCountersAreScopedPerProject(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p1, err := s.Projects.Create(ctx, "Alpha", "")
+	if err != nil {
+		t.Fatalf("create project 1: %v", err)
+	}
+	p2, err := s.Projects.Create(ctx, "Beta", "")
+	if err != nil {
+		t.Fatalf("create project 2: %v", err)
+	}
+
+	mustCase(t, s, p1.ID, "p1 case")
+	c := mustCase(t, s, p2.ID, "p2 first case")
+	if c.Key != "BETA-1" {
+		t.Errorf("p2's first case Key = %q, want %q (independent of p1's counter)", c.Key, "BETA-1")
+	}
+}
+
 // --- Projects (task 2.1) ---
+
+func TestProjectCreateAssignsDerivedUniqueKey(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	p1, err := s.Projects.Create(ctx, "Login Service", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	if p1.Key != "LS" {
+		t.Errorf("Key = %q, want %q", p1.Key, "LS")
+	}
+
+	// A second project whose derived key collides gets a numeric suffix.
+	p2, err := s.Projects.Create(ctx, "Loan Servicing", "")
+	if err != nil {
+		t.Fatalf("create colliding project: %v", err)
+	}
+	if p2.Key != "LS2" {
+		t.Errorf("Key = %q, want %q", p2.Key, "LS2")
+	}
+
+	p3, err := s.Projects.Create(ctx, "Lucky Streak", "")
+	if err != nil {
+		t.Fatalf("create second colliding project: %v", err)
+	}
+	if p3.Key != "LS3" {
+		t.Errorf("Key = %q, want %q", p3.Key, "LS3")
+	}
+}
 
 func TestProjectLifecycle(t *testing.T) {
 	s := testStore(t)

@@ -11,6 +11,7 @@ const mockPOST = vi.mocked(api.POST)
 
 const testCase = {
   id: 'c1',
+  key: 'p1-1',
   projectId: 'p1',
   folderId: 'root',
   currentVersion: 1,
@@ -20,13 +21,13 @@ const testCase = {
 
 function mockRunsAPI(cases: unknown[] = [], runs: unknown[] = []) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/projects/{projectId}')
+    if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
         data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectId}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/runs') return Promise.resolve({ data: runs, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/runs') return Promise.resolve({ data: runs, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -35,7 +36,7 @@ function renderRuns() {
   return render(
     <MemoryRouter initialEntries={['/projects/p1/runs']}>
       <Routes>
-        <Route path="/projects/:projectId/runs" element={<RunsPage />} />
+        <Route path="/projects/:projectKey/runs" element={<RunsPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -55,16 +56,16 @@ describe('RunsPage', () => {
   })
 
   it('lists runs as links to their execution board', async () => {
-    mockRunsAPI([testCase], [{ id: 'r1', projectId: 'p1', name: 'Sprint 1', createdAt: '' }])
+    mockRunsAPI([testCase], [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '' }])
     renderRuns()
     const runLink = await screen.findByRole('link', { name: 'Sprint 1' })
-    expect(runLink).toHaveAttribute('href', '/runs/r1')
+    expect(runLink).toHaveAttribute('href', '/runs/p1-R1')
   })
 
   it('creates a run including all current cases', async () => {
     mockRunsAPI([testCase])
     mockPOST.mockResolvedValue({
-      data: { id: 'r2', projectId: 'p1', name: 'Sprint 2', createdAt: '' },
+      data: { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Sprint 2', createdAt: '' },
       response: { ok: true },
     })
     renderRuns()
@@ -75,10 +76,10 @@ describe('RunsPage', () => {
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectId}/runs',
+        '/api/v1/projects/{projectKey}/runs',
         expect.objectContaining({
-          params: { path: { projectId: 'p1' } },
-          body: { name: 'Sprint 2', caseIds: ['c1'] },
+          params: { path: { projectKey: 'p1' } },
+          body: { name: 'Sprint 2', caseKeys: ['p1-1'] },
         }),
       )
     })
@@ -98,12 +99,12 @@ describe('RunsPage', () => {
       resolveCases = resolve
     })
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({
           data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
           response: { ok: true },
         })
-      if (path === '/api/v1/projects/{projectId}/cases') return casesPromise
+      if (path === '/api/v1/projects/{projectKey}/cases') return casesPromise
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderRuns()
@@ -130,7 +131,7 @@ describe('RunsPage', () => {
 
   it('shows a not-found message instead of an empty, interactive project when the project does not exist', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })

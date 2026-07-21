@@ -37,29 +37,40 @@ All request/response bodies are documented precisely in
 [`packages/shared/openapi.yaml`](../packages/shared/openapi.yaml) — the
 tables below are a quick map, not the source of truth.
 
+Projects, test cases, runs, and suites are addressed by their
+human-readable `key` in the path — never by their internal `id` — see
+[Test management: keys](test-management.md#keys) for how a key is derived,
+its format, and why it's immutable. A response body always includes both
+`id` (the stable internal identifier — never used in a path) and `key`
+(what you put in the URL, and in a request body wherever one of these four
+resource types is referenced, e.g. `caseKey` in the body of
+`POST /api/v1/runs/{runKey}/items`). An unrecognized key in a path 404s the
+same way an unrecognized id would in any other API. Folders keep their
+internal `id` in paths — they aren't in scope for this scheme.
+
 **Projects**
 
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/projects` | List projects |
-| POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only |
+| POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only; the response's `key` is auto-derived from `name` |
 | GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), and whether the calling user has favorited it, for every non-archived project, in one request — computed server-side (4 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
-| GET | `/api/v1/projects/{projectId}` | Get a project |
-| PATCH | `/api/v1/projects/{projectId}` | Rename, describe, and/or archive — Project Admin+ |
-| POST | `/api/v1/projects/{projectId}/favorite` | Star the project for the calling user (idempotent) |
-| DELETE | `/api/v1/projects/{projectId}/favorite` | Unstar the project for the calling user (idempotent) |
+| GET | `/api/v1/projects/{projectKey}` | Get a project |
+| PATCH | `/api/v1/projects/{projectKey}` | Rename, describe, and/or archive — Project Admin+ (renaming never changes `key`) |
+| POST | `/api/v1/projects/{projectKey}/favorite` | Star the project for the calling user (idempotent) |
+| DELETE | `/api/v1/projects/{projectKey}/favorite` | Unstar the project for the calling user (idempotent) |
 
 **Test cases** — every edit creates a new immutable version; see
 [Database](database.md) for the versioning model.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/projects/{projectId}/cases` | List cases (current version content) |
-| POST | `/api/v1/projects/{projectId}/cases` | Create a case (version 1); optional `folderId` defaults to the project's root folder |
-| GET | `/api/v1/cases/{caseId}` | Get a case at its current version |
-| PUT | `/api/v1/cases/{caseId}` | Edit — creates a new version |
-| DELETE | `/api/v1/cases/{caseId}` | Soft delete (versions stay readable in past runs) |
-| GET | `/api/v1/cases/{caseId}/versions` | Full version history, oldest first |
+| GET | `/api/v1/projects/{projectKey}/cases` | List cases (current version content) |
+| POST | `/api/v1/projects/{projectKey}/cases` | Create a case (version 1); optional `folderId` defaults to the project's root folder |
+| GET | `/api/v1/cases/{caseKey}` | Get a case at its current version |
+| PUT | `/api/v1/cases/{caseKey}` | Edit — creates a new version |
+| DELETE | `/api/v1/cases/{caseKey}` | Soft delete (versions stay readable in past runs) |
+| GET | `/api/v1/cases/{caseKey}/versions` | Full version history, oldest first |
 
 **Folders** — project-level, orthogonal to suites; every case belongs to
 exactly one folder, defaulting to the project's root; see
@@ -67,27 +78,27 @@ exactly one folder, defaulting to the project's root; see
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectId}/folders` | List all folders (flat) / create a subfolder (`name`, `parentFolderId` — always required) |
+| GET / POST | `/api/v1/projects/{projectKey}/folders` | List all folders (flat) / create a subfolder (`name`, `parentFolderId` — always required) |
 | DELETE | `/api/v1/folders/{folderId}` | Delete, reparenting child folders and cases to its parent; the root folder cannot be deleted (`400`) |
-| PUT | `/api/v1/cases/{caseId}/folder` | Move a case to a different folder (`folderId`) — suite membership is unaffected |
+| PUT | `/api/v1/cases/{caseKey}/folder` | Move a case to a different folder (`folderId`) — suite membership is unaffected |
 
 **Suites**
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectId}/suites` | List / create |
-| PUT / DELETE | `/api/v1/suites/{suiteId}/cases/{caseId}` | Add / remove a case (n:m; removing does not delete the case) |
+| GET / POST | `/api/v1/projects/{projectKey}/suites` | List / create |
+| PUT / DELETE | `/api/v1/suites/{suiteKey}/cases/{caseKey}` | Add / remove a case (n:m; removing does not delete the case) |
 
 **Runs and execution**
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectId}/runs` | List / create a run — pins each case's *current* version at creation time |
-| GET | `/api/v1/runs/{runId}` | Get a run |
-| GET / POST | `/api/v1/runs/{runId}/items` | List items (optionally `?assignee=`) / add a case to an open run (pins its then-current version) |
+| GET / POST | `/api/v1/projects/{projectKey}/runs` | List / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys` |
+| GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's |
+| GET / POST | `/api/v1/runs/{runKey}/items` | List items (optionally `?assignee=`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
 | GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`actor`, `verdict`, `comment`) |
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or `assignee` |
-| GET | `/api/v1/runs/{runId}/summary` | Item counts by current status |
+| GET | `/api/v1/runs/{runKey}/summary` | Item counts by current status |
 
 Validation errors return `400 {"error": "..."}` naming the offending field;
 missing entities return `404 {"error": "not found"}`. Unauthenticated
@@ -142,11 +153,11 @@ display/sort order only, never compared for authorization — see
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/projects/{projectId}/members` | List a project's directly-assigned users and assigned teams with their `roleId` — Read+ |
-| PUT | `/api/v1/projects/{projectId}/members/{userId}` | Assign/change a user's project role (`roleId`: a `Role.id`) — Tenant Admin only |
-| DELETE | `/api/v1/projects/{projectId}/members/{userId}` | Remove a user's direct project role assignment — Tenant Admin only |
-| PUT | `/api/v1/projects/{projectId}/teams/{teamId}` | Assign/change a team's project role (`roleId`) — Tenant Admin only |
-| DELETE | `/api/v1/projects/{projectId}/teams/{teamId}` | Remove a team's project role assignment — Tenant Admin only |
+| GET | `/api/v1/projects/{projectKey}/members` | List a project's directly-assigned users and assigned teams with their `roleId` — Read+ |
+| PUT | `/api/v1/projects/{projectKey}/members/{userId}` | Assign/change a user's project role (`roleId`: a `Role.id`) — Tenant Admin only |
+| DELETE | `/api/v1/projects/{projectKey}/members/{userId}` | Remove a user's direct project role assignment — Tenant Admin only |
+| PUT | `/api/v1/projects/{projectKey}/teams/{teamId}` | Assign/change a team's project role (`roleId`) — Tenant Admin only |
+| DELETE | `/api/v1/projects/{projectKey}/teams/{teamId}` | Remove a team's project role assignment — Tenant Admin only |
 
 ## Authentication
 

@@ -36,17 +36,17 @@ func TestScenario_ProjectDescriptionSetLater(t *testing.T) {
 
 	var p jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var updated jmap
-	callAs(t, h, adminCookie, "PATCH", "/api/v1/projects/"+projectID,
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/projects/"+projectKey,
 		jmap{"description": "added afterwards"}, 200, &updated)
 	if updated["description"] != "added afterwards" {
 		t.Errorf("description = %v", updated["description"])
 	}
 
 	var got jmap
-	callAs(t, h, adminCookie, "GET", "/api/v1/projects/"+projectID, nil, 200, &got)
+	callAs(t, h, adminCookie, "GET", "/api/v1/projects/"+projectKey, nil, 200, &got)
 	if got["description"] != "added afterwards" {
 		t.Errorf("GET after update = %+v", got)
 	}
@@ -58,9 +58,9 @@ func TestScenario_StarAndUnstarProjectOverHTTP(t *testing.T) {
 
 	var p jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
-	callAs(t, h, adminCookie, "POST", "/api/v1/projects/"+projectID+"/favorite", nil, 204, nil)
+	callAs(t, h, adminCookie, "POST", "/api/v1/projects/"+projectKey+"/favorite", nil, 204, nil)
 
 	var summaries []jmap
 	callAs(t, h, adminCookie, "GET", "/api/v1/projects/summaries", nil, 200, &summaries)
@@ -68,7 +68,7 @@ func TestScenario_StarAndUnstarProjectOverHTTP(t *testing.T) {
 		t.Errorf("summaries after star = %+v", summaries)
 	}
 
-	callAs(t, h, adminCookie, "DELETE", "/api/v1/projects/"+projectID+"/favorite", nil, 204, nil)
+	callAs(t, h, adminCookie, "DELETE", "/api/v1/projects/"+projectKey+"/favorite", nil, 204, nil)
 	callAs(t, h, adminCookie, "GET", "/api/v1/projects/summaries", nil, 200, &summaries)
 	if len(summaries) != 1 || summaries[0]["isFavorite"] != false {
 		t.Errorf("summaries after unstar = %+v", summaries)
@@ -82,6 +82,7 @@ func TestScenario_FavoritesAreNotSharedAcrossUsers(t *testing.T) {
 	var p jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
 	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var member jmap
 	callAs(t, h, adminCookie, "POST", "/api/v1/users",
@@ -110,7 +111,7 @@ func TestScenario_FavoritesAreNotSharedAcrossUsers(t *testing.T) {
 		t.Fatalf("SetProjectMember: %v", err)
 	}
 
-	callAs(t, h, adminCookie, "POST", "/api/v1/projects/"+projectID+"/favorite", nil, 204, nil)
+	callAs(t, h, adminCookie, "POST", "/api/v1/projects/"+projectKey+"/favorite", nil, 204, nil)
 
 	var memberSummaries []jmap
 	callAs(t, h, memberCookie, "GET", "/api/v1/projects/summaries", nil, 200, &memberSummaries)
@@ -123,6 +124,6 @@ func TestScenario_StarUnknownProjectNotFound(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
 
-	missing := "00000000-0000-0000-0000-000000000000"
+	missing := "NOPE"
 	callAs(t, h, adminCookie, "POST", "/api/v1/projects/"+missing+"/favorite", nil, 404, nil)
 }

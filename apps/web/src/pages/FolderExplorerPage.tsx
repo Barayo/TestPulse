@@ -39,7 +39,7 @@ function displayFolderName(folder: Folder | undefined, rootId: string): string {
 }
 
 export default function FolderExplorerPage() {
-  const { projectId, folderId } = useParams<{ projectId: string; folderId?: string }>()
+  const { projectKey, folderId } = useParams<{ projectKey: string; folderId?: string }>()
   const navigate = useNavigate()
   const bumpLanding = useBumpDataRevision()
   const isDesktop = useMediaQuery('(min-width: 768px)')
@@ -51,7 +51,7 @@ export default function FolderExplorerPage() {
   const [suites, setSuites] = useState<Suite[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
-  const [movingCaseId, setMovingCaseId] = useState<string | null>(null)
+  const [movingCaseKey, setMovingCaseKey] = useState<string | null>(null)
   const [moveQuery, setMoveQuery] = useState('')
   const [browsingSections, setBrowsingSections] = useState(false)
   const [browseQuery, setBrowseQuery] = useState('')
@@ -61,13 +61,13 @@ export default function FolderExplorerPage() {
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
 
   const load = useCallback(async () => {
-    if (!projectId) return
+    if (!projectKey) return
     setNotFound(false)
     const [{ data: p }, { data: f }, { data: c }, { data: s }] = await Promise.all([
-      api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
-      api.GET('/api/v1/projects/{projectId}/folders', { params: { path: { projectId } } }),
-      api.GET('/api/v1/projects/{projectId}/cases', { params: { path: { projectId } } }),
-      api.GET('/api/v1/projects/{projectId}/suites', { params: { path: { projectId } } }),
+      api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
     ])
     if (!p) {
       setNotFound(true)
@@ -77,7 +77,7 @@ export default function FolderExplorerPage() {
     setFolders(f ?? [])
     setCases(c ?? [])
     setSuites(s ?? [])
-  }, [projectId])
+  }, [projectKey])
 
   useEffect(() => {
     void load()
@@ -93,7 +93,7 @@ export default function FolderExplorerPage() {
     setExpanded((prev) => new Set([...prev, ...ancestors]))
   }, [selectedFolderId, folders])
 
-  if (!projectId) return null
+  if (!projectKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -111,9 +111,9 @@ export default function FolderExplorerPage() {
   }
 
   async function createFolder(parentId: string, name: string) {
-    if (!projectId || !name.trim()) return
-    await api.POST('/api/v1/projects/{projectId}/folders', {
-      params: { path: { projectId } },
+    if (!projectKey || !name.trim()) return
+    await api.POST('/api/v1/projects/{projectKey}/folders', {
+      params: { path: { projectKey } },
       body: { name: name.trim(), parentFolderId: parentId },
     })
     await load()
@@ -122,26 +122,26 @@ export default function FolderExplorerPage() {
 
   // Dropping onto the case's own current folder is a no-op — not an error,
   // just nothing to do (design.md, move-cases-between-folders).
-  async function moveCase(caseId: string, targetFolderId: string) {
-    const current = cases.find((c) => c.id === caseId)
+  async function moveCase(caseKey: string, targetFolderId: string) {
+    const current = cases.find((c) => c.key === caseKey)
     if (!current || current.folderId === targetFolderId) return
-    await api.PUT('/api/v1/cases/{caseId}/folder', {
-      params: { path: { caseId } },
+    await api.PUT('/api/v1/cases/{caseKey}/folder', {
+      params: { path: { caseKey } },
       body: { folderId: targetFolderId },
     })
     await load()
     bumpLanding()
   }
 
-  function openCase(caseId: string) {
-    if (!projectId) return
-    navigate(`/projects/${projectId}/cases/${caseId}`)
+  function openCase(caseKey: string) {
+    if (!projectKey) return
+    navigate(`/projects/${projectKey}/cases/${caseKey}`)
   }
 
   async function createCase(input: { title: string; steps: Step[] } & ClassificationFields) {
-    if (!projectId || !selectedFolderId) return
-    await api.POST('/api/v1/projects/{projectId}/cases', {
-      params: { path: { projectId } },
+    if (!projectKey || !selectedFolderId) return
+    await api.POST('/api/v1/projects/{projectKey}/cases', {
+      params: { path: { projectKey } },
       body: {
         title: input.title,
         folderId: selectedFolderId,
@@ -160,11 +160,11 @@ export default function FolderExplorerPage() {
 
   const breadcrumbSegments: Crumb[] = [
     { label: 'Projects', href: '/' },
-    { label: project?.name ?? '', href: `/projects/${projectId}` },
-    { label: 'Library', href: `/projects/${projectId}/library/${root.id}` },
+    { label: project?.name ?? '', href: `/projects/${projectKey}` },
+    { label: 'Library', href: `/projects/${projectKey}/library/${root.id}` },
     ...ancestorChain(folders, selectedFolderId).map((f) => ({
       label: f.name,
-      href: `/projects/${projectId}/library/${f.id}`,
+      href: `/projects/${projectKey}/library/${f.id}`,
     })),
   ]
 
@@ -179,7 +179,7 @@ export default function FolderExplorerPage() {
             rootId={root.id}
             selectedId={selectedFolderId}
             expanded={expanded}
-            onSelect={(id) => navigate(`/projects/${projectId}/library/${id}`)}
+            onSelect={(id) => navigate(`/projects/${projectKey}/library/${id}`)}
             onToggle={(id) =>
               setExpanded((prev) => {
                 const next = new Set(prev)
@@ -201,7 +201,7 @@ export default function FolderExplorerPage() {
               setTreeCreatingIn(null)
             }}
             onCancelNewFolder={() => setTreeCreatingIn(null)}
-            onDropCase={(caseId, folderId) => void moveCase(caseId, folderId)}
+            onDropCase={(caseKey, folderId) => void moveCase(caseKey, folderId)}
           />
         )}
 
@@ -273,14 +273,14 @@ export default function FolderExplorerPage() {
                       onDrop={(e) => {
                         e.preventDefault()
                         setDragOverFolderId(null)
-                        const caseId = e.dataTransfer.getData(CASE_ID_MIME)
-                        if (caseId) void moveCase(caseId, f.id)
+                        const caseKey = e.dataTransfer.getData(CASE_ID_MIME)
+                        if (caseKey) void moveCase(caseKey, f.id)
                       }}
                     >
                       <button
                         type="button"
                         className="flex w-full items-center gap-2 text-left"
-                        onClick={() => navigate(`/projects/${projectId}/library/${f.id}`)}
+                        onClick={() => navigate(`/projects/${projectKey}/library/${f.id}`)}
                       >
                         <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
                         <span>{f.name}</span>
@@ -291,13 +291,13 @@ export default function FolderExplorerPage() {
                     <li
                       key={c.id}
                       draggable
-                      onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.id)}
+                      onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.key)}
                       className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
                     >
                       <button
                         type="button"
                         className="flex flex-1 items-center gap-2 text-left"
-                        onClick={() => openCase(c.id)}
+                        onClick={() => openCase(c.key)}
                       >
                         <FileTextIcon className="size-4 text-muted-foreground" aria-hidden="true" />
                         <span>{c.content.title}</span>
@@ -316,7 +316,7 @@ export default function FolderExplorerPage() {
                         className="text-muted-foreground hover:text-foreground"
                         onClick={() => {
                           setMoveQuery('')
-                          setMovingCaseId(c.id)
+                          setMovingCaseKey(c.key)
                         }}
                       >
                         <FolderInputIcon className="size-4" aria-hidden="true" />
@@ -330,7 +330,7 @@ export default function FolderExplorerPage() {
         </div>
       </div>
 
-      <Dialog open={movingCaseId !== null} onOpenChange={(open) => !open && setMovingCaseId(null)}>
+      <Dialog open={movingCaseKey !== null} onOpenChange={(open) => !open && setMovingCaseKey(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>Move to…</DialogTitle>
           <FolderPicker
@@ -339,8 +339,8 @@ export default function FolderExplorerPage() {
             query={moveQuery}
             onQueryChange={setMoveQuery}
             onSelect={(targetFolderId) => {
-              if (movingCaseId) void moveCase(movingCaseId, targetFolderId)
-              setMovingCaseId(null)
+              if (movingCaseKey) void moveCase(movingCaseKey, targetFolderId)
+              setMovingCaseKey(null)
             }}
           />
         </DialogContent>
@@ -355,7 +355,7 @@ export default function FolderExplorerPage() {
             query={browseQuery}
             onQueryChange={setBrowseQuery}
             onSelect={(targetFolderId) => {
-              navigate(`/projects/${projectId}/library/${targetFolderId}`)
+              navigate(`/projects/${projectKey}/library/${targetFolderId}`)
               setBrowsingSections(false)
             }}
           />

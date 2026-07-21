@@ -42,7 +42,7 @@ describe('VersionDetailDialog', () => {
   it('shows only fields that changed relative to the previous version', async () => {
     mockExecutions()
     render(
-      <VersionDetailDialog open caseId="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
+      <VersionDetailDialog open caseKey="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
     )
     await screen.findByText('Login works (updated)')
     expect(screen.getByText('Form visible with SSO button')).toBeInTheDocument()
@@ -53,7 +53,7 @@ describe('VersionDetailDialog', () => {
 
   it('says there is no previous version to compare against for the first version', async () => {
     mockExecutions()
-    render(<VersionDetailDialog open caseId="c1" version={1} versions={[v1]} onOpenChange={() => {}} />)
+    render(<VersionDetailDialog open caseKey="c1" version={1} versions={[v1]} onOpenChange={() => {}} />)
     await screen.findByText(/no previous version/i)
   })
 
@@ -63,7 +63,7 @@ describe('VersionDetailDialog', () => {
       { runItemId: 'i2', runId: 'r2', runName: 'Sprint 0', caseVersion: 1, status: 'failed', createdAt: '2026-01-02T00:00:00Z' },
     ])
     render(
-      <VersionDetailDialog open caseId="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
+      <VersionDetailDialog open caseKey="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
     )
     await screen.findByText('Sprint 1')
     expect(screen.queryByText('Sprint 0')).not.toBeInTheDocument()
@@ -75,7 +75,7 @@ describe('VersionDetailDialog', () => {
       { runItemId: 'i2', runId: 'r2', runName: 'Sprint 2', caseVersion: 2, status: 'failed', createdAt: '2026-02-03T00:00:00Z' },
     ])
     render(
-      <VersionDetailDialog open caseId="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
+      <VersionDetailDialog open caseKey="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
     )
     await waitFor(() => expect(screen.getByText('Sprint 1')).toBeInTheDocument())
     expect(screen.getByText(/flaky/i)).toBeInTheDocument()
@@ -86,7 +86,7 @@ describe('VersionDetailDialog', () => {
       { runItemId: 'i1', runId: 'r1', runName: 'Sprint 1', caseVersion: 2, status: 'pass', createdAt: '2026-02-02T00:00:00Z' },
     ])
     render(
-      <VersionDetailDialog open caseId="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
+      <VersionDetailDialog open caseKey="c1" version={2} versions={[v2, v1]} onOpenChange={() => {}} />,
     )
     await waitFor(() => expect(screen.getByText('Sprint 1')).toBeInTheDocument())
     expect(screen.queryByText(/flaky/i)).not.toBeInTheDocument()

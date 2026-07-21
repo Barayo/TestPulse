@@ -27,25 +27,29 @@ func mountAPI(r chi.Router, h *api) {
 		r.Get("/", h.listProjects)
 		r.Get("/summaries", h.projectSummaries)
 		r.With(requireTenantAdmin).Post("/", h.createProject)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}", h.getProject)
-		r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Patch("/{projectID}", h.updateProject)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Post("/{projectID}/favorite", h.starProject)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/{projectID}/favorite", h.unstarProject)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/cases", h.listCases)
-		r.With(h.requirePermission(domain.PermCaseCreate, projectIDParam)).Post("/{projectID}/cases", h.createCase)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/folders", h.listFolders)
-		r.With(h.requirePermission(domain.PermSectionCreate, projectIDParam)).Post("/{projectID}/folders", h.createFolder)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/suites", h.listSuites)
-		r.With(h.requirePermission(domain.PermSuiteCreate, projectIDParam)).Post("/{projectID}/suites", h.createSuite)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/runs", h.listRuns)
-		r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/{projectID}/runs", h.createRun)
-		r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/{projectID}/members", h.getProjectMembership)
-		r.With(requireTenantAdmin).Put("/{projectID}/members/{userID}", h.setProjectMember)
-		r.With(requireTenantAdmin).Delete("/{projectID}/members/{userID}", h.removeProjectMember)
-		r.With(requireTenantAdmin).Put("/{projectID}/teams/{teamID}", h.setProjectTeamRole)
-		r.With(requireTenantAdmin).Delete("/{projectID}/teams/{teamID}", h.removeProjectTeamRole)
+		r.Route("/{projectKey}", func(r chi.Router) {
+			r.Use(h.resolveKey("projectKey", h.svc.ProjectIDByKey))
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/", h.getProject)
+			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Patch("/", h.updateProject)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Post("/favorite", h.starProject)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/favorite", h.unstarProject)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/cases", h.listCases)
+			r.With(h.requirePermission(domain.PermCaseCreate, projectIDParam)).Post("/cases", h.createCase)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/folders", h.listFolders)
+			r.With(h.requirePermission(domain.PermSectionCreate, projectIDParam)).Post("/folders", h.createFolder)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/suites", h.listSuites)
+			r.With(h.requirePermission(domain.PermSuiteCreate, projectIDParam)).Post("/suites", h.createSuite)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs", h.listRuns)
+			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/runs", h.createRun)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/members", h.getProjectMembership)
+			r.With(requireTenantAdmin).Put("/members/{userID}", h.setProjectMember)
+			r.With(requireTenantAdmin).Delete("/members/{userID}", h.removeProjectMember)
+			r.With(requireTenantAdmin).Put("/teams/{teamID}", h.setProjectTeamRole)
+			r.With(requireTenantAdmin).Delete("/teams/{teamID}", h.removeProjectTeamRole)
+		})
 	})
-	r.Route("/cases/{caseID}", func(r chi.Router) {
+	r.Route("/cases/{caseKey}", func(r chi.Router) {
+		r.Use(h.resolveKey("caseKey", h.svc.CaseIDByKey))
 		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/", h.getCase)
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/", h.editCase)
 		r.With(h.requirePermission(domain.PermCaseDelete, projectIDFromCase)).Delete("/", h.deleteCase)
@@ -54,11 +58,13 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
 	})
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
-	r.Route("/suites/{suiteID}/cases/{caseID}", func(r chi.Router) {
+	r.Route("/suites/{suiteKey}/cases/{caseKey}", func(r chi.Router) {
+		r.Use(h.resolveKey("suiteKey", h.svc.SuiteIDByKey), h.resolveKey("caseKey", h.svc.CaseIDByKey))
 		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Put("/", h.addCaseToSuite)
 		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Delete("/", h.removeCaseFromSuite)
 	})
-	r.Route("/runs/{runID}", func(r chi.Router) {
+	r.Route("/runs/{runKey}", func(r chi.Router) {
+		r.Use(h.resolveKey("runKey", h.svc.RunIDByKey))
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.getRun)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/items", h.listRunItems)
 		r.With(h.requirePermission(domain.PermRunCreate, projectIDFromRun)).Post("/items", h.addRunItem)
@@ -146,7 +152,7 @@ func (h *api) createProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *api) getProject(w http.ResponseWriter, r *http.Request) {
-	p, err := h.svc.GetProject(r.Context(), chi.URLParam(r, "projectID"))
+	p, err := h.svc.GetProject(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, p, err)
 }
 
@@ -160,7 +166,7 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	p, err := h.svc.UpdateProject(r.Context(), chi.URLParam(r, "projectID"),
+	p, err := h.svc.UpdateProject(r.Context(), resolvedID(r, "projectKey"),
 		service.ProjectUpdate{
 			Name: body.Name, Description: body.Description, Archived: body.Archived,
 		})
@@ -168,19 +174,19 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *api) starProject(w http.ResponseWriter, r *http.Request) {
-	err := h.svc.StarProject(r.Context(), chi.URLParam(r, "projectID"))
+	err := h.svc.StarProject(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) unstarProject(w http.ResponseWriter, r *http.Request) {
-	err := h.svc.UnstarProject(r.Context(), chi.URLParam(r, "projectID"))
+	err := h.svc.UnstarProject(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 // --- Project membership (add-project-rbac) ---
 
 func (h *api) getProjectMembership(w http.ResponseWriter, r *http.Request) {
-	m, err := h.svc.ProjectMembership(r.Context(), chi.URLParam(r, "projectID"))
+	m, err := h.svc.ProjectMembership(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, m, err)
 }
 
@@ -193,13 +199,13 @@ func (h *api) setProjectMember(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	err = h.svc.SetProjectMember(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "userID"), in.RoleID)
+	err = h.svc.SetProjectMember(r.Context(), actor, resolvedID(r, "projectKey"), chi.URLParam(r, "userID"), in.RoleID)
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) removeProjectMember(w http.ResponseWriter, r *http.Request) {
 	actor, _ := domain.ActorFromContext(r.Context())
-	err := h.svc.RemoveProjectMember(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "userID"))
+	err := h.svc.RemoveProjectMember(r.Context(), actor, resolvedID(r, "projectKey"), chi.URLParam(r, "userID"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
@@ -212,20 +218,20 @@ func (h *api) setProjectTeamRole(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	err = h.svc.SetProjectTeamRole(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "teamID"), in.RoleID)
+	err = h.svc.SetProjectTeamRole(r.Context(), actor, resolvedID(r, "projectKey"), chi.URLParam(r, "teamID"), in.RoleID)
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) removeProjectTeamRole(w http.ResponseWriter, r *http.Request) {
 	actor, _ := domain.ActorFromContext(r.Context())
-	err := h.svc.RemoveProjectTeamRole(r.Context(), actor, chi.URLParam(r, "projectID"), chi.URLParam(r, "teamID"))
+	err := h.svc.RemoveProjectTeamRole(r.Context(), actor, resolvedID(r, "projectKey"), chi.URLParam(r, "teamID"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 // --- Cases ---
 
 func (h *api) listCases(w http.ResponseWriter, r *http.Request) {
-	cases, err := h.svc.ListCases(r.Context(), chi.URLParam(r, "projectID"))
+	cases, err := h.svc.ListCases(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, cases, err)
 }
 
@@ -238,12 +244,12 @@ func (h *api) createCase(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	c, err := h.svc.CreateCase(r.Context(), chi.URLParam(r, "projectID"), body.FolderID, body.CaseContent)
+	c, err := h.svc.CreateCase(r.Context(), resolvedID(r, "projectKey"), body.FolderID, body.CaseContent)
 	h.respond(w, http.StatusCreated, c, err)
 }
 
 func (h *api) getCase(w http.ResponseWriter, r *http.Request) {
-	c, err := h.svc.GetCase(r.Context(), chi.URLParam(r, "caseID"))
+	c, err := h.svc.GetCase(r.Context(), resolvedID(r, "caseKey"))
 	h.respond(w, http.StatusOK, c, err)
 }
 
@@ -253,29 +259,29 @@ func (h *api) editCase(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	c, err := h.svc.EditCase(r.Context(), chi.URLParam(r, "caseID"), content)
+	c, err := h.svc.EditCase(r.Context(), resolvedID(r, "caseKey"), content)
 	h.respond(w, http.StatusOK, c, err)
 }
 
 func (h *api) deleteCase(w http.ResponseWriter, r *http.Request) {
-	err := h.svc.DeleteCase(r.Context(), chi.URLParam(r, "caseID"))
+	err := h.svc.DeleteCase(r.Context(), resolvedID(r, "caseKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) listCaseVersions(w http.ResponseWriter, r *http.Request) {
-	versions, err := h.svc.CaseVersions(r.Context(), chi.URLParam(r, "caseID"))
+	versions, err := h.svc.CaseVersions(r.Context(), resolvedID(r, "caseKey"))
 	h.respond(w, http.StatusOK, versions, err)
 }
 
 func (h *api) listCaseExecutions(w http.ResponseWriter, r *http.Request) {
-	execs, err := h.svc.CaseExecutions(r.Context(), chi.URLParam(r, "caseID"))
+	execs, err := h.svc.CaseExecutions(r.Context(), resolvedID(r, "caseKey"))
 	h.respond(w, http.StatusOK, execs, err)
 }
 
 // --- Folders ---
 
 func (h *api) listFolders(w http.ResponseWriter, r *http.Request) {
-	folders, err := h.svc.ListFolders(r.Context(), chi.URLParam(r, "projectID"))
+	folders, err := h.svc.ListFolders(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, folders, err)
 }
 
@@ -285,7 +291,7 @@ func (h *api) createFolder(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	f, err := h.svc.CreateFolder(r.Context(), chi.URLParam(r, "projectID"), body)
+	f, err := h.svc.CreateFolder(r.Context(), resolvedID(r, "projectKey"), body)
 	h.respond(w, http.StatusCreated, f, err)
 }
 
@@ -297,7 +303,7 @@ func (h *api) moveCase(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	err = h.svc.MoveCase(r.Context(), chi.URLParam(r, "caseID"), body.FolderID)
+	err = h.svc.MoveCase(r.Context(), resolvedID(r, "caseKey"), body.FolderID)
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
@@ -309,7 +315,7 @@ func (h *api) deleteFolder(w http.ResponseWriter, r *http.Request) {
 // --- Suites ---
 
 func (h *api) listSuites(w http.ResponseWriter, r *http.Request) {
-	suites, err := h.svc.ListSuites(r.Context(), chi.URLParam(r, "projectID"))
+	suites, err := h.svc.ListSuites(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, suites, err)
 }
 
@@ -321,66 +327,87 @@ func (h *api) createSuite(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	s, err := h.svc.CreateSuite(r.Context(), chi.URLParam(r, "projectID"), body.Name)
+	s, err := h.svc.CreateSuite(r.Context(), resolvedID(r, "projectKey"), body.Name)
 	h.respond(w, http.StatusCreated, s, err)
 }
 
 func (h *api) addCaseToSuite(w http.ResponseWriter, r *http.Request) {
-	err := h.svc.AddCaseToSuite(r.Context(), chi.URLParam(r, "suiteID"), chi.URLParam(r, "caseID"))
+	err := h.svc.AddCaseToSuite(r.Context(), resolvedID(r, "suiteKey"), resolvedID(r, "caseKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) removeCaseFromSuite(w http.ResponseWriter, r *http.Request) {
-	err := h.svc.RemoveCaseFromSuite(r.Context(), chi.URLParam(r, "suiteID"), chi.URLParam(r, "caseID"))
+	err := h.svc.RemoveCaseFromSuite(r.Context(), resolvedID(r, "suiteKey"), resolvedID(r, "caseKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 // --- Runs ---
 
 func (h *api) listRuns(w http.ResponseWriter, r *http.Request) {
-	runs, err := h.svc.ListRuns(r.Context(), chi.URLParam(r, "projectID"))
+	runs, err := h.svc.ListRuns(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, runs, err)
 }
 
 func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name    string   `json:"name"`
-		SuiteID string   `json:"suiteId"`
-		CaseIDs []string `json:"caseIds"`
+		Name     string   `json:"name"`
+		SuiteKey string   `json:"suiteKey"`
+		CaseKeys []string `json:"caseKeys"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
 		return
 	}
-	run, err := h.svc.CreateRun(r.Context(), chi.URLParam(r, "projectID"),
-		service.RunInput{Name: body.Name, SuiteID: body.SuiteID, CaseIDs: body.CaseIDs})
+	var suiteID string
+	if body.SuiteKey != "" {
+		suiteID, err = h.svc.SuiteIDByKey(r.Context(), body.SuiteKey)
+		if err != nil {
+			h.respond(w, 0, nil, err)
+			return
+		}
+	}
+	caseIDs := make([]string, len(body.CaseKeys))
+	for i, key := range body.CaseKeys {
+		caseIDs[i], err = h.svc.CaseIDByKey(r.Context(), key)
+		if err != nil {
+			h.respond(w, 0, nil, err)
+			return
+		}
+	}
+	run, err := h.svc.CreateRun(r.Context(), resolvedID(r, "projectKey"),
+		service.RunInput{Name: body.Name, SuiteID: suiteID, CaseIDs: caseIDs})
 	h.respond(w, http.StatusCreated, run, err)
 }
 
 func (h *api) getRun(w http.ResponseWriter, r *http.Request) {
-	run, err := h.svc.GetRun(r.Context(), chi.URLParam(r, "runID"))
+	run, err := h.svc.GetRun(r.Context(), resolvedID(r, "runKey"))
 	h.respond(w, http.StatusOK, run, err)
 }
 
 func (h *api) listRunItems(w http.ResponseWriter, r *http.Request) {
-	items, err := h.svc.RunItems(r.Context(), chi.URLParam(r, "runID"), r.URL.Query().Get("assignee"))
+	items, err := h.svc.RunItems(r.Context(), resolvedID(r, "runKey"), r.URL.Query().Get("assignee"))
 	h.respond(w, http.StatusOK, items, err)
 }
 
 func (h *api) addRunItem(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		CaseID string `json:"caseId"`
+		CaseKey string `json:"caseKey"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
 		return
 	}
-	id, err := h.svc.AddRunItem(r.Context(), chi.URLParam(r, "runID"), body.CaseID)
+	caseID, err := h.svc.CaseIDByKey(r.Context(), body.CaseKey)
+	if err != nil {
+		h.respond(w, 0, nil, err)
+		return
+	}
+	id, err := h.svc.AddRunItem(r.Context(), resolvedID(r, "runKey"), caseID)
 	h.respond(w, http.StatusCreated, map[string]string{"id": id}, err)
 }
 
 func (h *api) runSummary(w http.ResponseWriter, r *http.Request) {
-	sum, err := h.svc.RunSummary(r.Context(), chi.URLParam(r, "runID"))
+	sum, err := h.svc.RunSummary(r.Context(), resolvedID(r, "runKey"))
 	h.respond(w, http.StatusOK, sum, err)
 }
 

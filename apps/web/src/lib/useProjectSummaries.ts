@@ -4,6 +4,9 @@ import { api } from '@/lib/api'
 import { useDataRevision } from '@/lib/DataRevision'
 
 export type ProjectSummary = {
+  // Holds the project's human-readable key (add-human-readable-keys), not
+  // its internal database id — every route/link this feeds is key-based,
+  // and the frontend never needs the raw id for anything.
   id: string
   name: string
   description: string
@@ -39,7 +42,7 @@ export function useProjectSummaries(): ProjectSummary[] {
         const results = (projects ?? []).map((p) => {
           const stat = statsById.get(p.id)
           return {
-            id: p.id,
+            id: p.key,
             name: p.name,
             description: p.description ?? '',
             createdAt: p.createdAt,

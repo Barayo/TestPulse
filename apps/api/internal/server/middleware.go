@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -64,7 +65,7 @@ func requireTenantAdmin(next http.Handler) http.Handler {
 type projectIDResolver func(h *api, r *http.Request) (string, error)
 
 func projectIDParam(_ *api, r *http.Request) (string, error) {
-	id := chi.URLParam(r, "projectID")
+	id := resolvedID(r, "projectKey")
 	if id == "" {
 		return "", store.ErrNotFound
 	}
@@ -72,15 +73,15 @@ func projectIDParam(_ *api, r *http.Request) (string, error) {
 }
 
 func projectIDFromCase(h *api, r *http.Request) (string, error) {
-	return h.svc.ProjectIDForCase(r.Context(), chi.URLParam(r, "caseID"))
+	return h.svc.ProjectIDForCase(r.Context(), resolvedID(r, "caseKey"))
 }
 
 func projectIDFromSuite(h *api, r *http.Request) (string, error) {
-	return h.svc.ProjectIDForSuite(r.Context(), chi.URLParam(r, "suiteID"))
+	return h.svc.ProjectIDForSuite(r.Context(), resolvedID(r, "suiteKey"))
 }
 
 func projectIDFromRun(h *api, r *http.Request) (string, error) {
-	return h.svc.ProjectIDForRun(r.Context(), chi.URLParam(r, "runID"))
+	return h.svc.ProjectIDForRun(r.Context(), resolvedID(r, "runKey"))
 }
 
 func projectIDFromFolder(h *api, r *http.Request) (string, error) {
@@ -89,6 +90,39 @@ func projectIDFromFolder(h *api, r *http.Request) (string, error) {
 
 func projectIDFromItem(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForItem(r.Context(), chi.URLParam(r, "itemID"))
+}
+
+// --- Human-readable key resolution (add-human-readable-keys D4) ---
+//
+// resolveKey returns middleware that resolves a key-shaped path param
+// (projectKey/caseKey/runKey/suiteKey) to its internal id via lookup,
+// once, at the API boundary — storing the result in the request context
+// for resolvedID to read. Everything downstream (permission resolvers,
+// service methods, store methods) keeps operating on the internal id
+// exactly as it did before this design. An unrecognized key 404s
+// immediately, the same as any other unresolved identifier.
+
+type resolvedIDContextKey struct{ param string }
+
+func resolvedID(r *http.Request, param string) string {
+	if id, ok := r.Context().Value(resolvedIDContextKey{param}).(string); ok {
+		return id
+	}
+	return chi.URLParam(r, param)
+}
+
+func (h *api) resolveKey(param string, lookup func(ctx context.Context, key string) (string, error)) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			id, err := lookup(r.Context(), chi.URLParam(r, param))
+			if err != nil {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+				return
+			}
+			ctx := context.WithValue(r.Context(), resolvedIDContextKey{param}, id)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
 }
 
 // requirePermission rejects the request with 403 unless the context's

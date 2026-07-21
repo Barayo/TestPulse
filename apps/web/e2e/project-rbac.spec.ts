@@ -7,7 +7,7 @@ import { unique } from './support'
 // GIVEN: the compose stack is up (make e2e), with a fresh database, and the
 // default authenticated page (global-setup.ts) is the Tenant Admin.
 
-async function createProjectWithCase(page: Page, label: string): Promise<{ projectId: string; caseId: string }> {
+async function createProjectWithCase(page: Page, label: string): Promise<{ projectId: string; caseKey: string }> {
   const projectName = unique(label)
   await page.goto('/')
   await page.getByRole('button', { name: /new project/i }).click()
@@ -28,7 +28,7 @@ async function createProjectWithCase(page: Page, label: string): Promise<{ proje
   await expect(page.getByText('Login works')).toBeVisible()
 
   const cases = await (await page.request.get(`/api/v1/projects/${projectId}/cases`)).json()
-  return { projectId, caseId: cases[0].id }
+  return { projectId, caseKey: cases[0].key }
 }
 
 // Creates a fresh non-admin user (as the admin `page`) and returns a new
@@ -75,14 +75,14 @@ test.describe('Requirement: Effective project role from membership and teams', (
   })
 
   test('Scenario: Tester can read but cannot modify cases', async ({ page, browser }) => {
-    const { projectId, caseId } = await createProjectWithCase(page, 'RBAC Tester')
+    const { projectId, caseKey } = await createProjectWithCase(page, 'RBAC Tester')
     const { page: testerPage, userId } = await loginAsNewUser(page, browser, 'Tester User')
     await assignRole(page, projectId, userId, 'Tester')
 
     const readRes = await testerPage.request.get(`/api/v1/projects/${projectId}/cases`)
     expect(readRes.status()).toBe(200)
 
-    const editRes = await testerPage.request.put(`/api/v1/cases/${caseId}`, {
+    const editRes = await testerPage.request.put(`/api/v1/cases/${caseKey}`, {
       data: { title: 'Login works (tester edit)', priority: 'medium' },
     })
     expect(editRes.status()).toBe(403)
@@ -90,26 +90,26 @@ test.describe('Requirement: Effective project role from membership and teams', (
   })
 
   test('Scenario: Contributor can edit but cannot delete a case', async ({ page, browser }) => {
-    const { projectId, caseId } = await createProjectWithCase(page, 'RBAC Contributor')
+    const { projectId, caseKey } = await createProjectWithCase(page, 'RBAC Contributor')
     const { page: contributorPage, userId } = await loginAsNewUser(page, browser, 'Contributor User')
     await assignRole(page, projectId, userId, 'Contributor')
 
-    const editRes = await contributorPage.request.put(`/api/v1/cases/${caseId}`, {
+    const editRes = await contributorPage.request.put(`/api/v1/cases/${caseKey}`, {
       data: { title: 'Login works (contributor edit)', priority: 'medium' },
     })
     expect(editRes.status()).toBe(200)
 
-    const deleteRes = await contributorPage.request.delete(`/api/v1/cases/${caseId}`)
+    const deleteRes = await contributorPage.request.delete(`/api/v1/cases/${caseKey}`)
     expect(deleteRes.status()).toBe(403)
     await contributorPage.close()
   })
 
   test('Scenario: Project Admin can delete a case', async ({ page, browser }) => {
-    const { projectId, caseId } = await createProjectWithCase(page, 'RBAC Project Admin')
+    const { projectId, caseKey } = await createProjectWithCase(page, 'RBAC Project Admin')
     const { page: adminPage, userId } = await loginAsNewUser(page, browser, 'Project Admin User')
     await assignRole(page, projectId, userId, 'Project Admin')
 
-    const deleteRes = await adminPage.request.delete(`/api/v1/cases/${caseId}`)
+    const deleteRes = await adminPage.request.delete(`/api/v1/cases/${caseKey}`)
     expect(deleteRes.status()).toBe(204)
     await adminPage.close()
   })

@@ -30,10 +30,10 @@ function mockAPI(isTenantAdmin: boolean) {
     if (path === '/api/v1/users/me') {
       return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin }, response: { ok: true } })
     }
-    if (path === '/api/v1/projects/{projectId}') {
+    if (path === '/api/v1/projects/{projectKey}') {
       return Promise.resolve({ data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
     }
-    if (path === '/api/v1/projects/{projectId}/members') return Promise.resolve({ data: membership, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/members') return Promise.resolve({ data: membership, response: { ok: true } })
     if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
     if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
     if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
@@ -50,7 +50,7 @@ function renderPage() {
     <MemoryRouter initialEntries={['/projects/p1/members']}>
       <AuthProvider>
         <Routes>
-          <Route path="/projects/:projectId/members" element={<ProjectMembersPage />} />
+          <Route path="/projects/:projectKey/members" element={<ProjectMembersPage />} />
         </Routes>
       </AuthProvider>
     </MemoryRouter>,
@@ -88,9 +88,9 @@ describe('ProjectMembersPage', () => {
 
     await waitFor(() =>
       expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectId}/members/{userId}',
+        '/api/v1/projects/{projectKey}/members/{userId}',
         expect.objectContaining({
-          params: { path: { projectId: 'p1', userId: 'u2' } },
+          params: { path: { projectKey: 'p1', userId: 'u2' } },
           body: { roleId: 'r-tester' },
         }),
       ),
@@ -137,8 +137,8 @@ describe('ProjectMembersPage', () => {
       await user.click(within(dialog).getByRole('button', { name: /^remove$/i }))
 
       await waitFor(() =>
-        expect(mockDELETE).toHaveBeenCalledWith('/api/v1/projects/{projectId}/members/{userId}', {
-          params: { path: { projectId: 'p1', userId: 'u1' } },
+        expect(mockDELETE).toHaveBeenCalledWith('/api/v1/projects/{projectKey}/members/{userId}', {
+          params: { path: { projectKey: 'p1', userId: 'u1' } },
         }),
       )
     })
@@ -170,8 +170,8 @@ describe('ProjectMembersPage', () => {
       await user.click(within(dialog).getByRole('button', { name: /^remove$/i }))
 
       await waitFor(() =>
-        expect(mockDELETE).toHaveBeenCalledWith('/api/v1/projects/{projectId}/teams/{teamId}', {
-          params: { path: { projectId: 'p1', teamId: 't1' } },
+        expect(mockDELETE).toHaveBeenCalledWith('/api/v1/projects/{projectKey}/teams/{teamId}', {
+          params: { path: { projectKey: 'p1', teamId: 't1' } },
         }),
       )
     })

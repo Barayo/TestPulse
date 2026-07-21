@@ -2,9 +2,13 @@ package store
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -12,29 +16,62 @@ type ProjectRepo struct {
 	pool *pgxpool.Pool
 }
 
+// maxKeyCollisionAttempts bounds the numeric-suffix retry loop in Create —
+// practically unreachable, just a safety bound against an infinite loop bug
+// (add-human-readable-keys design.md D1).
+const maxKeyCollisionAttempts = 50
+
+// Create inserts a project with a key derived from name (add-human-readable-keys
+// D1). On a key collision (Postgres unique-violation 23505 on projects.key)
+// it retries with a numeric-suffixed candidate until one is free.
 func (r *ProjectRepo) Create(ctx context.Context, name, description string) (domain.Project, error) {
-	var p domain.Project
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO projects (name, description) VALUES ($1, $2)
-		 RETURNING id, name, archived, description, created_at`, name, description,
-	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt)
-	return p, err
+	base := domain.DeriveProjectKey(name)
+	candidate := base
+	for attempt := 1; attempt <= maxKeyCollisionAttempts; attempt++ {
+		var p domain.Project
+		err := r.pool.QueryRow(ctx,
+			`INSERT INTO projects (key, name, description) VALUES ($1, $2, $3)
+			 RETURNING id, key, name, archived, description, created_at`, candidate, name, description,
+		).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.CreatedAt)
+		if err == nil {
+			return p, nil
+		}
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "projects_key_key" {
+			candidate = fmt.Sprintf("%s%d", base, attempt+1)
+			continue
+		}
+		return domain.Project{}, err
+	}
+	return domain.Project{}, fmt.Errorf("could not find a unique key for project %q after %d attempts", name, maxKeyCollisionAttempts)
 }
 
 func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, name, archived, description, created_at FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt)
+		`SELECT id, key, name, archived, description, created_at FROM projects WHERE id = $1`, id,
+	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.CreatedAt)
 	if err != nil {
 		return domain.Project{}, ErrNotFound
 	}
 	return p, nil
 }
 
+// IDByKey resolves a project's key to its internal id — used at the API
+// boundary to translate a key-based path param before delegating to
+// UUID-based service/store calls (add-human-readable-keys D4).
+func (r *ProjectRepo) IDByKey(ctx context.Context, key string) (string, error) {
+	var id string
+	err := r.pool.QueryRow(ctx, `SELECT id FROM projects WHERE key = $1`, key).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return id, err
+}
+
 func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, name, archived, description, created_at FROM projects ORDER BY created_at`)
+		`SELECT id, key, name, archived, description, created_at FROM projects ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -43,7 +80,7 @@ func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	projects := []domain.Project{}
 	for rows.Next() {
 		var p domain.Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)
@@ -57,7 +94,7 @@ func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 // instead (implicit access to everything).
 func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT DISTINCT p.id, p.name, p.archived, p.description, p.created_at
+		`SELECT DISTINCT p.id, p.key, p.name, p.archived, p.description, p.created_at
 		 FROM projects p
 		 WHERE p.id IN (SELECT project_id FROM project_members WHERE user_id = $1)
 		    OR p.id IN (
@@ -74,7 +111,7 @@ func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domai
 	projects := []domain.Project{}
 	for rows.Next() {
 		var p domain.Project
-		if err := rows.Scan(&p.ID, &p.Name, &p.Archived, &p.Description, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)

@@ -22,7 +22,7 @@ func TestProjectsGainDescriptionColumn(t *testing.T) {
 
 	var projectID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (name, description) VALUES ('QA', 'a project') RETURNING id`,
+		`INSERT INTO projects (key, name, description) VALUES ('QA', 'QA', 'a project') RETURNING id`,
 	).Scan(&projectID); err != nil {
 		t.Fatalf("insert project with description: %v", err)
 	}
@@ -40,7 +40,7 @@ func TestProjectsGainDescriptionColumn(t *testing.T) {
 	// description defaults to '' when omitted.
 	var defaultID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (name) VALUES ('No metadata') RETURNING id`,
+		`INSERT INTO projects (key, name) VALUES ('NM', 'No metadata') RETURNING id`,
 	).Scan(&defaultID); err != nil {
 		t.Fatalf("insert project without description: %v", err)
 	}
@@ -71,7 +71,7 @@ func TestProjectFavoritesTableAndCascade(t *testing.T) {
 	}
 	var projectID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (name) VALUES ('QA') RETURNING id`,
+		`INSERT INTO projects (key, name) VALUES ('QA', 'QA') RETURNING id`,
 	).Scan(&projectID); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestProjectFavoritesTableAndCascade(t *testing.T) {
 
 	// Deleting the user cascades to their favorites. (The project side of
 	// the same ON DELETE CASCADE can't be exercised the same way: every
-	// project always owns a root folder via the projects_create_root_folder
+	// project always owns a root folder via the projects_create_defaults
 	// trigger, and test_case_folders.project_id has no cascade of its own,
 	// so no project row is ever deletable in this schema — that's a
 	// pre-existing constraint unrelated to this feature.)

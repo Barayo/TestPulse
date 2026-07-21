@@ -2,32 +2,34 @@ import { useEffect, useState } from 'react'
 import { useMatch } from 'react-router-dom'
 import { api } from '@/lib/api'
 
-// A project is "active" on /projects/:projectId directly, or indirectly on
-// /runs/:runId (resolved by fetching the run to find its project).
+// A project is "active" on /projects/:projectKey directly, or indirectly on
+// /runs/:runKey (resolved by fetching the run to find its project's key —
+// Run carries projectKey alongside its internal projectId specifically for
+// this, since a run's own route isn't nested under its project's).
 export function useActiveProjectId(): string | undefined {
-  const projectMatch = useMatch('/projects/:projectId/*')
-  const runMatch = useMatch('/runs/:runId')
-  const [runProjectId, setRunProjectId] = useState<string>()
+  const projectMatch = useMatch('/projects/:projectKey/*')
+  const runMatch = useMatch('/runs/:runKey')
+  const [runProjectKey, setRunProjectKey] = useState<string>()
 
   useEffect(() => {
-    const runId = runMatch?.params.runId
-    if (!runId) {
-      setRunProjectId(undefined)
+    const runKey = runMatch?.params.runKey
+    if (!runKey) {
+      setRunProjectKey(undefined)
       return
     }
     let cancelled = false
     void api
-      .GET('/api/v1/runs/{runId}', { params: { path: { runId } } })
+      .GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } })
       .then(({ data }) => {
-        if (!cancelled) setRunProjectId(data?.projectId)
+        if (!cancelled) setRunProjectKey(data?.projectKey)
       })
       .catch(() => {
-        if (!cancelled) setRunProjectId(undefined)
+        if (!cancelled) setRunProjectKey(undefined)
       })
     return () => {
       cancelled = true
     }
-  }, [runMatch?.params.runId])
+  }, [runMatch?.params.runKey])
 
-  return projectMatch?.params.projectId ?? runProjectId
+  return projectMatch?.params.projectKey ?? runProjectKey
 }

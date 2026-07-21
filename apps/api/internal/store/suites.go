@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -26,21 +27,49 @@ func (r *SuiteRepo) ProjectID(ctx context.Context, suiteID string) (string, erro
 	return projectID, err
 }
 
+// Create inserts a suite and claims its key in one transaction
+// (add-human-readable-keys D2/D3).
 func (r *SuiteRepo) Create(ctx context.Context, projectID, name string) (domain.Suite, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.Suite{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	key, err := claimEntityKey(ctx, tx, projectID, "suite", "%s-S%d")
+	if err != nil {
+		return domain.Suite{}, fmt.Errorf("claiming suite key: %w", err)
+	}
+
 	var s domain.Suite
-	err := r.pool.QueryRow(ctx,
-		`INSERT INTO test_suites (project_id, name) VALUES ($1, $2)
-		 RETURNING id, project_id, name, created_at`, projectID, name,
-	).Scan(&s.ID, &s.ProjectID, &s.Name, &s.CreatedAt)
+	err = tx.QueryRow(ctx,
+		`INSERT INTO test_suites (key, project_id, name) VALUES ($1, $2, $3)
+		 RETURNING id, key, project_id, name, created_at`, key, projectID, name,
+	).Scan(&s.ID, &s.Key, &s.ProjectID, &s.Name, &s.CreatedAt)
+	if err != nil {
+		return domain.Suite{}, err
+	}
 	s.CaseIDs = []string{}
-	return s, err
+	return s, tx.Commit(ctx)
+}
+
+// IDByKey resolves a suite's key to its internal id — used at the API
+// boundary to translate a key-based path param before delegating to
+// UUID-based service/store calls (add-human-readable-keys D4).
+func (r *SuiteRepo) IDByKey(ctx context.Context, key string) (string, error) {
+	var id string
+	err := r.pool.QueryRow(ctx, `SELECT id FROM test_suites WHERE key = $1`, key).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return id, err
 }
 
 func (r *SuiteRepo) Get(ctx context.Context, suiteID string) (domain.Suite, error) {
 	var s domain.Suite
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, project_id, name, created_at FROM test_suites WHERE id = $1`, suiteID,
-	).Scan(&s.ID, &s.ProjectID, &s.Name, &s.CreatedAt)
+		`SELECT id, key, project_id, name, created_at FROM test_suites WHERE id = $1`, suiteID,
+	).Scan(&s.ID, &s.Key, &s.ProjectID, &s.Name, &s.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Suite{}, ErrNotFound
 	}
@@ -70,7 +99,7 @@ func (r *SuiteRepo) Get(ctx context.Context, suiteID string) (domain.Suite, erro
 
 func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, project_id, name, created_at FROM test_suites
+		`SELECT id, key, project_id, name, created_at FROM test_suites
 		 WHERE project_id = $1 ORDER BY created_at`, projectID)
 	if err != nil {
 		return nil, err
@@ -80,7 +109,7 @@ func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite,
 	suites := []domain.Suite{}
 	for rows.Next() {
 		var s domain.Suite
-		if err := rows.Scan(&s.ID, &s.ProjectID, &s.Name, &s.CreatedAt); err != nil {
+		if err := rows.Scan(&s.ID, &s.Key, &s.ProjectID, &s.Name, &s.CreatedAt); err != nil {
 			return nil, err
 		}
 		suites = append(suites, s)

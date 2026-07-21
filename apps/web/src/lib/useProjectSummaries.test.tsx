@@ -18,7 +18,8 @@ beforeEach(() => {
 
 function manyProjects(count: number) {
   return Array.from({ length: count }, (_, i) => ({
-    id: `p${i}`,
+    id: `id${i}`,
+    key: `p${i}`,
     name: `Project ${i}`,
     archived: false,
     description: '',
@@ -92,7 +93,8 @@ describe('useProjectSummaries', () => {
         return Promise.resolve({
           data: [
             {
-              id: 'p0',
+              id: 'id0',
+              key: 'p0',
               name: 'Project 0',
               archived: false,
               description: 'a description',
@@ -106,7 +108,7 @@ describe('useProjectSummaries', () => {
         return Promise.resolve({
           data: [
             {
-              projectId: 'p0',
+              projectId: 'id0',
               suiteCount: 1,
               caseCount: 2,
               passRate: 90,

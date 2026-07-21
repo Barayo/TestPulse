@@ -33,7 +33,7 @@ function textToTags(text: string): string[] {
 }
 
 export default function CaseDetailPage() {
-  const { projectId, caseId } = useParams<{ projectId: string; caseId: string }>()
+  const { projectKey, caseKey } = useParams<{ projectKey: string; caseKey: string }>()
 
   const [project, setProject] = useState<Project>()
   const [folders, setFolders] = useState<Folder[]>([])
@@ -53,14 +53,14 @@ export default function CaseDetailPage() {
   const [automated, setAutomated] = useState(false)
 
   const load = useCallback(async () => {
-    if (!projectId || !caseId) return
+    if (!projectKey || !caseKey) return
     setNotFound(false)
     const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }] = await Promise.all([
-      api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
-      api.GET('/api/v1/projects/{projectId}/folders', { params: { path: { projectId } } }),
-      api.GET('/api/v1/cases/{caseId}', { params: { path: { caseId } } }),
-      api.GET('/api/v1/cases/{caseId}/versions', { params: { path: { caseId } } }),
-      api.GET('/api/v1/projects/{projectId}/suites', { params: { path: { projectId } } }),
+      api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } }),
+      api.GET('/api/v1/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
     ])
     if (!p || !c) {
       setNotFound(true)
@@ -71,7 +71,7 @@ export default function CaseDetailPage() {
     setTestCase(c)
     setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
     setSuites(s ?? [])
-  }, [projectId, caseId])
+  }, [projectKey, caseKey])
 
   useEffect(() => {
     void load()
@@ -89,11 +89,11 @@ export default function CaseDetailPage() {
     setIsEditing(false)
   }, [testCase])
 
-  if (!projectId || !caseId) return null
+  if (!projectKey || !caseKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Case not found. <Link to={`/projects/${projectId}/library`} className="underline">Go to Library</Link>
+        Case not found. <Link to={`/projects/${projectKey}/library`} className="underline">Go to Library</Link>
       </p>
     )
   }
@@ -105,9 +105,9 @@ export default function CaseDetailPage() {
   const suiteNames = suites.filter((s) => s.caseIds.includes(testCase.id)).map((s) => s.name)
 
   async function saveEdit() {
-    if (!title.trim() || !caseId) return
-    await api.PUT('/api/v1/cases/{caseId}', {
-      params: { path: { caseId } },
+    if (!title.trim() || !caseKey) return
+    await api.PUT('/api/v1/cases/{caseKey}', {
+      params: { path: { caseKey } },
       body: {
         title: title.trim(),
         steps: steps.filter((s) => s.action.trim()),
@@ -125,10 +125,10 @@ export default function CaseDetailPage() {
 
   const breadcrumbSegments: Crumb[] = [
     { label: 'Projects', href: '/' },
-    { label: project.name, href: `/projects/${projectId}` },
-    { label: 'Library', href: `/projects/${projectId}/library` },
+    { label: project.name, href: `/projects/${projectKey}` },
+    { label: 'Library', href: `/projects/${projectKey}/library` },
     ...(folder && root && folder.id !== root.id
-      ? [{ label: folder.name, href: `/projects/${projectId}/library/${folder.id}` }]
+      ? [{ label: folder.name, href: `/projects/${projectKey}/library/${folder.id}` }]
       : []),
     { label: testCase.content.title },
   ]
@@ -142,7 +142,7 @@ export default function CaseDetailPage() {
           <div className="flex items-center gap-3">
             {!isEditing && (
               <Link
-                to={`/projects/${projectId}/library/${(folder ?? root)?.id}`}
+                to={`/projects/${projectKey}/library/${(folder ?? root)?.id}`}
                 aria-label={`Back to ${folderName}`}
                 className="text-2xl leading-none text-primary hover:text-primary/70"
               >
@@ -285,7 +285,7 @@ export default function CaseDetailPage() {
         <VersionDetailDialog
           open
           onOpenChange={(open) => !open && setViewingVersion(null)}
-          caseId={caseId}
+          caseKey={caseKey}
           version={viewingVersion}
           versions={versions}
         />

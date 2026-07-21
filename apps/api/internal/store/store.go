@@ -4,10 +4,12 @@
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -54,6 +56,29 @@ func marshalSteps(steps []domain.Step) ([]byte, error) {
 		steps = []domain.Step{}
 	}
 	return json.Marshal(steps)
+}
+
+// claimEntityKey claims the next per-project, per-type sequential number
+// from project_key_counters and formats it with the project's own key
+// (add-human-readable-keys D2/D3) — e.g. format "%s-%d" for a case yields
+// "LOGIN-42". Must run inside the same transaction as the entity's own
+// insert: the UPDATE takes a row lock on the counter row, so concurrent
+// creates in the same project serialize on it and never collide.
+func claimEntityKey(ctx context.Context, tx pgx.Tx, projectID, entityType, format string) (string, error) {
+	var projectKey string
+	if err := tx.QueryRow(ctx, `SELECT key FROM projects WHERE id = $1`, projectID).Scan(&projectKey); err != nil {
+		return "", err
+	}
+	var n int
+	err := tx.QueryRow(ctx,
+		`UPDATE project_key_counters SET next_value = next_value + 1
+		 WHERE project_id = $1 AND entity_type = $2
+		 RETURNING next_value - 1`, projectID, entityType,
+	).Scan(&n)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf(format, projectKey, n), nil
 }
 
 func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool) func() (domain.CaseContent, error) {

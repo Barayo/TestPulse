@@ -96,12 +96,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}": {
+    "/api/v1/projects/{projectKey}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -116,12 +116,12 @@ export interface paths {
         patch: operations["updateProject"];
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/favorite": {
+    "/api/v1/projects/{projectKey}/favorite": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -136,12 +136,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/cases": {
+    "/api/v1/projects/{projectKey}/cases": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -156,12 +156,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/folders": {
+    "/api/v1/projects/{projectKey}/folders": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -195,12 +195,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/cases/{caseId}/folder": {
+    "/api/v1/cases/{caseKey}/folder": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -214,12 +214,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/cases/{caseId}": {
+    "/api/v1/cases/{caseKey}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -235,12 +235,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/cases/{caseId}/versions": {
+    "/api/v1/cases/{caseKey}/versions": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -254,12 +254,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/cases/{caseId}/executions": {
+    "/api/v1/cases/{caseKey}/executions": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -273,12 +273,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/suites": {
+    "/api/v1/projects/{projectKey}/suites": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -293,13 +293,13 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/suites/{suiteId}/cases/{caseId}": {
+    "/api/v1/suites/{suiteKey}/cases/{caseKey}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                suiteId: string;
-                caseId: string;
+                suiteKey: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -314,12 +314,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/runs": {
+    "/api/v1/projects/{projectKey}/runs": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -334,12 +334,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{runId}": {
+    "/api/v1/runs/{runKey}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                runId: string;
+                runKey: string;
             };
             cookie?: never;
         };
@@ -353,14 +353,14 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{runId}/items": {
+    "/api/v1/runs/{runKey}/items": {
         parameters: {
             query?: {
                 assignee?: string;
             };
             header?: never;
             path: {
-                runId: string;
+                runKey: string;
             };
             cookie?: never;
         };
@@ -414,12 +414,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/runs/{runId}/summary": {
+    "/api/v1/runs/{runKey}/summary": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                runId: string;
+                runKey: string;
             };
             cookie?: never;
         };
@@ -689,12 +689,12 @@ export interface paths {
         patch: operations["updateRole"];
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/members": {
+    "/api/v1/projects/{projectKey}/members": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -708,12 +708,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/members/{userId}": {
+    "/api/v1/projects/{projectKey}/members/{userId}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
                 userId: string;
             };
             cookie?: never;
@@ -729,12 +729,12 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/projects/{projectId}/teams/{teamId}": {
+    "/api/v1/projects/{projectKey}/teams/{teamId}": {
         parameters: {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
                 teamId: string;
             };
             cookie?: never;
@@ -801,6 +801,8 @@ export interface components {
         };
         Project: {
             id: string;
+            /** @description Short, unique, human-readable identifier auto-derived from the project's name at creation. Immutable. */
+            key: string;
             name: string;
             archived: boolean;
             description: string;
@@ -818,6 +820,8 @@ export interface components {
         };
         TestCase: {
             id: string;
+            /** @description Human-readable identifier, scoped to the project: {projectKey}-{n}. Immutable. */
+            key: string;
             projectId: string;
             folderId: string;
             currentVersion: number;
@@ -843,6 +847,8 @@ export interface components {
         };
         Suite: {
             id: string;
+            /** @description Human-readable identifier, scoped to the project: {projectKey}-S{n}. Immutable. */
+            key: string;
             projectId: string;
             name: string;
             caseIds: string[];
@@ -854,7 +860,11 @@ export interface components {
         };
         Run: {
             id: string;
+            /** @description Human-readable identifier, scoped to the project: {projectKey}-R{n}. Immutable. */
+            key: string;
             projectId: string;
+            /** @description The owning project's key — a run's own route isn't nested under its project's, so this lets a client link back without a second lookup. */
+            projectKey: string;
             name: string;
             /** Format: date-time */
             createdAt: string;
@@ -862,9 +872,9 @@ export interface components {
         RunInput: {
             name: string;
             /** @description Include all cases of this suite */
-            suiteId?: string;
+            suiteKey?: string;
             /** @description Explicit cases to include */
-            caseIds?: string[];
+            caseKeys?: string[];
         };
         RunItem: {
             id: string;
@@ -881,7 +891,7 @@ export interface components {
             createdAt: string;
         };
         AddItemInput: {
-            caseId: string;
+            caseKey: string;
         };
         NewResult: {
             actor: string;
@@ -1239,7 +1249,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1262,7 +1272,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1290,7 +1300,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1312,7 +1322,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1333,7 +1343,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1355,7 +1365,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1383,7 +1393,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1405,7 +1415,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1454,7 +1464,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1482,7 +1492,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1505,7 +1515,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1533,7 +1543,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1554,7 +1564,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1576,7 +1586,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                caseId: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1598,7 +1608,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1620,7 +1630,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1647,8 +1657,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                suiteId: string;
-                caseId: string;
+                suiteKey: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1669,8 +1679,8 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                suiteId: string;
-                caseId: string;
+                suiteKey: string;
+                caseKey: string;
             };
             cookie?: never;
         };
@@ -1690,7 +1700,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1712,7 +1722,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -1740,7 +1750,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                runId: string;
+                runKey: string;
             };
             cookie?: never;
         };
@@ -1765,7 +1775,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                runId: string;
+                runKey: string;
             };
             cookie?: never;
         };
@@ -1789,7 +1799,7 @@ export interface operations {
             };
             header?: never;
             path: {
-                runId: string;
+                runKey: string;
             };
             cookie?: never;
         };
@@ -1894,7 +1904,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                runId: string;
+                runKey: string;
             };
             cookie?: never;
         };
@@ -2432,7 +2442,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
             };
             cookie?: never;
         };
@@ -2457,7 +2467,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
                 userId: string;
             };
             cookie?: never;
@@ -2486,7 +2496,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
                 userId: string;
             };
             cookie?: never;
@@ -2510,7 +2520,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
                 teamId: string;
             };
             cookie?: never;
@@ -2539,7 +2549,7 @@ export interface operations {
             query?: never;
             header?: never;
             path: {
-                projectId: string;
+                projectKey: string;
                 teamId: string;
             };
             cookie?: never;

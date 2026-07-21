@@ -10,7 +10,7 @@ const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 const mockPUT = vi.mocked(api.PUT)
 
-const run = { id: 'r1', projectId: 'p1', name: 'Sprint 1', createdAt: '' }
+const run = { id: 'r1', key: 'r1', projectId: 'p1', projectKey: 'p1', name: 'Sprint 1', createdAt: '' }
 const pendingItem = {
   id: 'i1',
   runId: 'r1',
@@ -32,19 +32,19 @@ const pendingItem = {
 
 function mockRunAPI(items: unknown[], summary?: unknown) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/runs/{runId}') return Promise.resolve({ data: run, response: { ok: true } })
-    if (path === '/api/v1/runs/{runId}/items')
+    if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+    if (path === '/api/v1/runs/{runKey}/items')
       return Promise.resolve({ data: items, response: { ok: true } })
-    if (path === '/api/v1/runs/{runId}/summary')
+    if (path === '/api/v1/runs/{runKey}/summary')
       return Promise.resolve({
         data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
         response: { ok: true },
       })
     if (path === '/api/v1/items/{itemId}/results')
       return Promise.resolve({ data: [], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}')
+    if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
-        data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+        data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
     return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -55,7 +55,7 @@ function renderRun() {
   return render(
     <MemoryRouter initialEntries={['/runs/r1']}>
       <Routes>
-        <Route path="/runs/:runId" element={<RunPage />} />
+        <Route path="/runs/:runKey" element={<RunPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -164,13 +164,13 @@ describe('Run execution board', () => {
     // the very first (pre-verdict) fetch.
     let recorded = false
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/runs/{runId}') return Promise.resolve({ data: run, response: { ok: true } })
-      if (path === '/api/v1/runs/{runId}/items')
+      if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items')
         return Promise.resolve({
           data: [{ ...pendingItem, currentStatus: recorded ? 'failed' : 'pending' }],
           response: { ok: true },
         })
-      if (path === '/api/v1/runs/{runId}/summary')
+      if (path === '/api/v1/runs/{runKey}/summary')
         return Promise.resolve({
           data: { runId: 'r1', total: 1, counts: recorded ? { failed: 1 } : { pending: 1 } },
           response: { ok: true },
@@ -216,7 +216,7 @@ describe('Run execution board', () => {
 
   it('shows a not-found message instead of an empty, interactive board when the run does not exist or is not accessible', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/runs/{runId}')
+      if (path === '/api/v1/runs/{runKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: undefined, response: { ok: false } })
     })

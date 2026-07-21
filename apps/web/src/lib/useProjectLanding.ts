@@ -3,6 +3,8 @@ import { api } from '@/lib/api'
 import { useDataRevision } from '@/lib/DataRevision'
 
 export type LandingFolder = { id: string; name: string; caseCount: number }
+// LandingSuite/LandingRun.id holds the suite/run's key (add-human-readable-keys),
+// not its internal id — every route/link these feed is key-based.
 export type LandingSuite = { id: string; name: string; caseCount: number }
 export type LandingRun = { id: string; name: string; createdAt: string; passRate: number | null }
 
@@ -36,12 +38,12 @@ const empty: ProjectLanding = {
 // suites by creation order with their case count, and the most recent runs
 // with a pass rate — all computed client-side from already-fetched project
 // data (design.md D4), capped to TOP_N so the landing stays glanceable.
-export function useProjectLanding(projectId: string | undefined): ProjectLanding {
+export function useProjectLanding(projectKey: string | undefined): ProjectLanding {
   const dataRevision = useDataRevision()
   const [landing, setLanding] = useState<ProjectLanding>(empty)
 
   useEffect(() => {
-    if (!projectId) {
+    if (!projectKey) {
       setLanding(empty)
       return
     }
@@ -50,10 +52,10 @@ export function useProjectLanding(projectId: string | undefined): ProjectLanding
     const signal = controller.signal
 
     void Promise.all([
-      api.GET('/api/v1/projects/{projectId}/folders', { params: { path: { projectId } }, signal }),
-      api.GET('/api/v1/projects/{projectId}/cases', { params: { path: { projectId } }, signal }),
-      api.GET('/api/v1/projects/{projectId}/suites', { params: { path: { projectId } }, signal }),
-      api.GET('/api/v1/projects/{projectId}/runs', { params: { path: { projectId } }, signal }),
+      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } }, signal }),
+      api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } }, signal }),
+      api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } }, signal }),
+      api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } }, signal }),
     ])
       .then(async ([foldersRes, casesRes, suitesRes, runsRes]) => {
         const folders = foldersRes.data ?? []
@@ -97,22 +99,22 @@ export function useProjectLanding(projectId: string | undefined): ProjectLanding
 
         const landingSuites: LandingSuite[] = suites
           .slice(0, TOP_N)
-          .map((s) => ({ id: s.id, name: s.name, caseCount: s.caseIds.length }))
+          .map((s) => ({ id: s.key, name: s.name, caseCount: s.caseIds.length }))
 
         const recentRuns = [...runs]
           .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
           .slice(0, TOP_N)
         const landingRuns: LandingRun[] = await Promise.all(
           recentRuns.map(async (r) => {
-            const { data: summary } = await api.GET('/api/v1/runs/{runId}/summary', {
-              params: { path: { runId: r.id } },
+            const { data: summary } = await api.GET('/api/v1/runs/{runKey}/summary', {
+              params: { path: { runKey: r.key } },
               signal,
             })
             let passRate: number | null = null
             if (summary && summary.total > 0) {
               passRate = Math.round(((summary.counts.pass ?? 0) / summary.total) * 100)
             }
-            return { id: r.id, name: r.name, createdAt: r.createdAt, passRate }
+            return { id: r.key, name: r.name, createdAt: r.createdAt, passRate }
           }),
         )
 
@@ -137,7 +139,7 @@ export function useProjectLanding(projectId: string | undefined): ProjectLanding
       cancelled = true
       controller.abort()
     }
-  }, [projectId, dataRevision])
+  }, [projectKey, dataRevision])
 
   return landing
 }

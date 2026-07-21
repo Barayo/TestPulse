@@ -13,6 +13,7 @@ const mockDELETE = vi.mocked(api.DELETE)
 
 const testCase = {
   id: 'c1',
+  key: 'p1-1',
   projectId: 'p1',
   folderId: 'root',
   currentVersion: 3,
@@ -22,13 +23,13 @@ const testCase = {
 
 function mockSuitesAPI(cases: unknown[] = [], suites: unknown[] = []) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/projects/{projectId}')
+    if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
-        data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+        data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectId}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -37,7 +38,7 @@ function renderSuites(initialEntry = '/projects/p1/suites') {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route path="/projects/:projectId/suites" element={<SuitesPage />} />
+        <Route path="/projects/:projectKey/suites" element={<SuitesPage />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -59,7 +60,7 @@ describe('SuitesPage', () => {
   it('creates a suite via the plain form', async () => {
     mockSuitesAPI()
     mockPOST.mockResolvedValue({
-      data: { id: 's1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' },
+      data: { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' },
       response: { ok: true },
     })
     renderSuites()
@@ -69,8 +70,8 @@ describe('SuitesPage', () => {
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectId}/suites',
-        expect.objectContaining({ params: { path: { projectId: 'p1' } }, body: { name: 'Smoke' } }),
+        '/api/v1/projects/{projectKey}/suites',
+        expect.objectContaining({ params: { path: { projectKey: 'p1' } }, body: { name: 'Smoke' } }),
       )
     })
   })
@@ -78,7 +79,7 @@ describe('SuitesPage', () => {
   it('shows a clean list — suite name and case count only, no member cases until opened', async () => {
     mockSuitesAPI(
       [testCase],
-      [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
+      [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
     )
     renderSuites()
     expect(await screen.findByText('Smoke')).toBeInTheDocument()
@@ -90,7 +91,7 @@ describe('SuitesPage', () => {
   it('opens the suite drawer when a suite row is clicked, showing its member cases', async () => {
     mockSuitesAPI(
       [testCase],
-      [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
+      [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
     )
     renderSuites()
     await userEvent.click(await screen.findByText('Smoke'))
@@ -99,7 +100,7 @@ describe('SuitesPage', () => {
   })
 
   it('adds a case to a suite from within the drawer', async () => {
-    mockSuitesAPI([testCase], [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' }])
+    mockSuitesAPI([testCase], [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' }])
     mockPUT.mockResolvedValue({ response: { ok: true } })
     renderSuites()
 
@@ -110,14 +111,14 @@ describe('SuitesPage', () => {
 
     await waitFor(() => {
       expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/suites/{suiteId}/cases/{caseId}',
-        expect.objectContaining({ params: { path: { suiteId: 's1', caseId: 'c1' } } }),
+        '/api/v1/suites/{suiteKey}/cases/{caseKey}',
+        expect.objectContaining({ params: { path: { suiteKey: 'p1-S1', caseKey: 'p1-1' } } }),
       )
     })
   })
 
   it('removes a case from a suite from within the drawer', async () => {
-    mockSuitesAPI([testCase], [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }])
+    mockSuitesAPI([testCase], [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }])
     mockDELETE.mockResolvedValue({ response: { ok: true } })
     renderSuites()
 
@@ -127,14 +128,14 @@ describe('SuitesPage', () => {
 
     await waitFor(() => {
       expect(mockDELETE).toHaveBeenCalledWith(
-        '/api/v1/suites/{suiteId}/cases/{caseId}',
-        expect.objectContaining({ params: { path: { suiteId: 's1', caseId: 'c1' } } }),
+        '/api/v1/suites/{suiteKey}/cases/{caseKey}',
+        expect.objectContaining({ params: { path: { suiteKey: 'p1-S1', caseKey: 'p1-1' } } }),
       )
     })
   })
 
   it('falls back to the raw id when a suite references an unknown case', async () => {
-    mockSuitesAPI([], [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['orphan-id'], createdAt: '' }])
+    mockSuitesAPI([], [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['orphan-id'], createdAt: '' }])
     renderSuites()
     await userEvent.click(await screen.findByText('Smoke'))
     expect(await screen.findByText('orphan-id')).toBeInTheDocument()
@@ -154,7 +155,7 @@ describe('SuitesPage', () => {
 
   it('shows a not-found message instead of an empty, interactive project when the project does not exist', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
@@ -167,11 +168,11 @@ describe('SuitesPage', () => {
     mockSuitesAPI(
       [],
       [
-        { id: 's1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' },
-        { id: 's2', projectId: 'p1', name: 'Regression', caseIds: [], createdAt: '' },
+        { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' },
+        { id: 's2', key: 'p1-S2', projectId: 'p1', name: 'Regression', caseIds: [], createdAt: '' },
       ],
     )
-    renderSuites('/projects/p1/suites#suite-s2')
+    renderSuites('/projects/p1/suites#suite-p1-S2')
     expect(await screen.findByRole('dialog', { name: 'Regression' })).toBeInTheDocument()
   })
 })

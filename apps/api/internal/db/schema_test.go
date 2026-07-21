@@ -22,7 +22,7 @@ var domainTables = []string{
 }
 
 // rootFolder looks up the project's auto-created root folder id, seeded by
-// the projects_create_root_folder trigger.
+// the projects_create_defaults trigger.
 func rootFolder(t *testing.T, pool *pgxpool.Pool, projectID string) string {
 	t.Helper()
 	var folderID string
@@ -67,11 +67,11 @@ func TestRunItemStatusConstraint(t *testing.T) {
 	// Seed the FK chain: project → case → version → run → item.
 	var projectID, caseID, runID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (name) VALUES ('p') RETURNING id`).Scan(&projectID); err != nil {
+		`INSERT INTO projects (key, name) VALUES ('P', 'p') RETURNING id`).Scan(&projectID); err != nil {
 		t.Fatalf("insert project: %v", err)
 	}
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO test_cases (project_id, folder_id) VALUES ($1, $2) RETURNING id`,
+		`INSERT INTO test_cases (key, project_id, folder_id) VALUES ('P-1', $1, $2) RETURNING id`,
 		projectID, rootFolder(t, pool, projectID)).Scan(&caseID); err != nil {
 		t.Fatalf("insert case: %v", err)
 	}
@@ -80,7 +80,7 @@ func TestRunItemStatusConstraint(t *testing.T) {
 		t.Fatalf("insert version: %v", err)
 	}
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO test_runs (project_id, name) VALUES ($1, 'r') RETURNING id`, projectID).Scan(&runID); err != nil {
+		`INSERT INTO test_runs (key, project_id, name) VALUES ('P-R1', $1, 'r') RETURNING id`, projectID).Scan(&runID); err != nil {
 		t.Fatalf("insert run: %v", err)
 	}
 
@@ -118,17 +118,17 @@ func TestResultVerdictConstraint(t *testing.T) {
 	ctx := context.Background()
 
 	var projectID, caseID, runID, itemID string
-	if err := pool.QueryRow(ctx, `INSERT INTO projects (name) VALUES ('p') RETURNING id`).Scan(&projectID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO projects (key, name) VALUES ('P', 'p') RETURNING id`).Scan(&projectID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO test_cases (project_id, folder_id) VALUES ($1, $2) RETURNING id`,
+	if err := pool.QueryRow(ctx, `INSERT INTO test_cases (key, project_id, folder_id) VALUES ('P-1', $1, $2) RETURNING id`,
 		projectID, rootFolder(t, pool, projectID)).Scan(&caseID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := pool.Exec(ctx, `INSERT INTO test_case_versions (case_id, version, title) VALUES ($1, 1, 't')`, caseID); err != nil {
 		t.Fatal(err)
 	}
-	if err := pool.QueryRow(ctx, `INSERT INTO test_runs (project_id, name) VALUES ($1, 'r') RETURNING id`, projectID).Scan(&runID); err != nil {
+	if err := pool.QueryRow(ctx, `INSERT INTO test_runs (key, project_id, name) VALUES ('P-R1', $1, 'r') RETURNING id`, projectID).Scan(&runID); err != nil {
 		t.Fatal(err)
 	}
 	if err := pool.QueryRow(ctx, `INSERT INTO test_run_items (run_id, case_id, case_version) VALUES ($1, $2, 1) RETURNING id`, runID, caseID).Scan(&itemID); err != nil {
@@ -159,7 +159,7 @@ func TestProjectCreationCreatesRootFolder(t *testing.T) {
 
 	var projectID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (name) VALUES ('p') RETURNING id`).Scan(&projectID); err != nil {
+		`INSERT INTO projects (key, name) VALUES ('P', 'p') RETURNING id`).Scan(&projectID); err != nil {
 		t.Fatalf("insert project: %v", err)
 	}
 
@@ -192,7 +192,7 @@ func TestCaseFolderIsMandatoryAndNested(t *testing.T) {
 
 	var projectID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO projects (name) VALUES ('p') RETURNING id`).Scan(&projectID); err != nil {
+		`INSERT INTO projects (key, name) VALUES ('P', 'p') RETURNING id`).Scan(&projectID); err != nil {
 		t.Fatal(err)
 	}
 	root := rootFolder(t, pool, projectID)
@@ -214,7 +214,7 @@ func TestCaseFolderIsMandatoryAndNested(t *testing.T) {
 	// A case can be placed directly in the nested subfolder.
 	var caseID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO test_cases (project_id, folder_id) VALUES ($1, $2) RETURNING id`,
+		`INSERT INTO test_cases (key, project_id, folder_id) VALUES ('P-1', $1, $2) RETURNING id`,
 		projectID, subID).Scan(&caseID); err != nil {
 		t.Fatalf("insert case in subfolder: %v", err)
 	}

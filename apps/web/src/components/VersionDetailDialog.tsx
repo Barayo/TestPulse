@@ -61,20 +61,20 @@ function diffContent(before: CaseContent, after: CaseContent): { fields: FieldDi
 type Props = {
   open: boolean
   onOpenChange: (open: boolean) => void
-  caseId: string
+  caseKey: string
   version: number
   versions: CaseVersion[]
 }
 
-export function VersionDetailDialog({ open, onOpenChange, caseId, version, versions }: Props) {
+export function VersionDetailDialog({ open, onOpenChange, caseKey, version, versions }: Props) {
   const [executions, setExecutions] = useState<CaseExecution[]>([])
 
   useEffect(() => {
     if (!open) return
-    void api.GET('/api/v1/cases/{caseId}/executions', { params: { path: { caseId } } }).then(({ data }) => {
+    void api.GET('/api/v1/cases/{caseKey}/executions', { params: { path: { caseKey } } }).then(({ data }) => {
       setExecutions(data ?? [])
     })
-  }, [open, caseId])
+  }, [open, caseKey])
 
   const current = versions.find((v) => v.version === version)
   const previous = versions.find((v) => v.version === version - 1)

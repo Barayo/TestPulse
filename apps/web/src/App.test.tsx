@@ -103,59 +103,65 @@ function mockProjectData() {
       return Promise.resolve({
         response: { ok: true },
         data: [
-          { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' },
-          { id: 'p2', name: 'Desktop App', archived: false, createdAt: '' },
+          { id: 'id1', key: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' },
+          { id: 'id2', key: 'p2', name: 'Desktop App', archived: false, createdAt: '' },
         ],
       })
     if (path === '/api/v1/projects/summaries')
       return Promise.resolve({
         response: { ok: true },
         data: [
-          { projectId: 'p1', suiteCount: 1, caseCount: 2, passRate: 50 },
-          { projectId: 'p2', suiteCount: 0, caseCount: 0, passRate: null },
+          { projectId: 'id1', suiteCount: 1, caseCount: 2, passRate: 50 },
+          { projectId: 'id2', suiteCount: 0, caseCount: 0, passRate: null },
         ],
       })
-    if (path === '/api/v1/projects/{projectId}') {
-      const projectId = options?.params?.path?.projectId
+    if (path === '/api/v1/projects/{projectKey}') {
+      const projectKey = options?.params?.path?.projectKey
       return Promise.resolve({
         response: { ok: true },
-        data: { id: projectId, name: projectId === 'p1' ? 'Banca Móvil' : 'Desktop App', archived: false, createdAt: '' },
+        data: {
+          id: projectKey === 'p1' ? 'id1' : 'id2',
+          key: projectKey,
+          name: projectKey === 'p1' ? 'Banca Móvil' : 'Desktop App',
+          archived: false,
+          createdAt: '',
+        },
       })
     }
-    if (path === '/api/v1/projects/{projectId}/suites') {
-      const projectId = options?.params?.path?.projectId
-      if (projectId === 'p1')
+    if (path === '/api/v1/projects/{projectKey}/suites') {
+      const projectKey = options?.params?.path?.projectKey
+      if (projectKey === 'p1')
         return Promise.resolve({
           response: { ok: true },
-          data: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '' }],
+          data: [{ id: 'sid1', key: 'p1-S1', projectId: 'id1', name: 'Smoke', caseIds: [], createdAt: '' }],
         })
       return Promise.resolve({ response: { ok: true }, data: [] })
     }
-    if (path === '/api/v1/projects/{projectId}/cases') {
-      const projectId = options?.params?.path?.projectId
-      if (projectId === 'p1')
+    if (path === '/api/v1/projects/{projectKey}/cases') {
+      const projectKey = options?.params?.path?.projectKey
+      if (projectKey === 'p1')
         return Promise.resolve({
           response: { ok: true },
           data: [
-            { id: 'c1', projectId: 'p1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case A', steps: [] } },
-            { id: 'c2', projectId: 'p1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case B', steps: [] } },
+            { id: 'cid1', key: 'p1-1', projectId: 'id1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case A', steps: [] } },
+            { id: 'cid2', key: 'p1-2', projectId: 'id1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case B', steps: [] } },
           ],
         })
       return Promise.resolve({ response: { ok: true }, data: [] })
     }
-    if (path === '/api/v1/projects/{projectId}/runs') {
-      const projectId = options?.params?.path?.projectId
-      if (projectId === 'p1')
+    if (path === '/api/v1/projects/{projectKey}/runs') {
+      const projectKey = options?.params?.path?.projectKey
+      if (projectKey === 'p1')
         return Promise.resolve({
           response: { ok: true },
-          data: [{ id: 'r1', projectId: 'p1', name: 'Smoke run', createdAt: '2026-01-01T00:00:00Z' }],
+          data: [{ id: 'rid1', key: 'p1-R1', projectId: 'id1', projectKey: 'p1', name: 'Smoke run', createdAt: '2026-01-01T00:00:00Z' }],
         })
       return Promise.resolve({ response: { ok: true }, data: [] })
     }
-    if (path === '/api/v1/runs/{runId}/summary')
+    if (path === '/api/v1/runs/{runKey}/summary')
       return Promise.resolve({
         response: { ok: true },
-        data: { runId: 'r1', total: 2, counts: { pass: 1 } },
+        data: { runId: 'rid1', total: 2, counts: { pass: 1 } },
       })
     return Promise.resolve({ response: { ok: true }, data: [] })
   })
@@ -266,17 +272,22 @@ describe('App shell', () => {
       if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
       if (path === '/api/v1/projects')
         return Promise.resolve({
-          data: [{ id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }],
+          data: [{ id: 'id1', key: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }],
           response: { ok: true },
         })
-      if (path === '/api/v1/runs/{runId}' && options?.params?.path?.runId === 'r1')
+      if (path === '/api/v1/runs/{runKey}' && options?.params?.path?.runKey === 'r1')
         return Promise.resolve({
-          data: { id: 'r1', projectId: 'p1', name: 'Sprint 1', createdAt: '' },
+          data: { id: 'rid1', key: 'r1', projectId: 'id1', projectKey: 'p1', name: 'Sprint 1', createdAt: '' },
           response: { ok: true },
         })
-      if (path === '/api/v1/runs/{runId}/items') return Promise.resolve({ data: [], response: { ok: true } })
-      if (path === '/api/v1/runs/{runId}/summary')
-        return Promise.resolve({ data: { runId: 'r1', total: 0, counts: {} }, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/summary')
+        return Promise.resolve({ data: { runId: 'rid1', total: 0, counts: {} }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'id1', key: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' },
+          response: { ok: true },
+        })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     window.history.pushState({}, '', '/runs/r1')
@@ -315,7 +326,9 @@ describe('App shell', () => {
   it('falls back to no active project when resolving it from a run route fails', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
-      if (path === '/api/v1/runs/{runId}') return Promise.reject(new Error('network down'))
+      if (path === '/api/v1/runs/{runKey}') return Promise.reject(new Error('network down'))
+      if (path === '/api/v1/runs/{runKey}/summary')
+        return Promise.resolve({ data: { runId: 'rid1', total: 0, counts: {} }, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     window.history.pushState({}, '', '/runs/r1')

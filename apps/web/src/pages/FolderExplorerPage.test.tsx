@@ -30,6 +30,7 @@ const nacionales = { id: 'nacionales', projectId: 'p1', parentFolderId: 'transfe
 
 const limitCase = {
   id: 'c1',
+  key: 'c1',
   projectId: 'p1',
   folderId: 'transferencias',
   currentVersion: 2,
@@ -49,18 +50,18 @@ const limitCase = {
 
 function mockExplorerAPI(overrides: Partial<Record<string, unknown>> = {}) {
   mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
-    if (path === '/api/v1/projects/{projectId}')
+    if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/folders')
+    if (path === '/api/v1/projects/{projectKey}/folders')
       return Promise.resolve({ data: overrides.folders ?? [root, transferencias, nacionales], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/cases')
+    if (path === '/api/v1/projects/{projectKey}/cases')
       return Promise.resolve({ data: overrides.cases ?? [limitCase], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/suites')
+    if (path === '/api/v1/projects/{projectKey}/suites')
       return Promise.resolve({
         data: overrides.suites ?? [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
       })
-    if (path === '/api/v1/cases/{caseId}/versions' && options?.params?.path?.caseId === 'c1')
+    if (path === '/api/v1/cases/{caseKey}/versions' && options?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: [
           { caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' },
@@ -73,17 +74,17 @@ function mockExplorerAPI(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 function CaseDetailProbe() {
-  const { caseId } = useParams<{ caseId: string }>()
-  return <p data-testid="case-detail-probe">case detail for {caseId}</p>
+  const { caseKey } = useParams<{ caseKey: string }>()
+  return <p data-testid="case-detail-probe">case detail for {caseKey}</p>
 }
 
 function renderExplorer(path = '/projects/p1/library/transferencias') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/projects/:projectId/library" element={<FolderExplorerPage />} />
-        <Route path="/projects/:projectId/library/:folderId" element={<FolderExplorerPage />} />
-        <Route path="/projects/:projectId/cases/:caseId" element={<CaseDetailProbe />} />
+        <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
+        <Route path="/projects/:projectKey/library/:folderId" element={<FolderExplorerPage />} />
+        <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -116,14 +117,14 @@ afterEach(() => {
 describe('FolderExplorerPage', () => {
   it('shows a not-found message instead of a blank/empty interactive page when the project does not exist or is not accessible', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     render(
       <MemoryRouter initialEntries={['/projects/p1/library']}>
         <Routes>
-          <Route path="/projects/:projectId/library" element={<FolderExplorerPage />} />
+          <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
         </Routes>
       </MemoryRouter>,
     )
@@ -180,9 +181,9 @@ describe('FolderExplorerPage', () => {
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectId}/folders',
+        '/api/v1/projects/{projectKey}/folders',
         expect.objectContaining({
-          params: { path: { projectId: 'p1' } },
+          params: { path: { projectKey: 'p1' } },
           body: { name: 'Internacionales', parentFolderId: 'transferencias' },
         }),
       )
@@ -205,7 +206,7 @@ describe('FolderExplorerPage', () => {
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectId}/folders',
+        '/api/v1/projects/{projectKey}/folders',
         expect.objectContaining({ body: { name: 'Returns', parentFolderId: 'nacionales' } }),
       )
     })
@@ -224,9 +225,9 @@ describe('FolderExplorerPage', () => {
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectId}/cases',
+        '/api/v1/projects/{projectKey}/cases',
         expect.objectContaining({
-          params: { path: { projectId: 'p1' } },
+          params: { path: { projectKey: 'p1' } },
           body: expect.objectContaining({
             title: 'New case',
             folderId: 'transferencias',
@@ -257,7 +258,7 @@ describe('FolderExplorerPage', () => {
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectId}/cases',
+        '/api/v1/projects/{projectKey}/cases',
         expect.objectContaining({
           body: expect.objectContaining({
             priority: 'critical',
@@ -294,8 +295,8 @@ describe('FolderExplorerPage', () => {
 
       await waitFor(() => {
         expect(mockPUT).toHaveBeenCalledWith(
-          '/api/v1/cases/{caseId}/folder',
-          expect.objectContaining({ params: { path: { caseId: 'c1' } }, body: { folderId: 'nacionales' } }),
+          '/api/v1/cases/{caseKey}/folder',
+          expect.objectContaining({ params: { path: { caseKey: 'c1' } }, body: { folderId: 'nacionales' } }),
         )
       })
     })
@@ -315,8 +316,8 @@ describe('FolderExplorerPage', () => {
 
       await waitFor(() => {
         expect(mockPUT).toHaveBeenCalledWith(
-          '/api/v1/cases/{caseId}/folder',
-          expect.objectContaining({ params: { path: { caseId: 'c1' } }, body: { folderId: 'nacionales' } }),
+          '/api/v1/cases/{caseKey}/folder',
+          expect.objectContaining({ params: { path: { caseKey: 'c1' } }, body: { folderId: 'nacionales' } }),
         )
       })
     })
@@ -352,8 +353,8 @@ describe('FolderExplorerPage', () => {
 
       await waitFor(() => {
         expect(mockPUT).toHaveBeenCalledWith(
-          '/api/v1/cases/{caseId}/folder',
-          expect.objectContaining({ params: { path: { caseId: 'c1' } }, body: { folderId: 'nacionales' } }),
+          '/api/v1/cases/{caseKey}/folder',
+          expect.objectContaining({ params: { path: { caseKey: 'c1' } }, body: { folderId: 'nacionales' } }),
         )
       })
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()

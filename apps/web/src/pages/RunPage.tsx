@@ -24,7 +24,7 @@ type Result = components['schemas']['Result']
 type Project = components['schemas']['Project']
 
 export default function RunPage() {
-  const { runId } = useParams<{ runId: string }>()
+  const { runKey } = useParams<{ runKey: string }>()
   const [run, setRun] = useState<Run>()
   const [notFound, setNotFound] = useState(false)
   const [project, setProject] = useState<Project>()
@@ -37,13 +37,13 @@ export default function RunPage() {
   const [verdictError, setVerdictError] = useState<string>()
 
   const load = useCallback(async () => {
-    if (!runId) return
+    if (!runKey) return
     setNotFound(false)
     try {
       const [{ data: r }, { data: i }, { data: s }] = await Promise.all([
-        api.GET('/api/v1/runs/{runId}', { params: { path: { runId } } }),
-        api.GET('/api/v1/runs/{runId}/items', { params: { path: { runId } } }),
-        api.GET('/api/v1/runs/{runId}/summary', { params: { path: { runId } } }),
+        api.GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } }),
+        api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
+        api.GET('/api/v1/runs/{runKey}/summary', { params: { path: { runKey } } }),
       ])
       if (!r) {
         setNotFound(true)
@@ -55,12 +55,12 @@ export default function RunPage() {
     } catch {
       setItems([])
     }
-  }, [runId])
+  }, [runKey])
 
   useEffect(() => {
     if (!run) return
     api
-      .GET('/api/v1/projects/{projectId}', { params: { path: { projectId: run.projectId } } })
+      .GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey: run.projectKey } } })
       .then(({ data }) => setProject(data))
       .catch(() => setProject(undefined))
   }, [run])
@@ -74,10 +74,10 @@ export default function RunPage() {
   // component-local closures, which can be stale across awaits.
   const refreshSelected = useCallback(
     async (itemId: string) => {
-      if (!runId) return
+      if (!runKey) return
       const [{ data: i }, { data: s }, { data: r }] = await Promise.all([
-        api.GET('/api/v1/runs/{runId}/items', { params: { path: { runId } } }),
-        api.GET('/api/v1/runs/{runId}/summary', { params: { path: { runId } } }),
+        api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
+        api.GET('/api/v1/runs/{runKey}/summary', { params: { path: { runKey } } }),
         api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId } } }),
       ])
       setItems(i ?? [])
@@ -85,7 +85,7 @@ export default function RunPage() {
       setResults(r ?? [])
       setSelected((i ?? []).find((it) => it.id === itemId))
     },
-    [runId],
+    [runKey],
   )
 
   async function selectItem(item: RunItem) {
@@ -131,7 +131,7 @@ export default function RunPage() {
       <Breadcrumbs
         segments={[
           { label: 'Projects', href: '/' },
-          { label: project?.name ?? '', href: project ? `/projects/${project.id}` : undefined },
+          { label: project?.name ?? '', href: project ? `/projects/${project.key}` : undefined },
           { label: run?.name ?? '' },
         ]}
       />

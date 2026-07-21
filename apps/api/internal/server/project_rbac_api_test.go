@@ -33,7 +33,7 @@ func TestScenario_NoMembershipCannotSeeProject(t *testing.T) {
 
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var member jmap
 	callAs(t, handler, admin, "POST", "/api/v1/users",
@@ -41,8 +41,8 @@ func TestScenario_NoMembershipCannotSeeProject(t *testing.T) {
 	memberCookie := loginCookie(t, handler, "outsider@example.com", "correcthorse")
 
 	var errBody jmap
-	callAs(t, handler, memberCookie, "GET", "/api/v1/projects/"+projectID, nil, 403, &errBody)
-	callAs(t, handler, memberCookie, "GET", "/api/v1/projects/"+projectID+"/cases", nil, 403, &errBody)
+	callAs(t, handler, memberCookie, "GET", "/api/v1/projects/"+projectKey, nil, 403, &errBody)
+	callAs(t, handler, memberCookie, "GET", "/api/v1/projects/"+projectKey+"/cases", nil, 403, &errBody)
 
 	var list []jmap
 	callAs(t, handler, memberCookie, "GET", "/api/v1/projects", nil, 200, &list)
@@ -58,32 +58,32 @@ func TestScenario_TesterCanReadAndExecuteButNotAuthor(t *testing.T) {
 
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var user jmap
 	callAs(t, handler, admin, "POST", "/api/v1/users",
 		jmap{"email": "tester@example.com", "password": "correcthorse"}, 201, &user)
 	userID, _ := user["id"].(string)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/members/"+userID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
 		jmap{"roleId": testerRoleID}, 204, nil)
 	testerCookie := loginCookie(t, handler, "tester@example.com", "correcthorse")
 
 	// Read access: granted.
-	callAs(t, handler, testerCookie, "GET", "/api/v1/projects/"+projectID, nil, 200, nil)
-	callAs(t, handler, testerCookie, "GET", "/api/v1/projects/"+projectID+"/cases", nil, 200, nil)
+	callAs(t, handler, testerCookie, "GET", "/api/v1/projects/"+projectKey, nil, 200, nil)
+	callAs(t, handler, testerCookie, "GET", "/api/v1/projects/"+projectKey+"/cases", nil, 200, nil)
 
 	// Tester can create and execute runs.
 	var run jmap
-	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectID+"/runs",
+	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectKey+"/runs",
 		jmap{"name": "Sprint 1"}, 201, &run)
 
 	// Tester cannot author cases/folders/suites.
 	var errBody jmap
-	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectID+"/cases",
+	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectKey+"/cases",
 		jmap{"title": "Login works"}, 403, &errBody)
-	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectID+"/folders",
+	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectKey+"/folders",
 		jmap{"name": "Auth"}, 403, &errBody)
-	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectID+"/suites",
+	callAs(t, handler, testerCookie, "POST", "/api/v1/projects/"+projectKey+"/suites",
 		jmap{"name": "Smoke"}, 403, &errBody)
 }
 
@@ -94,29 +94,29 @@ func TestScenario_ContributorCanAuthorButNotDelete(t *testing.T) {
 
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var user jmap
 	callAs(t, handler, admin, "POST", "/api/v1/users",
 		jmap{"email": "contributor@example.com", "password": "correcthorse"}, 201, &user)
 	userID, _ := user["id"].(string)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/members/"+userID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
 		jmap{"roleId": contributorRoleID}, 204, nil)
 	contributorCookie := loginCookie(t, handler, "contributor@example.com", "correcthorse")
 
 	var c jmap
-	callAs(t, handler, contributorCookie, "POST", "/api/v1/projects/"+projectID+"/cases",
+	callAs(t, handler, contributorCookie, "POST", "/api/v1/projects/"+projectKey+"/cases",
 		jmap{"title": "Login works"}, 201, &c)
-	caseID, _ := c["id"].(string)
+	caseKey, _ := c["key"].(string)
 
 	// Contributor can edit but not delete.
-	callAs(t, handler, contributorCookie, "PUT", "/api/v1/cases/"+caseID,
+	callAs(t, handler, contributorCookie, "PUT", "/api/v1/cases/"+caseKey,
 		jmap{"title": "Login works (edited)", "steps": []jmap{}}, 200, nil)
 	var errBody jmap
-	callAs(t, handler, contributorCookie, "DELETE", "/api/v1/cases/"+caseID, nil, 403, &errBody)
+	callAs(t, handler, contributorCookie, "DELETE", "/api/v1/cases/"+caseKey, nil, 403, &errBody)
 
 	// Contributor cannot administer the project itself.
-	callAs(t, handler, contributorCookie, "PATCH", "/api/v1/projects/"+projectID,
+	callAs(t, handler, contributorCookie, "PATCH", "/api/v1/projects/"+projectKey,
 		jmap{"description": "nope"}, 403, &errBody)
 }
 
@@ -128,25 +128,25 @@ func TestScenario_ProjectAdminCanDeleteButNotAssignMembership(t *testing.T) {
 
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var c jmap
-	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectID+"/cases",
+	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/cases",
 		jmap{"title": "Login works"}, 201, &c)
-	caseID, _ := c["id"].(string)
+	caseKey, _ := c["key"].(string)
 
 	var user jmap
 	callAs(t, handler, admin, "POST", "/api/v1/users",
 		jmap{"email": "projectadmin@example.com", "password": "correcthorse"}, 201, &user)
 	userID, _ := user["id"].(string)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/members/"+userID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
 		jmap{"roleId": projectAdminRoleID}, 204, nil)
 	paCookie := loginCookie(t, handler, "projectadmin@example.com", "correcthorse")
 
 	// Project Admin can rename/describe the project and delete cases.
-	callAs(t, handler, paCookie, "PATCH", "/api/v1/projects/"+projectID,
+	callAs(t, handler, paCookie, "PATCH", "/api/v1/projects/"+projectKey,
 		jmap{"description": "now described"}, 200, nil)
-	callAs(t, handler, paCookie, "DELETE", "/api/v1/cases/"+caseID, nil, 204, nil)
+	callAs(t, handler, paCookie, "DELETE", "/api/v1/cases/"+caseKey, nil, 204, nil)
 
 	// But cannot assign project membership — that's Tenant-Admin-only.
 	var other jmap
@@ -154,7 +154,7 @@ func TestScenario_ProjectAdminCanDeleteButNotAssignMembership(t *testing.T) {
 		jmap{"email": "another@example.com", "password": "correcthorse"}, 201, &other)
 	otherID, _ := other["id"].(string)
 	var errBody jmap
-	callAs(t, handler, paCookie, "PUT", "/api/v1/projects/"+projectID+"/members/"+otherID,
+	callAs(t, handler, paCookie, "PUT", "/api/v1/projects/"+projectKey+"/members/"+otherID,
 		jmap{"roleId": testerRoleID}, 403, &errBody)
 }
 
@@ -165,7 +165,7 @@ func TestScenario_TeamMembershipGrantsProjectAccess(t *testing.T) {
 
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var user jmap
 	callAs(t, handler, admin, "POST", "/api/v1/users",
@@ -176,11 +176,11 @@ func TestScenario_TeamMembershipGrantsProjectAccess(t *testing.T) {
 	callAs(t, handler, admin, "POST", "/api/v1/teams", jmap{"name": "QA Core"}, 201, &team)
 	teamID, _ := team["id"].(string)
 	callAs(t, handler, admin, "POST", "/api/v1/teams/"+teamID+"/members/"+userID, nil, 200, nil)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/teams/"+teamID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/teams/"+teamID,
 		jmap{"roleId": testerRoleID}, 204, nil)
 
 	memberCookie := loginCookie(t, handler, "viateam@example.com", "correcthorse")
-	callAs(t, handler, memberCookie, "GET", "/api/v1/projects/"+projectID, nil, 200, nil)
+	callAs(t, handler, memberCookie, "GET", "/api/v1/projects/"+projectKey, nil, 200, nil)
 }
 
 func TestScenario_TenantAdminManagesRolesOverHTTP(t *testing.T) {
@@ -253,33 +253,33 @@ func TestScenario_ReadAndRemoveProjectMembershipOverHTTP(t *testing.T) {
 
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var user jmap
 	callAs(t, handler, admin, "POST", "/api/v1/users",
 		jmap{"email": "readmembership@example.com", "password": "correcthorse"}, 201, &user)
 	userID, _ := user["id"].(string)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/members/"+userID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
 		jmap{"roleId": testerRoleID}, 204, nil)
 
 	var team jmap
 	callAs(t, handler, admin, "POST", "/api/v1/teams", jmap{"name": "Read Membership Team"}, 201, &team)
 	teamID, _ := team["id"].(string)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/teams/"+teamID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/teams/"+teamID,
 		jmap{"roleId": testerRoleID}, 204, nil)
 
 	var membership jmap
-	callAs(t, handler, admin, "GET", "/api/v1/projects/"+projectID+"/members", nil, 200, &membership)
+	callAs(t, handler, admin, "GET", "/api/v1/projects/"+projectKey+"/members", nil, 200, &membership)
 	users, _ := membership["users"].([]any)
 	teams, _ := membership["teams"].([]any)
 	if len(users) != 1 || len(teams) != 1 {
 		t.Fatalf("getProjectMembership = %+v", membership)
 	}
 
-	callAs(t, handler, admin, "DELETE", "/api/v1/projects/"+projectID+"/members/"+userID, nil, 204, nil)
-	callAs(t, handler, admin, "DELETE", "/api/v1/projects/"+projectID+"/teams/"+teamID, nil, 204, nil)
+	callAs(t, handler, admin, "DELETE", "/api/v1/projects/"+projectKey+"/members/"+userID, nil, 204, nil)
+	callAs(t, handler, admin, "DELETE", "/api/v1/projects/"+projectKey+"/teams/"+teamID, nil, 204, nil)
 
-	callAs(t, handler, admin, "GET", "/api/v1/projects/"+projectID+"/members", nil, 200, &membership)
+	callAs(t, handler, admin, "GET", "/api/v1/projects/"+projectKey+"/members", nil, 200, &membership)
 	users, _ = membership["users"].([]any)
 	teams, _ = membership["teams"].([]any)
 	if len(users) != 0 || len(teams) != 0 {
@@ -299,19 +299,19 @@ func TestScenario_NonTenantAdminCannotRemoveProjectMembershipOverHTTP(t *testing
 
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	projectID, _ := p["id"].(string)
+	projectKey, _ := p["key"].(string)
 
 	var user jmap
 	callAs(t, handler, admin, "POST", "/api/v1/users",
 		jmap{"email": "removemember@example.com", "password": "correcthorse"}, 201, &user)
 	userID, _ := user["id"].(string)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/members/"+userID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
 		jmap{"roleId": testerRoleID}, 204, nil)
 
 	var team jmap
 	callAs(t, handler, admin, "POST", "/api/v1/teams", jmap{"name": "Remove Membership Team"}, 201, &team)
 	teamID, _ := team["id"].(string)
-	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectID+"/teams/"+teamID,
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/teams/"+teamID,
 		jmap{"roleId": testerRoleID}, 204, nil)
 
 	var bystander jmap
@@ -320,12 +320,12 @@ func TestScenario_NonTenantAdminCannotRemoveProjectMembershipOverHTTP(t *testing
 	bystanderCookie := loginCookie(t, handler, "bystander@example.com", "correcthorse")
 
 	var errBody jmap
-	callAs(t, handler, bystanderCookie, "DELETE", "/api/v1/projects/"+projectID+"/members/"+userID, nil, 403, &errBody)
-	callAs(t, handler, bystanderCookie, "DELETE", "/api/v1/projects/"+projectID+"/teams/"+teamID, nil, 403, &errBody)
+	callAs(t, handler, bystanderCookie, "DELETE", "/api/v1/projects/"+projectKey+"/members/"+userID, nil, 403, &errBody)
+	callAs(t, handler, bystanderCookie, "DELETE", "/api/v1/projects/"+projectKey+"/teams/"+teamID, nil, 403, &errBody)
 
 	// Neither attempt actually removed anything.
 	var membership jmap
-	callAs(t, handler, admin, "GET", "/api/v1/projects/"+projectID+"/members", nil, 200, &membership)
+	callAs(t, handler, admin, "GET", "/api/v1/projects/"+projectKey+"/members", nil, 200, &membership)
 	users, _ := membership["users"].([]any)
 	teams, _ := membership["teams"].([]any)
 	if len(users) != 1 || len(teams) != 1 {

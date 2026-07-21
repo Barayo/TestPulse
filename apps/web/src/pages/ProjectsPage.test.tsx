@@ -15,7 +15,8 @@ const ME_TENANT_ADMIN = { id: 'admin1', email: 'admin@example.com', isTenantAdmi
 const ME_NON_ADMIN = { id: 'member1', email: 'member@example.com', isTenantAdmin: false }
 
 function project(overrides: Record<string, unknown> = {}) {
-  return { id: 'p1', name: 'Banca Móvil', archived: false, description: '', createdAt: '', ...overrides }
+  const id = (overrides.id as string | undefined) ?? 'p1'
+  return { id, key: id, name: 'Banca Móvil', archived: false, description: '', createdAt: '', ...overrides }
 }
 
 function summary(overrides: Record<string, unknown> = {}) {
@@ -29,7 +30,7 @@ function mockProjectsList(projects: unknown[] = [], summaries: unknown[] = [], o
     if (path === '/api/v1/projects/summaries')
       return Promise.resolve({ data: summaries, response: { ok: true } })
     if (path === '/api/v1/users/me') return Promise.resolve({ data: me, response: { ok: true } })
-    if (path === '/api/v1/runs/{runId}/summary')
+    if (path === '/api/v1/runs/{runKey}/summary')
       return Promise.resolve({ data: { runId: 'r1', total: 0, counts: {} }, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
@@ -41,7 +42,7 @@ function renderPage() {
       <AuthProvider>
         <Routes>
           <Route path="/" element={<ProjectsPage />} />
-          <Route path="/projects/:projectId" element={<div>Project page stub</div>} />
+          <Route path="/projects/:projectKey" element={<div>Project page stub</div>} />
         </Routes>
       </AuthProvider>
     </MemoryRouter>,
@@ -149,7 +150,7 @@ describe('ProjectsPage', () => {
   it('reveals the create form when "+ New project" is clicked, and creates a project', async () => {
     mockProjectsList([])
     mockPOST.mockResolvedValue({
-      data: { id: 'p2', name: 'New Proj', archived: false, description: '', createdAt: '' },
+      data: { id: 'p2', key: 'p2', name: 'New Proj', archived: false, description: '', createdAt: '' },
       response: { ok: true },
     })
     renderPage()
@@ -170,7 +171,7 @@ describe('ProjectsPage', () => {
   it('creates a project with an optional description', async () => {
     mockProjectsList([])
     mockPOST.mockResolvedValue({
-      data: { id: 'p2', name: 'Full Proj', archived: false, description: 'desc', createdAt: '' },
+      data: { id: 'p2', key: 'p2', name: 'Full Proj', archived: false, description: 'desc', createdAt: '' },
       response: { ok: true },
     })
     renderPage()
@@ -346,8 +347,8 @@ describe('ProjectsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: /star banca móvil/i }))
       await waitFor(() => {
         expect(mockPOST).toHaveBeenCalledWith(
-          '/api/v1/projects/{projectId}/favorite',
-          expect.objectContaining({ params: { path: { projectId: 'p1' } } }),
+          '/api/v1/projects/{projectKey}/favorite',
+          expect.objectContaining({ params: { path: { projectKey: 'p1' } } }),
         )
       })
     })
@@ -361,8 +362,8 @@ describe('ProjectsPage', () => {
       await userEvent.click(screen.getByRole('button', { name: /unstar banca móvil/i }))
       await waitFor(() => {
         expect(mockDELETE).toHaveBeenCalledWith(
-          '/api/v1/projects/{projectId}/favorite',
-          expect.objectContaining({ params: { path: { projectId: 'p1' } } }),
+          '/api/v1/projects/{projectKey}/favorite',
+          expect.objectContaining({ params: { path: { projectKey: 'p1' } } }),
         )
       })
     })

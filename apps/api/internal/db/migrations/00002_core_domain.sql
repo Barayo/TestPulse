@@ -3,12 +3,27 @@
 -- Design decisions D1–D3: immutable case versioning, version pinning on run
 -- items, append-only result log with materialized current_status.
 -- D8: project-level case folders, orthogonal to suites.
+-- add-human-readable-keys D1–D3: every project/case/run/suite carries an
+-- immutable, unique, human-readable `key` alongside its uuid primary key.
 
 CREATE TABLE projects (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    key         text NOT NULL UNIQUE,
     name        text NOT NULL CHECK (name <> ''),
     archived    boolean NOT NULL DEFAULT false,
     created_at  timestamptz NOT NULL DEFAULT now()
+);
+
+-- Per-project, per-entity-type sequential counters backing case/run/suite
+-- keys (add-human-readable-keys D3). Seeded for every project by the
+-- trigger below; claimed via `UPDATE ... RETURNING` inside the same
+-- transaction as the entity's own insert, so concurrent creates in the
+-- same project serialize on this row and never collide.
+CREATE TABLE project_key_counters (
+    project_id   uuid NOT NULL REFERENCES projects (id),
+    entity_type  text NOT NULL CHECK (entity_type IN ('case', 'run', 'suite')),
+    next_value   integer NOT NULL DEFAULT 1,
+    PRIMARY KEY (project_id, entity_type)
 );
 
 -- Self-referencing folder tree per project (D8). Exactly one row per project
@@ -28,21 +43,29 @@ CREATE UNIQUE INDEX test_case_folders_one_root_idx
     ON test_case_folders (project_id) WHERE parent_folder_id IS NULL;
 
 -- +goose StatementBegin
-CREATE FUNCTION create_project_root_folder() RETURNS trigger AS $$
+-- Seeds every new project's fixed dependents: its root folder (D8) and its
+-- three key counters (add-human-readable-keys D3). Renamed from
+-- create_project_root_folder to reflect the broader job; guarantees both
+-- exist for every project regardless of call site, the same way the root
+-- folder guarantee always has.
+CREATE FUNCTION create_project_defaults() RETURNS trigger AS $$
 BEGIN
     INSERT INTO test_case_folders (project_id, parent_folder_id, name)
     VALUES (NEW.id, NULL, 'Root');
+    INSERT INTO project_key_counters (project_id, entity_type, next_value)
+    VALUES (NEW.id, 'case', 1), (NEW.id, 'run', 1), (NEW.id, 'suite', 1);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 -- +goose StatementEnd
 
-CREATE TRIGGER projects_create_root_folder
+CREATE TRIGGER projects_create_defaults
     AFTER INSERT ON projects
-    FOR EACH ROW EXECUTE FUNCTION create_project_root_folder();
+    FOR EACH ROW EXECUTE FUNCTION create_project_defaults();
 
 CREATE TABLE test_cases (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    key             text NOT NULL UNIQUE,
     project_id      uuid NOT NULL REFERENCES projects (id),
     folder_id       uuid NOT NULL REFERENCES test_case_folders (id),
     current_version integer NOT NULL DEFAULT 1,
@@ -72,6 +95,7 @@ CREATE TABLE test_case_versions (
 
 CREATE TABLE test_suites (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    key         text NOT NULL UNIQUE,
     project_id  uuid NOT NULL REFERENCES projects (id),
     name        text NOT NULL CHECK (name <> ''),
     created_at  timestamptz NOT NULL DEFAULT now()
@@ -86,6 +110,7 @@ CREATE TABLE suite_cases (
 
 CREATE TABLE test_runs (
     id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+    key         text NOT NULL UNIQUE,
     project_id  uuid NOT NULL REFERENCES projects (id),
     name        text NOT NULL CHECK (name <> ''),
     created_at  timestamptz NOT NULL DEFAULT now()
@@ -133,7 +158,8 @@ DROP TABLE suite_cases;
 DROP TABLE test_suites;
 DROP TABLE test_case_versions;
 DROP TABLE test_cases;
-DROP TRIGGER projects_create_root_folder ON projects;
-DROP FUNCTION create_project_root_folder();
+DROP TRIGGER projects_create_defaults ON projects;
+DROP FUNCTION create_project_defaults();
 DROP TABLE test_case_folders;
+DROP TABLE project_key_counters;
 DROP TABLE projects;

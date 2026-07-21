@@ -111,14 +111,14 @@ export default function ProjectsPage() {
     }
     setName('')
     setDescription('')
-    if (data) navigate(`/projects/${data.id}`)
+    if (data) navigate(`/projects/${data.key}`)
   }
 
   async function toggleFavorite(p: ProjectSummary) {
     if (p.isFavorite) {
-      await api.DELETE('/api/v1/projects/{projectId}/favorite', { params: { path: { projectId: p.id } } })
+      await api.DELETE('/api/v1/projects/{projectKey}/favorite', { params: { path: { projectKey: p.id } } })
     } else {
-      await api.POST('/api/v1/projects/{projectId}/favorite', { params: { path: { projectId: p.id } } })
+      await api.POST('/api/v1/projects/{projectKey}/favorite', { params: { path: { projectKey: p.id } } })
     }
     bump()
   }

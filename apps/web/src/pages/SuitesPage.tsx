@@ -15,7 +15,7 @@ type Suite = components['schemas']['Suite']
 type Project = components['schemas']['Project']
 
 export default function SuitesPage() {
-  const { projectId } = useParams<{ projectId: string }>()
+  const { projectKey } = useParams<{ projectKey: string }>()
   const location = useLocation()
   const bumpLanding = useBumpDataRevision()
   const [project, setProject] = useState<Project>()
@@ -23,18 +23,18 @@ export default function SuitesPage() {
   const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [suiteName, setSuiteName] = useState('')
-  const [openSuiteId, setOpenSuiteId] = useState<string | undefined>(
+  const [openSuiteKey, setOpenSuiteKey] = useState<string | undefined>(
     location.hash.startsWith('#suite-') ? location.hash.slice('#suite-'.length) : undefined,
   )
 
   const load = useCallback(async () => {
-    if (!projectId) return
+    if (!projectKey) return
     setNotFound(false)
     try {
       const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
-        api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
-        api.GET('/api/v1/projects/{projectId}/cases', { params: { path: { projectId } } }),
-        api.GET('/api/v1/projects/{projectId}/suites', { params: { path: { projectId } } }),
+        api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
       ])
       if (!p) {
         setNotFound(true)
@@ -47,7 +47,7 @@ export default function SuitesPage() {
       setCases([])
       setSuites([])
     }
-  }, [projectId])
+  }, [projectKey])
 
   useEffect(() => {
     void load()
@@ -55,9 +55,9 @@ export default function SuitesPage() {
 
   async function handleCreateSuite(e: FormEvent) {
     e.preventDefault()
-    if (!projectId || !suiteName.trim()) return
-    await api.POST('/api/v1/projects/{projectId}/suites', {
-      params: { path: { projectId } },
+    if (!projectKey || !suiteName.trim()) return
+    await api.POST('/api/v1/projects/{projectKey}/suites', {
+      params: { path: { projectKey } },
       body: { name: suiteName },
     })
     setSuiteName('')
@@ -65,19 +65,19 @@ export default function SuitesPage() {
     bumpLanding()
   }
 
-  async function addCaseToSuite(suiteId: string, caseId: string) {
-    await api.PUT('/api/v1/suites/{suiteId}/cases/{caseId}', { params: { path: { suiteId, caseId } } })
+  async function addCaseToSuite(suiteKey: string, caseKey: string) {
+    await api.PUT('/api/v1/suites/{suiteKey}/cases/{caseKey}', { params: { path: { suiteKey, caseKey } } })
     await load()
     bumpLanding()
   }
 
-  async function removeCaseFromSuite(suiteId: string, caseId: string) {
-    await api.DELETE('/api/v1/suites/{suiteId}/cases/{caseId}', { params: { path: { suiteId, caseId } } })
+  async function removeCaseFromSuite(suiteKey: string, caseKey: string) {
+    await api.DELETE('/api/v1/suites/{suiteKey}/cases/{caseKey}', { params: { path: { suiteKey, caseKey } } })
     await load()
     bumpLanding()
   }
 
-  if (!projectId) return null
+  if (!projectKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -86,14 +86,14 @@ export default function SuitesPage() {
     )
   }
 
-  const openSuite = suites.find((s) => s.id === openSuiteId)
+  const openSuite = suites.find((s) => s.key === openSuiteKey)
 
   return (
     <div className="space-y-6">
       <Breadcrumbs
         segments={[
           { label: 'Projects', href: '/' },
-          { label: project?.name ?? '', href: `/projects/${projectId}` },
+          { label: project?.name ?? '', href: `/projects/${projectKey}` },
           { label: 'Suites' },
         ]}
       />
@@ -132,7 +132,7 @@ export default function SuitesPage() {
                   <button
                     type="button"
                     className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-accent"
-                    onClick={() => setOpenSuiteId(s.id)}
+                    onClick={() => setOpenSuiteKey(s.key)}
                   >
                     <span className="truncate">{s.name}</span>
                     <span className="text-muted-foreground">
@@ -152,12 +152,12 @@ export default function SuitesPage() {
           suiteName={openSuite.name}
           memberCases={openSuite.caseIds.map((id) => {
             const c = cases.find((x) => x.id === id)
-            return { id, title: c?.content.title ?? id }
+            return { id: c?.key ?? id, title: c?.content.title ?? id }
           })}
-          availableCases={cases.map((c) => ({ id: c.id, title: c.content.title }))}
-          onClose={() => setOpenSuiteId(undefined)}
-          onAddCase={(caseId) => void addCaseToSuite(openSuite.id, caseId)}
-          onRemoveCase={(caseId) => void removeCaseFromSuite(openSuite.id, caseId)}
+          availableCases={cases.map((c) => ({ id: c.key, title: c.content.title }))}
+          onClose={() => setOpenSuiteKey(undefined)}
+          onAddCase={(caseKey) => void addCaseToSuite(openSuite.key, caseKey)}
+          onRemoveCase={(caseKey) => void removeCaseFromSuite(openSuite.key, caseKey)}
         />
       )}
     </div>

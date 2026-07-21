@@ -101,9 +101,9 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/ProjectSummary" }
-  /api/v1/projects/{projectId}:
+  /api/v1/projects/{projectKey}:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: getProject
       summary: Get a project
@@ -132,9 +132,9 @@ paths:
               schema: { $ref: "#/components/schemas/Project" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/projects/{projectId}/favorite:
+  /api/v1/projects/{projectKey}/favorite:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
     post:
       operationId: starProject
       summary: Star a project for the calling user
@@ -150,9 +150,9 @@ paths:
       responses:
         "204": { description: Project is no longer favorited by the caller }
         "400": { $ref: "#/components/responses/ValidationError" }
-  /api/v1/projects/{projectId}/cases:
+  /api/v1/projects/{projectKey}/cases:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listCases
       summary: List test cases in a project
@@ -182,9 +182,9 @@ paths:
               schema: { $ref: "#/components/schemas/TestCase" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/projects/{projectId}/folders:
+  /api/v1/projects/{projectKey}/folders:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listFolders
       summary: List all folders in a project (flat; reconstruct the tree from parentFolderId)
@@ -224,9 +224,9 @@ paths:
         "204": { description: Deleted }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/cases/{caseId}/folder:
+  /api/v1/cases/{caseKey}/folder:
     parameters:
-      - { name: caseId, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
     put:
       operationId: moveCase
       summary: Move a case to a different folder (suite membership is unaffected)
@@ -244,9 +244,9 @@ paths:
         "204": { description: Moved }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/cases/{caseId}:
+  /api/v1/cases/{caseKey}:
     parameters:
-      - { name: caseId, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: getCase
       summary: Get a case at its current version
@@ -282,9 +282,9 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/cases/{caseId}/versions:
+  /api/v1/cases/{caseKey}/versions:
     parameters:
-      - { name: caseId, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listCaseVersions
       summary: Full version history of a case
@@ -297,9 +297,9 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CaseVersion" }
-  /api/v1/cases/{caseId}/executions:
+  /api/v1/cases/{caseKey}/executions:
     parameters:
-      - { name: caseId, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listCaseExecutions
       summary: Every execution that has pinned this case, across all runs, grouped by version
@@ -312,9 +312,9 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CaseExecution" }
-  /api/v1/projects/{projectId}/suites:
+  /api/v1/projects/{projectKey}/suites:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listSuites
       summary: List suites in a project
@@ -343,10 +343,10 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Suite" }
         "400": { $ref: "#/components/responses/ValidationError" }
-  /api/v1/suites/{suiteId}/cases/{caseId}:
+  /api/v1/suites/{suiteKey}/cases/{caseKey}:
     parameters:
-      - { name: suiteId, in: path, required: true, schema: { type: string } }
-      - { name: caseId, in: path, required: true, schema: { type: string } }
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
     put:
       operationId: addCaseToSuite
       summary: Add a case to a suite (n:m)
@@ -360,9 +360,9 @@ paths:
       tags: [suites]
       responses:
         "204": { description: Removed }
-  /api/v1/projects/{projectId}/runs:
+  /api/v1/projects/{projectKey}/runs:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listRuns
       summary: List runs in a project
@@ -392,9 +392,9 @@ paths:
               schema: { $ref: "#/components/schemas/Run" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/runs/{runId}:
+  /api/v1/runs/{runKey}:
     parameters:
-      - { name: runId, in: path, required: true, schema: { type: string } }
+      - { name: runKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: getRun
       summary: Get a run
@@ -406,9 +406,9 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Run" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/runs/{runId}/items:
+  /api/v1/runs/{runKey}/items:
     parameters:
-      - { name: runId, in: path, required: true, schema: { type: string } }
+      - { name: runKey, in: path, required: true, schema: { type: string } }
       - { name: assignee, in: query, required: false, schema: { type: string } }
     get:
       operationId: listRunItems
@@ -489,9 +489,9 @@ paths:
         "204": { description: Updated }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/runs/{runId}/summary:
+  /api/v1/runs/{runKey}/summary:
     parameters:
-      - { name: runId, in: path, required: true, schema: { type: string } }
+      - { name: runKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: getRunSummary
       summary: Item counts by status
@@ -836,9 +836,9 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/projects/{projectId}/members:
+  /api/v1/projects/{projectKey}/members:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: getProjectMembership
       summary: List a project's directly-assigned users and assigned teams, each with their role
@@ -852,9 +852,9 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/projects/{projectId}/members/{userId}:
+  /api/v1/projects/{projectKey}/members/{userId}:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
       - { name: userId, in: path, required: true, schema: { type: string } }
     put:
       operationId: setProjectMember
@@ -880,9 +880,9 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /api/v1/projects/{projectId}/teams/{teamId}:
+  /api/v1/projects/{projectKey}/teams/{teamId}:
     parameters:
-      - { name: projectId, in: path, required: true, schema: { type: string } }
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
       - { name: teamId, in: path, required: true, schema: { type: string } }
     put:
       operationId: setProjectTeamRole
@@ -1003,9 +1003,12 @@ components:
           description: Required — only the root folder (auto-created with the project) may have no parent.
     Project:
       type: object
-      required: [id, name, archived, description, createdAt]
+      required: [id, key, name, archived, description, createdAt]
       properties:
         id: { type: string }
+        key:
+          type: string
+          description: Short, unique, human-readable identifier auto-derived from the project's name at creation. Immutable.
         name: { type: string }
         archived: { type: boolean }
         description: { type: string }
@@ -1024,9 +1027,12 @@ components:
         archived: { type: boolean }
     TestCase:
       type: object
-      required: [id, projectId, folderId, currentVersion, content, createdAt]
+      required: [id, key, projectId, folderId, currentVersion, content, createdAt]
       properties:
         id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-{n}. Immutable."
         projectId: { type: string }
         folderId: { type: string }
         currentVersion: { type: integer }
@@ -1052,9 +1058,12 @@ components:
         createdAt: { type: string, format: date-time }
     Suite:
       type: object
-      required: [id, projectId, name, caseIds, createdAt]
+      required: [id, key, projectId, name, caseIds, createdAt]
       properties:
         id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-S{n}. Immutable."
         projectId: { type: string }
         name: { type: string }
         caseIds:
@@ -1068,10 +1077,16 @@ components:
         name: { type: string }
     Run:
       type: object
-      required: [id, projectId, name, createdAt]
+      required: [id, key, projectId, projectKey, name, createdAt]
       properties:
         id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-R{n}. Immutable."
         projectId: { type: string }
+        projectKey:
+          type: string
+          description: The owning project's key — a run's own route isn't nested under its project's, so this lets a client link back without a second lookup.
         name: { type: string }
         createdAt: { type: string, format: date-time }
     RunInput:
@@ -1079,10 +1094,10 @@ components:
       required: [name]
       properties:
         name: { type: string }
-        suiteId:
+        suiteKey:
           type: string
           description: Include all cases of this suite
-        caseIds:
+        caseKeys:
           type: array
           items: { type: string }
           description: Explicit cases to include
@@ -1105,9 +1120,9 @@ components:
         createdAt: { type: string, format: date-time }
     AddItemInput:
       type: object
-      required: [caseId]
+      required: [caseKey]
       properties:
-        caseId: { type: string }
+        caseKey: { type: string }
     NewResult:
       type: object
       required: [actor, verdict]

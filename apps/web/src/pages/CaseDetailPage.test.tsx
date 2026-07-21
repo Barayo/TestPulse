@@ -35,13 +35,13 @@ const limitCase = {
 
 function mockDetailAPI() {
   mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
-    if (path === '/api/v1/projects/{projectId}')
+    if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectId}/folders')
+    if (path === '/api/v1/projects/{projectKey}/folders')
       return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
-    if (path === '/api/v1/cases/{caseId}' && options?.params?.path?.caseId === 'c1')
+    if (path === '/api/v1/cases/{caseKey}' && options?.params?.path?.caseKey === 'c1')
       return Promise.resolve({ data: limitCase, response: { ok: true } })
-    if (path === '/api/v1/cases/{caseId}/versions' && options?.params?.path?.caseId === 'c1')
+    if (path === '/api/v1/cases/{caseKey}/versions' && options?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: [
           { caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' },
@@ -49,7 +49,7 @@ function mockDetailAPI() {
         ],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectId}/suites')
+    if (path === '/api/v1/projects/{projectKey}/suites')
       return Promise.resolve({
         data: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
@@ -67,9 +67,9 @@ function renderDetail(path = '/projects/p1/cases/c1') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
-        <Route path="/projects/:projectId/cases/:caseId" element={<CaseDetailPage />} />
-        <Route path="/projects/:projectId/library" element={<LibraryProbe />} />
-        <Route path="/projects/:projectId/library/:folderId" element={<LibraryProbe />} />
+        <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailPage />} />
+        <Route path="/projects/:projectKey/library" element={<LibraryProbe />} />
+        <Route path="/projects/:projectKey/library/:folderId" element={<LibraryProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -86,9 +86,9 @@ afterEach(() => {
 describe('CaseDetailPage', () => {
   it('shows a not-found message when the case does not exist or is not accessible', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
-      if (path === '/api/v1/cases/{caseId}')
+      if (path === '/api/v1/cases/{caseKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
@@ -213,16 +213,16 @@ describe('CaseDetailPage', () => {
 
   it('shows a real empty state with a call to action when a case has no steps', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
-      if (path === '/api/v1/projects/{projectId}/folders')
+      if (path === '/api/v1/projects/{projectKey}/folders')
         return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
-      if (path === '/api/v1/cases/{caseId}')
+      if (path === '/api/v1/cases/{caseKey}')
         return Promise.resolve({
           data: { ...limitCase, content: { ...limitCase.content, steps: [] } },
           response: { ok: true },
         })
-      if (path === '/api/v1/cases/{caseId}/versions')
+      if (path === '/api/v1/cases/{caseKey}/versions')
         return Promise.resolve({
           data: [{ caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' }],
           response: { ok: true },
@@ -310,9 +310,9 @@ describe('CaseDetailPage', () => {
 
     await waitFor(() => {
       expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/cases/{caseId}',
+        '/api/v1/cases/{caseKey}',
         expect.objectContaining({
-          params: { path: { caseId: 'c1' } },
+          params: { path: { caseKey: 'c1' } },
           body: expect.objectContaining({
             title: 'Daily transfer limit',
             steps: [{ action: 'Start a transfer above the daily limit', expected: 'Blocked before confirming' }],
@@ -325,16 +325,16 @@ describe('CaseDetailPage', () => {
   it('refreshes the version history after saving an edit', async () => {
     let saved = false
     mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
-      if (path === '/api/v1/projects/{projectId}')
+      if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
-      if (path === '/api/v1/projects/{projectId}/folders')
+      if (path === '/api/v1/projects/{projectKey}/folders')
         return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
-      if (path === '/api/v1/cases/{caseId}' && options?.params?.path?.caseId === 'c1')
+      if (path === '/api/v1/cases/{caseKey}' && options?.params?.path?.caseKey === 'c1')
         return Promise.resolve({
           data: saved ? { ...limitCase, currentVersion: 3 } : limitCase,
           response: { ok: true },
         })
-      if (path === '/api/v1/cases/{caseId}/versions' && options?.params?.path?.caseId === 'c1')
+      if (path === '/api/v1/cases/{caseKey}/versions' && options?.params?.path?.caseKey === 'c1')
         return Promise.resolve({
           data: saved
             ? [
@@ -345,7 +345,7 @@ describe('CaseDetailPage', () => {
             : [{ caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' }],
           response: { ok: true },
         })
-      if (path === '/api/v1/projects/{projectId}/suites')
+      if (path === '/api/v1/projects/{projectKey}/suites')
         return Promise.resolve({ data: [], response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })

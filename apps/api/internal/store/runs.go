@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -50,12 +51,20 @@ func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 
+	key, err := claimEntityKey(ctx, tx, projectID, "run", "%s-R%d")
+	if err != nil {
+		return domain.Run{}, fmt.Errorf("claiming run key: %w", err)
+	}
+
 	var run domain.Run
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_runs (project_id, name) VALUES ($1, $2)
-		 RETURNING id, project_id, name, created_at`, projectID, name,
-	).Scan(&run.ID, &run.ProjectID, &run.Name, &run.CreatedAt)
+		`INSERT INTO test_runs (key, project_id, name) VALUES ($1, $2, $3)
+		 RETURNING id, key, project_id, name, created_at`, key, projectID, name,
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.CreatedAt)
 	if err != nil {
+		return domain.Run{}, err
+	}
+	if err := tx.QueryRow(ctx, `SELECT key FROM projects WHERE id = $1`, projectID).Scan(&run.ProjectKey); err != nil {
 		return domain.Run{}, err
 	}
 	for _, caseID := range caseIDs {
@@ -106,18 +115,33 @@ func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID string) error {
 func (r *RunRepo) Get(ctx context.Context, runID string) (domain.Run, error) {
 	var run domain.Run
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, project_id, name, created_at FROM test_runs WHERE id = $1`, runID,
-	).Scan(&run.ID, &run.ProjectID, &run.Name, &run.CreatedAt)
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.created_at
+		 FROM test_runs tr JOIN projects p ON p.id = tr.project_id
+		 WHERE tr.id = $1`, runID,
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Run{}, ErrNotFound
 	}
 	return run, err
 }
 
+// IDByKey resolves a run's key to its internal id — used at the API
+// boundary to translate a key-based path param before delegating to
+// UUID-based service/store calls (add-human-readable-keys D4).
+func (r *RunRepo) IDByKey(ctx context.Context, key string) (string, error) {
+	var id string
+	err := r.pool.QueryRow(ctx, `SELECT id FROM test_runs WHERE key = $1`, key).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return id, err
+}
+
 func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, project_id, name, created_at FROM test_runs
-		 WHERE project_id = $1 ORDER BY created_at DESC`, projectID)
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.created_at
+		 FROM test_runs tr JOIN projects p ON p.id = tr.project_id
+		 WHERE tr.project_id = $1 ORDER BY tr.created_at DESC`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +150,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	runs := []domain.Run{}
 	for rows.Next() {
 		var run domain.Run
-		if err := rows.Scan(&run.ID, &run.ProjectID, &run.Name, &run.CreatedAt); err != nil {
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.CreatedAt); err != nil {
 			return nil, err
 		}
 		runs = append(runs, run)

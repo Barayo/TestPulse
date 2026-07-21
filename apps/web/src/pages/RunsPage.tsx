@@ -14,7 +14,7 @@ type Run = components['schemas']['Run']
 type Project = components['schemas']['Project']
 
 export default function RunsPage() {
-  const { projectId } = useParams<{ projectId: string }>()
+  const { projectKey } = useParams<{ projectKey: string }>()
   const bumpLanding = useBumpDataRevision()
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
@@ -24,13 +24,13 @@ export default function RunsPage() {
   const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
-    if (!projectId) return
+    if (!projectKey) return
     setNotFound(false)
     try {
       const [{ data: p }, { data: c }, { data: r }] = await Promise.all([
-        api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
-        api.GET('/api/v1/projects/{projectId}/cases', { params: { path: { projectId } } }),
-        api.GET('/api/v1/projects/{projectId}/runs', { params: { path: { projectId } } }),
+        api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
       ])
       if (!p) {
         setNotFound(true)
@@ -45,7 +45,7 @@ export default function RunsPage() {
     } finally {
       setLoaded(true)
     }
-  }, [projectId])
+  }, [projectKey])
 
   useEffect(() => {
     void load()
@@ -53,17 +53,17 @@ export default function RunsPage() {
 
   async function handleCreateRun(e: FormEvent) {
     e.preventDefault()
-    if (!projectId || !runName.trim() || !loaded) return
-    await api.POST('/api/v1/projects/{projectId}/runs', {
-      params: { path: { projectId } },
-      body: { name: runName, caseIds: cases.map((c) => c.id) },
+    if (!projectKey || !runName.trim() || !loaded) return
+    await api.POST('/api/v1/projects/{projectKey}/runs', {
+      params: { path: { projectKey } },
+      body: { name: runName, caseKeys: cases.map((c) => c.key) },
     })
     setRunName('')
     await load()
     bumpLanding()
   }
 
-  if (!projectId) return null
+  if (!projectKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -77,7 +77,7 @@ export default function RunsPage() {
       <Breadcrumbs
         segments={[
           { label: 'Projects', href: '/' },
-          { label: project?.name ?? '', href: `/projects/${projectId}` },
+          { label: project?.name ?? '', href: `/projects/${projectKey}` },
           { label: 'Runs' },
         ]}
       />
@@ -115,7 +115,7 @@ export default function RunsPage() {
             <ul className="space-y-1 text-sm">
               {runs.map((r) => (
                 <li key={r.id}>
-                  <Link to={`/runs/${r.id}`} className="hover:underline">
+                  <Link to={`/runs/${r.key}`} className="hover:underline">
                     {r.name}
                   </Link>
                 </li>

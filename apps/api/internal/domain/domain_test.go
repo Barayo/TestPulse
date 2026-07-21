@@ -1,6 +1,7 @@
 package domain
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -258,5 +259,35 @@ func TestTokenNameRequired(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "name") {
 		t.Errorf("error %q does not name the field", err)
+	}
+}
+
+func TestDeriveProjectKey(t *testing.T) {
+	cases := []struct {
+		name string
+		want string
+	}{
+		{"Customer Payments Api", "CPA"},
+		{"Login Service", "LS"},
+		{"Checkout", "CHEC"},
+		{"Go", "GO"},
+		{"a b c d e f g", "ABCDE"},
+		{"???", "PROJ"},
+		{"", "PROJ"},
+	}
+	for _, c := range cases {
+		if got := DeriveProjectKey(c.name); got != c.want {
+			t.Errorf("DeriveProjectKey(%q) = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestDeriveProjectKeyIsAlwaysUppercaseAlphanumeric(t *testing.T) {
+	alphanumeric := regexp.MustCompile(`^[A-Z0-9]+$`)
+	for _, name := range []string{"login-service", "Payments_Api", "Café Menu", "1st Project"} {
+		got := DeriveProjectKey(name)
+		if !alphanumeric.MatchString(got) {
+			t.Errorf("DeriveProjectKey(%q) = %q, not uppercase alphanumeric", name, got)
+		}
 	}
 }

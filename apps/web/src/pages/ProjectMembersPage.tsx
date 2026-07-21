@@ -21,9 +21,9 @@ type Team = { id: string; name: string }
 // emails/names needs GET /users or /teams — both Tenant-Admin-only routes.
 // This page is therefore Tenant-Admin-only for now, same gate as
 // PeoplePage, even though the backend already permits Tester+ to read
-// GET /projects/{projectId}/members per the project-membership spec.
+// GET /projects/{projectKey}/members per the project-membership spec.
 export default function ProjectMembersPage() {
-  const { projectId } = useParams<{ projectId: string }>()
+  const { projectKey } = useParams<{ projectKey: string }>()
   const { user: me } = useAuth()
   const [projectName, setProjectName] = useState('')
   const [membership, setMembership] = useState<Membership>({ users: [], teams: [] })
@@ -34,10 +34,10 @@ export default function ProjectMembersPage() {
   const [removeTeamTarget, setRemoveTeamTarget] = useState<{ teamId: string; label: string } | null>(null)
 
   async function load() {
-    if (!projectId) return
+    if (!projectKey) return
     const [{ data: p }, { data: m }, { data: u }, { data: t }, { data: r }] = await Promise.all([
-      api.GET('/api/v1/projects/{projectId}', { params: { path: { projectId } } }),
-      api.GET('/api/v1/projects/{projectId}/members', { params: { path: { projectId } } }),
+      api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/members', { params: { path: { projectKey } } }),
       api.GET('/api/v1/users'),
       api.GET('/api/v1/teams'),
       api.GET('/api/v1/roles'),
@@ -52,16 +52,16 @@ export default function ProjectMembersPage() {
   useEffect(() => {
     if (me?.isTenantAdmin) void load()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [me, projectId])
+  }, [me, projectKey])
 
   if (!me?.isTenantAdmin) {
     return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
   }
-  if (!projectId) return null
+  if (!projectKey) return null
 
   async function setMemberRole(userId: string, roleId: string) {
-    await api.PUT('/api/v1/projects/{projectId}/members/{userId}', {
-      params: { path: { projectId: projectId!, userId } },
+    await api.PUT('/api/v1/projects/{projectKey}/members/{userId}', {
+      params: { path: { projectKey: projectKey!, userId } },
       body: { roleId },
     })
     await load()
@@ -69,16 +69,16 @@ export default function ProjectMembersPage() {
 
   async function removeMember() {
     if (!removeMemberTarget) return
-    await api.DELETE('/api/v1/projects/{projectId}/members/{userId}', {
-      params: { path: { projectId: projectId!, userId: removeMemberTarget.userId } },
+    await api.DELETE('/api/v1/projects/{projectKey}/members/{userId}', {
+      params: { path: { projectKey: projectKey!, userId: removeMemberTarget.userId } },
     })
     setRemoveMemberTarget(null)
     await load()
   }
 
   async function setTeamRole(teamId: string, roleId: string) {
-    await api.PUT('/api/v1/projects/{projectId}/teams/{teamId}', {
-      params: { path: { projectId: projectId!, teamId } },
+    await api.PUT('/api/v1/projects/{projectKey}/teams/{teamId}', {
+      params: { path: { projectKey: projectKey!, teamId } },
       body: { roleId },
     })
     await load()
@@ -86,8 +86,8 @@ export default function ProjectMembersPage() {
 
   async function removeTeamRole() {
     if (!removeTeamTarget) return
-    await api.DELETE('/api/v1/projects/{projectId}/teams/{teamId}', {
-      params: { path: { projectId: projectId!, teamId: removeTeamTarget.teamId } },
+    await api.DELETE('/api/v1/projects/{projectKey}/teams/{teamId}', {
+      params: { path: { projectKey: projectKey!, teamId: removeTeamTarget.teamId } },
     })
     setRemoveTeamTarget(null)
     await load()
@@ -104,7 +104,7 @@ export default function ProjectMembersPage() {
       <Breadcrumbs
         segments={[
           { label: 'Projects', href: '/' },
-          { label: projectName, href: `/projects/${projectId}` },
+          { label: projectName, href: `/projects/${projectKey}` },
           { label: 'Members' },
         ]}
       />
