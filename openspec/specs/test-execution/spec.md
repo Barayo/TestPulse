@@ -8,7 +8,7 @@ log per item, assignment/filtering, run summaries, and the run execution
 board that ties it all together for a human tester.
 ## Requirements
 ### Requirement: Run creation pins case versions
-The system SHALL let users create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards.
+The system SHALL let users create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI.
 
 #### Scenario: Run pins versions at creation
 - **WHEN** a run is created containing a case whose current version is 2, and the case is later edited to version 3
@@ -21,6 +21,10 @@ The system SHALL let users create a test run from a suite and/or an explicit lis
 #### Scenario: Newer version hint
 - **WHEN** a run item's pinned version is older than the case's current version
 - **THEN** the run item indicates that a newer version of the case exists
+
+#### Scenario: A newly created run has a key
+- **WHEN** a user creates a run in a project
+- **THEN** the run is created with a `key` assigned, scoped to that project
 
 ### Requirement: Run item status lifecycle
 Each run item SHALL carry a current status, one of `pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`. Items start as `pending`. `retest` marks an item for re-execution and is set by an explicit action, never as a verdict.

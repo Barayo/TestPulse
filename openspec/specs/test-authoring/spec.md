@@ -5,11 +5,9 @@
 Creating and organizing test assets: projects, versioned test cases (with a
 mandatory nested folder tree for browsing/organization), and suites (an
 independent n:m grouping used for execution).
-
 ## Requirements
-
 ### Requirement: Project management
-The system SHALL let users create, list, rename, and archive projects, where a project is the container for all test assets. A project MAY carry an optional `description` (free text) and an optional `ownerId` (a reference to a user), settable at creation or updated later.
+The system SHALL let users create, list, rename, and archive projects, where a project is the container for all test assets. A project MAY carry an optional `description` (free text) and an optional `ownerId` (a reference to a user), settable at creation or updated later. Every project SHALL be assigned an immutable, unique `key` at creation (see `resource-keys`), used to address it in the API and UI.
 
 #### Scenario: Create a project
 - **WHEN** a user submits a new project with a name
@@ -31,8 +29,12 @@ The system SHALL let users create, list, rename, and archive projects, where a p
 - **WHEN** a project's owner is a user who is later deactivated
 - **THEN** the project still shows that user as its owner, not a blank or error
 
+#### Scenario: A newly created project has a key
+- **WHEN** a user creates a project
+- **THEN** the project is created with a `key` assigned, with no separate step required
+
 ### Requirement: Test case creation
-The system SHALL let users create test cases within a project with title, description, steps, expected result, priority, and tags. Creating a case establishes version 1.
+The system SHALL let users create test cases within a project with title, description, steps, expected result, priority, and tags. Creating a case establishes version 1. Every case SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI.
 
 #### Scenario: Create a test case
 - **WHEN** a user creates a case with a title and steps
@@ -41,6 +43,10 @@ The system SHALL let users create test cases within a project with title, descri
 #### Scenario: Title is required
 - **WHEN** a user creates a case without a title
 - **THEN** the request is rejected with a validation error naming the field
+
+#### Scenario: A newly created case has a key
+- **WHEN** a user creates a test case in a project
+- **THEN** the case is created with a `key` assigned, scoped to that project
 
 ### Requirement: Immutable test case versioning
 Every edit to a test case's content SHALL create a new immutable version; previous versions MUST remain readable forever. The case always exposes its current version number.
@@ -54,7 +60,7 @@ Every edit to a test case's content SHALL create a new immutable version; previo
 - **THEN** all 3 versions are returned with their content and creation timestamps
 
 ### Requirement: Test suite grouping
-The system SHALL let users create suites within a project and manage an n:m membership between suites and test cases.
+The system SHALL let users create suites within a project and manage an n:m membership between suites and test cases. Every suite SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI.
 
 #### Scenario: Add cases to a suite
 - **WHEN** a user adds two cases to a suite
@@ -63,6 +69,10 @@ The system SHALL let users create suites within a project and manage an n:m memb
 #### Scenario: Removing a case from a suite does not delete the case
 - **WHEN** a user removes a case from a suite
 - **THEN** the case no longer appears in the suite but still exists in the project
+
+#### Scenario: A newly created suite has a key
+- **WHEN** a user creates a suite in a project
+- **THEN** the suite is created with a `key` assigned, scoped to that project
 
 ### Requirement: Soft deletion protects run history
 Deleting a test case SHALL be a soft delete: the case disappears from authoring lists but its versions remain readable wherever runs reference them.
@@ -104,3 +114,4 @@ Deleting a non-empty folder SHALL move its direct child folders and cases to the
 #### Scenario: Root folder cannot be deleted
 - **WHEN** a user attempts to delete a project's root folder
 - **THEN** the request is rejected
+

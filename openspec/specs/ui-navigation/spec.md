@@ -198,7 +198,7 @@ A user SHALL be able to create a test case within a section, specifying a title 
 
 ### Requirement: Viewing an existing test case
 Selecting a test case SHALL navigate to a dedicated route
-(`/projects/{projectId}/cases/{caseId}`) showing a read-only view of its title, current
+(`/projects/{projectKey}/cases/{caseKey}`) showing a read-only view of its title, current
 version, steps, suite memberships, and version history. The page SHALL show its title and
 steps as the full-width primary content, alongside a sidebar containing its properties,
 version history, and a results section. Every scalar property (test type, automation,
@@ -212,7 +212,7 @@ fail/blocked execution exist for the same version.
 
 #### Scenario: Opening a case navigates to its own route
 - **WHEN** a user selects a test case from the library content list
-- **THEN** the browser URL changes to that case's detail route, and the browser back button returns to the library view
+- **THEN** the browser URL changes to that case's detail route, keyed by the case's key, and the browser back button returns to the library view
 
 #### Scenario: Viewing steps and suite membership
 - **WHEN** a user views a test case that belongs to one or more suites
@@ -369,4 +369,23 @@ Without an active project selected, the web UI SHALL show a list of all projects
 #### Scenario: Sort control is available on mobile
 - **WHEN** the list is viewed on a mobile-width viewport
 - **THEN** the sort control remains visible and usable, unlike the view-mode toggle which is desktop-only
+
+### Requirement: Routes address projects, cases, runs, and suites by key
+The web UI SHALL address projects, test cases, runs, and suites in the URL by their human-readable `key`, not their internal `id`. Folder routes are unaffected and continue to use the folder's internal id.
+
+#### Scenario: Project route uses the project's key
+- **WHEN** a user navigates to a project's landing page
+- **THEN** the URL's project segment is that project's key, not a UUID
+
+#### Scenario: Case route uses the case's key
+- **WHEN** a user opens a test case
+- **THEN** the URL's case segment is that case's key, not a UUID
+
+#### Scenario: Run route uses the run's key
+- **WHEN** a user opens a run's execution board
+- **THEN** the URL's run segment is that run's key, not a UUID
+
+#### Scenario: An unrecognized key does not resolve
+- **WHEN** a user navigates to a URL whose project, case, or run segment does not match any existing key
+- **THEN** the page shows a not-found state, the same as for any other unresolved identifier
 
