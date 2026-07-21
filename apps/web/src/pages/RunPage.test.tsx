@@ -148,6 +148,15 @@ describe('Run execution board', () => {
     expect(await screen.findByText(/newer version/i)).toBeInTheDocument()
   })
 
+  it('shows the pinned version as a labeled property, not an unlabeled sentence', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    await userEvent.click((await screen.findAllByText('Login works'))[0])
+    const detail = await screen.findByTestId('item-detail')
+    expect(within(detail).getByText('Pinned version')).toBeInTheDocument()
+    expect(within(detail).getByText('v1')).toBeInTheDocument()
+  })
+
   it('shows the result in history immediately after recording it, without re-selecting', async () => {
     mockRunAPI([pendingItem])
     // Server state changes only once the POST actually happens — mirroring

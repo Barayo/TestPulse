@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { StatusBadge } from '@/components/StatusBadge'
+import { PropertyRow } from '@/components/PropertyRow'
 import {
   Card,
   CardContent,
@@ -175,10 +176,10 @@ export default function RunPage() {
         <Card data-testid="item-detail">
           <CardHeader>
             <CardTitle className="tp-heading">{selected.content.title}</CardTitle>
-            <p className="text-sm text-muted-foreground">
-              Pinned at v{selected.caseVersion}
-              {selected.newerVersion && ' — a newer version of this case exists'}
-            </p>
+            <PropertyRow label="Pinned version" value={`v${selected.caseVersion}`} />
+            {selected.newerVersion && (
+              <p className="text-sm text-muted-foreground">A newer version of this case exists</p>
+            )}
           </CardHeader>
           <CardContent className="space-y-4">
             <div>

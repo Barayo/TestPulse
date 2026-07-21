@@ -8,10 +8,19 @@ style guide — extend it in the same change that introduces a new pattern.
 ## Property rows: `Label: value`
 
 Every scalar property on an entity (a case's test type, automation, platform, tags, version,
-suite membership; a run's pinned version; a project's description) renders through
-`PropertyRow` (`apps/web/src/components/PropertyRow.tsx`): a label on the left, styled with the
-`.tp-label` utility (mono, uppercase, tracked, muted), and the value on the right in normal
-weight. An empty value shows a dash placeholder (`—`), never a blank space.
+suite membership; a run's pinned version) renders through `PropertyRow`
+(`apps/web/src/components/PropertyRow.tsx`): a label on the left, styled with the `.tp-label`
+utility (mono, uppercase, tracked, muted), and the value on the right in normal weight. An
+empty value shows a dash placeholder (`—`), never a blank space.
+
+**Not every scalar value belongs in a `PropertyRow` — the pattern assumes a spacious,
+single-item context.** `ProjectsPage.tsx`'s project cards show a description as plain,
+unlabeled `line-clamp-2` text under the project name — a dense grid of many cards, not a
+sidebar. Adding a `.tp-label` caption there would fight the compactness the card is
+deliberately designed around, for a value that's already unambiguous without one. Reach for
+`PropertyRow` in detail panes and sidebars (case detail's Properties section, a run item's
+detail pane); leave dense list/grid rows alone unless a label is actually needed to
+disambiguate the value.
 
 ```tsx
 <PropertyRow label="Test type" value={testCase.content.testType} />
@@ -22,6 +31,23 @@ weight. An empty value shows a dash placeholder (`—`), never a blank space.
 across a list of items — right now, that's priority only. Everything else — platform, test
 type, tags, counts, version numbers — is a `PropertyRow` value. If you're reaching for a badge
 and the value isn't one of a small, fixed set of states, use a property row instead.
+
+## StatusPill vs. Badge vs. PropertyRow
+
+Three components can all render "a value" — pick by what the value *is*, not by habit:
+
+- **`StatusPill`** (`apps/web/src/components/HealthBar.tsx`): a health/status band **derived**
+  from data — pass-rate thresholds mapped to Healthy/In progress/At risk/No runs yet. Use it
+  where the underlying number needs a human-readable band, not the raw number itself.
+- **`Badge`**: a small, **fixed enum the user sets directly** — today, only case priority.
+  Reserved for a value scanned at a glance across a list of items (see the Property rows rule
+  above).
+- **`PropertyRow`**: everything else — any scalar property that isn't a derived status band
+  and isn't priority.
+
+The dividing line between `StatusPill` and `Badge` is *computed vs. set*: a `StatusPill`'s
+label wouldn't make sense as something picked from a dropdown (a project can't be manually
+"set" to Healthy), while a `Badge`'s value is exactly what the user chose.
 
 ## Numbered sequences (steps, and anything else ordered)
 
