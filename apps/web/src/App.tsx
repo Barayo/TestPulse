@@ -13,6 +13,7 @@ import ProjectPage from '@/pages/ProjectPage'
 import SuitesPage from '@/pages/SuitesPage'
 import RunsPage from '@/pages/RunsPage'
 import FolderExplorerPage from '@/pages/FolderExplorerPage'
+import CaseDetailPage from '@/pages/CaseDetailPage'
 import RunPage from '@/pages/RunPage'
 import LoginPage from '@/pages/LoginPage'
 import PeoplePage from '@/pages/PeoplePage'
@@ -194,6 +195,14 @@ function App() {
               element={
                 <RequireAuth>
                   <FolderExplorerPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/projects/:projectId/cases/:caseId"
+              element={
+                <RequireAuth>
+                  <CaseDetailPage />
                 </RequireAuth>
               }
             />

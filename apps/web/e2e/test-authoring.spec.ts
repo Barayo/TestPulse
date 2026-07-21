@@ -77,7 +77,7 @@ test.describe('Requirement: Test case creation and immutable versioning', () => 
     await page.getByRole('button', { name: /^edit$/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works v2')
     await page.getByRole('button', { name: /save changes/i }).click()
-    await expect(page.getByRole('dialog').getByText('v2')).toBeVisible()
+    await expect(page.getByRole('list', { name: /version history/i }).getByText('v2')).toBeVisible()
     await page.getByRole('button', { name: 'Close' }).click()
     await expect(page.getByText('Login works v2')).toBeVisible()
   })

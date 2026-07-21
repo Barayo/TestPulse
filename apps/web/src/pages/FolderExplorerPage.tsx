@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
-import { CaseDrawer, type CaseVersionSummary, type ClassificationFields, type Step } from '@/components/CaseDrawer'
+import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useBumpDataRevision } from '@/lib/DataRevision'
@@ -14,7 +14,7 @@ type TestCase = components['schemas']['TestCase']
 type Suite = components['schemas']['Suite']
 type Project = components['schemas']['Project']
 
-type DrawerState = { mode: 'create' } | { mode: 'view'; caseId: string; versions: CaseVersionSummary[] }
+type DrawerState = { mode: 'create' }
 
 function ancestorChain(folders: Folder[], folderId: string): Folder[] {
   const chain: Folder[] = []
@@ -133,13 +133,9 @@ export default function FolderExplorerPage() {
     bumpLanding()
   }
 
-  async function openCase(caseId: string) {
+  function openCase(caseId: string) {
     if (!projectId) return
-    const { data } = await api.GET('/api/v1/cases/{caseId}/versions', { params: { path: { caseId } } })
-    const versions = (data ?? [])
-      .map((v) => ({ version: v.version, createdAt: v.createdAt }))
-      .sort((a, b) => b.version - a.version)
-    setDrawer({ mode: 'view', caseId, versions })
+    navigate(`/projects/${projectId}/cases/${caseId}`)
   }
 
   async function createCase(input: { title: string; steps: Step[] } & ClassificationFields) {
@@ -162,31 +158,6 @@ export default function FolderExplorerPage() {
     bumpLanding()
   }
 
-  // The drawer only edits title/steps/priority/tags/platform/testType/automated —
-  // description and expectedResult are preserved from the case's current content so
-  // an edit never silently wipes fields the drawer has no controls for (PUT replaces
-  // the whole content, per D1 immutable versioning; there is no partial update).
-  async function saveCaseEdit(caseId: string, input: { title: string; steps: Step[] } & ClassificationFields) {
-    const current = cases.find((c) => c.id === caseId)?.content
-    await api.PUT('/api/v1/cases/{caseId}', {
-      params: { path: { caseId } },
-      body: {
-        title: input.title,
-        steps: input.steps,
-        description: current?.description ?? '',
-        expectedResult: current?.expectedResult ?? '',
-        priority: input.priority,
-        tags: input.tags,
-        platform: input.platform,
-        testType: input.testType,
-        automated: input.automated,
-      },
-    })
-    await load()
-    bumpLanding()
-    await openCase(caseId)
-  }
-
   const breadcrumbSegments: Crumb[] = [
     { label: 'Projects', href: '/' },
     { label: project?.name ?? '', href: `/projects/${projectId}` },
@@ -196,8 +167,6 @@ export default function FolderExplorerPage() {
       href: `/projects/${projectId}/library/${f.id}`,
     })),
   ]
-
-  const activeCase = drawer?.mode === 'view' ? cases.find((c) => c.id === drawer.caseId) : undefined
 
   return (
     <div className="space-y-4">
@@ -316,7 +285,7 @@ export default function FolderExplorerPage() {
                     <button
                       type="button"
                       className="flex flex-1 items-center gap-2 text-left"
-                      onClick={() => void openCase(c.id)}
+                      onClick={() => openCase(c.id)}
                     >
                       <span aria-hidden="true">📄</span>
                       <span>{c.content.title}</span>
@@ -385,25 +354,6 @@ export default function FolderExplorerPage() {
           folderName={displayFolderName(selectedFolder, root.id)}
           onClose={() => setDrawer(null)}
           onCreate={(input) => void createCase(input)}
-        />
-      )}
-      {drawer?.mode === 'view' && activeCase && (
-        <CaseDrawer
-          mode="view"
-          open
-          folderName={displayFolderName(selectedFolder, root.id)}
-          onClose={() => setDrawer(null)}
-          caseTitle={activeCase.content.title}
-          currentVersion={activeCase.currentVersion}
-          steps={(activeCase.content.steps ?? []).map((s) => ({ action: s.action, expected: s.expected ?? '' }))}
-          suiteNames={suiteNamesFor(activeCase.id)}
-          versions={drawer.versions}
-          priority={activeCase.content.priority ?? 'medium'}
-          tags={activeCase.content.tags ?? []}
-          platform={activeCase.content.platform ?? ''}
-          testType={activeCase.content.testType ?? ''}
-          automated={activeCase.content.automated ?? false}
-          onSaveEdit={(input) => void saveCaseEdit(activeCase.id, input)}
         />
       )}
     </div>

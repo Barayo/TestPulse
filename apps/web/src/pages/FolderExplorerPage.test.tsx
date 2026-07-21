@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import FolderExplorerPage from './FolderExplorerPage'
 import { api } from '@/lib/api'
 
@@ -72,12 +72,18 @@ function mockExplorerAPI(overrides: Partial<Record<string, unknown>> = {}) {
   })
 }
 
+function CaseDetailProbe() {
+  const { caseId } = useParams<{ caseId: string }>()
+  return <p data-testid="case-detail-probe">case detail for {caseId}</p>
+}
+
 function renderExplorer(path = '/projects/p1/library/transferencias') {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <Routes>
         <Route path="/projects/:projectId/library" element={<FolderExplorerPage />} />
         <Route path="/projects/:projectId/library/:folderId" element={<FolderExplorerPage />} />
+        <Route path="/projects/:projectId/cases/:caseId" element={<CaseDetailProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -245,13 +251,11 @@ describe('FolderExplorerPage', () => {
     })
   })
 
-  it('opens an existing case in view mode with its version history', async () => {
+  it('navigates to the case detail route when a case is selected', async () => {
     mockExplorerAPI()
     renderExplorer()
     await userEvent.click(await screen.findByText('Daily transfer limit'))
-    const dialog = await screen.findByRole('dialog')
-    expect(within(dialog).getByText('Smoke')).toBeInTheDocument()
-    expect(within(dialog).getByRole('list', { name: /version history/i })).toBeInTheDocument()
+    expect(await screen.findByTestId('case-detail-probe')).toHaveTextContent('case detail for c1')
   })
 
   describe('moving a case', () => {
@@ -349,71 +353,4 @@ describe('FolderExplorerPage', () => {
     })
   })
 
-  it('editing a case calls PUT and refreshes the list', async () => {
-    mockExplorerAPI()
-    mockPUT.mockResolvedValue({
-      data: { ...limitCase, currentVersion: 3, content: { ...limitCase.content, title: 'Daily transfer limit v3' } },
-      response: { ok: true },
-    })
-    renderExplorer()
-    await userEvent.click(await screen.findByText('Daily transfer limit'))
-    await userEvent.click(await screen.findByRole('button', { name: /^edit$/i }))
-    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
-
-    await waitFor(() => {
-      expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/cases/{caseId}',
-        expect.objectContaining({ params: { path: { caseId: 'c1' } } }),
-      )
-    })
-  })
-
-  it('editing a case preserves description and expected result, which the drawer has no controls for', async () => {
-    mockExplorerAPI()
-    mockPUT.mockResolvedValue({
-      data: { ...limitCase, currentVersion: 3 },
-      response: { ok: true },
-    })
-    renderExplorer()
-    await userEvent.click(await screen.findByText('Daily transfer limit'))
-    await userEvent.click(await screen.findByRole('button', { name: /^edit$/i }))
-    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
-
-    await waitFor(() => {
-      expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/cases/{caseId}',
-        expect.objectContaining({
-          body: expect.objectContaining({
-            description: 'Ensures over-threshold transfers are blocked',
-            expectedResult: 'Transfer blocked',
-          }),
-        }),
-      )
-    })
-  })
-
-  it('editing a case sends changed classification fields alongside preserved title and steps', async () => {
-    mockExplorerAPI()
-    mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
-    renderExplorer()
-    await userEvent.click(await screen.findByText('Daily transfer limit'))
-    await userEvent.click(await screen.findByRole('button', { name: /^edit$/i }))
-    await userEvent.selectOptions(screen.getByLabelText(/priority/i), 'low')
-    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
-
-    await waitFor(() => {
-      expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/cases/{caseId}',
-        expect.objectContaining({
-          body: expect.objectContaining({
-            priority: 'low',
-            tags: ['smoke'],
-            platform: 'web',
-            testType: 'e2e',
-            automated: true,
-          }),
-        }),
-      )
-    })
-  })
 })

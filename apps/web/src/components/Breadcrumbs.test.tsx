@@ -50,4 +50,23 @@ describe('Breadcrumbs', () => {
     renderCrumbs([])
     expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
   })
+
+  it('truncates a long last segment instead of letting it wrap word-by-word', () => {
+    renderCrumbs([
+      { label: 'Projects', href: '/' },
+      { label: 'TestPulse', href: '/projects/p1' },
+      { label: 'Library', href: '/projects/p1/library' },
+      { label: 'Server', href: '/projects/p1/library/f1' },
+      { label: 'Tenant admin manages roles over HTTP' },
+    ])
+    const last = screen.getByText('Tenant admin manages roles over HTTP')
+    expect(last).toHaveClass('truncate')
+    // Earlier segments never wrap or shrink below their natural width.
+    expect(screen.getByRole('link', { name: 'Server' }).parentElement).toHaveClass('shrink-0')
+  })
+
+  it('never wraps the breadcrumb text onto multiple lines', () => {
+    renderCrumbs([{ label: 'Projects', href: '/' }, { label: 'A very long current page title indeed' }])
+    expect(screen.getByRole('navigation', { name: 'Breadcrumb' })).toHaveClass('flex-nowrap')
+  })
 })

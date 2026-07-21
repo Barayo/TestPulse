@@ -236,9 +236,9 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.goBack()
     await openFolderExplorer(page)
     await page.getByText('Login works').click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('Enter valid credentials')).toBeVisible()
-    await expect(dialog.getByText('Smoke')).toBeVisible()
+    await page.waitForURL(/\/cases\//)
+    await expect(page.getByText('Enter valid credentials')).toBeVisible()
+    await expect(page.getByText('Smoke')).toBeVisible()
   })
 
   test('Scenario: Version history is visible', async ({ page }) => {
@@ -254,6 +254,58 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await expect(history.getByText('v1')).toBeVisible()
     await expect(history.getByText('v2')).toBeVisible()
   })
+
+  test('Scenario: Opening a case navigates to its own route', async ({ page }) => {
+    await createProject(page, 'Case Route Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    const libraryUrl = page.url()
+
+    await page.getByText('Login works').click()
+    await page.waitForURL(/\/cases\//)
+    await page.goBack()
+    await expect(page).toHaveURL(libraryUrl)
+  })
+
+  test('Scenario: Properties render as labeled pairs', async ({ page }) => {
+    await createProject(page, 'Labeled Properties Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.waitForURL(/\/cases\//)
+
+    await expect(page.getByText('Test type')).toBeVisible()
+    await expect(page.getByText('Automation')).toBeVisible()
+  })
+
+  test('Scenario: Results section shows a designed empty state', async ({ page }) => {
+    await createProject(page, 'Results Empty State Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.waitForURL(/\/cases\//)
+
+    await expect(page.getByText('Results', { exact: true })).toBeVisible()
+    await expect(page.getByText(/no result history yet/i)).toBeVisible()
+  })
+
+  test('Scenario: Sidebar collapses to stacked sections on narrow viewports', async ({ page }) => {
+    await createProject(page, 'Mobile Sidebar Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.waitForURL(/\/cases\//)
+
+    await page.setViewportSize({ width: 375, height: 800 })
+    // <details>/<summary>'s implicit ARIA role isn't reliably matched by
+    // Playwright's getByRole engine — assert on the visible summary text
+    // directly instead, which is what a user actually sees and clicks.
+    const propertiesToggle = page.getByText('Properties', { exact: true })
+    await expect(propertiesToggle).toBeVisible()
+    await expect(page.getByText('Test type')).toBeHidden()
+    await propertiesToggle.click()
+    await expect(page.getByText('Test type')).toBeVisible()
+  })
 })
 
 test.describe('Requirement: Editing a test case creates a new version', () => {
@@ -265,7 +317,7 @@ test.describe('Requirement: Editing a test case creates a new version', () => {
     await page.getByRole('button', { name: /^edit$/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works v2')
     await page.getByRole('button', { name: /save changes/i }).click()
-    await expect(page.getByRole('dialog').getByText('v2')).toBeVisible()
+    await expect(page.getByRole('list', { name: /version history/i }).getByText('v2')).toBeVisible()
     await page.getByRole('button', { name: 'Close' }).click()
     await expect(content(page).getByText('Login works v2')).toBeVisible()
   })

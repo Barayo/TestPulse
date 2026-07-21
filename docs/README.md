@@ -21,6 +21,7 @@ updated in the same change that alters the behavior it describes.
 | [Architecture](architecture.md) | System design, stack decisions, and their rationale |
 | [Development](development.md) | Local setup, repo layout, build/test/lint workflow |
 | [Testing](testing.md) | TDD/BDD practice, test pyramid, coverage gates |
+| [Design system](design-system.md) | UI patterns (property rows, sidebar sections, chart colors, empty states) future pages should follow |
 | [Contributing](../CONTRIBUTING.md) | DCO sign-off, spec-first workflow, code style |
 | [Roadmap](../ROADMAP.md) | Release ladder and per-version scope |
 
