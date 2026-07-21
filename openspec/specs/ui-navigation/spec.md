@@ -7,9 +7,7 @@ a compact project switcher, a three-panel project landing (Library/Suites/Recent
 runs), a two-pane library explorer for browsing/organizing test cases, suite
 membership management, and a breadcrumb trail — replacing an earlier flat,
 kitchen-sink page with no persistent orientation.
-
 ## Requirements
-
 ### Requirement: Breadcrumb trail
 The web UI SHALL show a breadcrumb trail reflecting the user's current location — Projects
 › {Project} for a project's own pages, extended with intermediate section names (and a
@@ -313,3 +311,4 @@ Without an active project selected, the web UI SHALL show a list of all projects
 #### Scenario: Sort control is available on mobile
 - **WHEN** the list is viewed on a mobile-width viewport
 - **THEN** the sort control remains visible and usable, unlike the view-mode toggle which is desktop-only
+
