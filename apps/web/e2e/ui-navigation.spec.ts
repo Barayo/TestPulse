@@ -159,10 +159,33 @@ test.describe('Requirement: Brand wordmark', () => {
 
 test.describe('Requirement: Project landing shows top-level structure only', () => {
   test('Scenario: Empty project shows per-panel empty states', async ({ page }) => {
+    // Spec WHEN clause: "a project has cases or suites already, but one
+    // panel has nothing in it yet" — a *totally* empty project (no cases,
+    // no suites, no runs at all) instead shows the get-started checklist
+    // (next scenario), so this needs at least one case to land on the
+    // per-panel empty states as a stable end state, not a transient one
+    // that flips away once landing data finishes loading.
     await createProject(page, 'Empty Landing Project')
-    await expect(page.getByText(/no sections yet/i)).toBeVisible()
+    await openFolderExplorer(page)
+    await createCase(page, 'Placeholder case')
+    await page.goBack()
     await expect(page.getByText(/no suites yet/i)).toBeVisible()
-    await expect(page.getByText(/no runs yet/i)).toBeVisible()
+    // Anchored on the trailing period — see the next scenario's comment for
+    // why (the summary strip's status pill also reads "No runs yet").
+    await expect(page.getByText(/no runs yet\./i)).toBeVisible()
+  })
+
+  test('Scenario: Entirely empty project shows a getting-started checklist instead of three empty panels', async ({ page }) => {
+    await createProject(page, 'Entirely Empty Project')
+    await expect(page.getByText(/get started/i)).toBeVisible()
+    await expect(page.getByText(/no sections yet/i)).not.toBeVisible()
+    await expect(page.getByText(/no suites yet/i)).not.toBeVisible()
+    // Anchored on the trailing period: the Runs panel's own empty label is
+    // "No runs yet." — the summary strip's status pill also reads "No runs
+    // yet" (no period) when the project has never run, and stays visible
+    // regardless of which of the two landing views is showing, so a bare
+    // /no runs yet/i match would false-negative this assertion.
+    await expect(page.getByText(/no runs yet\./i)).not.toBeVisible()
   })
 
   test('Scenario: Dense project stays legible', async ({ page }) => {
