@@ -8,7 +8,7 @@ log per item, assignment/filtering, run summaries, and the run execution
 board that ties it all together for a human tester.
 ## Requirements
 ### Requirement: Run creation pins case versions
-The system SHALL let users create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI.
+The system SHALL let users create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A run item MAY carry an optional `testName` — the literal name reported by an external test runner, independent of the pinned case's own title.
 
 #### Scenario: Run pins versions at creation
 - **WHEN** a run is created containing a case whose current version is 2, and the case is later edited to version 3
@@ -25,6 +25,10 @@ The system SHALL let users create a test run from a suite and/or an explicit lis
 #### Scenario: A newly created run has a key
 - **WHEN** a user creates a run in a project
 - **THEN** the run is created with a `key` assigned, scoped to that project
+
+#### Scenario: A run item's testName is independent of the case's title
+- **WHEN** a run item carries a `testName` that differs from its pinned case's title
+- **THEN** both are shown — the case's own title is not overwritten or replaced by the reported name
 
 ### Requirement: Run item status lifecycle
 Each run item SHALL carry a current status, one of `pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`. Items start as `pending`. `retest` marks an item for re-execution and is set by an explicit action, never as a verdict.
@@ -46,7 +50,7 @@ Each run item SHALL carry a current status, one of `pending`, `pass`, `failed`, 
 - **THEN** the request is rejected with a validation error
 
 ### Requirement: Append-only result log
-Each run item SHALL have an append-only result log. A result records actor, verdict (`pass`, `failed`, `skipped`, `blocked`), optional comment, and timestamp. Results MUST NOT be editable or deletable through the API.
+Each run item SHALL have an append-only result log. A result records actor, verdict (`pass`, `failed`, `skipped`, `blocked`), optional comment, and timestamp. Results MUST NOT be editable or deletable through the API. A result MAY additionally carry optional execution metadata: start time, end time, platform, version, and tags.
 
 #### Scenario: Results accumulate
 - **WHEN** an item receives verdict `failed`, is marked retest, and then receives verdict `pass`
@@ -55,6 +59,14 @@ Each run item SHALL have an append-only result log. A result records actor, verd
 #### Scenario: Actor is required
 - **WHEN** a result is submitted without an actor
 - **THEN** the request is rejected with a validation error naming the field
+
+#### Scenario: Execution metadata is optional
+- **WHEN** a result is recorded without start time, end time, platform, version, or tags
+- **THEN** the result is recorded normally, with those fields absent
+
+#### Scenario: A manually-recorded result can also carry execution metadata
+- **WHEN** a user records a verdict through the UI and supplies a platform or version
+- **THEN** the result reflects it, the same as a result produced by an import
 
 ### Requirement: Run item assignment
 The system SHALL let users assign a run item to a person (free-text identity until the identity capability lands) and filter a run's items by assignee.

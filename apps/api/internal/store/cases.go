@@ -41,6 +41,21 @@ func (r *CaseRepo) IDByKey(ctx context.Context, key string) (string, error) {
 	return id, err
 }
 
+// IDByKeyInProject resolves a case's key to its internal id, scoped to one
+// project — a key belonging to a different project is ErrNotFound, not a
+// match (add-execution-import: an import only ever matches within its own
+// target project).
+func (r *CaseRepo) IDByKeyInProject(ctx context.Context, projectID, key string) (string, error) {
+	var id string
+	err := r.pool.QueryRow(ctx,
+		`SELECT id FROM test_cases WHERE key = $1 AND project_id = $2 AND NOT deleted`, key, projectID,
+	).Scan(&id)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return id, err
+}
+
 // Create inserts a case and its version 1 in one transaction. An empty
 // folderID resolves to the project's root folder (design D8).
 func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, content domain.CaseContent) (domain.TestCase, error) {

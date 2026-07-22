@@ -334,6 +334,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/imports": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk-import externally-run test results from a JUnit XML report, matching each reported test to an existing case by its key */
+        post: operations["importResults"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{runKey}": {
         parameters: {
             query?: never;
@@ -887,6 +906,8 @@ export interface components {
             content: components["schemas"]["CaseContent"];
             /** @description True when the case has a newer version than the pinned one */
             newerVersion: boolean;
+            /** @description The literal name an external test runner reported for this item, independent of the pinned case's own title. Absent for items added manually. */
+            testName?: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -897,6 +918,13 @@ export interface components {
             actor: string;
             verdict: components["schemas"]["Verdict"];
             comment?: string;
+            /** Format: date-time */
+            startTime?: string;
+            /** Format: date-time */
+            endTime?: string;
+            platform?: string;
+            version?: string;
+            tags?: string[];
         };
         Result: {
             id: string;
@@ -905,7 +933,32 @@ export interface components {
             verdict: components["schemas"]["Verdict"];
             comment: string;
             /** Format: date-time */
+            startTime?: string;
+            /** Format: date-time */
+            endTime?: string;
+            platform?: string;
+            version?: string;
+            tags?: string[];
+            /** Format: date-time */
             createdAt: string;
+        };
+        ImportRequest: {
+            /** @enum {string} */
+            format: "junit-xml";
+            /** @description Run name. Defaults to the report's own <testsuite> name if present, otherwise a generated default. */
+            name?: string;
+            /** @description The raw report content (JUnit XML). */
+            report: string;
+        };
+        ImportResult: {
+            run: components["schemas"]["Run"];
+            message: string;
+            matched: number;
+            unmatched: components["schemas"]["UnmatchedTest"][];
+        };
+        UnmatchedTest: {
+            caseKey: string;
+            verdict: components["schemas"]["Verdict"];
         };
         ItemStatusUpdate: {
             status?: components["schemas"]["Status"];
@@ -1739,6 +1792,43 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    importResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Every reported test matched an existing case */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            /** @description Import succeeded but one or more tests had no matching case */
+            207: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportResult"];
                 };
             };
             400: components["responses"]["ValidationError"];

@@ -392,6 +392,33 @@ paths:
               schema: { $ref: "#/components/schemas/Run" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/imports:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: importResults
+      summary: >-
+        Bulk-import externally-run test results from a JUnit XML report,
+        matching each reported test to an existing case by its key
+      tags: [imports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRequest" }
+      responses:
+        "201":
+          description: Every reported test matched an existing case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "207":
+          description: Import succeeded but one or more tests had no matching case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/runs/{runKey}:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -1117,6 +1144,12 @@ components:
         newerVersion:
           type: boolean
           description: True when the case has a newer version than the pinned one
+        testName:
+          type: string
+          description: >-
+            The literal name an external test runner reported for this
+            item, independent of the pinned case's own title. Absent for
+            items added manually.
         createdAt: { type: string, format: date-time }
     AddItemInput:
       type: object
@@ -1130,6 +1163,13 @@ components:
         actor: { type: string }
         verdict: { $ref: "#/components/schemas/Verdict" }
         comment: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        platform: { type: string }
+        version: { type: string }
+        tags:
+          type: array
+          items: { type: string }
     Result:
       type: object
       required: [id, runItemId, actor, verdict, comment, createdAt]
@@ -1139,7 +1179,45 @@ components:
         actor: { type: string }
         verdict: { $ref: "#/components/schemas/Verdict" }
         comment: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        platform: { type: string }
+        version: { type: string }
+        tags:
+          type: array
+          items: { type: string }
         createdAt: { type: string, format: date-time }
+    ImportRequest:
+      type: object
+      required: [format, report]
+      properties:
+        format:
+          type: string
+          enum: [junit-xml]
+        name:
+          type: string
+          description: >-
+            Run name. Defaults to the report's own <testsuite> name if
+            present, otherwise a generated default.
+        report:
+          type: string
+          description: The raw report content (JUnit XML).
+    ImportResult:
+      type: object
+      required: [run, message, matched, unmatched]
+      properties:
+        run: { $ref: "#/components/schemas/Run" }
+        message: { type: string }
+        matched: { type: integer }
+        unmatched:
+          type: array
+          items: { $ref: "#/components/schemas/UnmatchedTest" }
+    UnmatchedTest:
+      type: object
+      required: [caseKey, verdict]
+      properties:
+        caseKey: { type: string }
+        verdict: { $ref: "#/components/schemas/Verdict" }
     ItemStatusUpdate:
       type: object
       properties:

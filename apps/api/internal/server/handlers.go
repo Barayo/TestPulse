@@ -41,6 +41,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermSuiteCreate, projectIDParam)).Post("/suites", h.createSuite)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs", h.listRuns)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/runs", h.createRun)
+			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/imports", h.importResults)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/members", h.getProjectMembership)
 			r.With(requireTenantAdmin).Put("/members/{userID}", h.setProjectMember)
 			r.With(requireTenantAdmin).Delete("/members/{userID}", h.removeProjectMember)
@@ -377,6 +378,55 @@ func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 	run, err := h.svc.CreateRun(r.Context(), resolvedID(r, "projectKey"),
 		service.RunInput{Name: body.Name, SuiteID: suiteID, CaseIDs: caseIDs})
 	h.respond(w, http.StatusCreated, run, err)
+}
+
+// unmatchedTestJSON is the wire shape of one unmatched entry in an
+// import's 207 response body.
+type unmatchedTestJSON struct {
+	CaseKey string         `json:"caseKey"`
+	Verdict domain.Verdict `json:"verdict"`
+}
+
+// importResultJSON is the wire shape of a 207 import response
+// (openapi.yaml's ImportResult schema).
+type importResultJSON struct {
+	Run       domain.Run          `json:"run"`
+	Message   string              `json:"message"`
+	Matched   int                 `json:"matched"`
+	Unmatched []unmatchedTestJSON `json:"unmatched"`
+}
+
+func (h *api) importResults(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Format string `json:"format"`
+		Name   string `json:"name"`
+		Report string `json:"report"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	result, err := h.svc.Import(r.Context(), resolvedID(r, "projectKey"), service.ImportInput{
+		Format: body.Format, Name: body.Name, Report: body.Report,
+	})
+	if err != nil {
+		h.respond(w, 0, nil, err)
+		return
+	}
+	if len(result.Unmatched) == 0 {
+		h.respond(w, http.StatusCreated, result.Run, nil)
+		return
+	}
+	unmatched := make([]unmatchedTestJSON, len(result.Unmatched))
+	for i, u := range result.Unmatched {
+		unmatched[i] = unmatchedTestJSON{CaseKey: u.CaseKey, Verdict: u.Verdict}
+	}
+	h.respond(w, http.StatusMultiStatus, importResultJSON{
+		Run:       result.Run,
+		Message:   "Success but unmatched cases ignored",
+		Matched:   result.Matched,
+		Unmatched: unmatched,
+	}, nil)
 }
 
 func (h *api) getRun(w http.ResponseWriter, r *http.Request) {

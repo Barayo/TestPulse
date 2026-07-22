@@ -99,6 +99,7 @@ exactly one folder, defaulting to the project's root; see
 | GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`actor`, `verdict`, `comment`) |
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or `assignee` |
 | GET | `/api/v1/runs/{runKey}/summary` | Item counts by current status |
+| POST | `/api/v1/projects/{projectKey}/imports` | Bulk-import a JUnit XML report: matches each `<testcase>` to an existing case by its `key`, creates one run with items/results for every match. `201` if every test matched; `207` if some/all didn't (see [Importing results](importing-results.md)) |
 
 Validation errors return `400 {"error": "..."}` naming the offending field;
 missing entities return `404 {"error": "not found"}`. Unauthenticated

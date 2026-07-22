@@ -68,7 +68,7 @@ func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []
 		return domain.Run{}, err
 	}
 	for _, caseID := range caseIDs {
-		if err := pinItem(ctx, tx, run.ID, caseID); err != nil {
+		if err := pinItem(ctx, tx, run.ID, caseID, ""); err != nil {
 			return domain.Run{}, err
 		}
 	}
@@ -78,14 +78,83 @@ func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []
 	return run, nil
 }
 
+// ImportItem is one matched test to attach to an imported run: the case it
+// matched, the runner's own name for it, and the result to record.
+type ImportItem struct {
+	CaseID   string
+	TestName string
+	Result   domain.NewResult
+}
+
+// Import creates a run and, in the same transaction, pins and records a
+// result for every matched item — add-execution-import's "match-only,
+// atomic per import" rule (design.md): a mid-pipeline failure leaves nothing
+// created, unlike Create+AddItem+AppendResult's separate transactions.
+func (r *RunRepo) Import(ctx context.Context, projectID, name string, items []ImportItem) (domain.Run, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.Run{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	key, err := claimEntityKey(ctx, tx, projectID, "run", "%s-R%d")
+	if err != nil {
+		return domain.Run{}, fmt.Errorf("claiming run key: %w", err)
+	}
+
+	var run domain.Run
+	err = tx.QueryRow(ctx,
+		`INSERT INTO test_runs (key, project_id, name) VALUES ($1, $2, $3)
+		 RETURNING id, key, project_id, name, created_at`, key, projectID, name,
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.CreatedAt)
+	if err != nil {
+		return domain.Run{}, err
+	}
+	if err := tx.QueryRow(ctx, `SELECT key FROM projects WHERE id = $1`, projectID).Scan(&run.ProjectKey); err != nil {
+		return domain.Run{}, err
+	}
+
+	for _, item := range items {
+		if err := pinItem(ctx, tx, run.ID, item.CaseID, item.TestName); err != nil {
+			return domain.Run{}, err
+		}
+		var itemID string
+		if err := tx.QueryRow(ctx,
+			`SELECT id FROM test_run_items WHERE run_id = $1 AND case_id = $2`,
+			run.ID, item.CaseID).Scan(&itemID); err != nil {
+			return domain.Run{}, err
+		}
+		res := item.Result
+		if _, err := tx.Exec(ctx,
+			`INSERT INTO test_run_results (run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags)
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'))`,
+			itemID, res.Actor, res.Verdict, res.Comment, res.StartTime, res.EndTime, res.Platform, res.Version, res.Tags,
+		); err != nil {
+			return domain.Run{}, err
+		}
+		if _, err := tx.Exec(ctx,
+			`UPDATE test_run_items SET current_status = $2 WHERE id = $1`,
+			itemID, res.Verdict.Status()); err != nil {
+			return domain.Run{}, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return domain.Run{}, err
+	}
+	return run, nil
+}
+
 // AddItem pins the case's then-current version into an existing run.
-func (r *RunRepo) AddItem(ctx context.Context, runID, caseID string) (string, error) {
+// testName is the literal name an external test runner reported
+// (add-execution-import); pass "" for manually-added items.
+func (r *RunRepo) AddItem(ctx context.Context, runID, caseID, testName string) (string, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
-	if err := pinItem(ctx, tx, runID, caseID); err != nil {
+	if err := pinItem(ctx, tx, runID, caseID, testName); err != nil {
 		return "", err
 	}
 	var itemID string
@@ -98,11 +167,11 @@ func (r *RunRepo) AddItem(ctx context.Context, runID, caseID string) (string, er
 }
 
 // pinItem inserts a run item pinned to the case's current version.
-func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID string) error {
+func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID, testName string) error {
 	tag, err := tx.Exec(ctx,
-		`INSERT INTO test_run_items (run_id, case_id, case_version)
-		 SELECT $1, id, current_version FROM test_cases WHERE id = $2 AND NOT deleted`,
-		runID, caseID)
+		`INSERT INTO test_run_items (run_id, case_id, case_version, test_name)
+		 SELECT $1, id, current_version, $3 FROM test_cases WHERE id = $2 AND NOT deleted`,
+		runID, caseID, testName)
 	if err != nil {
 		return err
 	}
@@ -162,7 +231,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 // optionally filtered by assignee.
 func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.RunItem, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT i.id, i.run_id, i.case_id, i.case_version, i.assignee, i.current_status, i.created_at,
+		`SELECT i.id, i.run_id, i.case_id, i.case_version, i.assignee, i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
 		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
 		 FROM test_run_items i
@@ -187,7 +256,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 			automated                    bool
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseVersion,
-			&it.Assignee, &it.CurrentStatus, &it.CreatedAt, &it.NewerVersion,
+			&it.Assignee, &it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
 			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err
 		}
@@ -239,11 +308,12 @@ func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.Ne
 
 	var out domain.Result
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_run_results (run_item_id, actor, verdict, comment)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, run_item_id, actor, verdict, comment, created_at`,
-		itemID, res.Actor, res.Verdict, res.Comment,
-	).Scan(&out.ID, &out.RunItemID, &out.Actor, &out.Verdict, &out.Comment, &out.CreatedAt)
+		`INSERT INTO test_run_results (run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'))
+		 RETURNING id, run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags, created_at`,
+		itemID, res.Actor, res.Verdict, res.Comment, res.StartTime, res.EndTime, res.Platform, res.Version, res.Tags,
+	).Scan(&out.ID, &out.RunItemID, &out.Actor, &out.Verdict, &out.Comment,
+		&out.StartTime, &out.EndTime, &out.Platform, &out.Version, &out.Tags, &out.CreatedAt)
 	if err != nil {
 		return domain.Result{}, err
 	}
@@ -261,7 +331,7 @@ func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.Ne
 
 func (r *RunRepo) Results(ctx context.Context, itemID string) ([]domain.Result, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, run_item_id, actor, verdict, comment, created_at
+		`SELECT id, run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags, created_at
 		 FROM test_run_results WHERE run_item_id = $1 ORDER BY created_at, id`, itemID)
 	if err != nil {
 		return nil, err
@@ -271,7 +341,8 @@ func (r *RunRepo) Results(ctx context.Context, itemID string) ([]domain.Result, 
 	results := []domain.Result{}
 	for rows.Next() {
 		var res domain.Result
-		if err := rows.Scan(&res.ID, &res.RunItemID, &res.Actor, &res.Verdict, &res.Comment, &res.CreatedAt); err != nil {
+		if err := rows.Scan(&res.ID, &res.RunItemID, &res.Actor, &res.Verdict, &res.Comment,
+			&res.StartTime, &res.EndTime, &res.Platform, &res.Version, &res.Tags, &res.CreatedAt); err != nil {
 			return nil, err
 		}
 		results = append(results, res)

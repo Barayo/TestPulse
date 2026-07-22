@@ -5,6 +5,7 @@ import (
 	"errors"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
@@ -431,12 +432,31 @@ func TestAddItemToOpenRunPinsThenCurrentVersion(t *testing.T) {
 	if _, err := s.Cases.NewVersion(ctx, c.ID, edited); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Runs.AddItem(ctx, run.ID, c.ID); err != nil {
+	if _, err := s.Runs.AddItem(ctx, run.ID, c.ID, ""); err != nil {
 		t.Fatalf("AddItem: %v", err)
 	}
 	items, _ := s.Runs.Items(ctx, run.ID, "")
 	if items[0].CaseVersion != 2 {
 		t.Errorf("pinned version = %d, want 2 (then-current)", items[0].CaseVersion)
+	}
+}
+
+// TestRunItemTestNamePersists covers add-execution-import's RunItem.TestName
+// field: the literal name an external runner reported, independent of the
+// pinned case's own title.
+func TestRunItemTestNamePersists(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", nil)
+
+	if _, err := s.Runs.AddItem(ctx, run.ID, c.ID, "tests/test_login.py::test_login"); err != nil {
+		t.Fatalf("AddItem: %v", err)
+	}
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	if items[0].TestName != "tests/test_login.py::test_login" {
+		t.Errorf("TestName = %q, want the runner's literal name", items[0].TestName)
 	}
 }
 
@@ -470,6 +490,74 @@ func TestAppendResultUpdatesStatusAndAccumulates(t *testing.T) {
 	items, _ = s.Runs.Items(ctx, run.ID, "")
 	if items[0].CurrentStatus != domain.StatusPass {
 		t.Errorf("final status = %q, want pass", items[0].CurrentStatus)
+	}
+}
+
+// TestResultExecutionMetadataPersists covers add-execution-import's optional
+// execution metadata on Result: available to both imports and a manually
+// recorded verdict.
+func TestResultExecutionMetadataPersists(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	item := items[0]
+
+	start := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
+	end := start.Add(2 * time.Second)
+	res, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{
+		Actor:     "ci",
+		Verdict:   domain.VerdictPass,
+		StartTime: &start,
+		EndTime:   &end,
+		Platform:  "linux",
+		Version:   "1.2.3",
+		Tags:      []string{"smoke", "regression"},
+	})
+	if err != nil {
+		t.Fatalf("AppendResult: %v", err)
+	}
+	if res.Platform != "linux" || res.Version != "1.2.3" {
+		t.Errorf("AppendResult platform/version = %q/%q, want linux/1.2.3", res.Platform, res.Version)
+	}
+	if res.StartTime == nil || !res.StartTime.Equal(start) {
+		t.Errorf("AppendResult StartTime = %v, want %v", res.StartTime, start)
+	}
+
+	results, err := s.Runs.Results(ctx, item.ID)
+	if err != nil || len(results) != 1 {
+		t.Fatalf("Results = %d, %v; want 1", len(results), err)
+	}
+	got := results[0]
+	if got.EndTime == nil || !got.EndTime.Equal(end) {
+		t.Errorf("Results EndTime = %v, want %v", got.EndTime, end)
+	}
+	if len(got.Tags) != 2 || got.Tags[0] != "smoke" || got.Tags[1] != "regression" {
+		t.Errorf("Results Tags = %v, want [smoke regression]", got.Tags)
+	}
+}
+
+// TestResultExecutionMetadataOptional covers the "omitted, not guessed" rule:
+// a result recorded without execution metadata leaves those fields absent.
+func TestResultExecutionMetadataOptional(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+
+	res, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass})
+	if err != nil {
+		t.Fatalf("AppendResult: %v", err)
+	}
+	if res.StartTime != nil || res.EndTime != nil {
+		t.Errorf("StartTime/EndTime = %v/%v, want both nil when not supplied", res.StartTime, res.EndTime)
+	}
+	if res.Platform != "" || res.Version != "" || len(res.Tags) != 0 {
+		t.Errorf("Platform/Version/Tags = %q/%q/%v, want all empty when not supplied", res.Platform, res.Version, res.Tags)
 	}
 }
 

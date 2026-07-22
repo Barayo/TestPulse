@@ -109,11 +109,19 @@ func (c CaseContent) Validate() error {
 	return nil
 }
 
-// NewResult is a result being appended to a run item's log.
+// NewResult is a result being appended to a run item's log. StartTime/EndTime
+// and the platform/version/tags fields are optional execution metadata
+// (add-execution-import): populated from a JUnit XML import, or supplied
+// manually via the same "record a verdict" action.
 type NewResult struct {
-	Actor   string  `json:"actor"`
-	Verdict Verdict `json:"verdict"`
-	Comment string  `json:"comment"`
+	Actor     string     `json:"actor"`
+	Verdict   Verdict    `json:"verdict"`
+	Comment   string     `json:"comment"`
+	StartTime *time.Time `json:"startTime,omitempty"`
+	EndTime   *time.Time `json:"endTime,omitempty"`
+	Platform  string     `json:"platform,omitempty"`
+	Version   string     `json:"version,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
 }
 
 func (r NewResult) Validate() error {
@@ -271,7 +279,11 @@ type RunItem struct {
 	CurrentStatus Status      `json:"currentStatus"`
 	Content       CaseContent `json:"content"` // pinned version's content
 	NewerVersion  bool        `json:"newerVersion"`
-	CreatedAt     time.Time   `json:"createdAt"`
+	// TestName is the literal name an external test runner reported
+	// (add-execution-import), independent of the pinned case's own title.
+	// Empty for items added manually.
+	TestName  string    `json:"testName,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // CaseExecution is one run item's outcome, viewed from the case's side
@@ -287,12 +299,17 @@ type CaseExecution struct {
 }
 
 type Result struct {
-	ID        string    `json:"id"`
-	RunItemID string    `json:"runItemId"`
-	Actor     string    `json:"actor"`
-	Verdict   Verdict   `json:"verdict"`
-	Comment   string    `json:"comment"`
-	CreatedAt time.Time `json:"createdAt"`
+	ID        string     `json:"id"`
+	RunItemID string     `json:"runItemId"`
+	Actor     string     `json:"actor"`
+	Verdict   Verdict    `json:"verdict"`
+	Comment   string     `json:"comment"`
+	StartTime *time.Time `json:"startTime,omitempty"`
+	EndTime   *time.Time `json:"endTime,omitempty"`
+	Platform  string     `json:"platform,omitempty"`
+	Version   string     `json:"version,omitempty"`
+	Tags      []string   `json:"tags,omitempty"`
+	CreatedAt time.Time  `json:"createdAt"`
 }
 
 // RunSummary is the per-run status breakdown.

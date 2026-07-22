@@ -364,7 +364,7 @@ func (s *Service) AddRunItem(ctx context.Context, runID, caseID string) (string,
 	if caseID == "" {
 		return "", invalid("caseId is required")
 	}
-	itemID, err := s.store.Runs.AddItem(ctx, runID, caseID)
+	itemID, err := s.store.Runs.AddItem(ctx, runID, caseID, "")
 	if err != nil {
 		return "", err
 	}

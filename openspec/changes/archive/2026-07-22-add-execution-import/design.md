@@ -28,18 +28,32 @@ match-only import of one format, no auto-creation, no plugin yet.
 
 ## Decisions
 
-**External id transport: JUnit XML's `<properties>` element, not the
+**Match by the case's existing `key`, not a new `externalId` field.** An
+earlier draft of this design added a dedicated `externalId` field to
+`TestCase` so a human had *something* typeable to paste into
+`record_property()` — pre-keys, the only stable identifier was a raw
+UUID, unfit for hand-editing pytest source. `add-human-readable-keys`
+shipped first specifically to close that gap: every case already carries
+an immutable, human-readable `key` (e.g. `LOGIN-42`), scoped to its
+project (see `resource-keys`). Reusing it here means one fewer field to
+add, nothing new for a user to set or keep in sync with the case it
+identifies, and no possibility of an `externalId` drifting out of sync
+with the case it's meant to point at — the `key` is already guaranteed
+present, unique per project, and immutable for every case.
+
+**Case-key transport: JUnit XML's `<properties>` element, not the
 test name.** pytest's `record_property(key, value)` serializes into
 `<testcase>`'s `<properties><property name="key" value="value"/></properties>`
 when combined with `--junitxml`. The importer reads
-`property[name="testpulse_case_id"]` per `<testcase>`. This is why no
+`property[name="testpulse_case_key"]` per `<testcase>` and matches its
+value against `TestCase.Key` within the target project. This is why no
 custom pytest plugin is needed for V1 — `record_property` and
 `--junitxml` are both pytest built-ins; only a few lines of `conftest.py`
 (reading a custom marker, calling `record_property`) are needed, which
 ships as documentation, not a package.
 
 **Request shape: JSON envelope wrapping the report, not raw XML body.**
-`POST /api/v1/projects/{projectId}/imports` with
+`POST /api/v1/projects/{projectKey}/imports` with
 `{ format: "junit-xml", name?: string, report: string }`. Every other
 endpoint in this API is JSON; keeping the request `Content-Type` uniform
 avoids new body-parsing middleware and keeps `format` available as an
@@ -67,7 +81,7 @@ a failure mode at all — it's the expected `207` path.
 | Outcome | Status | Body |
 |---|---|---|
 | Every `<testcase>` matched an existing case | `201 Created` | `{ run: {...} }` — identical shape to the existing `createRun` response |
-| Some or all unmatched, run still created with whatever matched | `207 Multi-Status` | `{ run: {...}, message: "Success but unmatched cases ignored", matched: N, unmatched: [{ externalId, verdict }] }` |
+| Some or all unmatched, run still created with whatever matched | `207 Multi-Status` | `{ run: {...}, message: "Success but unmatched cases ignored", matched: N, unmatched: [{ caseKey, verdict }] }` |
 | Malformed report / project not found | `400` | existing `ValidationError` shape |
 
 `207` was chosen deliberately over inventing a non-standard code: it's a
@@ -77,12 +91,11 @@ naive tooling checking `response.ok`/`status < 300` still treats it as
 success without special-casing, while still being distinguishable from a
 clean `201` for tooling that wants to surface the warning.
 
-**No `externalId` uniqueness enforcement across the whole project scope
-beyond the obvious** — two cases with the same `externalId` would both
-be candidates for a match; the importer takes the first match
-deterministically (creation order) and this is a case-authoring mistake
-to surface via validation at case-create/update time, not an import-time
-concern to solve twice.
+**No extra uniqueness enforcement needed for matching** — a case `key` is
+already guaranteed unique per project at the database level (see
+`resource-keys`), so unlike the earlier `externalId` draft there's no new
+"two cases could claim the same identifier" case to reason about at
+import time.
 
 **Execution metadata: `RunItem` gains `testName`; `Result` gains
 `startTime`, `endTime`, `platform`, `version`, `tags` — all optional.**
@@ -104,7 +117,7 @@ is stable per match and belongs on `RunItem` instead:
   it does, per-test start time is the running cumulative offset; if not,
   both fields are omitted rather than guessed.
 - `platform`, `version`, `tags` (Result) — extend the same
-  `<properties>` mechanism as the external id: `testpulse_platform`,
+  `<properties>` mechanism as the case key: `testpulse_platform`,
   `testpulse_version`, `testpulse_tags` custom properties, written by
   the same `conftest.py` snippet via `record_property()`. All optional;
   a report without them just omits those fields on the created result.
@@ -125,8 +138,8 @@ a case is authored, independent of any particular execution or import.
   first, but that noise is the point (visible, not silently dropped).
 - **JUnit XML's `<properties>` mechanism is pytest-specific in how it
   gets populated**, even though the XML format itself is shared — Maven/
-  Gradle will need their own answer for "how does the external id get
-  into the XML" when those land (Surefire doesn't have an equivalent to
+  Gradle will need their own answer for "how does the case key get into
+  the XML" when those land (Surefire doesn't have an equivalent to
   `record_property` out of the box); flagged for whichever change tackles
   Maven, not solved here.
 

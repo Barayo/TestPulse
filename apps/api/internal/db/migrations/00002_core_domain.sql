@@ -127,6 +127,9 @@ CREATE TABLE test_run_items (
     current_status text NOT NULL DEFAULT 'pending'
                    CHECK (current_status IN
                           ('pending', 'pass', 'failed', 'skipped', 'blocked', 'retest')),
+    -- The literal name an external test runner reported (add-execution-import);
+    -- empty for items added manually.
+    test_name      text NOT NULL DEFAULT '',
     created_at     timestamptz NOT NULL DEFAULT now(),
     UNIQUE (run_id, case_id),
     FOREIGN KEY (case_id, case_version)
@@ -146,6 +149,13 @@ CREATE TABLE test_run_results (
     verdict      text NOT NULL
                  CHECK (verdict IN ('pass', 'failed', 'skipped', 'blocked')),
     comment      text NOT NULL DEFAULT '',
+    -- Optional execution metadata (add-execution-import): populated by
+    -- imports, and available to a manually-recorded result too.
+    start_time   timestamptz,
+    end_time     timestamptz,
+    platform     text NOT NULL DEFAULT '',
+    version      text NOT NULL DEFAULT '',
+    tags         text[] NOT NULL DEFAULT '{}',
     created_at   timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX test_run_results_item_idx ON test_run_results (run_item_id, created_at);

@@ -33,7 +33,7 @@ func TestNotFoundPaths(t *testing.T) {
 
 	_, err = s.Runs.Get(ctx, missingID)
 	checks["Runs.Get"] = err
-	_, err = s.Runs.AddItem(ctx, missingID, missingID)
+	_, err = s.Runs.AddItem(ctx, missingID, missingID, "")
 	checks["Runs.AddItem"] = err
 	checks["Runs.SetItemStatus"] = s.Runs.SetItemStatus(ctx, missingID, domain.StatusRetest)
 	checks["Runs.AssignItem"] = s.Runs.AssignItem(ctx, missingID, "ana")
@@ -57,7 +57,7 @@ func TestSoftDeletedCaseCannotJoinRun(t *testing.T) {
 	if err := s.Cases.SoftDelete(ctx, c.ID); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Runs.AddItem(ctx, run.ID, c.ID); !errors.Is(err, store.ErrNotFound) {
+	if _, err := s.Runs.AddItem(ctx, run.ID, c.ID, ""); !errors.Is(err, store.ErrNotFound) {
 		t.Errorf("AddItem with deleted case = %v, want ErrNotFound", err)
 	}
 }
