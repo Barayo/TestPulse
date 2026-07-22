@@ -14,6 +14,54 @@ type RunRepo struct {
 	pool *pgxpool.Pool
 }
 
+// ErrRunClosed is returned when a mutating run-item operation (adding an
+// item, recording a result, updating status/assignee) targets a closed run
+// (add-run-lifecycle-status).
+var ErrRunClosed = fmt.Errorf("run is closed")
+
+// rowScanner is satisfied by both *pgxpool.Pool and pgx.Tx — lets the
+// open/closed guard helpers run standalone or as part of an existing
+// transaction.
+type rowScanner interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+}
+
+// checkRunOpen returns ErrNotFound if runID doesn't exist, ErrRunClosed if
+// it's closed, nil if open.
+func checkRunOpen(ctx context.Context, q rowScanner, runID string) error {
+	var status domain.RunStatus
+	err := q.QueryRow(ctx, `SELECT status FROM test_runs WHERE id = $1`, runID).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status == domain.RunStatusClosed {
+		return ErrRunClosed
+	}
+	return nil
+}
+
+// checkItemRunOpen is checkRunOpen for a run item, resolving its parent run
+// via a join.
+func checkItemRunOpen(ctx context.Context, q rowScanner, itemID string) error {
+	var status domain.RunStatus
+	err := q.QueryRow(ctx,
+		`SELECT tr.status FROM test_run_items tri JOIN test_runs tr ON tr.id = tri.run_id WHERE tri.id = $1`, itemID,
+	).Scan(&status)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return ErrNotFound
+	}
+	if err != nil {
+		return err
+	}
+	if status == domain.RunStatusClosed {
+		return ErrRunClosed
+	}
+	return nil
+}
+
 // ProjectID resolves the project a run belongs to — used by
 // requirePermission's per-resource resolver (add-project-rbac design.md D5).
 func (r *RunRepo) ProjectID(ctx context.Context, runID string) (string, error) {
@@ -59,8 +107,8 @@ func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []
 	var run domain.Run
 	err = tx.QueryRow(ctx,
 		`INSERT INTO test_runs (key, project_id, name) VALUES ($1, $2, $3)
-		 RETURNING id, key, project_id, name, created_at`, key, projectID, name,
-	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.CreatedAt)
+		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name,
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.Status, &run.CreatedAt)
 	if err != nil {
 		return domain.Run{}, err
 	}
@@ -105,8 +153,8 @@ func (r *RunRepo) Import(ctx context.Context, projectID, name string, items []Im
 	var run domain.Run
 	err = tx.QueryRow(ctx,
 		`INSERT INTO test_runs (key, project_id, name) VALUES ($1, $2, $3)
-		 RETURNING id, key, project_id, name, created_at`, key, projectID, name,
-	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.CreatedAt)
+		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name,
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.Status, &run.CreatedAt)
 	if err != nil {
 		return domain.Run{}, err
 	}
@@ -154,6 +202,9 @@ func (r *RunRepo) AddItem(ctx context.Context, runID, caseID, testName string) (
 		return "", err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := checkRunOpen(ctx, tx, runID); err != nil {
+		return "", err
+	}
 	if err := pinItem(ctx, tx, runID, caseID, testName); err != nil {
 		return "", err
 	}
@@ -184,14 +235,42 @@ func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID, testName string) err
 func (r *RunRepo) Get(ctx context.Context, runID string) (domain.Run, error) {
 	var run domain.Run
 	err := r.pool.QueryRow(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.created_at
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, tr.created_at
 		 FROM test_runs tr JOIN projects p ON p.id = tr.project_id
 		 WHERE tr.id = $1`, runID,
-	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.CreatedAt)
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Run{}, ErrNotFound
 	}
 	return run, err
+}
+
+// Close seals a run: every subsequent mutating run-item operation
+// (AddItem, AppendResult, SetItemStatus, AssignItem) is rejected with
+// ErrRunClosed until it's reopened.
+func (r *RunRepo) Close(ctx context.Context, runID string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE test_runs SET status = 'closed' WHERE id = $1`, runID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Reopen returns a closed run to open, allowing mutations again.
+func (r *RunRepo) Reopen(ctx context.Context, runID string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE test_runs SET status = 'open' WHERE id = $1`, runID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 // IDByKey resolves a run's key to its internal id — used at the API
@@ -208,7 +287,7 @@ func (r *RunRepo) IDByKey(ctx context.Context, key string) (string, error) {
 
 func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.created_at
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, tr.created_at
 		 FROM test_runs tr JOIN projects p ON p.id = tr.project_id
 		 WHERE tr.project_id = $1 ORDER BY tr.created_at DESC`, projectID)
 	if err != nil {
@@ -219,7 +298,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	runs := []domain.Run{}
 	for rows.Next() {
 		var run domain.Run
-		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.CreatedAt); err != nil {
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.CreatedAt); err != nil {
 			return nil, err
 		}
 		runs = append(runs, run)
@@ -305,6 +384,9 @@ func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.Ne
 		return domain.Result{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+	if err := checkItemRunOpen(ctx, tx, itemID); err != nil {
+		return domain.Result{}, err
+	}
 
 	var out domain.Result
 	err = tx.QueryRow(ctx,
@@ -351,6 +433,9 @@ func (r *RunRepo) Results(ctx context.Context, itemID string) ([]domain.Result, 
 }
 
 func (r *RunRepo) SetItemStatus(ctx context.Context, itemID string, status domain.Status) error {
+	if err := checkItemRunOpen(ctx, r.pool, itemID); err != nil {
+		return err
+	}
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE test_run_items SET current_status = $2 WHERE id = $1`, itemID, status)
 	if err != nil {
@@ -363,6 +448,9 @@ func (r *RunRepo) SetItemStatus(ctx context.Context, itemID string, status domai
 }
 
 func (r *RunRepo) AssignItem(ctx context.Context, itemID, assignee string) error {
+	if err := checkItemRunOpen(ctx, r.pool, itemID); err != nil {
+		return err
+	}
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE test_run_items SET assignee = $2 WHERE id = $1`, itemID, assignee)
 	if err != nil {

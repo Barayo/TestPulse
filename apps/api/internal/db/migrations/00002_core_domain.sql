@@ -113,6 +113,9 @@ CREATE TABLE test_runs (
     key         text NOT NULL UNIQUE,
     project_id  uuid NOT NULL REFERENCES projects (id),
     name        text NOT NULL CHECK (name <> ''),
+    -- open/closed lifecycle (add-run-lifecycle-status): a closed run's
+    -- items become read-only.
+    status      text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX test_runs_project_idx ON test_runs (project_id);

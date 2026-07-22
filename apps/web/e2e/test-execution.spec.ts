@@ -99,6 +99,32 @@ test.describe('Requirement: Run item status lifecycle', () => {
   })
 })
 
+test.describe('Requirement: Run open/closed lifecycle', () => {
+  test('Scenario: Closing a run blocks recording; reopening allows it again', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Lifecycle Project')
+    await page.goto(`/projects/${projectId}/runs`)
+    await page.getByLabel(/^name$/i).fill('Run 1')
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.getByRole('link', { name: 'Run 1' }).click()
+
+    await expect(page.getByText(/^open$/i)).toBeVisible()
+    await page.getByRole('button', { name: /close run/i }).click()
+    await expect(page.getByText(/^closed$/i)).toBeVisible()
+
+    await page.getByText('Login works').first().click()
+    await expect(page.getByText(/this run is closed/i)).toBeVisible()
+    await expect(page.getByRole('button', { name: /^pass$/i })).toBeDisabled()
+
+    await page.getByRole('button', { name: /reopen/i }).click()
+    await expect(page.getByText(/^open$/i)).toBeVisible()
+
+    await page.getByText('Login works').first().click()
+    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /^pass$/i }).click()
+    await expect(page.getByText('ana: pass')).toBeVisible()
+  })
+})
+
 test.describe('Requirement: Run summary', () => {
   test('Scenario: Summary counts by status', async ({ page }) => {
     const projectId = await createProjectWithCase(page, 'Summary Project')

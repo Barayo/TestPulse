@@ -8,9 +8,10 @@ Every run SHALL have a status, `open` or `closed`. Runs are created `open`.
 - **THEN** its status is `open`
 
 ### Requirement: Closing a run
-Any actor who can write to an open run SHALL be able to close it. Once
-`closed`, the run's items become read-only: recording a result, updating an
-item's status or assignee, and adding an item are all rejected with `409`.
+Any actor with permission to record results on a run SHALL be able to close
+it. Once `closed`, the run's items become read-only: recording a result,
+updating an item's status or assignee, and adding an item are all rejected
+with `409`.
 
 #### Scenario: Closing an open run
 - **WHEN** an authenticated actor closes an open run
@@ -29,15 +30,17 @@ item's status or assignee, and adding an item are all rejected with `409`.
 - **WHEN** a case is added as a new item to a closed run
 - **THEN** the request is rejected with `409`
 
-### Requirement: Reopening a closed run is admin-only
-Only an actor with the `admin` role SHALL be able to reopen a closed run,
-returning it to `open`.
+### Requirement: Reopening a closed run requires project-admin permission
+Only an actor with the `manageProject` permission on the run's project
+SHALL be able to reopen a closed run, returning it to `open`.
 
-#### Scenario: Admin reopens a closed run
-- **WHEN** an actor with role `admin` reopens a closed run
+#### Scenario: An actor with manageProject reopens a closed run
+- **WHEN** an actor with `manageProject` permission on the run's project
+  reopens a closed run
 - **THEN** the run's status becomes `open` and its items accept modification
   again
 
-#### Scenario: Non-admin cannot reopen a closed run
-- **WHEN** an actor without the `admin` role attempts to reopen a closed run
+#### Scenario: An actor without manageProject cannot reopen a closed run
+- **WHEN** an actor without `manageProject` permission on the run's project
+  attempts to reopen a closed run
 - **THEN** the request is rejected with `403`

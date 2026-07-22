@@ -120,6 +120,12 @@ Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for 
 - Recording a verdict appends to that item's result log (visible as **History**) and updates its status immediately — the board reflects the change without needing to reselect the item.
 - A **Retest** button appears on failed items; marking retest sets the item back to an executable state (`retest` status) without erasing the prior failure from history.
 
+## Closing and reopening a run
+
+A run is **open** or **closed**, shown as a badge next to its name. Runs are created open. Any actor who can record results (Record Result permission) can click **Close run** to seal it: once closed, its items become read-only — recording a verdict, marking retest, and adding an item are all rejected until it's reopened. This matters once results carry real authorship: a closed run is a stable, final record of who executed what.
+
+Reopening is more privileged than closing — it requires **Manage Project** (the same permission that gates renaming or archiving the project itself), since undoing a seal should be rare and deliberate. Clicking **Reopen** without that permission shows an inline message pointing at asking a project admin instead of silently failing.
+
 ## Run summary
 
 Each run page shows a live item count by status (e.g. "4 items — 2 pass, 1 failed, 1 pending"), backed by `GET /api/v1/runs/{key}/summary`. Deeper analytics (trends, flaky-test detection) arrive in `add-reporting` (v0.3) — see [ROADMAP.md](../ROADMAP.md).

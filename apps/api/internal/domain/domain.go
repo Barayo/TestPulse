@@ -267,8 +267,19 @@ type Run struct {
 	// from the URL (add-human-readable-keys).
 	ProjectKey string    `json:"projectKey"`
 	Name       string    `json:"name"`
+	Status     RunStatus `json:"status"`
 	CreatedAt  time.Time `json:"createdAt"`
 }
+
+// RunStatus is a run's open/closed lifecycle state (add-run-lifecycle-status).
+// A closed run's items become read-only: no new results, status/assignee
+// updates, or added items.
+type RunStatus string
+
+const (
+	RunStatusOpen   RunStatus = "open"
+	RunStatusClosed RunStatus = "closed"
+)
 
 type RunItem struct {
 	ID            string      `json:"id"`

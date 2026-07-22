@@ -420,6 +420,86 @@ func TestRunPinsVersionAtCreation(t *testing.T) {
 	}
 }
 
+// TestNewRunStartsOpen covers add-run-lifecycle-status's "New run starts
+// open" scenario.
+func TestNewRunStartsOpen(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	run, err := s.Runs.Create(ctx, p.ID, "sprint 1", nil)
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	if run.Status != domain.RunStatusOpen {
+		t.Errorf("new run status = %q, want %q", run.Status, domain.RunStatusOpen)
+	}
+
+	got, err := s.Runs.Get(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.Status != domain.RunStatusOpen {
+		t.Errorf("Get status = %q, want %q", got.Status, domain.RunStatusOpen)
+	}
+}
+
+// TestCloseAndReopenRun covers "Closing an open run" and "An actor with
+// manageProject reopens a closed run".
+func TestCloseAndReopenRun(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", nil)
+
+	if err := s.Runs.Close(ctx, run.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	got, _ := s.Runs.Get(ctx, run.ID)
+	if got.Status != domain.RunStatusClosed {
+		t.Errorf("status after Close = %q, want %q", got.Status, domain.RunStatusClosed)
+	}
+
+	if err := s.Runs.Reopen(ctx, run.ID); err != nil {
+		t.Fatalf("Reopen: %v", err)
+	}
+	got, _ = s.Runs.Get(ctx, run.ID)
+	if got.Status != domain.RunStatusOpen {
+		t.Errorf("status after Reopen = %q, want %q", got.Status, domain.RunStatusOpen)
+	}
+}
+
+// TestClosedRunRejectsMutations covers the "Closed run rejects ..."
+// scenarios: every existing mutating run-item store method refuses once
+// the parent run is closed.
+func TestClosedRunRejectsMutations(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	c2 := mustCase(t, s, p.ID, "Logout works")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	item := items[0]
+
+	if err := s.Runs.Close(ctx, run.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	if _, err := s.Runs.AddItem(ctx, run.ID, c2.ID, ""); !errors.Is(err, store.ErrRunClosed) {
+		t.Errorf("AddItem on closed run = %v, want ErrRunClosed", err)
+	}
+	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); !errors.Is(err, store.ErrRunClosed) {
+		t.Errorf("AppendResult on closed run = %v, want ErrRunClosed", err)
+	}
+	if err := s.Runs.SetItemStatus(ctx, item.ID, domain.StatusRetest); !errors.Is(err, store.ErrRunClosed) {
+		t.Errorf("SetItemStatus on closed run = %v, want ErrRunClosed", err)
+	}
+	if err := s.Runs.AssignItem(ctx, item.ID, "ana"); !errors.Is(err, store.ErrRunClosed) {
+		t.Errorf("AssignItem on closed run = %v, want ErrRunClosed", err)
+	}
+}
+
 func TestAddItemToOpenRunPinsThenCurrentVersion(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

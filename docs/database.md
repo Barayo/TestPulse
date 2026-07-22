@@ -115,7 +115,7 @@ This split exists so a run can reference `(case_id, version)` directly (via FK) 
 `test_suites` is a named grouping per project. `suite_cases` is the n:m join table (`suite_id`, `case_id`); removing a row here never touches `test_cases`.
 
 ### `test_runs`
-A named execution container per project.
+A named execution container per project. `status` (`add-run-lifecycle-status`) is `open` or `closed` — a closed run's items become read-only (no new results, status/assignee updates, or added items) until an actor with `manageProject` reopens it.
 
 ### `test_run_items`
 One row per case included in a run, **pinned to an exact `(case_id, case_version)` at insert time** — either when the run is created or when a case is later added to an open run. The pin never changes even if the case is edited afterward or soft-deleted; the API surfaces a `newerVersion` flag by comparing against the case's current version. `current_status` is one of `pending / pass / failed / skipped / blocked / retest` and is the fast-read cache of "what does the log currently imply" — it's written in the same transaction as a new result, or directly via the status endpoint (assign, retest). Unique on `(run_id, case_id)`: a case appears at most once per run. `test_name` (`add-execution-import`) is the literal name an external runner reported for this item, empty for items added manually.

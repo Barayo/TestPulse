@@ -67,6 +67,8 @@ func mountAPI(r chi.Router, h *api) {
 	r.Route("/runs/{runKey}", func(r chi.Router) {
 		r.Use(h.resolveKey("runKey", h.svc.RunIDByKey))
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.getRun)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromRun)).Post("/close", h.closeRun)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRun)).Post("/reopen", h.reopenRun)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/items", h.listRunItems)
 		r.With(h.requirePermission(domain.PermRunCreate, projectIDFromRun)).Post("/items", h.addRunItem)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/summary", h.runSummary)
@@ -89,6 +91,7 @@ func (h *api) respond(w http.ResponseWriter, status int, v any, err error) {
 		var verr *service.ValidationError
 		var uerr *service.UnauthorizedError
 		var ferr *service.ForbiddenError
+		var cerr *service.ConflictError
 		switch {
 		case errors.As(err, &verr):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -96,6 +99,8 @@ func (h *api) respond(w http.ResponseWriter, status int, v any, err error) {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
 		case errors.As(err, &ferr):
 			writeJSON(w, http.StatusForbidden, map[string]string{"error": err.Error()})
+		case errors.As(err, &cerr):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		case errors.Is(err, store.ErrNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		case errors.Is(err, store.ErrRootFolder):
@@ -432,6 +437,16 @@ func (h *api) importResults(w http.ResponseWriter, r *http.Request) {
 func (h *api) getRun(w http.ResponseWriter, r *http.Request) {
 	run, err := h.svc.GetRun(r.Context(), resolvedID(r, "runKey"))
 	h.respond(w, http.StatusOK, run, err)
+}
+
+func (h *api) closeRun(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.CloseRun(r.Context(), resolvedID(r, "runKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) reopenRun(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.ReopenRun(r.Context(), resolvedID(r, "runKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) listRunItems(w http.ResponseWriter, r *http.Request) {

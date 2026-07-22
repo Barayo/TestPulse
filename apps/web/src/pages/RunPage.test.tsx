@@ -10,7 +10,15 @@ const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 const mockPUT = vi.mocked(api.PUT)
 
-const run = { id: 'r1', key: 'r1', projectId: 'p1', projectKey: 'p1', name: 'Sprint 1', createdAt: '' }
+const run = {
+  id: 'r1',
+  key: 'r1',
+  projectId: 'p1',
+  projectKey: 'p1',
+  name: 'Sprint 1',
+  status: 'open' as const,
+  createdAt: '',
+}
 const pendingItem = {
   id: 'i1',
   runId: 'r1',
@@ -30,9 +38,10 @@ const pendingItem = {
   },
 }
 
-function mockRunAPI(items: unknown[], summary?: unknown) {
+function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+    if (path === '/api/v1/runs/{runKey}')
+      return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/items')
       return Promise.resolve({ data: items, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/summary')
@@ -242,5 +251,64 @@ describe('Run execution board', () => {
         }),
       )
     })
+  })
+})
+
+describe('Run lifecycle (open/closed)', () => {
+  it('shows an open badge and a Close control for an open run', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /close run/i })).toBeInTheDocument()
+  })
+
+  it('closes the run', async () => {
+    mockRunAPI([pendingItem])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /close run/i }))
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/runs/{runKey}/close',
+        expect.objectContaining({ params: { path: { runKey: 'r1' } } }),
+      )
+    })
+  })
+
+  it('shows a closed badge and a Reopen control for a closed run', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    renderRun()
+    expect(await screen.findByText(/^closed$/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /reopen/i })).toBeInTheDocument()
+  })
+
+  it('disables verdict recording and explains why when the run is closed', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    renderRun()
+    await userEvent.click(await screen.findByText('Login works'))
+    expect(await screen.findByText(/this run is closed/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^pass$/i })).toBeDisabled()
+    expect(mockPOST).not.toHaveBeenCalled()
+  })
+
+  it('reopens the run', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/runs/{runKey}/reopen',
+        expect.objectContaining({ params: { path: { runKey: 'r1' } } }),
+      )
+    })
+  })
+
+  it('shows a permission message when reopening is forbidden', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    mockPOST.mockResolvedValue({ error: { error: 'forbidden' }, response: { ok: false } })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
+    expect(await screen.findByText(/project admin/i)).toBeInTheDocument()
   })
 })

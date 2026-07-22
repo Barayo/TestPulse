@@ -5,6 +5,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -34,6 +35,15 @@ type ForbiddenError struct{ msg string }
 func (e *ForbiddenError) Error() string { return e.msg }
 
 func forbidden(msg string) error { return &ForbiddenError{msg: msg} }
+
+// ConflictError marks a request that's individually well-formed but
+// conflicts with the resource's current state (HTTP 409) — e.g. mutating a
+// closed run (add-run-lifecycle-status).
+type ConflictError struct{ msg string }
+
+func (e *ConflictError) Error() string { return e.msg }
+
+func conflict(msg string) error { return &ConflictError{msg: msg} }
 
 type Service struct {
 	store *store.Store
@@ -360,13 +370,45 @@ func (s *Service) ListRuns(ctx context.Context, projectID string) ([]domain.Run,
 	return s.store.Runs.List(ctx, projectID)
 }
 
+// CloseRun seals a run: subsequent run-item mutations are rejected until
+// it's reopened. Authorization (runRecordResult permission) is enforced by
+// requirePermission at the routing layer, not here (add-run-lifecycle-status
+// design.md D2).
+func (s *Service) CloseRun(ctx context.Context, runID string) error {
+	if err := s.store.Runs.Close(ctx, runID); err != nil {
+		return err
+	}
+	s.audit(ctx, "close", "run", runID)
+	return nil
+}
+
+// ReopenRun returns a closed run to open. Authorization (manageProject
+// permission) is enforced by requirePermission at the routing layer.
+func (s *Service) ReopenRun(ctx context.Context, runID string) error {
+	if err := s.store.Runs.Reopen(ctx, runID); err != nil {
+		return err
+	}
+	s.audit(ctx, "reopen", "run", runID)
+	return nil
+}
+
+// runClosedAsConflict translates the store's closed-run sentinel into the
+// service's 409 ConflictError, leaving every other error (including
+// ErrNotFound) unchanged.
+func runClosedAsConflict(err error) error {
+	if errors.Is(err, store.ErrRunClosed) {
+		return conflict("run is closed")
+	}
+	return err
+}
+
 func (s *Service) AddRunItem(ctx context.Context, runID, caseID string) (string, error) {
 	if caseID == "" {
 		return "", invalid("caseId is required")
 	}
 	itemID, err := s.store.Runs.AddItem(ctx, runID, caseID, "")
 	if err != nil {
-		return "", err
+		return "", runClosedAsConflict(err)
 	}
 	s.audit(ctx, "add_item", "run", runID)
 	return itemID, nil
@@ -382,7 +424,7 @@ func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.Ne
 	}
 	result, err := s.store.Runs.AppendResult(ctx, itemID, res)
 	if err != nil {
-		return domain.Result{}, err
+		return domain.Result{}, runClosedAsConflict(err)
 	}
 	s.audit(ctx, "record_result", "run_item", itemID)
 	return result, nil
@@ -408,12 +450,12 @@ func (s *Service) UpdateItem(ctx context.Context, itemID string, upd ItemUpdate)
 			return invalid("%s", err)
 		}
 		if err := s.store.Runs.SetItemStatus(ctx, itemID, status); err != nil {
-			return err
+			return runClosedAsConflict(err)
 		}
 	}
 	if upd.Assignee != nil {
 		if err := s.store.Runs.AssignItem(ctx, itemID, *upd.Assignee); err != nil {
-			return err
+			return runClosedAsConflict(err)
 		}
 	}
 	s.audit(ctx, "update", "run_item", itemID)

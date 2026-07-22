@@ -372,6 +372,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{runKey}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Seal a run — its items become read-only until reopened */
+        post: operations["closeRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{runKey}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen a closed run — requires the manageProject permission */
+        post: operations["reopenRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{runKey}/items": {
         parameters: {
             query?: {
@@ -779,6 +817,8 @@ export interface components {
         /** @enum {string} */
         Status: "pending" | "pass" | "failed" | "skipped" | "blocked" | "retest";
         /** @enum {string} */
+        RunStatus: "open" | "closed";
+        /** @enum {string} */
         Verdict: "pass" | "failed" | "skipped" | "blocked";
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "critical";
@@ -885,6 +925,8 @@ export interface components {
             /** @description The owning project's key — a run's own route isn't nested under its project's, so this lets a client link back without a second lookup. */
             projectKey: string;
             name: string;
+            /** @description Runs are created open; a closed run's items become read-only until reopened. */
+            status: components["schemas"]["RunStatus"];
             /** Format: date-time */
             createdAt: string;
         };
@@ -1148,6 +1190,15 @@ export interface components {
         };
         /** @description Authenticated, but not permitted to perform this action */
         Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
+        /** @description The request conflicts with the resource's current state (e.g. the run is closed) */
+        Conflict: {
             headers: {
                 [name: string]: unknown;
             };
@@ -1858,6 +1909,49 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    closeRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Closed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    reopenRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reopened */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     listRunItems: {
         parameters: {
             query?: {
@@ -1911,6 +2005,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listResults: {
@@ -1961,6 +2056,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     updateItemStatus: {
@@ -1987,6 +2083,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getRunSummary: {

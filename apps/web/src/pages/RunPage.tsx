@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -35,6 +36,7 @@ export default function RunPage() {
   const [actor, setActor] = useState('')
   const [comment, setComment] = useState('')
   const [verdictError, setVerdictError] = useState<string>()
+  const [lifecycleError, setLifecycleError] = useState<string>()
 
   const load = useCallback(async () => {
     if (!runKey) return
@@ -118,6 +120,28 @@ export default function RunPage() {
     await refreshSelected(selected.id)
   }
 
+  async function closeRun() {
+    if (!runKey) return
+    setLifecycleError(undefined)
+    const { error } = await api.POST('/api/v1/runs/{runKey}/close', { params: { path: { runKey } } })
+    if (error) {
+      setLifecycleError('Could not close this run.')
+      return
+    }
+    await load()
+  }
+
+  async function reopenRun() {
+    if (!runKey) return
+    setLifecycleError(undefined)
+    const { error } = await api.POST('/api/v1/runs/{runKey}/reopen', { params: { path: { runKey } } })
+    if (error) {
+      setLifecycleError("You don't have permission to reopen this run — ask a project admin.")
+      return
+    }
+    await load()
+  }
+
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
@@ -138,7 +162,24 @@ export default function RunPage() {
       <div className="grid grid-cols-1 gap-6 md:grid-cols-[1fr_1.4fr]">
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">{run?.name ?? 'Run'}</CardTitle>
+          <div className="flex items-center justify-between gap-2">
+            <CardTitle className="tp-heading">{run?.name ?? 'Run'}</CardTitle>
+            {run && (
+              <div className="flex items-center gap-2">
+                <Badge variant={run.status === 'open' ? 'secondary' : 'outline'}>{run.status}</Badge>
+                {run.status === 'open' ? (
+                  <Button size="sm" variant="outline" onClick={() => void closeRun()}>
+                    Close run
+                  </Button>
+                ) : (
+                  <Button size="sm" variant="outline" onClick={() => void reopenRun()}>
+                    Reopen
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+          {lifecycleError && <p className="text-sm text-destructive">{lifecycleError}</p>}
           {summary && (
             <p className="text-sm text-muted-foreground">
               {summary.total} items — {Object.entries(summary.counts)
@@ -203,9 +244,19 @@ export default function RunPage() {
             )}
 
             <div className="space-y-2 border-t pt-4">
+              {run?.status === 'closed' && (
+                <p className="text-sm text-muted-foreground">
+                  This run is closed. Ask a project admin to reopen it to record new results.
+                </p>
+              )}
               <div className="space-y-1">
                 <Label htmlFor="actor">Your name</Label>
-                <Input id="actor" value={actor} onChange={(e) => setActor(e.target.value)} />
+                <Input
+                  id="actor"
+                  value={actor}
+                  onChange={(e) => setActor(e.target.value)}
+                  disabled={run?.status === 'closed'}
+                />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="comment">Comment</Label>
@@ -213,24 +264,45 @@ export default function RunPage() {
                   id="comment"
                   value={comment}
                   onChange={(e) => setComment(e.target.value)}
+                  disabled={run?.status === 'closed'}
                 />
               </div>
               {verdictError && <p className="text-sm text-destructive">{verdictError}</p>}
               <div className="flex flex-wrap gap-2">
-                <Button size="sm" onClick={() => void recordVerdict('pass')}>
+                <Button size="sm" disabled={run?.status === 'closed'} onClick={() => void recordVerdict('pass')}>
                   Pass
                 </Button>
-                <Button size="sm" variant="destructive" onClick={() => void recordVerdict('failed')}>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  disabled={run?.status === 'closed'}
+                  onClick={() => void recordVerdict('failed')}
+                >
                   Failed
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void recordVerdict('blocked')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={run?.status === 'closed'}
+                  onClick={() => void recordVerdict('blocked')}
+                >
                   Blocked
                 </Button>
-                <Button size="sm" variant="outline" onClick={() => void recordVerdict('skipped')}>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={run?.status === 'closed'}
+                  onClick={() => void recordVerdict('skipped')}
+                >
                   Skipped
                 </Button>
                 {selected.currentStatus === 'failed' && (
-                  <Button size="sm" variant="secondary" onClick={() => void markRetest()}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={run?.status === 'closed'}
+                    onClick={() => void markRetest()}
+                  >
                     Retest
                   </Button>
                 )}

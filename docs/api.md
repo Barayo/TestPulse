@@ -94,7 +94,9 @@ exactly one folder, defaulting to the project's root; see
 | Method | Path | Description |
 |---|---|---|
 | GET / POST | `/api/v1/projects/{projectKey}/runs` | List / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys` |
-| GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's |
+| GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's, and `status` (`open`/`closed`) |
+| POST | `/api/v1/runs/{runKey}/close` | Seal a run — requires `runRecordResult`, the same permission needed to record a verdict |
+| POST | `/api/v1/runs/{runKey}/reopen` | Reopen a closed run — requires `manageProject`, the project-admin-level permission |
 | GET / POST | `/api/v1/runs/{runKey}/items` | List items (optionally `?assignee=`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
 | GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`actor`, `verdict`, `comment`) |
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or `assignee` |
@@ -104,7 +106,9 @@ exactly one folder, defaulting to the project's root; see
 Validation errors return `400 {"error": "..."}` naming the offending field;
 missing entities return `404 {"error": "not found"}`. Unauthenticated
 requests return `401 {"error": "unauthorized"}`; authenticated requests
-lacking permission return `403 {"error": "..."}`.
+lacking permission return `403 {"error": "..."}`. A request that conflicts
+with the resource's current state — recording a result, updating an item,
+or adding an item on a *closed* run — returns `409 {"error": "..."}`.
 
 **Identity**
 
