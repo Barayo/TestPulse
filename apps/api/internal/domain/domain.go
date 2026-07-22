@@ -213,12 +213,15 @@ func (f NewFolder) Validate() error {
 // Entity types returned by stores and services.
 
 type Project struct {
-	ID          string    `json:"id"`
-	Key         string    `json:"key"`
-	Name        string    `json:"name"`
-	Archived    bool      `json:"archived"`
-	Description string    `json:"description"`
-	CreatedAt   time.Time `json:"createdAt"`
+	ID          string `json:"id"`
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Archived    bool   `json:"archived"`
+	Description string `json:"description"`
+	// IsSample marks the single, automatically-seeded showroom project
+	// (add-sample-project); false for every normally-created project.
+	IsSample  bool      `json:"isSample"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 type TestCase struct {

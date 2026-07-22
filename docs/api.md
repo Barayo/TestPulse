@@ -52,8 +52,8 @@ internal `id` in paths — they aren't in scope for this scheme.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/projects` | List projects |
-| POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only; the response's `key` is auto-derived from `name` |
+| GET | `/api/v1/projects` | List projects. Every project carries `isSample`, `true` for the one automatically-seeded showroom project a fresh instance gets on first startup (see [Getting started](getting-started.md)), `false` otherwise |
+| POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only; the response's `key` is auto-derived from `name`; `isSample` is always `false` for a project created this way |
 | GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), and whether the calling user has favorited it, for every non-archived project, in one request — computed server-side (4 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
 | GET | `/api/v1/projects/{projectKey}` | Get a project |
 | PATCH | `/api/v1/projects/{projectKey}` | Rename, describe, and/or archive — Project Admin+ (renaming never changes `key`) |

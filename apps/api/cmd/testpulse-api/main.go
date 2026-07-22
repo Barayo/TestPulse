@@ -13,6 +13,7 @@ import (
 
 	"github.com/Barayo/TestPulse/apps/api/internal/config"
 	"github.com/Barayo/TestPulse/apps/api/internal/db"
+	"github.com/Barayo/TestPulse/apps/api/internal/sampledata"
 	"github.com/Barayo/TestPulse/apps/api/internal/server"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
@@ -53,6 +54,7 @@ func run() error {
 	if err := svc.BootstrapAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword); err != nil {
 		return fmt.Errorf("bootstrapping admin: %w", err)
 	}
+	seedSampleProjectIfEmpty(ctx, logger, svc)
 	if err := svc.CleanupExpiredSessions(ctx); err != nil {
 		logger.Warn("clearing expired sessions at startup", "error", err)
 	}
@@ -81,6 +83,27 @@ func run() error {
 		}
 		return err
 	}
+}
+
+// seedSampleProjectIfEmpty seeds the always-on Sample Project once, on an
+// instance with zero projects — never re-seeds afterward, including after
+// the Sample Project is later deleted (add-sample-project). Failure is
+// logged, never fatal: a broken demo seed must not prevent the server from
+// starting.
+func seedSampleProjectIfEmpty(ctx context.Context, logger *slog.Logger, svc *service.Service) {
+	has, err := svc.HasAnyProject(ctx)
+	if err != nil {
+		logger.Warn("checking for existing projects before seeding sample project", "error", err)
+		return
+	}
+	if has {
+		return
+	}
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		logger.Warn("seeding sample project", "error", err)
+		return
+	}
+	logger.Info("sample project seeded")
 }
 
 func newLogger(level string) *slog.Logger {

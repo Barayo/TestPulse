@@ -11,6 +11,9 @@ CREATE TABLE projects (
     key         text NOT NULL UNIQUE,
     name        text NOT NULL CHECK (name <> ''),
     archived    boolean NOT NULL DEFAULT false,
+    -- Marks the single, automatically-seeded showroom project
+    -- (add-sample-project); false for every normally-created project.
+    is_sample   boolean NOT NULL DEFAULT false,
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 

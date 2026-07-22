@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { StarIcon, Grid2x2, Grid3x3 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -406,9 +407,12 @@ function ExpandedGrid({
               <button type="button" onClick={() => onNavigate(p.id)} className="flex flex-col gap-3.5 text-left">
                 <span className="flex items-start justify-between gap-2">
                   <span className="min-w-0">
-                    <h2 className="truncate text-base font-semibold leading-snug text-foreground" title={p.name}>
-                      {p.name}
-                    </h2>
+                    <span className="flex items-center gap-1.5">
+                      <h2 className="truncate text-base font-semibold leading-snug text-foreground" title={p.name}>
+                        {p.name}
+                      </h2>
+                      {p.isSample && <Badge variant="secondary">Sample</Badge>}
+                    </span>
                     {p.description && (
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.description}</p>
                     )}
@@ -480,9 +484,12 @@ function CompactList({
           <div className="group relative flex w-full flex-col gap-3.5 rounded-2xl border border-border bg-card p-4 transition-colors hover:border-primary/40">
             <button type="button" onClick={() => onNavigate(p.id)} className="flex flex-col gap-3.5 text-left">
               <span className="flex items-start justify-between gap-2">
-                <h2 className="min-w-0 truncate text-base font-semibold leading-snug text-foreground" title={p.name}>
-                  {p.name}
-                </h2>
+                <span className="flex min-w-0 items-center gap-1.5">
+                  <h2 className="min-w-0 truncate text-base font-semibold leading-snug text-foreground" title={p.name}>
+                    {p.name}
+                  </h2>
+                  {p.isSample && <Badge variant="secondary">Sample</Badge>}
+                </span>
                 <span className="size-4 shrink-0" aria-hidden="true" />
               </span>
 

@@ -865,6 +865,8 @@ export interface components {
             name: string;
             archived: boolean;
             description: string;
+            /** @description True for the single, automatically-seeded showroom project. False for every normally-created project. */
+            isSample: boolean;
             /** Format: date-time */
             createdAt: string;
         };

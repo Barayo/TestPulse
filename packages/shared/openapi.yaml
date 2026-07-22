@@ -1062,7 +1062,7 @@ components:
           description: Required — only the root folder (auto-created with the project) may have no parent.
     Project:
       type: object
-      required: [id, key, name, archived, description, createdAt]
+      required: [id, key, name, archived, description, isSample, createdAt]
       properties:
         id: { type: string }
         key:
@@ -1071,6 +1071,9 @@ components:
         name: { type: string }
         archived: { type: boolean }
         description: { type: string }
+        isSample:
+          type: boolean
+          description: True for the single, automatically-seeded showroom project. False for every normally-created project.
         createdAt: { type: string, format: date-time }
     ProjectInput:
       type: object

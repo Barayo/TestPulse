@@ -8,6 +8,7 @@ function project(overrides: Partial<ProjectSummary>): ProjectSummary {
     name: 'Project',
     description: '',
     createdAt: '2026-01-01T00:00:00.000Z',
+    isSample: false,
     suiteCount: 0,
     caseCount: 0,
     passRate: null,

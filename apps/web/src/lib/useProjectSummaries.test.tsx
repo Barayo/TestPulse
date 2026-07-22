@@ -23,6 +23,7 @@ function manyProjects(count: number) {
     name: `Project ${i}`,
     archived: false,
     description: '',
+    isSample: false,
     createdAt: '',
   }))
 }
@@ -68,6 +69,7 @@ describe('useProjectSummaries', () => {
       name: 'Project 0',
       description: '',
       createdAt: '',
+      isSample: false,
       suiteCount: 0,
       caseCount: 0,
       passRate: null,
@@ -79,6 +81,7 @@ describe('useProjectSummaries', () => {
       name: 'Project 1',
       description: '',
       createdAt: '',
+      isSample: false,
       suiteCount: 1,
       caseCount: 2,
       passRate: 50,
@@ -87,7 +90,7 @@ describe('useProjectSummaries', () => {
     })
   })
 
-  it('passes through description and isFavorite from the API', async () => {
+  it('passes through description, isSample, and isFavorite from the API', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/projects') {
         return Promise.resolve({
@@ -98,6 +101,7 @@ describe('useProjectSummaries', () => {
               name: 'Project 0',
               archived: false,
               description: 'a description',
+              isSample: true,
               createdAt: '2026-01-01T00:00:00Z',
             },
           ],
@@ -129,6 +133,7 @@ describe('useProjectSummaries', () => {
       name: 'Project 0',
       description: 'a description',
       createdAt: '2026-01-01T00:00:00Z',
+      isSample: true,
       suiteCount: 1,
       caseCount: 2,
       passRate: 90,

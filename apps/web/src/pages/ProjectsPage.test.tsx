@@ -16,7 +16,16 @@ const ME_NON_ADMIN = { id: 'member1', email: 'member@example.com', isTenantAdmin
 
 function project(overrides: Record<string, unknown> = {}) {
   const id = (overrides.id as string | undefined) ?? 'p1'
-  return { id, key: id, name: 'Banca Móvil', archived: false, description: '', createdAt: '', ...overrides }
+  return {
+    id,
+    key: id,
+    name: 'Banca Móvil',
+    archived: false,
+    description: '',
+    isSample: false,
+    createdAt: '',
+    ...overrides,
+  }
 }
 
 function summary(overrides: Record<string, unknown> = {}) {
@@ -96,6 +105,28 @@ describe('ProjectsPage', () => {
     expect(screen.getByText('70')).toBeInTheDocument()
     expect(screen.getByText(/cases/i, { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText('Healthy', { selector: 'span' })).toBeInTheDocument()
+  })
+
+  it('shows a "Sample" badge next to the sample project in expanded view', async () => {
+    mockProjectsList([project({ isSample: true })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.getByText('Sample')).toBeInTheDocument()
+  })
+
+  it('shows no badge for a non-sample project in expanded view', async () => {
+    mockProjectsList([project({ isSample: false })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.queryByText('Sample')).not.toBeInTheDocument()
+  })
+
+  it('shows a "Sample" badge next to the sample project in compact view', async () => {
+    window.localStorage.setItem('testpulse.projectListViewMode', 'compact')
+    mockProjectsList([project({ isSample: true })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.getByText('Sample')).toBeInTheDocument()
   })
 
   it('renders the project name clearly, not in the heavy page-title weight', async () => {

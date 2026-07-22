@@ -64,6 +64,58 @@ func TestSetDescription(t *testing.T) {
 	}
 }
 
+// --- Sample project flag (add-sample-project, task 2.1) ---
+
+func TestCreateProjectDefaultsIsSampleFalse(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	p, err := s.Projects.Create(ctx, "QA", "")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if p.IsSample {
+		t.Error("IsSample = true on a normally-created project, want false")
+	}
+
+	got, err := s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.IsSample {
+		t.Error("Get round-trip IsSample = true, want false")
+	}
+}
+
+func TestMarkSampleSetsFlag(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p, err := s.Projects.Create(ctx, "Sample Project", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Projects.MarkSample(ctx, p.ID); err != nil {
+		t.Fatalf("MarkSample: %v", err)
+	}
+
+	got, err := s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.IsSample {
+		t.Error("IsSample = false after MarkSample, want true")
+	}
+
+	list, err := s.Projects.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || !list[0].IsSample {
+		t.Errorf("List = %+v, want one project with IsSample true", list)
+	}
+}
+
 // --- Favorites (task 2.2) ---
 
 func TestStarAndUnstarProject(t *testing.T) {

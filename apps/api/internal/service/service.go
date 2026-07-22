@@ -78,6 +78,24 @@ func (s *Service) GetProject(ctx context.Context, id string) (domain.Project, er
 	return s.store.Projects.Get(ctx, id)
 }
 
+// HasAnyProject reports whether the instance has at least one project,
+// bypassing RBAC entirely — there is no authenticated actor at server
+// startup, where this is used to gate the one-time Sample Project seed
+// (add-sample-project), mirroring BootstrapAdmin's own emptiness check.
+func (s *Service) HasAnyProject(ctx context.Context) (bool, error) {
+	projects, err := s.store.Projects.List(ctx)
+	if err != nil {
+		return false, err
+	}
+	return len(projects) > 0, nil
+}
+
+// MarkSample flags a project as the automatically-seeded showroom project
+// (add-sample-project).
+func (s *Service) MarkSample(ctx context.Context, projectID string) error {
+	return s.store.Projects.MarkSample(ctx, projectID)
+}
+
 // ListProjects returns every project for a Tenant Admin, or only the
 // projects the caller has an effective role on otherwise (add-project-rbac
 // design.md D6) — non-Tenant-Admins never saw an unfiltered list again

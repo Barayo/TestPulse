@@ -1,0 +1,101 @@
+// Package sampledata holds generic content-building primitives (folders,
+// cases, suites, runs with recorded verdicts) used to construct realistic
+// example project content purely through the public service.Service API —
+// shared between apps/cmd/seed-demo (dev-only, two dense demo projects) and
+// the always-on Sample Project seeded at server startup (add-sample-project).
+package sampledata
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/Barayo/TestPulse/apps/api/internal/domain"
+	"github.com/Barayo/TestPulse/apps/api/internal/service"
+)
+
+// RootFolder returns projectID's root folder (the one with no parent),
+// created automatically alongside the project.
+func RootFolder(ctx context.Context, svc *service.Service, projectID string) (domain.Folder, error) {
+	folders, err := svc.ListFolders(ctx, projectID)
+	if err != nil {
+		return domain.Folder{}, err
+	}
+	for _, f := range folders {
+		if f.ParentFolderID == "" {
+			return f, nil
+		}
+	}
+	return domain.Folder{}, fmt.Errorf("project %s has no root folder", projectID)
+}
+
+// Folder creates a subfolder under parentID.
+func Folder(ctx context.Context, svc *service.Service, projectID, parentID, name string) (domain.Folder, error) {
+	return svc.CreateFolder(ctx, projectID, domain.NewFolder{Name: name, ParentFolderID: parentID})
+}
+
+// CaseWithSteps creates a case with the given title and steps, returning its id.
+func CaseWithSteps(ctx context.Context, svc *service.Service, projectID, folderID, title string, steps []domain.Step) (string, error) {
+	c, err := svc.CreateCase(ctx, projectID, folderID, domain.CaseContent{Title: title, Steps: steps})
+	if err != nil {
+		return "", err
+	}
+	return c.ID, nil
+}
+
+// Filler creates n bare cases (no steps) titled "<label> — caso N", useful
+// for bulking out a folder without writing out each case by hand.
+func Filler(ctx context.Context, svc *service.Service, projectID, folderID, label string, n int) ([]string, error) {
+	ids := make([]string, 0, n)
+	for i := 1; i <= n; i++ {
+		id, err := CaseWithSteps(ctx, svc, projectID, folderID, fmt.Sprintf("%s — caso %d", label, i), nil)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, nil
+}
+
+// Suite creates a suite and adds caseIDs to it.
+func Suite(ctx context.Context, svc *service.Service, projectID, name string, caseIDs []string) (domain.Suite, error) {
+	s, err := svc.CreateSuite(ctx, projectID, name)
+	if err != nil {
+		return domain.Suite{}, err
+	}
+	for _, caseID := range caseIDs {
+		if err := svc.AddCaseToSuite(ctx, s.ID, caseID); err != nil {
+			return domain.Suite{}, err
+		}
+	}
+	return s, nil
+}
+
+// Actors is a small pool of example authors — human and agent — cycled by
+// RunWithVerdicts so recorded results attribute to varied, realistic names.
+var Actors = []string{"Julia López", "Miguel Alonso", "agent:qa-bot"}
+
+// RunWithVerdicts creates a run over caseIDs and immediately records one
+// result per item, cycling verdicts in order (e.g. mostly pass, a couple of
+// fails) so pass-rate panels have real, varied data.
+func RunWithVerdicts(ctx context.Context, svc *service.Service, projectID, name string, caseIDs []string, verdicts []domain.Verdict) error {
+	r, err := svc.CreateRun(ctx, projectID, service.RunInput{Name: name, CaseIDs: caseIDs})
+	if err != nil {
+		return err
+	}
+	items, err := svc.RunItems(ctx, r.ID, "")
+	if err != nil {
+		return err
+	}
+	verdictByCase := map[string]domain.Verdict{}
+	for i, caseID := range caseIDs {
+		verdictByCase[caseID] = verdicts[i%len(verdicts)]
+	}
+	for i, item := range items {
+		v := verdictByCase[item.CaseID]
+		actor := Actors[i%len(Actors)]
+		if _, err := svc.RecordResult(ctx, item.ID, domain.NewResult{Actor: actor, Verdict: v}); err != nil {
+			return err
+		}
+	}
+	return nil
+}

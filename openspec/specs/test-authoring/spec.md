@@ -7,7 +7,7 @@ mandatory nested folder tree for browsing/organization), and suites (an
 independent n:m grouping used for execution).
 ## Requirements
 ### Requirement: Project management
-The system SHALL let users create, list, rename, and archive projects, where a project is the container for all test assets. A project MAY carry an optional `description` (free text) and an optional `ownerId` (a reference to a user), settable at creation or updated later. Every project SHALL be assigned an immutable, unique `key` at creation (see `resource-keys`), used to address it in the API and UI.
+The system SHALL let users create, list, rename, and archive projects, where a project is the container for all test assets. A project MAY carry an optional `description` (free text) and an optional `ownerId` (a reference to a user), settable at creation or updated later. Every project SHALL be assigned an immutable, unique `key` at creation (see `resource-keys`), used to address it in the API and UI. Every project SHALL carry an `isSample` flag, `false` unless the project is the automatically-created Sample Project (see `sample-data`).
 
 #### Scenario: Create a project
 - **WHEN** a user submits a new project with a name
@@ -32,6 +32,10 @@ The system SHALL let users create, list, rename, and archive projects, where a p
 #### Scenario: A newly created project has a key
 - **WHEN** a user creates a project
 - **THEN** the project is created with a `key` assigned, with no separate step required
+
+#### Scenario: Normally-created projects are never marked sample
+- **WHEN** a user creates a project through the normal create action
+- **THEN** the project's `isSample` flag is `false`
 
 ### Requirement: Test case creation
 The system SHALL let users create test cases within a project with title, description, steps, expected result, priority, and tags. Creating a case establishes version 1. A case MAY additionally carry `platform` (free text), `testType` (free text), and `automated` (boolean, defaults to false), settable at creation or updated later. Every case SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI.

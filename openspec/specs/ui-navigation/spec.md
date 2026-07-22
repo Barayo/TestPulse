@@ -296,7 +296,7 @@ in the suite.
 - **THEN** the case is no longer a member of that suite, but the case itself still exists
 
 ### Requirement: Project list with permission-ready create action
-Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section.
+Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section. A project marked as the sample project SHALL show a "Sample" badge next to its name, in both view modes.
 
 #### Scenario: Listing projects
 - **WHEN** a user navigates to the project list with no project selected
@@ -369,6 +369,14 @@ Without an active project selected, the web UI SHALL show a list of all projects
 #### Scenario: Sort control is available on mobile
 - **WHEN** the list is viewed on a mobile-width viewport
 - **THEN** the sort control remains visible and usable, unlike the view-mode toggle which is desktop-only
+
+#### Scenario: Sample Project shows a badge
+- **WHEN** the project list includes the sample project
+- **THEN** its row shows a "Sample" badge next to its name, in both expanded and compact view
+
+#### Scenario: Non-sample projects show no badge
+- **WHEN** the project list includes projects that are not the sample project
+- **THEN** their rows show no "Sample" badge
 
 ### Requirement: Routes address projects, cases, runs, and suites by key
 The web UI SHALL address projects, test cases, runs, and suites in the URL by their human-readable `key`, not their internal `id`. Folder routes are unaffected and continue to use the folder's internal id.

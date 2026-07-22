@@ -11,6 +11,7 @@ export type ProjectSummary = {
   name: string
   description: string
   createdAt: string
+  isSample: boolean
   suiteCount: number
   caseCount: number
   passRate: number | null
@@ -46,6 +47,7 @@ export function useProjectSummaries(): ProjectSummary[] {
             name: p.name,
             description: p.description ?? '',
             createdAt: p.createdAt,
+            isSample: p.isSample ?? false,
             suiteCount: stat?.suiteCount ?? 0,
             caseCount: stat?.caseCount ?? 0,
             passRate: stat?.passRate ?? null,

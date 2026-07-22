@@ -21,6 +21,12 @@ Then open **http://localhost:8080**.
 - Database migrations apply automatically on startup.
 - PostgreSQL data lives in the named volume `testpulse-db` and survives
   `docker compose down` / `up`. Use `down -v` to wipe it.
+- A fresh instance (zero existing projects) automatically gets a populated
+  **Sample Project** — sections, classified cases, suites, an open run, a
+  closed run, and a run imported from a JUnit XML report — so there's
+  something real to explore immediately. It's marked with a "Sample" badge
+  in the project list, behaves like any other project, and is safe to
+  archive or edit — it's created once and never comes back on its own.
 
 Check that everything is healthy:
 
