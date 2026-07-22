@@ -10,11 +10,11 @@ import (
 
 // Seed creates the Sample Project: a populated, realistic example touching
 // most of TestPulse's core capabilities — sections, classified cases,
-// suites, an open run, a closed run, a JUnit-XML-imported run, and a case
-// with more than one version — so a fresh instance has something real to
-// look at (add-sample-project). It attributes the seeded content to the
-// instance's Tenant Admin, the one user guaranteed to exist by the time
-// this runs (called after BootstrapAdmin).
+// suites, an open run, a closed run, a JUnit-XML-imported run, cases with
+// version history, and a deliberately flaky case — so a fresh instance has
+// something real to look at (add-sample-project, enrich-sample-project-content).
+// It attributes the seeded content to the instance's Tenant Admin, the one
+// user guaranteed to exist by the time this runs (called after BootstrapAdmin).
 func Seed(ctx context.Context, svc *service.Service) error {
 	admin, err := tenantAdmin(ctx, svc)
 	if err != nil {
@@ -44,6 +44,8 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	// --- Sections -----------------------------------------------------
+
 	auth, err := Folder(ctx, svc, p.ID, root.ID, "Authentication")
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
@@ -52,6 +54,20 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
+	settings, err := Folder(ctx, svc, p.ID, root.ID, "Settings")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	notifications, err := Folder(ctx, svc, p.ID, root.ID, "Notifications")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	reportingAPI, err := Folder(ctx, svc, p.ID, root.ID, "Reporting API")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	// --- Authentication cases ------------------------------------------
 
 	login, err := svc.CreateCase(ctx, p.ID, auth.ID, domain.CaseContent{
 		Title:     "User can log in with valid credentials",
@@ -87,7 +103,7 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
-	// Edited once so version history has a real diff to show.
+	// Edited once, reaching version 2 — first version-history example.
 	passwordReset, err = svc.EditCase(ctx, passwordReset.ID, domain.CaseContent{
 		Title:          passwordReset.Content.Title,
 		Steps:          passwordReset.Content.Steps,
@@ -100,6 +116,59 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
+	sessionTimeout, err := svc.CreateCase(ctx, p.ID, auth.ID, domain.CaseContent{
+		Title:    "Session expires after inactivity",
+		Steps:    []domain.Step{{Action: "Leave the session idle past the timeout window", Expected: "The next action redirects to login"}},
+		Priority: domain.PriorityMedium,
+		Tags:     []string{"auth", "session"},
+		Platform: "web",
+		TestType: "functional",
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	// Edited twice, reaching version 3 — second version-history example.
+	sessionTimeout, err = svc.EditCase(ctx, sessionTimeout.ID, domain.CaseContent{
+		Title:          sessionTimeout.Content.Title,
+		Steps:          sessionTimeout.Content.Steps,
+		ExpectedResult: "A warning appears 60 seconds before the session expires",
+		Priority:       sessionTimeout.Content.Priority,
+		Tags:           sessionTimeout.Content.Tags,
+		Platform:       sessionTimeout.Content.Platform,
+		TestType:       sessionTimeout.Content.TestType,
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	sessionTimeout, err = svc.EditCase(ctx, sessionTimeout.ID, domain.CaseContent{
+		Title:          sessionTimeout.Content.Title,
+		Steps:          append(sessionTimeout.Content.Steps, domain.Step{Action: "Dismiss the warning and confirm the session extends"}),
+		ExpectedResult: sessionTimeout.Content.ExpectedResult,
+		Priority:       sessionTimeout.Content.Priority,
+		Tags:           sessionTimeout.Content.Tags,
+		Platform:       sessionTimeout.Content.Platform,
+		TestType:       sessionTimeout.Content.TestType,
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	twoFactor, err := svc.CreateCase(ctx, p.ID, auth.ID, domain.CaseContent{
+		Title:     "Two-factor prompt is required for a new device",
+		Steps:     []domain.Step{{Action: "Log in from an unrecognized device", Expected: "A one-time code is required before access is granted"}},
+		Priority:  domain.PriorityHigh,
+		Tags:      []string{"auth", "security"},
+		Platform:  "web",
+		TestType:  "functional",
+		Automated: true,
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := Filler(ctx, svc, p.ID, auth.ID, "Authentication", "case", 2); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	// --- Checkout cases --------------------------------------------------
 
 	checkoutValid, err := svc.CreateCase(ctx, p.ID, checkout.ID, domain.CaseContent{
 		Title:     "Checkout completes with a valid card",
@@ -124,22 +193,130 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
-
-	if _, err := Suite(ctx, svc, p.ID, "Smoke", []string{login.ID, checkoutValid.ID}); err != nil {
-		return fmt.Errorf("sampledata: %w", err)
-	}
-	if _, err := Suite(ctx, svc, p.ID, "Regression", []string{login.ID, badPassword.ID, passwordReset.ID, checkoutValid.ID, checkoutExpired.ID}); err != nil {
+	if _, err := Filler(ctx, svc, p.ID, checkout.ID, "Checkout", "case", 3); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
-	// Open run: mid-execution, mixed verdicts, left open.
+	// --- Settings cases ----------------------------------------------
+
+	displayName, err := svc.CreateCase(ctx, p.ID, settings.ID, domain.CaseContent{
+		Title:    "Update profile display name",
+		Steps:    []domain.Step{{Action: "Change the display name and save", Expected: "The new name appears immediately across the UI"}},
+		Priority: domain.PriorityMedium,
+		Tags:     []string{"settings"},
+		Platform: "web",
+		TestType: "functional",
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	timezone, err := svc.CreateCase(ctx, p.ID, settings.ID, domain.CaseContent{
+		Title:     "Change timezone preference",
+		Steps:     []domain.Step{{Action: "Select a new timezone and save", Expected: "Timestamps across the app reflect the new timezone"}},
+		Priority:  domain.PriorityLow,
+		Tags:      []string{"settings"},
+		Platform:  "web",
+		TestType:  "functional",
+		Automated: true,
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := Filler(ctx, svc, p.ID, settings.ID, "Settings", "case", 4); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	// --- Notifications cases -------------------------------------------
+
+	notifOptOut, err := svc.CreateCase(ctx, p.ID, notifications.ID, domain.CaseContent{
+		Title:    "Email notification opt-out is respected",
+		Steps:    []domain.Step{{Action: "Disable email notifications and trigger an event that would normally notify", Expected: "No email is sent"}},
+		Priority: domain.PriorityHigh,
+		Tags:     []string{"notifications", "negative"},
+		Platform: "mobile",
+		TestType: "regression",
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	notifPush, err := svc.CreateCase(ctx, p.ID, notifications.ID, domain.CaseContent{
+		Title:     "Push notification arrives within 30 seconds",
+		Steps:     []domain.Step{{Action: "Trigger a push-worthy event", Expected: "The device receives the push notification within 30 seconds"}},
+		Priority:  domain.PriorityMedium,
+		Tags:      []string{"notifications", "smoke"},
+		Platform:  "mobile",
+		TestType:  "regression",
+		Automated: true,
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := Filler(ctx, svc, p.ID, notifications.ID, "Notifications", "case", 4); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	// --- Reporting API cases -------------------------------------------
+
+	reportingList, err := svc.CreateCase(ctx, p.ID, reportingAPI.ID, domain.CaseContent{
+		Title:     "GET /api/v1/reports returns paginated results",
+		Steps:     []domain.Step{{Action: "Request a page of reports with a page size", Expected: "The response respects the page size and includes a next-page cursor"}},
+		Priority:  domain.PriorityHigh,
+		Tags:      []string{"api", "reporting"},
+		Platform:  "api",
+		TestType:  "api",
+		Automated: true,
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	reportingExport, err := svc.CreateCase(ctx, p.ID, reportingAPI.ID, domain.CaseContent{
+		Title:    "Report export respects the date range filter",
+		Steps:    []domain.Step{{Action: "Export a report with a start and end date", Expected: "Only rows within that range appear in the export"}},
+		Priority: domain.PriorityMedium,
+		Tags:     []string{"api", "reporting"},
+		Platform: "api",
+		TestType: "api",
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := Filler(ctx, svc, p.ID, reportingAPI.ID, "Reporting API", "case", 3); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	// --- Suites ---------------------------------------------------------
+
+	if _, err := Suite(ctx, svc, p.ID, "Smoke", []string{login.ID, checkoutValid.ID, notifPush.ID, reportingList.ID}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	regressionCaseIDs := []string{
+		login.ID, badPassword.ID, passwordReset.ID, checkoutValid.ID, checkoutExpired.ID,
+		displayName.ID, notifOptOut.ID, reportingExport.ID,
+	}
+	if _, err := Suite(ctx, svc, p.ID, "Regression", regressionCaseIDs); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	nightlyCaseIDs := []string{login.ID, checkoutValid.ID, timezone.ID, notifPush.ID, reportingList.ID, twoFactor.ID}
+	if _, err := Suite(ctx, svc, p.ID, "Nightly", nightlyCaseIDs); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := Suite(ctx, svc, p.ID, "API Contract", []string{reportingList.ID, reportingExport.ID}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	// --- Runs -------------------------------------------------------
+	// Created in order — the LAST run created is what drives the project's
+	// shown pass rate (ProjectRepo.Summaries uses only the most recent run),
+	// so it's deliberately the strongest one.
+
+	// 1. Open run, mid-sprint, mixed verdicts.
 	if err := RunWithVerdicts(ctx, svc, p.ID, "Sprint 12 execution",
 		[]string{login.ID, badPassword.ID, checkoutValid.ID},
 		[]domain.Verdict{domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass}); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
-	// Closed run: a sealed record of a past release sign-off.
+	// 2. Closed run: a sealed record of a past release sign-off.
 	closedRunName := "Release 1.0 sign-off"
 	if err := RunWithVerdicts(ctx, svc, p.ID, closedRunName,
 		[]string{login.ID, checkoutValid.ID, checkoutExpired.ID},
@@ -154,8 +331,38 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: closing run: %w", err)
 	}
 
-	// Imported run: shows the JUnit-XML import feature, including an
-	// intentionally unmatched case key (the 207 partial-match behavior).
+	// 3. Closed run: a broader regression pass, mostly green.
+	regressionRunName := "Release 1.1 regression"
+	if err := RunWithVerdicts(ctx, svc, p.ID, regressionRunName, regressionCaseIDs,
+		[]domain.Verdict{
+			domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,
+			domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,
+		}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	regressionRun, err := runByName(ctx, svc, p.ID, regressionRunName)
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := svc.CloseRun(ctx, regressionRun.ID); err != nil {
+		return fmt.Errorf("sampledata: closing run: %w", err)
+	}
+
+	// 4. Open nightly run — automated cases. checkoutValid fails here,
+	// deliberately, having passed in runs 1 and 2 above: same pinned
+	// version, mixed verdicts, no edit in between — a genuinely flaky case.
+	if err := RunWithVerdicts(ctx, svc, p.ID, "Nightly — main",
+		nightlyCaseIDs,
+		[]domain.Verdict{
+			domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,
+			domain.VerdictPass, domain.VerdictPass, domain.VerdictPass,
+		}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	// 5. Imported run: shows the JUnit-XML import feature, matching several
+	// cases and leaving one intentionally unmatched (the 207 partial-match
+	// behavior).
 	report := fmt.Sprintf(`<testsuites><testsuite name="CI pipeline">`+
 		`<testcase name="test_login_valid_credentials" time="0.8">`+
 		`<properties>`+
@@ -170,16 +377,35 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		`<property name="testpulse_platform" value="linux"/>`+
 		`<property name="testpulse_version" value="1.4.0"/>`+
 		`</properties>`+
-		`<failure message="assertion failed">stack trace</failure>`+
+		`</testcase>`+
+		`<testcase name="test_change_timezone_preference" time="0.5">`+
+		`<properties>`+
+		`<property name="testpulse_case_key" value="%s"/>`+
+		`<property name="testpulse_platform" value="linux"/>`+
+		`<property name="testpulse_version" value="1.4.0"/>`+
+		`</properties>`+
 		`</testcase>`+
 		`<testcase name="test_legacy_feature_removed_from_ui" time="0.1">`+
 		`<properties>`+
 		`<property name="testpulse_case_key" value="%s-999"/>`+
 		`</properties>`+
 		`</testcase>`+
-		`</testsuite></testsuites>`, login.Key, checkoutValid.Key, p.Key)
+		`</testsuite></testsuites>`, login.Key, checkoutValid.Key, timezone.Key, p.Key)
 	if _, err := svc.Import(ctx, p.ID, service.ImportInput{Format: "junit-xml", Report: report}); err != nil {
 		return fmt.Errorf("sampledata: importing CI results: %w", err)
+	}
+
+	// 6. Final run, created last: a strong go/no-go pass across a wide set
+	// of cases, so the project's health indicator (driven only by the most
+	// recently created run) shows its healthy state.
+	finalCaseIDs := append(append([]string{}, regressionCaseIDs...), twoFactor.ID, notifPush.ID)
+	finalVerdicts := make([]domain.Verdict, len(finalCaseIDs))
+	for i := range finalVerdicts {
+		finalVerdicts[i] = domain.VerdictPass
+	}
+	finalVerdicts[2] = domain.VerdictFailed // one deliberate failure keeps it realistic, still well above 85%.
+	if err := RunWithVerdicts(ctx, svc, p.ID, "Release 1.2 — go/no-go", finalCaseIDs, finalVerdicts); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
 	}
 
 	return nil

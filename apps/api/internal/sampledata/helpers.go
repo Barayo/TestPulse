@@ -42,12 +42,15 @@ func CaseWithSteps(ctx context.Context, svc *service.Service, projectID, folderI
 	return c.ID, nil
 }
 
-// Filler creates n bare cases (no steps) titled "<label> — caso N", useful
-// for bulking out a folder without writing out each case by hand.
-func Filler(ctx context.Context, svc *service.Service, projectID, folderID, label string, n int) ([]string, error) {
+// Filler creates n bare cases (no steps) titled "<label> — <noun> N", useful
+// for bulking out a folder without writing out each case by hand. noun lets
+// callers match the surrounding content's language (e.g. "caso" for
+// cmd/seed-demo's Spanish demo projects, "case" for the English Sample
+// Project).
+func Filler(ctx context.Context, svc *service.Service, projectID, folderID, label, noun string, n int) ([]string, error) {
 	ids := make([]string, 0, n)
 	for i := 1; i <= n; i++ {
-		id, err := CaseWithSteps(ctx, svc, projectID, folderID, fmt.Sprintf("%s — caso %d", label, i), nil)
+		id, err := CaseWithSteps(ctx, svc, projectID, folderID, fmt.Sprintf("%s — %s %d", label, noun, i), nil)
 		if err != nil {
 			return nil, err
 		}

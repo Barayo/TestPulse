@@ -73,7 +73,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	onboardingCases, err := sampledata.Filler(ctx, svc, p.ID, onboarding.ID, "Onboarding", 12)
+	onboardingCases, err := sampledata.Filler(ctx, svc, p.ID, onboarding.ID, "Onboarding", "caso", 12)
 	if err != nil {
 		return err
 	}
@@ -108,7 +108,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	nacionalesCases, err := sampledata.Filler(ctx, svc, p.ID, nacionales.ID, "Nacionales", 12)
+	nacionalesCases, err := sampledata.Filler(ctx, svc, p.ID, nacionales.ID, "Nacionales", "caso", 12)
 	if err != nil {
 		return err
 	}
@@ -121,7 +121,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	ibanCases, err := sampledata.Filler(ctx, svc, p.ID, iban.ID, "Validación IBAN", 5)
+	ibanCases, err := sampledata.Filler(ctx, svc, p.ID, iban.ID, "Validación IBAN", "caso", 5)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	recurrentesCases, err := sampledata.Filler(ctx, svc, p.ID, recurrentes.ID, "Recurrentes", 9)
+	recurrentesCases, err := sampledata.Filler(ctx, svc, p.ID, recurrentes.ID, "Recurrentes", "caso", 9)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	if _, err := sampledata.Filler(ctx, svc, p.ID, internacionales.ID, "Internacionales", 6); err != nil {
+	if _, err := sampledata.Filler(ctx, svc, p.ID, internacionales.ID, "Internacionales", "caso", 6); err != nil {
 		return err
 	}
 
@@ -147,7 +147,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	pagosCases, err := sampledata.Filler(ctx, svc, p.ID, pagos.ID, "Pagos con tarjeta", 17)
+	pagosCases, err := sampledata.Filler(ctx, svc, p.ID, pagos.ID, "Pagos con tarjeta", "caso", 17)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	biometriaCases, err := sampledata.Filler(ctx, svc, p.ID, biometria.ID, "Biometría", 5)
+	biometriaCases, err := sampledata.Filler(ctx, svc, p.ID, biometria.ID, "Biometría", "caso", 5)
 	if err != nil {
 		return err
 	}
@@ -248,14 +248,14 @@ func seedDesktopApp(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	if _, err := sampledata.Filler(ctx, svc, p.ID, windows.ID, "Instalador Windows", 8); err != nil {
+	if _, err := sampledata.Filler(ctx, svc, p.ID, windows.ID, "Instalador Windows", "caso", 8); err != nil {
 		return err
 	}
 	macos, err := sampledata.Folder(ctx, svc, p.ID, instalacion.ID, "macOS")
 	if err != nil {
 		return err
 	}
-	if _, err := sampledata.Filler(ctx, svc, p.ID, macos.ID, "Instalador macOS", 8); err != nil {
+	if _, err := sampledata.Filler(ctx, svc, p.ID, macos.ID, "Instalador macOS", "caso", 8); err != nil {
 		return err
 	}
 
@@ -263,7 +263,7 @@ func seedDesktopApp(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return err
 	}
-	if _, err := sampledata.Filler(ctx, svc, p.ID, actualizacion.ID, "Actualización automática", 4); err != nil {
+	if _, err := sampledata.Filler(ctx, svc, p.ID, actualizacion.ID, "Actualización automática", "caso", 4); err != nil {
 		return err
 	}
 

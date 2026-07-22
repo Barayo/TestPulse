@@ -79,11 +79,15 @@ func TestSeedContentCoversClassificationFieldsAndVersioning(t *testing.T) {
 		t.Fatal("no cases seeded")
 	}
 
-	var sawPriority, sawTags, sawPlatform, sawTestType, sawAutomated, sawMultiVersion bool
+	if len(cases) < 25 {
+		t.Errorf("cases = %d, want at least 25", len(cases))
+	}
+
+	priorities := map[domain.Priority]bool{}
+	var sawTags, sawPlatform, sawTestType, sawAutomated bool
+	var multiVersionCount int
 	for _, c := range cases {
-		if c.Content.Priority != "" {
-			sawPriority = true
-		}
+		priorities[c.Content.Priority] = true
 		if len(c.Content.Tags) > 0 {
 			sawTags = true
 		}
@@ -97,23 +101,127 @@ func TestSeedContentCoversClassificationFieldsAndVersioning(t *testing.T) {
 			sawAutomated = true
 		}
 		if c.CurrentVersion > 1 {
-			sawMultiVersion = true
+			multiVersionCount++
 		}
 	}
-	if !sawPriority || !sawTags || !sawPlatform || !sawTestType || !sawAutomated {
-		t.Errorf("classification field coverage missing: priority=%v tags=%v platform=%v testType=%v automated=%v",
-			sawPriority, sawTags, sawPlatform, sawTestType, sawAutomated)
+	for _, want := range []domain.Priority{domain.PriorityLow, domain.PriorityMedium, domain.PriorityHigh, domain.PriorityCritical} {
+		if !priorities[want] {
+			t.Errorf("no case uses priority %q", want)
+		}
 	}
-	if !sawMultiVersion {
-		t.Error("no case has currentVersion > 1 — version history has nothing to show")
+	if !sawTags || !sawPlatform || !sawTestType || !sawAutomated {
+		t.Errorf("classification field coverage missing: tags=%v platform=%v testType=%v automated=%v",
+			sawTags, sawPlatform, sawTestType, sawAutomated)
+	}
+	if multiVersionCount < 2 {
+		t.Errorf("cases with currentVersion > 1 = %d, want at least 2", multiVersionCount)
 	}
 
 	suites, err := svc.ListSuites(actorCtx, p.ID)
 	if err != nil {
 		t.Fatalf("ListSuites: %v", err)
 	}
-	if len(suites) < 2 {
-		t.Errorf("suites = %d, want at least 2", len(suites))
+	if len(suites) < 4 {
+		t.Errorf("suites = %d, want at least 4", len(suites))
+	}
+
+	folders, err := svc.ListFolders(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	var sections int
+	for _, f := range folders {
+		if f.ParentFolderID != "" {
+			sections++
+		}
+	}
+	if sections < 5 {
+		t.Errorf("sections (non-root folders) = %d, want at least 5", sections)
+	}
+}
+
+// TestSeedContentHasAFlakyVersion covers "Sample Project demonstrates the
+// flaky-test signal": at least one case's currently-pinned version has
+// mixed pass/fail(blocked) executions, which is what VersionDetailDialog's
+// real "Flaky" badge is driven by.
+func TestSeedContentHasAFlakyVersion(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+
+	var foundFlaky bool
+	for _, c := range cases {
+		execs, err := svc.CaseExecutions(actorCtx, c.ID)
+		if err != nil {
+			t.Fatalf("CaseExecutions(%s): %v", c.Key, err)
+		}
+		byVersion := map[int]map[domain.Status]bool{}
+		for _, e := range execs {
+			if byVersion[e.CaseVersion] == nil {
+				byVersion[e.CaseVersion] = map[domain.Status]bool{}
+			}
+			byVersion[e.CaseVersion][e.Status] = true
+		}
+		for _, statuses := range byVersion {
+			if statuses[domain.StatusPass] && (statuses[domain.StatusFailed] || statuses[domain.StatusBlocked]) {
+				foundFlaky = true
+			}
+		}
+	}
+	if !foundFlaky {
+		t.Error("no case has a version with both a pass and a failed/blocked execution — nothing shows as flaky")
+	}
+}
+
+// TestSeedContentEndsOnAHealthyRun covers the project health-badge
+// showcase: the chronologically LAST-created run is the one that
+// determines the project's shown pass rate.
+func TestSeedContentEndsOnAHealthyRun(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) == 0 {
+		t.Fatal("no runs seeded")
+	}
+	// ListRuns orders newest first.
+	latest := runs[0]
+
+	items, err := svc.RunItems(actorCtx, latest.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	if len(items) == 0 {
+		t.Fatalf("latest run %q has no items", latest.Name)
+	}
+	var passCount int
+	for _, it := range items {
+		if it.CurrentStatus == domain.StatusPass {
+			passCount++
+		}
+	}
+	rate := float64(passCount) / float64(len(items)) * 100
+	if rate < 85 {
+		t.Errorf("latest run %q pass rate = %.0f%%, want at least 85%%", latest.Name, rate)
 	}
 }
 
