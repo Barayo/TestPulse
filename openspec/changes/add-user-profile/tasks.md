@@ -35,7 +35,12 @@
 - [ ] 6.1 `make lint`, `make test`, coverage gates all green
 - [ ] 6.2 Manual check against the compose stack: set a display name, pick an avatar, set a timezone, confirm the header updates and the Profile page's links to Tokens/Users work
 
-## 7. Docs and spec sync
+## 7. Sample Project showcase (CLAUDE.md standing rule)
 
-- [ ] 7.1 Update `docs/` wherever the header/settings navigation is documented
-- [ ] 7.2 Confirm `openspec validate add-user-profile` passes
+- [ ] 7.1 This feature is about the current user's own profile, not project content — it has no natural home inside the Sample Project itself. Judgment call, confirm with the user before implementing: set the bootstrap admin's profile (display name, a preset avatar, a timezone) at the same point `BootstrapAdmin`/`sampledata.Seed` run at startup, so a fresh instance's header shows a filled-in example immediately instead of the generated-initial default — giving an evaluator something to look at before they've touched Settings themselves.
+- [ ] 7.2 If implemented, add a corresponding assertion (bootstrap admin has a non-empty display name/avatar/timezone after startup) alongside the existing `seedSampleProjectIfEmpty`-adjacent tests in `cmd/testpulse-api`.
+
+## 8. Docs and spec sync
+
+- [ ] 8.1 Update `docs/` wherever the header/settings navigation is documented
+- [ ] 8.2 Confirm `openspec validate add-user-profile` passes

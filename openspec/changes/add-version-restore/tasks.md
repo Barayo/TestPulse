@@ -34,7 +34,13 @@
 - [ ] 6.1 `make lint`, `make test`, coverage gates all green
 - [ ] 6.2 Manual check against the compose stack: edit a case a few times, restore an old version, confirm the new version appears, old versions stay intact, and the audit log shows both the move-detail and restore-detail entries correctly
 
-## 7. Docs and spec sync
+## 7. Sample Project showcase (CLAUDE.md standing rule)
 
-- [ ] 7.1 Update `docs/test-management.md`'s versioning section to mention restore
-- [ ] 7.2 Confirm `openspec validate add-version-restore` passes
+- [ ] 7.1 The Sample Project already seeds two multi-version cases (a case edited once to v2, a case edited twice to v3, in `apps/api/internal/sampledata/seed.go`) — good restore targets already exist, no new version-history content needed.
+- [ ] 7.2 Add one case move in `sampledata.Seed` (move an existing case to a different section after creation) so the seeded audit log includes a real `{from, to}`-detail move entry, showcasing the structured-audit-detail half of this change alongside the version-restore half.
+- [ ] 7.3 Add corresponding assertions to `seed_test.go`: the moved case's audit entry carries `detail == {from, to}`.
+
+## 8. Docs and spec sync
+
+- [ ] 8.1 Update `docs/test-management.md`'s versioning section to mention restore
+- [ ] 8.2 Confirm `openspec validate add-version-restore` passes

@@ -13,6 +13,22 @@ instructions shift. Docs describe what exists; planned work belongs in
 `ROADMAP.md` and OpenSpec changes. When writing tasks.md for a new change,
 include a docs-update task.
 
+## Sample Project showcase is part of every change (standing rule)
+
+TestPulse ships with an always-on, automatically-seeded **Sample Project**
+(`apps/api/internal/sampledata/seed.go`, `sample-data` capability) — the
+product's showroom for anyone evaluating it. **Any change that adds or
+meaningfully alters user-facing functionality must update `seed.go` (and
+its test, `internal/sampledata/seed_test.go`) so the Sample Project's
+content demonstrates the new capability**, the same way it must update
+docs. The Sample Project is only useful as a showroom if it never drifts
+behind what's actually shipped. When writing tasks.md for a new change,
+include a Sample-Project-showcase task, not a trailing catch-all — and
+apply it to every currently-planned change too, not just new ones.
+Purely internal work with no new user-visible surface (infra, CI,
+refactors, dependency bumps) is exempt; default to including the task
+when in doubt.
+
 ## TDD/BDD is the standing practice
 
 - **No production code without a failing test first** (red-green-refactor).
