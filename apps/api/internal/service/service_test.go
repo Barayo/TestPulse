@@ -68,10 +68,7 @@ func TestCreateRunRequiresName(t *testing.T) {
 
 func TestRecordResultValidates(t *testing.T) {
 	s := nilService()
-	_, err := s.RecordResult(context.Background(), "i1", domain.NewResult{Verdict: domain.VerdictPass})
-	wantValidation(t, err, "actor")
-
-	_, err = s.RecordResult(context.Background(), "i1", domain.NewResult{Actor: "ana", Verdict: "retest"})
+	_, err := s.RecordResult(context.Background(), "i1", domain.NewResult{Actor: "ana", Verdict: "retest"})
 	wantValidation(t, err, "verdict")
 }
 

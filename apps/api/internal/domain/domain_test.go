@@ -70,13 +70,17 @@ func TestResultValidation(t *testing.T) {
 		t.Errorf("valid result rejected: %v", err)
 	}
 
-	missingActor := NewResult{Verdict: VerdictPass}
-	err := missingActor.Validate()
-	if err == nil {
-		t.Fatal("result without actor accepted")
+	// Actor is optional (link-result-actor-to-identity): the service
+	// resolves it from the authenticated caller, not Validate().
+	omittedActor := NewResult{Verdict: VerdictPass}
+	if err := omittedActor.Validate(); err != nil {
+		t.Errorf("result without actor rejected: %v", err)
 	}
-	if !strings.Contains(err.Error(), "actor") {
-		t.Errorf("error %q does not name the missing field", err)
+
+	badVerdict := NewResult{Actor: "ana", Verdict: "retest"}
+	err := badVerdict.Validate()
+	if err == nil {
+		t.Fatal("invalid verdict accepted")
 	}
 }
 

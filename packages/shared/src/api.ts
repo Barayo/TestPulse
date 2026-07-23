@@ -959,7 +959,8 @@ export interface components {
             caseKey: string;
         };
         NewResult: {
-            actor: string;
+            /** @description Optional. Defaults to the authenticated caller's display name. If supplied, overrides only the displayed name — the real authenticated actor's kind/ref is still recorded alongside it. */
+            actor?: string;
             verdict: components["schemas"]["Verdict"];
             comment?: string;
             /** Format: date-time */
@@ -970,10 +971,15 @@ export interface components {
             version?: string;
             tags?: string[];
         };
+        /** @enum {string} */
+        ResultActorKind: "user" | "agent" | "unknown";
         Result: {
             id: string;
             runItemId: string;
             actor: string;
+            actorKind: components["schemas"]["ResultActorKind"];
+            /** @description The real user/agent id behind this result, when known. */
+            actorRefId?: string;
             verdict: components["schemas"]["Verdict"];
             comment: string;
             /** Format: date-time */

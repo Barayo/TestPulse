@@ -162,6 +162,13 @@ CREATE TABLE test_run_results (
     platform     text NOT NULL DEFAULT '',
     version      text NOT NULL DEFAULT '',
     tags         text[] NOT NULL DEFAULT '{}',
+    -- Real actor link (link-result-actor-to-identity): denormalized like
+    -- audit_log so a result's attribution survives the actor being deleted.
+    -- 'unknown' is the honest default for rows recorded before this change,
+    -- not a fabricated identity.
+    actor_kind   text NOT NULL DEFAULT 'unknown'
+                 CHECK (actor_kind IN ('user', 'agent', 'unknown')),
+    actor_ref_id text,
     created_at   timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX test_run_results_item_idx ON test_run_results (run_item_id, created_at);

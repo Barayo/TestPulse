@@ -377,8 +377,11 @@ func (r *RunRepo) ExecutionsByCase(ctx context.Context, caseID string) ([]domain
 }
 
 // AppendResult inserts into the append-only log and updates the item's
-// current status in the same transaction (D3).
-func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.NewResult) (domain.Result, error) {
+// current status in the same transaction (D3). actorKind/actorRefID are the
+// resolved real actor behind the result (link-result-actor-to-identity D2) —
+// the caller (the service layer) resolves these from the authenticated
+// request; res.Actor stays the display name, which may be an override.
+func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.NewResult, actorKind domain.ResultActorKind, actorRefID string) (domain.Result, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.Result{}, err
@@ -388,16 +391,25 @@ func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.Ne
 		return domain.Result{}, err
 	}
 
+	var refID *string
+	if actorRefID != "" {
+		refID = &actorRefID
+	}
+
 	var out domain.Result
+	var outRef *string
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_run_results (run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'))
-		 RETURNING id, run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags, created_at`,
-		itemID, res.Actor, res.Verdict, res.Comment, res.StartTime, res.EndTime, res.Platform, res.Version, res.Tags,
+		`INSERT INTO test_run_results (run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags, actor_kind, actor_ref_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'), $10, $11)
+		 RETURNING id, run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags, actor_kind, actor_ref_id, created_at`,
+		itemID, res.Actor, res.Verdict, res.Comment, res.StartTime, res.EndTime, res.Platform, res.Version, res.Tags, actorKind, refID,
 	).Scan(&out.ID, &out.RunItemID, &out.Actor, &out.Verdict, &out.Comment,
-		&out.StartTime, &out.EndTime, &out.Platform, &out.Version, &out.Tags, &out.CreatedAt)
+		&out.StartTime, &out.EndTime, &out.Platform, &out.Version, &out.Tags, &out.ActorKind, &outRef, &out.CreatedAt)
 	if err != nil {
 		return domain.Result{}, err
+	}
+	if outRef != nil {
+		out.ActorRefID = *outRef
 	}
 	tag, err := tx.Exec(ctx,
 		`UPDATE test_run_items SET current_status = $2 WHERE id = $1`,
@@ -413,7 +425,7 @@ func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.Ne
 
 func (r *RunRepo) Results(ctx context.Context, itemID string) ([]domain.Result, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags, created_at
+		`SELECT id, run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags, actor_kind, actor_ref_id, created_at
 		 FROM test_run_results WHERE run_item_id = $1 ORDER BY created_at, id`, itemID)
 	if err != nil {
 		return nil, err
@@ -423,9 +435,13 @@ func (r *RunRepo) Results(ctx context.Context, itemID string) ([]domain.Result, 
 	results := []domain.Result{}
 	for rows.Next() {
 		var res domain.Result
+		var refID *string
 		if err := rows.Scan(&res.ID, &res.RunItemID, &res.Actor, &res.Verdict, &res.Comment,
-			&res.StartTime, &res.EndTime, &res.Platform, &res.Version, &res.Tags, &res.CreatedAt); err != nil {
+			&res.StartTime, &res.EndTime, &res.Platform, &res.Version, &res.Tags, &res.ActorKind, &refID, &res.CreatedAt); err != nil {
 			return nil, err
+		}
+		if refID != nil {
+			res.ActorRefID = *refID
 		}
 		results = append(results, res)
 	}

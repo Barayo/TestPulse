@@ -113,7 +113,24 @@ func (c CaseContent) Validate() error {
 // and the platform/version/tags fields are optional execution metadata
 // (add-execution-import): populated from a JUnit XML import, or supplied
 // manually via the same "record a verdict" action.
+// ResultActorKind mirrors ActorKind but adds "unknown" — a result-log
+// concept, not a request-time one. Every authenticated request always has a
+// real user/agent Actor (design D4 in link-result-actor-to-identity); a
+// result's actor_kind can still be "unknown" for rows recorded before this
+// change, where no real actor link exists to report.
+type ResultActorKind string
+
+const (
+	ResultActorUser    ResultActorKind = "user"
+	ResultActorAgent   ResultActorKind = "agent"
+	ResultActorUnknown ResultActorKind = "unknown"
+)
+
 type NewResult struct {
+	// Actor is optional: if empty, RecordResult fills it from the
+	// authenticated caller. If supplied, it overrides the *displayed* name
+	// only — the real authenticated actor's kind/ref is still recorded
+	// alongside it (design D2).
 	Actor     string     `json:"actor"`
 	Verdict   Verdict    `json:"verdict"`
 	Comment   string     `json:"comment"`
@@ -125,9 +142,6 @@ type NewResult struct {
 }
 
 func (r NewResult) Validate() error {
-	if r.Actor == "" {
-		return fmt.Errorf("actor is required")
-	}
 	if _, err := ParseVerdict(string(r.Verdict)); err != nil {
 		return err
 	}
@@ -313,17 +327,19 @@ type CaseExecution struct {
 }
 
 type Result struct {
-	ID        string     `json:"id"`
-	RunItemID string     `json:"runItemId"`
-	Actor     string     `json:"actor"`
-	Verdict   Verdict    `json:"verdict"`
-	Comment   string     `json:"comment"`
-	StartTime *time.Time `json:"startTime,omitempty"`
-	EndTime   *time.Time `json:"endTime,omitempty"`
-	Platform  string     `json:"platform,omitempty"`
-	Version   string     `json:"version,omitempty"`
-	Tags      []string   `json:"tags,omitempty"`
-	CreatedAt time.Time  `json:"createdAt"`
+	ID         string          `json:"id"`
+	RunItemID  string          `json:"runItemId"`
+	Actor      string          `json:"actor"`
+	ActorKind  ResultActorKind `json:"actorKind"`
+	ActorRefID string          `json:"actorRefId,omitempty"`
+	Verdict    Verdict         `json:"verdict"`
+	Comment    string          `json:"comment"`
+	StartTime  *time.Time      `json:"startTime,omitempty"`
+	EndTime    *time.Time      `json:"endTime,omitempty"`
+	Platform   string          `json:"platform,omitempty"`
+	Version    string          `json:"version,omitempty"`
+	Tags       []string        `json:"tags,omitempty"`
+	CreatedAt  time.Time       `json:"createdAt"`
 }
 
 // RunSummary is the per-run status breakdown.

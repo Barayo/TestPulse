@@ -66,7 +66,8 @@ test.describe('Requirement: Run execution board', () => {
     await page.getByRole('link', { name: 'Run 1' }).click()
 
     await page.getByText('Login works').first().click()
-    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByLabel(/comment/i).fill('works great')
     await page.getByRole('button', { name: /^pass$/i }).click()
 
@@ -83,7 +84,8 @@ test.describe('Requirement: Run item status lifecycle', () => {
     await page.getByRole('link', { name: 'Run 1' }).click()
 
     await page.getByText('Login works').first().click()
-    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^failed$/i }).click()
     // Scoped to the history line, not just "failed" — the "Failed" verdict
     // button's own label also matches that substring once it's present.
@@ -119,7 +121,8 @@ test.describe('Requirement: Run open/closed lifecycle', () => {
     await expect(page.getByText(/^open$/i)).toBeVisible()
 
     await page.getByText('Login works').first().click()
-    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
     await expect(page.getByText('ana: pass')).toBeVisible()
   })
@@ -139,7 +142,8 @@ test.describe('Requirement: Run summary', () => {
     await page.getByRole('link', { name: 'Run 1' }).click()
 
     await page.getByText('Login works').first().click()
-    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
 
     await expect(page.getByText(/2 items/)).toBeVisible()

@@ -33,9 +33,9 @@ export default function RunPage() {
   const [summary, setSummary] = useState<RunSummary>()
   const [selected, setSelected] = useState<RunItem>()
   const [results, setResults] = useState<Result[]>([])
-  const [actor, setActor] = useState('')
+  const [actorOverride, setActorOverride] = useState('')
+  const [showActorOverride, setShowActorOverride] = useState(false)
   const [comment, setComment] = useState('')
-  const [verdictError, setVerdictError] = useState<string>()
   const [lifecycleError, setLifecycleError] = useState<string>()
 
   const load = useCallback(async () => {
@@ -92,20 +92,15 @@ export default function RunPage() {
 
   async function selectItem(item: RunItem) {
     setSelected(item)
-    setVerdictError(undefined)
     await refreshSelected(item.id)
   }
 
   async function recordVerdict(verdict: Verdict) {
     if (!selected) return
-    if (!actor.trim()) {
-      setVerdictError('your name is required')
-      return
-    }
-    setVerdictError(undefined)
+    const override = actorOverride.trim()
     await api.POST('/api/v1/items/{itemId}/results', {
       params: { path: { itemId: selected.id } },
-      body: { actor, verdict, comment },
+      body: { verdict, comment, ...(override ? { actor: override } : {}) },
     })
     setComment('')
     await refreshSelected(selected.id)
@@ -250,15 +245,6 @@ export default function RunPage() {
                 </p>
               )}
               <div className="space-y-1">
-                <Label htmlFor="actor">Your name</Label>
-                <Input
-                  id="actor"
-                  value={actor}
-                  onChange={(e) => setActor(e.target.value)}
-                  disabled={run?.status === 'closed'}
-                />
-              </div>
-              <div className="space-y-1">
                 <Label htmlFor="comment">Comment</Label>
                 <Textarea
                   id="comment"
@@ -267,7 +253,29 @@ export default function RunPage() {
                   disabled={run?.status === 'closed'}
                 />
               </div>
-              {verdictError && <p className="text-sm text-destructive">{verdictError}</p>}
+              <div className="space-y-1">
+                {showActorOverride ? (
+                  <>
+                    <Label htmlFor="actor-override">Record on behalf of</Label>
+                    <Input
+                      id="actor-override"
+                      value={actorOverride}
+                      onChange={(e) => setActorOverride(e.target.value)}
+                      disabled={run?.status === 'closed'}
+                      placeholder="Defaults to you"
+                    />
+                  </>
+                ) : (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    onClick={() => setShowActorOverride(true)}
+                    disabled={run?.status === 'closed'}
+                  >
+                    Record on behalf of someone else
+                  </button>
+                )}
+              </div>
               <div className="flex flex-wrap gap-2">
                 <Button size="sm" disabled={run?.status === 'closed'} onClick={() => void recordVerdict('pass')}>
                   Pass

@@ -289,3 +289,60 @@ func TestSeedContentCoversRunLifecycleAndImport(t *testing.T) {
 		t.Error("no result carries platform/version — the import's execution metadata isn't visible")
 	}
 }
+
+// TestSeedContentShowcasesResultActorLink covers link-result-actor-to-
+// identity: the seed must demonstrate both new paths it adds — a result
+// that defaults its actor from the seeding actor (real actorKind/ref, no
+// client override) and a result with an explicit override display name
+// that still carries the real actor link underneath it.
+func TestSeedContentShowcasesResultActorLink(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+
+	users, err := svc.ListUsers(actorCtx)
+	if err != nil || len(users) == 0 {
+		t.Fatalf("ListUsers: %v, %d users", err, len(users))
+	}
+	adminEmail := users[0].Email
+
+	var sawDefaulted, sawOverride bool
+	for _, r := range runs {
+		items, err := svc.RunItems(actorCtx, r.ID, "")
+		if err != nil {
+			t.Fatalf("RunItems: %v", err)
+		}
+		for _, item := range items {
+			results, err := svc.Results(actorCtx, item.ID)
+			if err != nil {
+				t.Fatalf("Results: %v", err)
+			}
+			for _, res := range results {
+				if res.ActorKind != domain.ResultActorUser || res.ActorRefID == "" {
+					continue
+				}
+				if res.Actor == adminEmail {
+					sawDefaulted = true
+				} else {
+					sawOverride = true
+				}
+			}
+		}
+	}
+	if !sawDefaulted {
+		t.Error("no seeded result defaults its actor from the seeding actor (real actorKind/ref, no override)")
+	}
+	if !sawOverride {
+		t.Error("no seeded result carries an override display name with the real actor link still populated")
+	}
+}

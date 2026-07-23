@@ -391,7 +391,8 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByRole('button', { name: 'Create run' }).click()
     await page.getByRole('link', { name: 'Run pass' }).click()
     await page.getByText('Login works').first().click()
-    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
     await expect(page.getByTestId('item-detail').getByText('ana: pass')).toBeVisible()
 
@@ -400,7 +401,8 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByRole('button', { name: 'Create run' }).click()
     await page.getByRole('link', { name: 'Run fail' }).click()
     await page.getByText('Login works').first().click()
-    await page.getByLabel(/your name/i).fill('ana')
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^failed$/i }).click()
     await expect(page.getByTestId('item-detail').getByText('ana: failed')).toBeVisible()
 

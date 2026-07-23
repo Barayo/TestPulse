@@ -75,7 +75,10 @@ func Suite(ctx context.Context, svc *service.Service, projectID, name string, ca
 
 // Actors is a small pool of example authors — human and agent — cycled by
 // RunWithVerdicts so recorded results attribute to varied, realistic names.
-var Actors = []string{"Julia López", "Miguel Alonso", "agent:qa-bot"}
+// An empty entry means "no override": RecordResult defaults the result's
+// actor to the seeding caller (link-result-actor-to-identity), so both the
+// default and override paths show up in the seeded data.
+var Actors = []string{"", "Julia López", "Miguel Alonso", "agent:qa-bot"}
 
 // RunWithVerdicts creates a run over caseIDs and immediately records one
 // result per item, cycling verdicts in order (e.g. mostly pass, a couple of

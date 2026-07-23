@@ -106,16 +106,17 @@ describe('Run execution board', () => {
     expect(screen.getByText('user is logged in')).toBeInTheDocument()
   })
 
-  it('records a verdict with comment from the board', async () => {
+  it('records a verdict with comment from the board, without specifying an actor', async () => {
+    // link-result-actor-to-identity: actor is no longer a required field —
+    // the server defaults it to the authenticated caller.
     mockRunAPI([pendingItem])
     mockPOST.mockResolvedValue({
-      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: '', createdAt: '' },
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', actorKind: 'user', verdict: 'pass', comment: '', createdAt: '' },
       response: { ok: true },
     })
     renderRun()
 
     await userEvent.click(await screen.findByText('Login works'))
-    await userEvent.type(screen.getByLabelText(/your name/i), 'ana')
     await userEvent.type(screen.getByLabelText(/comment/i), 'all good')
     await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
 
@@ -124,19 +125,34 @@ describe('Run execution board', () => {
         '/api/v1/items/{itemId}/results',
         expect.objectContaining({
           params: { path: { itemId: 'i1' } },
-          body: { actor: 'ana', verdict: 'pass', comment: 'all good' },
+          body: { verdict: 'pass', comment: 'all good' },
         }),
       )
     })
   })
 
-  it('requires actor name before recording a verdict', async () => {
+  it('supports recording on behalf of someone else via an optional override', async () => {
     mockRunAPI([pendingItem])
+    mockPOST.mockResolvedValue({
+      data: { id: 'res1', runItemId: 'i1', actor: 'Manual Tester', actorKind: 'user', verdict: 'pass', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
     renderRun()
+
     await userEvent.click(await screen.findByText('Login works'))
+    await userEvent.click(screen.getByRole('button', { name: /record on behalf of someone else/i }))
+    await userEvent.type(screen.getByLabelText(/record on behalf of/i), 'Manual Tester')
     await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
-    expect(await screen.findByText(/your name is required/i)).toBeInTheDocument()
-    expect(mockPOST).not.toHaveBeenCalled()
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({
+          params: { path: { itemId: 'i1' } },
+          body: { verdict: 'pass', comment: '', actor: 'Manual Tester' },
+        }),
+      )
+    })
   })
 
   it('renders steps without an expected-result line when none is set', async () => {
@@ -204,7 +220,6 @@ describe('Run execution board', () => {
 
     await userEvent.click(await screen.findByText('Login works'))
     expect(screen.queryByText(/ana: failed/i)).not.toBeInTheDocument()
-    await userEvent.type(screen.getByLabelText(/your name/i), 'ana')
     await userEvent.click(screen.getByRole('button', { name: /^failed$/i }))
 
     // No re-selection here — the board must refresh on its own.

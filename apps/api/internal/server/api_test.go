@@ -209,8 +209,20 @@ func TestScenario_RunLifecycleOverHTTP(t *testing.T) {
 		t.Errorf("result log = %+v", results)
 	}
 
-	// "Actor is required" and "Invalid status rejected" scenarios.
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items[0].ID), jmap{"verdict": "pass"}, 400, nil)
+	// "Actor defaults to the authenticated caller" scenario
+	// (link-result-actor-to-identity): omitting actor no longer errors, it
+	// records the caller's own identity.
+	var defaulted struct {
+		Actor      string `json:"actor"`
+		ActorKind  string `json:"actorKind"`
+		ActorRefID string `json:"actorRefId"`
+	}
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items[0].ID), jmap{"verdict": "pass"}, 201, &defaulted)
+	if defaulted.Actor == "" || defaulted.ActorKind != "user" || defaulted.ActorRefID == "" {
+		t.Errorf("defaulted result = %+v, want a non-empty actor/user/actorRefId", defaulted)
+	}
+
+	// "Invalid status rejected" scenario.
 	call(t, h, "PUT", fmt.Sprintf("/api/v1/items/%s/status", items[0].ID), jmap{"status": "bogus"}, 400, nil)
 
 	// "Assign and filter" scenario.

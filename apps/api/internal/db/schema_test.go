@@ -149,6 +149,67 @@ func TestResultVerdictConstraint(t *testing.T) {
 	}
 }
 
+func TestResultActorKindConstraint(t *testing.T) {
+	pool := testPool(t)
+	resetSchema(t, pool)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	ctx := context.Background()
+
+	var projectID, caseID, runID, itemID string
+	if err := pool.QueryRow(ctx, `INSERT INTO projects (key, name) VALUES ('P', 'p') RETURNING id`).Scan(&projectID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO test_cases (key, project_id, folder_id) VALUES ('P-1', $1, $2) RETURNING id`,
+		projectID, rootFolder(t, pool, projectID)).Scan(&caseID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := pool.Exec(ctx, `INSERT INTO test_case_versions (case_id, version, title) VALUES ($1, 1, 't')`, caseID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO test_runs (key, project_id, name) VALUES ('P-R1', $1, 'r') RETURNING id`, projectID).Scan(&runID); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `INSERT INTO test_run_items (run_id, case_id, case_version) VALUES ($1, $2, 1) RETURNING id`, runID, caseID).Scan(&itemID); err != nil {
+		t.Fatal(err)
+	}
+
+	// A result inserted without actor_kind/actor_ref_id (pre-existing-style
+	// row) reads back as 'unknown' with no explicit backfill statement.
+	var actorKind string
+	var actorRefID *string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO test_run_results (run_item_id, actor, verdict) VALUES ($1, 'ana', 'pass')
+		 RETURNING actor_kind, actor_ref_id`, itemID).Scan(&actorKind, &actorRefID); err != nil {
+		t.Fatalf("insert without actor_kind: %v", err)
+	}
+	if actorKind != "unknown" {
+		t.Errorf("default actor_kind = %q, want unknown", actorKind)
+	}
+	if actorRefID != nil {
+		t.Errorf("default actor_ref_id = %v, want nil", *actorRefID)
+	}
+
+	// A real actor kind/ref persists and round-trips.
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO test_run_results (run_item_id, actor, verdict, actor_kind, actor_ref_id)
+		 VALUES ($1, 'ana', 'pass', 'user', 'u1') RETURNING actor_kind, actor_ref_id`,
+		itemID).Scan(&actorKind, &actorRefID); err != nil {
+		t.Fatalf("insert with actor_kind: %v", err)
+	}
+	if actorKind != "user" || actorRefID == nil || *actorRefID != "u1" {
+		t.Errorf("actor_kind/actor_ref_id = %q/%v, want user/u1", actorKind, actorRefID)
+	}
+
+	// Invalid actor_kind rejected by CHECK constraint.
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO test_run_results (run_item_id, actor, verdict, actor_kind) VALUES ($1, 'ana', 'pass', 'bogus')`,
+		itemID); err == nil {
+		t.Error("invalid actor_kind accepted, want CHECK constraint violation")
+	}
+}
+
 func TestProjectCreationCreatesRootFolder(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)

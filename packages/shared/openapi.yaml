@@ -1196,9 +1196,14 @@ components:
         caseKey: { type: string }
     NewResult:
       type: object
-      required: [actor, verdict]
+      required: [verdict]
       properties:
-        actor: { type: string }
+        actor:
+          type: string
+          description: >-
+            Optional. Defaults to the authenticated caller's display name.
+            If supplied, overrides only the displayed name — the real
+            authenticated actor's kind/ref is still recorded alongside it.
         verdict: { $ref: "#/components/schemas/Verdict" }
         comment: { type: string }
         startTime: { type: string, format: date-time }
@@ -1208,13 +1213,20 @@ components:
         tags:
           type: array
           items: { type: string }
+    ResultActorKind:
+      type: string
+      enum: [user, agent, unknown]
     Result:
       type: object
-      required: [id, runItemId, actor, verdict, comment, createdAt]
+      required: [id, runItemId, actor, actorKind, verdict, comment, createdAt]
       properties:
         id: { type: string }
         runItemId: { type: string }
         actor: { type: string }
+        actorKind: { $ref: "#/components/schemas/ResultActorKind" }
+        actorRefId:
+          type: string
+          description: The real user/agent id behind this result, when known.
         verdict: { $ref: "#/components/schemas/Verdict" }
         comment: { type: string }
         startTime: { type: string, format: date-time }

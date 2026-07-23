@@ -96,7 +96,7 @@ func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
 	}
 	oldItems, _ := s.Runs.Items(ctx, oldRun.ID, "")
 	for _, it := range oldItems {
-		if _, err := s.Runs.AppendResult(ctx, it.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}); err != nil {
+		if _, err := s.Runs.AppendResult(ctx, it.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -108,7 +108,7 @@ func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
 	}
 	newItems, _ := s.Runs.Items(ctx, newRun.ID, "")
 	for _, it := range newItems {
-		if _, err := s.Runs.AppendResult(ctx, it.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+		if _, err := s.Runs.AppendResult(ctx, it.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
 			t.Fatal(err)
 		}
 	}

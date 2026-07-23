@@ -489,7 +489,7 @@ func TestClosedRunRejectsMutations(t *testing.T) {
 	if _, err := s.Runs.AddItem(ctx, run.ID, c2.ID, ""); !errors.Is(err, store.ErrRunClosed) {
 		t.Errorf("AddItem on closed run = %v, want ErrRunClosed", err)
 	}
-	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); !errors.Is(err, store.ErrRunClosed) {
+	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); !errors.Is(err, store.ErrRunClosed) {
 		t.Errorf("AppendResult on closed run = %v, want ErrRunClosed", err)
 	}
 	if err := s.Runs.SetItemStatus(ctx, item.ID, domain.StatusRetest); !errors.Is(err, store.ErrRunClosed) {
@@ -550,13 +550,13 @@ func TestAppendResultUpdatesStatusAndAccumulates(t *testing.T) {
 	item := items[0]
 
 	// failed → retest → pass, per the spec's "Results accumulate" scenario.
-	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed, Comment: "broken"}); err != nil {
+	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed, Comment: "broken"}, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatalf("AppendResult failed: %v", err)
 	}
 	if err := s.Runs.SetItemStatus(ctx, item.ID, domain.StatusRetest); err != nil {
 		t.Fatalf("SetItemStatus retest: %v", err)
 	}
-	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatalf("AppendResult pass: %v", err)
 	}
 
@@ -595,7 +595,7 @@ func TestResultExecutionMetadataPersists(t *testing.T) {
 		Platform:  "linux",
 		Version:   "1.2.3",
 		Tags:      []string{"smoke", "regression"},
-	})
+	}, domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatalf("AppendResult: %v", err)
 	}
@@ -629,7 +629,7 @@ func TestResultExecutionMetadataOptional(t *testing.T) {
 	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
 	items, _ := s.Runs.Items(ctx, run.ID, "")
 
-	res, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass})
+	res, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatalf("AppendResult: %v", err)
 	}
@@ -638,6 +638,61 @@ func TestResultExecutionMetadataOptional(t *testing.T) {
 	}
 	if res.Platform != "" || res.Version != "" || len(res.Tags) != 0 {
 		t.Errorf("Platform/Version/Tags = %q/%q/%v, want all empty when not supplied", res.Platform, res.Version, res.Tags)
+	}
+}
+
+// TestAppendResultPersistsActorLink covers link-result-actor-to-identity:
+// AppendResult takes the resolved actor kind/ref alongside the display name
+// and persists/round-trips all three.
+func TestAppendResultPersistsActorLink(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+
+	// A result with a real actor link.
+	res, err := s.Runs.AppendResult(ctx, items[0].ID,
+		domain.NewResult{Actor: "Ana", Verdict: domain.VerdictPass},
+		domain.ResultActorUser, "u1")
+	if err != nil {
+		t.Fatalf("AppendResult: %v", err)
+	}
+	if res.ActorKind != domain.ResultActorUser || res.ActorRefID != "u1" {
+		t.Errorf("ActorKind/ActorRefID = %q/%q, want user/u1", res.ActorKind, res.ActorRefID)
+	}
+
+	// A result with an override display name but the real actor link still
+	// recorded underneath it (design D2).
+	res2, err := s.Runs.AppendResult(ctx, items[0].ID,
+		domain.NewResult{Actor: "agent:qa-bot", Verdict: domain.VerdictFailed},
+		domain.ResultActorAgent, "tok1")
+	if err != nil {
+		t.Fatalf("AppendResult override: %v", err)
+	}
+	if res2.Actor != "agent:qa-bot" || res2.ActorKind != domain.ResultActorAgent || res2.ActorRefID != "tok1" {
+		t.Errorf("override result = %+v, want Actor=agent:qa-bot ActorKind=agent ActorRefID=tok1", res2)
+	}
+
+	// A pre-existing-style row (no resolved actor) reads back as unknown.
+	res3, err := s.Runs.AppendResult(ctx, items[0].ID,
+		domain.NewResult{Actor: "legacy", Verdict: domain.VerdictSkipped},
+		domain.ResultActorUnknown, "")
+	if err != nil {
+		t.Fatalf("AppendResult legacy: %v", err)
+	}
+	if res3.ActorKind != domain.ResultActorUnknown || res3.ActorRefID != "" {
+		t.Errorf("legacy result ActorKind/ActorRefID = %q/%q, want unknown/\"\"", res3.ActorKind, res3.ActorRefID)
+	}
+
+	results, err := s.Runs.Results(ctx, items[0].ID)
+	if err != nil || len(results) != 3 {
+		t.Fatalf("Results = %d, %v; want 3", len(results), err)
+	}
+	if results[0].ActorKind != domain.ResultActorUser || results[1].ActorKind != domain.ResultActorAgent || results[2].ActorKind != domain.ResultActorUnknown {
+		t.Errorf("Results actor kinds = %q/%q/%q, want user/agent/unknown",
+			results[0].ActorKind, results[1].ActorKind, results[2].ActorKind)
 	}
 }
 
@@ -675,11 +730,11 @@ func TestRunSummaryCounts(t *testing.T) {
 
 	// 2 pass, 1 failed, 1 pending.
 	for _, i := range []int{0, 1} {
-		if _, err := s.Runs.AppendResult(ctx, items[i].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+		if _, err := s.Runs.AppendResult(ctx, items[i].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if _, err := s.Runs.AppendResult(ctx, items[2].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}); err != nil {
+	if _, err := s.Runs.AppendResult(ctx, items[2].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -705,10 +760,10 @@ func TestExecutionsByCaseGroupedByVersion(t *testing.T) {
 	run2, _ := s.Runs.Create(ctx, p.ID, "run 2", []string{c.ID})
 	items1, _ := s.Runs.Items(ctx, run1.ID, "")
 	items2, _ := s.Runs.Items(ctx, run2.ID, "")
-	if _, err := s.Runs.AppendResult(ctx, items1[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+	if _, err := s.Runs.AppendResult(ctx, items1[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Runs.AppendResult(ctx, items2[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}); err != nil {
+	if _, err := s.Runs.AppendResult(ctx, items2[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
 

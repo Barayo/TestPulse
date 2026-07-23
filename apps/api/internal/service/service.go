@@ -436,11 +436,31 @@ func (s *Service) RunItems(ctx context.Context, runID, assignee string) ([]domai
 	return s.store.Runs.Items(ctx, runID, assignee)
 }
 
+// RecordResult resolves the result's actor from the authenticated caller
+// when the client omits one, and always records the real actor's kind/ref
+// alongside whatever display name ends up on the result — even when the
+// client supplies an explicit override (link-result-actor-to-identity D2).
+// A request with no resolved Actor in context (reachable only if this were
+// ever called ahead of auth middleware) falls back to "unknown" rather than
+// panicking.
 func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.NewResult) (domain.Result, error) {
 	if err := res.Validate(); err != nil {
 		return domain.Result{}, invalid("%s", err)
 	}
-	result, err := s.store.Runs.AppendResult(ctx, itemID, res)
+
+	actorKind := domain.ResultActorUnknown
+	actorRefID := ""
+	if actor, ok := domain.ActorFromContext(ctx); ok {
+		actorKind = domain.ResultActorKind(actor.Kind)
+		actorRefID = actor.ID
+		if res.Actor == "" {
+			res.Actor = actor.DisplayName
+		}
+	} else if res.Actor == "" {
+		return domain.Result{}, invalid("actor is required")
+	}
+
+	result, err := s.store.Runs.AppendResult(ctx, itemID, res, actorKind, actorRefID)
 	if err != nil {
 		return domain.Result{}, runClosedAsConflict(err)
 	}

@@ -98,7 +98,7 @@ exactly one folder, defaulting to the project's root; see
 | POST | `/api/v1/runs/{runKey}/close` | Seal a run — requires `runRecordResult`, the same permission needed to record a verdict |
 | POST | `/api/v1/runs/{runKey}/reopen` | Reopen a closed run — requires `manageProject`, the project-admin-level permission |
 | GET / POST | `/api/v1/runs/{runKey}/items` | List items (optionally `?assignee=`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
-| GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`actor`, `verdict`, `comment`) |
+| GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`verdict`, `comment`, optional `actor` override — see below) |
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or `assignee` |
 | GET | `/api/v1/runs/{runKey}/summary` | Item counts by current status |
 | POST | `/api/v1/projects/{projectKey}/imports` | Bulk-import a JUnit XML report: matches each `<testcase>` to an existing case by its `key`, creates one run with items/results for every match. `201` if every test matched; `207` if some/all didn't (see [Importing results](importing-results.md)) |
@@ -109,6 +109,15 @@ requests return `401 {"error": "unauthorized"}`; authenticated requests
 lacking permission return `403 {"error": "..."}`. A request that conflicts
 with the resource's current state — recording a result, updating an item,
 or adding an item on a *closed* run — returns `409 {"error": "..."}`.
+
+Recording a result no longer requires a client-supplied `actor` — it
+defaults to the authenticated caller's display name, and the response's
+`actorKind` (`user`/`agent`/`unknown`) and `actorRefId` record the real
+actor behind it. A client may still pass `actor` explicitly to override the
+*displayed* name (e.g. an agent recording on behalf of a named human
+tester) — the real authenticated actor's `actorKind`/`actorRefId` are still
+recorded underneath the override, never spoofed. Results recorded before
+this capability shipped read back with `actorKind: "unknown"`.
 
 **Identity**
 
