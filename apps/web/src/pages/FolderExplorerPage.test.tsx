@@ -360,12 +360,13 @@ describe('FolderExplorerPage', () => {
       expect(mockPUT).not.toHaveBeenCalled()
     })
 
-    it('moves a case via the "Move to…" picker, listing every folder with its full path', async () => {
+    it('moves a case via the "Move to…" item in its row menu, listing every folder with its full path', async () => {
       mockExplorerAPI()
       mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
-      await userEvent.click(within(caseRow).getByRole('button', { name: /move to/i }))
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
@@ -386,7 +387,8 @@ describe('FolderExplorerPage', () => {
       mockExplorerAPI()
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
-      await userEvent.click(within(caseRow).getByRole('button', { name: /move to/i }))
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText('Library')).toBeInTheDocument()
       expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
@@ -401,7 +403,8 @@ describe('FolderExplorerPage', () => {
       mockExplorerAPI()
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
-      await userEvent.click(within(caseRow).getByRole('button', { name: /move to/i }))
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
       const dialog = await screen.findByRole('dialog')
 
       await userEvent.click(within(dialog).getByText('Library / Transferencias'))
@@ -465,52 +468,46 @@ describe('FolderExplorerPage', () => {
     })
   })
 
-  describe('delete mode (add-delete-mode)', () => {
-    it('hides the delete mode toggle entirely for a user with neither caseDelete nor sectionDelete permission', async () => {
-      mockExplorerAPI({ permissions: { ...allPermissions, caseDelete: false, sectionDelete: false } })
+  describe('row action menu (redesign-delete-mode-menu)', () => {
+    it('shows no destructive-tinted "Delete mode" toggle in the toolbar at all', async () => {
+      mockExplorerAPI()
       renderExplorer()
       await screen.findByRole('list', { name: 'Section contents' })
       expect(screen.queryByRole('button', { name: /delete mode/i })).not.toBeInTheDocument()
     })
 
-    it('shows the toggle, off by default, for a user with delete permission', async () => {
-      mockExplorerAPI()
+    it("hides a folder row's action menu entirely without sectionDelete permission", async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, sectionDelete: false } })
       renderExplorer()
-      const toggle = await screen.findByRole('button', { name: /delete mode/i })
-      expect(toggle).toHaveAttribute('aria-pressed', 'false')
-      expect(screen.queryByRole('button', { name: /^delete folder$/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /^delete case$/i })).not.toBeInTheDocument()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('button', { name: /actions for nacionales/i })).not.toBeInTheDocument()
     })
 
-    it('reveals delete affordances on folder and case rows when toggled on, and hides them again when toggled off', async () => {
-      mockExplorerAPI()
-      renderExplorer()
-      const toggle = await screen.findByRole('button', { name: /delete mode/i })
-
-      await userEvent.click(toggle)
-      expect(toggle).toHaveAttribute('aria-pressed', 'true')
-      expect(await screen.findAllByRole('button', { name: /^delete section$/i })).toHaveLength(1)
-      expect(screen.getAllByRole('button', { name: /^delete case$/i })).toHaveLength(1)
-
-      await userEvent.click(toggle)
-      expect(toggle).toHaveAttribute('aria-pressed', 'false')
-      expect(screen.queryByRole('button', { name: /^delete section$/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /^delete case$/i })).not.toBeInTheDocument()
-    })
-
-    it('only shows the case delete affordance without caseDelete permission, and the folder one without sectionDelete', async () => {
+    it("still shows a case row's action menu without caseDelete permission, but without a Delete item", async () => {
       mockExplorerAPI({ permissions: { ...allPermissions, caseDelete: false } })
       renderExplorer()
-      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
-      expect(screen.getByRole('button', { name: /^delete section$/i })).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /^delete case$/i })).not.toBeInTheDocument()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      expect(within(caseRow).getByRole('menuitem', { name: /move to/i })).toBeInTheDocument()
+      expect(within(caseRow).queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument()
+    })
+
+    it("a folder row's menu is closed by default and lists Delete once opened, with permission", async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      expect(within(folderRow).queryByRole('menuitem')).not.toBeInTheDocument()
+
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      expect(within(folderRow).getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
     })
 
     it('deleting a case shows a confirmation naming it; canceling makes no request', async () => {
       mockExplorerAPI()
       renderExplorer()
-      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
-      await userEvent.click(screen.getByRole('button', { name: /^delete case$/i }))
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /^delete$/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText(/daily transfer limit/i)).toBeInTheDocument()
@@ -524,8 +521,9 @@ describe('FolderExplorerPage', () => {
       mockExplorerAPI()
       mockDELETE.mockResolvedValue({ response: { ok: true } })
       renderExplorer()
-      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
-      await userEvent.click(screen.getByRole('button', { name: /^delete case$/i }))
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /^delete$/i }))
       const dialog = await screen.findByRole('dialog')
       await userEvent.click(within(dialog).getByRole('button', { name: /^delete case$/i }))
 
@@ -541,8 +539,9 @@ describe('FolderExplorerPage', () => {
       mockExplorerAPI({ deletePreview: { caseCount: 3, folderCount: 2 } })
       mockDELETE.mockResolvedValue({ response: { ok: true } })
       renderExplorer()
-      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
-      await userEvent.click(screen.getByRole('button', { name: /^delete section$/i }))
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      await userEvent.click(within(folderRow).getByRole('menuitem', { name: /^delete$/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText(/nacionales/i)).toBeInTheDocument()
@@ -561,8 +560,9 @@ describe('FolderExplorerPage', () => {
     it('canceling a folder delete confirmation makes no request and leaves the folder in place', async () => {
       mockExplorerAPI({ deletePreview: { caseCount: 0, folderCount: 0 } })
       renderExplorer()
-      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
-      await userEvent.click(screen.getByRole('button', { name: /^delete section$/i }))
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      await userEvent.click(within(folderRow).getByRole('menuitem', { name: /^delete$/i }))
       const dialog = await screen.findByRole('dialog')
       await userEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
 
@@ -574,8 +574,9 @@ describe('FolderExplorerPage', () => {
     it('uses singular wording for a subtree of exactly one case and one subsection', async () => {
       mockExplorerAPI({ deletePreview: { caseCount: 1, folderCount: 1 } })
       renderExplorer()
-      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
-      await userEvent.click(screen.getByRole('button', { name: /^delete section$/i }))
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      await userEvent.click(within(folderRow).getByRole('menuitem', { name: /^delete$/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText(/1 case and 1 subsection\./i)).toBeInTheDocument()
@@ -584,8 +585,9 @@ describe('FolderExplorerPage', () => {
     it('closing the delete confirmation via Escape makes no request', async () => {
       mockExplorerAPI()
       renderExplorer()
-      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
-      await userEvent.click(screen.getByRole('button', { name: /^delete case$/i }))
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /^delete$/i }))
       await screen.findByRole('dialog')
 
       await userEvent.keyboard('{Escape}')

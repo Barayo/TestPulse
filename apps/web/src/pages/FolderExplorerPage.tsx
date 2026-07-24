@@ -6,6 +6,7 @@ import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
+import { RowActionMenu, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
@@ -64,11 +65,9 @@ export default function FolderExplorerPage() {
   const [contentCreatingFolder, setContentCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
-  const [deleteMode, setDeleteMode] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
 
   const permissions = useProjectPermissions(projectKey)
-  const canDeleteAnything = Boolean(permissions?.caseDelete || permissions?.sectionDelete)
 
   const load = useCallback(async () => {
     if (!projectKey) return
@@ -255,16 +254,6 @@ export default function FolderExplorerPage() {
                 Browse sections
               </Button>
             )}
-            {canDeleteAnything && (
-              <Button
-                type="button"
-                variant={deleteMode ? 'destructive' : 'outline'}
-                aria-pressed={deleteMode}
-                onClick={() => setDeleteMode((prev) => !prev)}
-              >
-                Delete mode
-              </Button>
-            )}
             <Button
               type="button"
               variant="outline"
@@ -330,15 +319,18 @@ export default function FolderExplorerPage() {
                         <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
                         <span>{f.name}</span>
                       </button>
-                      {deleteMode && permissions?.sectionDelete && (
-                        <button
-                          type="button"
-                          aria-label="Delete section"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => void requestDeleteFolder(f)}
-                        >
-                          <Trash2Icon className="size-4" aria-hidden="true" />
-                        </button>
+                      {permissions?.sectionDelete && (
+                        <RowActionMenu
+                          label={`Actions for ${f.name}`}
+                          items={[
+                            {
+                              label: 'Delete',
+                              danger: true,
+                              icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+                              onSelect: () => void requestDeleteFolder(f),
+                            },
+                          ]}
+                        />
                       )}
                     </li>
                   ))}
@@ -365,27 +357,30 @@ export default function FolderExplorerPage() {
                           {name}
                         </span>
                       ))}
-                      <button
-                        type="button"
-                        aria-label="Move to…"
-                        className="text-muted-foreground hover:text-foreground"
-                        onClick={() => {
-                          setMoveQuery('')
-                          setMovingCaseKey(c.key)
-                        }}
-                      >
-                        <FolderInputIcon className="size-4" aria-hidden="true" />
-                      </button>
-                      {deleteMode && permissions?.caseDelete && (
-                        <button
-                          type="button"
-                          aria-label="Delete case"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
-                        >
-                          <Trash2Icon className="size-4" aria-hidden="true" />
-                        </button>
-                      )}
+                      <RowActionMenu
+                        label={`Actions for ${c.content.title}`}
+                        items={[
+                          {
+                            label: 'Move to…',
+                            icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
+                            onSelect: () => {
+                              setMoveQuery('')
+                              setMovingCaseKey(c.key)
+                            },
+                          },
+                          ...(permissions?.caseDelete
+                            ? [
+                                {
+                                  label: 'Delete',
+                                  danger: true,
+                                  dividerBefore: true,
+                                  icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+                                  onSelect: () => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title }),
+                                } satisfies RowActionMenuItem,
+                              ]
+                            : []),
+                        ]}
+                      />
                     </li>
                   ))}
                 </ul>

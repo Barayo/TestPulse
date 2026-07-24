@@ -80,7 +80,7 @@ A user's effective permissions on a project SHALL be the union — one flag OR'd
 
 #### Scenario: A user can query their own effective permissions
 - **WHEN** an authenticated user with `read` permission on a project requests their own effective permissions on it
-- **THEN** the response reflects every flag granted by their direct and team-derived roles — a Tenant Admin's response has every flag `true` regardless of membership, so UI (e.g. `add-delete-mode`'s delete mode toggle) can hide permission-gated controls entirely rather than just disabling them
+- **THEN** the response reflects every flag granted by their direct and team-derived roles — a Tenant Admin's response has every flag `true` regardless of membership, so UI (e.g. the Library view's per-row "⋯" delete/move menu, `redesign-delete-mode-menu`) can hide permission-gated controls entirely rather than just disabling them
 
 ### Requirement: Agent actors inherit their creator's permission level
 An API token's actor SHALL never have its own project membership. Its Tenant Admin flag and effective permissions on any project SHALL be resolved from its creator's current state at request time, not the creator's state at token-creation time.

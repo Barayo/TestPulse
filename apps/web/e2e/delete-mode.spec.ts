@@ -1,8 +1,8 @@
 import { test, expect, type Browser, type Page } from '@playwright/test'
 import { unique } from './support'
 
-// BDD E2E for add-delete-mode, mapped to
-// openspec/changes/add-delete-mode/specs/test-authoring/spec.md scenarios.
+// BDD E2E for redesign-delete-mode-menu, mapped to
+// openspec/changes/redesign-delete-mode-menu/specs/test-authoring/spec.md scenarios.
 // GIVEN: the compose stack is up (make e2e), with a fresh database, and the
 // default authenticated page (global-setup.ts) is the Tenant Admin.
 
@@ -61,20 +61,27 @@ async function assignRole(adminPage: Page, projectId: string, userId: string, ro
   expect(res.status()).toBe(204)
 }
 
-test.describe('Requirement: Destructive actions require delete mode and confirmation', () => {
-  test('Scenario: Delete mode is unavailable without delete permission', async ({ page, browser }) => {
-    const projectId = await createProjectId(page, 'Delete Mode Visibility')
+test.describe('Requirement: Destructive actions are tucked behind a per-row menu and require confirmation', () => {
+  test('Scenario: A folder row\'s menu trigger is not shown without sectionDelete permission', async ({
+    page,
+    browser,
+  }) => {
+    const projectId = await createProjectId(page, 'Delete Menu Visibility')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Auth')
+
     const { page: testerPage, userId } = await loginAsNewUser(page, browser, 'Tester No Delete')
     await assignRole(page, projectId, userId, 'Tester')
 
     await testerPage.goto(`/projects/${projectId}/library`)
-    await expect(testerPage.getByRole('button', { name: /delete mode/i })).toHaveCount(0)
+    await expect(content(testerPage).getByText('Auth')).toBeVisible()
+    await expect(testerPage.getByRole('button', { name: /actions for auth/i })).toHaveCount(0)
   })
 
-  test('Scenario: Enabling delete mode reveals delete actions; deleting a folder cascades to its subtree', async ({
+  test('Scenario: Opening a folder row\'s menu reveals Delete; deleting a folder cascades to its subtree', async ({
     page,
   }) => {
-    await createProjectId(page, 'Delete Mode Cascade')
+    await createProjectId(page, 'Delete Menu Cascade')
     await openFolderExplorer(page)
 
     // A subfolder with a case inside, so the confirmation preview has
@@ -84,12 +91,12 @@ test.describe('Requirement: Destructive actions require delete mode and confirma
     await createCase(page, 'Login works')
     await page.getByRole('navigation', { name: 'Breadcrumb' }).getByText('Library').click()
 
-    // No delete affordance until delete mode is switched on.
-    await expect(page.getByRole('button', { name: /^delete section$/i })).toHaveCount(0)
-    await page.getByRole('button', { name: /delete mode/i }).click()
-    await expect(page.getByRole('button', { name: /^delete section$/i })).toBeVisible()
+    // No delete affordance until the row's own "⋯" menu is opened.
+    await expect(page.getByRole('menuitem', { name: /^delete$/i })).toHaveCount(0)
+    await page.getByRole('button', { name: /actions for auth/i }).click()
+    await expect(page.getByRole('menuitem', { name: /^delete$/i })).toBeVisible()
 
-    await page.getByRole('button', { name: /^delete section$/i }).click()
+    await page.getByRole('menuitem', { name: /^delete$/i }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(/1 case/i)).toBeVisible()
 
@@ -98,7 +105,8 @@ test.describe('Requirement: Destructive actions require delete mode and confirma
     await expect(content(page).getByText('Auth')).toBeVisible()
 
     // Confirm: the folder and its case are gone.
-    await page.getByRole('button', { name: /^delete section$/i }).click()
+    await page.getByRole('button', { name: /actions for auth/i }).click()
+    await page.getByRole('menuitem', { name: /^delete$/i }).click()
     await page.getByRole('dialog').getByRole('button', { name: /^delete section$/i }).click()
     await expect(content(page).getByText('Auth')).toHaveCount(0)
   })
