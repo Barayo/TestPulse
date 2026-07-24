@@ -11,13 +11,11 @@ before any domain route runs.
 
 ### Requirement: Local user accounts
 The system SHALL support local user accounts identified by email, with a
-bcrypt-hashed password. There is no public self-registration in v0.1 — only
-an existing user (any role, per authorization capability) can create a new
-account.
+bcrypt-hashed password. There is no public self-registration — only a
+Tenant Admin (see `authorization`) can create a new account.
 
 #### Scenario: Create a user
-- **WHEN** an authenticated user submits a new account with an email and
-  password
+- **WHEN** a Tenant Admin submits a new account with an email and password
 - **THEN** the account is created with the password stored as a bcrypt hash,
   never in plain text
 
@@ -29,6 +27,10 @@ account.
 - **WHEN** a new account or password change submits a password under 8
   characters
 - **THEN** the request is rejected with a validation error naming the field
+
+#### Scenario: Non-Tenant-Admin cannot create a user
+- **WHEN** a non-Tenant-Admin authenticated user submits a new account
+- **THEN** the request is rejected with `403`
 
 ### Requirement: Session-based login
 The system SHALL authenticate a user's email and password against the
@@ -86,7 +88,7 @@ is restricted per the authorization capability.
 - **THEN** the request is rejected with `401`
 
 #### Scenario: A user can only revoke their own tokens
-- **WHEN** a non-admin user attempts to revoke a token created by a
+- **WHEN** a non-Tenant-Admin user attempts to revoke a token created by a
   different user
 - **THEN** the request is rejected with `403`
 

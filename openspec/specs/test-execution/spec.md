@@ -8,7 +8,7 @@ log per item, assignment/filtering, run summaries, and the run execution
 board that ties it all together for a human tester.
 ## Requirements
 ### Requirement: Run creation pins case versions
-The system SHALL let users create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A run item MAY carry an optional `testName` — the literal name reported by an external test runner, independent of the pinned case's own title.
+The system SHALL let a user with `runCreate` permission on a project create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A run item MAY carry an optional `testName` — the literal name reported by an external test runner, independent of the pinned case's own title. Adding an item to an existing run SHALL also require `runCreate` permission.
 
 #### Scenario: Run pins versions at creation
 - **WHEN** a run is created containing a case whose current version is 2, and the case is later edited to version 3
@@ -29,6 +29,10 @@ The system SHALL let users create a test run from a suite and/or an explicit lis
 #### Scenario: A run item's testName is independent of the case's title
 - **WHEN** a run item carries a `testName` that differs from its pinned case's title
 - **THEN** both are shown — the case's own title is not overwritten or replaced by the reported name
+
+#### Scenario: A permission that doesn't include runCreate cannot create a run
+- **WHEN** a user whose effective permissions on a project do not include `runCreate` attempts to create a run in it
+- **THEN** the request is rejected with `403`
 
 ### Requirement: Run open/closed lifecycle
 Every run SHALL have a status, `open` or `closed`. Runs are created `open`.
@@ -76,18 +80,18 @@ SHALL be able to reopen a closed run, returning it to `open`.
 - **THEN** the request is rejected with `403`
 
 ### Requirement: Run item status lifecycle
-Each run item SHALL carry a current status, one of `pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`. Items start as `pending`. `retest` marks an item for re-execution and is set by an explicit action, never as a verdict.
+Each run item SHALL carry a current status, one of `pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`. Items start as `pending`. `retest` marks an item for re-execution and is set by an explicit action, never as a verdict. Updating a run item's status SHALL require `runRecordResult` permission on the run's project.
 
 #### Scenario: Items start pending
 - **WHEN** a run is created with three cases
 - **THEN** all three run items have status `pending`
 
 #### Scenario: Recording a verdict updates status
-- **WHEN** a result with verdict `failed` is recorded on a pending item
+- **WHEN** a user with `runRecordResult` permission records a result with verdict `failed` on a pending item
 - **THEN** the item's current status becomes `failed`
 
 #### Scenario: Marking retest
-- **WHEN** a user marks a `failed` item for retest
+- **WHEN** a user with `runRecordResult` permission marks a `failed` item for retest
 - **THEN** the item's status becomes `retest` and a subsequent verdict can be recorded
 
 #### Scenario: Invalid status rejected
@@ -95,7 +99,7 @@ Each run item SHALL carry a current status, one of `pending`, `pass`, `failed`, 
 - **THEN** the request is rejected with a validation error
 
 ### Requirement: Append-only result log
-Each run item SHALL have an append-only result log. A result records an actor, verdict (`pass`, `failed`, `skipped`, `blocked`), optional comment, and timestamp. Results MUST NOT be editable or deletable through the API. A result MAY additionally carry optional execution metadata: start time, end time, platform, version, and tags.
+Each run item SHALL have an append-only result log. A result records an actor, verdict (`pass`, `failed`, `skipped`, `blocked`), optional comment, and timestamp. Results MUST NOT be editable or deletable through the API. A result MAY additionally carry optional execution metadata: start time, end time, platform, version, and tags. Recording a result SHALL require `runRecordResult` permission on the run's project.
 
 The actor SHALL default to the authenticated caller who recorded the result; a client MAY still explicitly supply an `actor` display name to override it (e.g. an agent recording a result on behalf of a named human tester). Regardless of an override, the result SHALL also store which real actor (if any) authenticated the request that created it, denormalized so that link survives the actor's own later deletion. A result recorded before this capability existed has no real actor behind it and is marked accordingly, rather than erroring or fabricating an identity.
 
@@ -115,6 +119,10 @@ The actor SHALL default to the authenticated caller who recorded the result; a c
 - **WHEN** a result recorded before this capability existed is read
 - **THEN** its original actor display name is shown, with no real actor linked (`unknown`) rather than an error or a fabricated identity
 
+#### Scenario: A permission that doesn't include runRecordResult cannot record a result
+- **WHEN** a user whose effective permissions on a run's project do not include `runRecordResult` attempts to record a result
+- **THEN** the request is rejected with `403`
+
 #### Scenario: Execution metadata is optional
 - **WHEN** a result is recorded without start time, end time, platform, version, or tags
 - **THEN** the result is recorded normally, with those fields absent
@@ -124,24 +132,24 @@ The actor SHALL default to the authenticated caller who recorded the result; a c
 - **THEN** the result reflects it, the same as a result produced by an import
 
 ### Requirement: Run item assignment
-The system SHALL let users assign a run item to a person (free-text identity until the identity capability lands) and filter a run's items by assignee.
+The system SHALL let a user with `runRecordResult` permission on a project assign a run item to a person (free-text identity until the identity capability lands); any user with `read` permission MAY filter a run's items by assignee.
 
 #### Scenario: Assign and filter
 - **WHEN** two items are assigned to "ana" and one to "luis"
 - **THEN** filtering the run's items by assignee "ana" returns exactly the two items
 
 ### Requirement: Run summary
-The system SHALL provide a per-run summary with item counts by current status, consumable by the UI and future MCP clients.
+The system SHALL provide a per-run summary with item counts by current status, consumable by the UI and future MCP clients, visible to any user with `read` permission on the run's project.
 
 #### Scenario: Summary counts by status
 - **WHEN** a run has 2 `pass`, 1 `failed`, and 1 `pending` items
 - **THEN** the summary reports those counts and the run's total of 4
 
 ### Requirement: Run execution board
-The web UI SHALL provide a run execution board: the run's items with status and assignee, a detail pane showing the pinned case version's steps and expected result, and controls to record a verdict with an optional comment without leaving the board. The detail pane SHALL render the pinned version as a labeled `Label: value` property, consistent with the rest of the app's scalar-property presentation, rather than as an unlabeled prose sentence.
+The web UI SHALL provide a run execution board: the run's items with status and assignee, a detail pane showing the pinned case version's steps and expected result, and controls to record a verdict with an optional comment without leaving the board. The detail pane SHALL render the pinned version as a labeled `Label: value` property, consistent with the rest of the app's scalar-property presentation, rather than as an unlabeled prose sentence. Recording a verdict from the board SHALL require `runRecordResult` permission.
 
 #### Scenario: Execute a case from the board
-- **WHEN** a tester opens a run, selects a pending item, reviews its steps, and records verdict `pass` with a comment
+- **WHEN** a user with `runRecordResult` permission opens a run, selects a pending item, reviews its steps, and records verdict `pass` with a comment
 - **THEN** the item's status chip updates to `pass` on the board and the result appears in the item's log
 
 #### Scenario: Board shows pinned content
