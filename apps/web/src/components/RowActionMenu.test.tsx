@@ -1,7 +1,24 @@
+import { useRef } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { RowActionMenu } from './RowActionMenu'
+import { RowActionMenu, type RowActionMenuHandle } from './RowActionMenu'
+
+function OpenAtHarness({ x, y }: { x: number; y: number }) {
+  const ref = useRef<RowActionMenuHandle>(null)
+  return (
+    <>
+      <button type="button" onClick={() => ref.current?.openAt(x, y)}>
+        Right-click stand-in
+      </button>
+      <RowActionMenu
+        ref={ref}
+        label="Actions for Two-Factor"
+        items={[{ label: 'Delete', onSelect: vi.fn(), danger: true }]}
+      />
+    </>
+  )
+}
 
 describe('RowActionMenu', () => {
   it('shows a trigger and no menu until opened', () => {
@@ -69,5 +86,19 @@ describe('RowActionMenu', () => {
     const deleteItem = screen.getByRole('menuitem', { name: 'Delete' })
     expect(deleteItem.className).toContain('text-destructive')
     expect(deleteItem.previousElementSibling).toHaveAttribute('role', 'separator')
+  })
+
+  it('opens at an explicit position via the imperative openAt handle', async () => {
+    render(<OpenAtHarness x={120} y={80} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Right-click stand-in' }))
+    expect(screen.getByRole('menu')).toHaveStyle({ left: '120px', top: '80px' })
+  })
+
+  it('closes a ref-opened (cursor-positioned) menu on Escape, same as the button-opened one', async () => {
+    render(<OpenAtHarness x={10} y={10} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Right-click stand-in' }))
+    expect(screen.getByRole('menu')).toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 })

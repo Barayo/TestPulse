@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { FolderIcon, FileTextIcon, FolderInputIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -6,7 +6,7 @@ import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
-import { RowActionMenu, type RowActionMenuItem } from '@/components/RowActionMenu'
+import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
@@ -42,6 +42,124 @@ function ancestorChain(folders: Folder[], folderId: string): Folder[] {
 function displayFolderName(folder: Folder | undefined, rootId: string): string {
   if (!folder) return ''
   return folder.id === rootId ? 'Library' : folder.name
+}
+
+// Each row owns its own RowActionMenu ref so a right-click on the row can
+// open that exact menu at the cursor, alongside its visible "⋯" trigger
+// (unify-library-row-menus) — a ref can't live inside a bare .map()
+// callback, hence these as real component instances, matching the
+// precedent FolderTree.tsx's own TreeNode already sets.
+function FolderRow({
+  folder,
+  isDragOver,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onNavigate,
+  canDelete,
+  onRequestDelete,
+}: {
+  folder: Folder
+  isDragOver: boolean
+  onDragOver: () => void
+  onDragLeave: () => void
+  onDrop: (caseKey: string) => void
+  onNavigate: () => void
+  canDelete: boolean
+  onRequestDelete: () => void
+}) {
+  const menuRef = useRef<RowActionMenuHandle>(null)
+  const items: RowActionMenuItem[] = [
+    { label: 'Delete', danger: true, icon: <Trash2Icon className="size-4" aria-hidden="true" />, onSelect: onRequestDelete },
+  ]
+
+  return (
+    <li
+      className={`flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0 ${isDragOver ? 'bg-primary/10' : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault()
+        onDragOver()
+      }}
+      onDragLeave={onDragLeave}
+      onDrop={(e) => {
+        e.preventDefault()
+        onDragLeave()
+        const caseKey = e.dataTransfer.getData(CASE_ID_MIME)
+        if (caseKey) onDrop(caseKey)
+      }}
+      onContextMenu={(e) => {
+        if (!canDelete) return
+        e.preventDefault()
+        menuRef.current?.openAt(e.clientX, e.clientY)
+      }}
+    >
+      <button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={onNavigate}>
+        <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        <span>{folder.name}</span>
+      </button>
+      {canDelete && <RowActionMenu ref={menuRef} label={`Actions for ${folder.name}`} items={items} />}
+    </li>
+  )
+}
+
+function CaseRow({
+  testCase,
+  suiteNames,
+  onOpen,
+  onDragStart,
+  onMoveTo,
+  canDelete,
+  onRequestDelete,
+}: {
+  testCase: TestCase
+  suiteNames: string[]
+  onOpen: () => void
+  onDragStart: (e: DragEvent) => void
+  onMoveTo: () => void
+  canDelete: boolean
+  onRequestDelete: () => void
+}) {
+  const menuRef = useRef<RowActionMenuHandle>(null)
+  const items: RowActionMenuItem[] = [
+    { label: 'Move to…', icon: <FolderInputIcon className="size-4" aria-hidden="true" />, onSelect: onMoveTo },
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete',
+            danger: true,
+            dividerBefore: true,
+            icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+            onSelect: onRequestDelete,
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
+  ]
+
+  return (
+    <li
+      draggable
+      onDragStart={onDragStart}
+      className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
+      onContextMenu={(e) => {
+        e.preventDefault()
+        menuRef.current?.openAt(e.clientX, e.clientY)
+      }}
+    >
+      <button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={onOpen}>
+        <FileTextIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        <span>{testCase.content.title}</span>
+      </button>
+      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+        v{testCase.currentVersion}
+      </span>
+      {suiteNames.map((name) => (
+        <span key={name} className="rounded-full bg-accent px-2 py-0.5 text-xs">
+          {name}
+        </span>
+      ))}
+      <RowActionMenu ref={menuRef} label={`Actions for ${testCase.content.title}`} items={items} />
+    </li>
+  )
 }
 
 export default function FolderExplorerPage() {
@@ -296,92 +414,32 @@ export default function FolderExplorerPage() {
               ) : (
                 <ul aria-label="Section contents">
                   {subfolders.map((f) => (
-                    <li
+                    <FolderRow
                       key={f.id}
-                      className={`flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0 ${dragOverFolderId === f.id ? 'bg-primary/10' : ''}`}
-                      onDragOver={(e) => {
-                        e.preventDefault()
-                        setDragOverFolderId(f.id)
-                      }}
+                      folder={f}
+                      isDragOver={dragOverFolderId === f.id}
+                      onDragOver={() => setDragOverFolderId(f.id)}
                       onDragLeave={() => setDragOverFolderId(null)}
-                      onDrop={(e) => {
-                        e.preventDefault()
-                        setDragOverFolderId(null)
-                        const caseKey = e.dataTransfer.getData(CASE_ID_MIME)
-                        if (caseKey) void moveCase(caseKey, f.id)
-                      }}
-                    >
-                      <button
-                        type="button"
-                        className="flex flex-1 items-center gap-2 text-left"
-                        onClick={() => navigate(`/projects/${projectKey}/library/${f.id}`)}
-                      >
-                        <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-                        <span>{f.name}</span>
-                      </button>
-                      {permissions?.sectionDelete && (
-                        <RowActionMenu
-                          label={`Actions for ${f.name}`}
-                          items={[
-                            {
-                              label: 'Delete',
-                              danger: true,
-                              icon: <Trash2Icon className="size-4" aria-hidden="true" />,
-                              onSelect: () => void requestDeleteFolder(f),
-                            },
-                          ]}
-                        />
-                      )}
-                    </li>
+                      onDrop={(caseKey) => void moveCase(caseKey, f.id)}
+                      onNavigate={() => navigate(`/projects/${projectKey}/library/${f.id}`)}
+                      canDelete={Boolean(permissions?.sectionDelete)}
+                      onRequestDelete={() => void requestDeleteFolder(f)}
+                    />
                   ))}
                   {casesHere.map((c) => (
-                    <li
+                    <CaseRow
                       key={c.id}
-                      draggable
+                      testCase={c}
+                      suiteNames={suiteNamesFor(c.id)}
+                      onOpen={() => openCase(c.key)}
                       onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.key)}
-                      className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
-                    >
-                      <button
-                        type="button"
-                        className="flex flex-1 items-center gap-2 text-left"
-                        onClick={() => openCase(c.key)}
-                      >
-                        <FileTextIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-                        <span>{c.content.title}</span>
-                      </button>
-                      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                        v{c.currentVersion}
-                      </span>
-                      {suiteNamesFor(c.id).map((name) => (
-                        <span key={name} className="rounded-full bg-accent px-2 py-0.5 text-xs">
-                          {name}
-                        </span>
-                      ))}
-                      <RowActionMenu
-                        label={`Actions for ${c.content.title}`}
-                        items={[
-                          {
-                            label: 'Move to…',
-                            icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
-                            onSelect: () => {
-                              setMoveQuery('')
-                              setMovingCaseKey(c.key)
-                            },
-                          },
-                          ...(permissions?.caseDelete
-                            ? [
-                                {
-                                  label: 'Delete',
-                                  danger: true,
-                                  dividerBefore: true,
-                                  icon: <Trash2Icon className="size-4" aria-hidden="true" />,
-                                  onSelect: () => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title }),
-                                } satisfies RowActionMenuItem,
-                              ]
-                            : []),
-                        ]}
-                      />
-                    </li>
+                      onMoveTo={() => {
+                        setMoveQuery('')
+                        setMovingCaseKey(c.key)
+                      }}
+                      canDelete={Boolean(permissions?.caseDelete)}
+                      onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
+                    />
                   ))}
                 </ul>
               )}

@@ -198,7 +198,7 @@ describe('FolderExplorerPage', () => {
     })
     renderExplorer()
     await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
-    await userEvent.click(screen.getByRole('button', { name: /new section/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^\+ new section$/i }))
     await userEvent.type(screen.getByLabelText(/new section name/i), 'Internacionales{Enter}')
 
     await waitFor(() => {
@@ -594,6 +594,39 @@ describe('FolderExplorerPage', () => {
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
       expect(mockDELETE).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('right-click opens the row menu (unify-library-row-menus)', () => {
+    it('right-clicking a case row opens its menu, listing the same items as the visible trigger', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.pointer({ keys: '[MouseRight]', target: caseRow })
+      // The right-click-opened menu is portaled to <body>, so it's no
+      // longer a DOM descendant of caseRow — query at document scope.
+      expect(screen.getByRole('menuitem', { name: /move to/i })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+    })
+
+    it('right-clicking a folder row opens its menu, listing Delete', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const folderRow = (
+        await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
+      ).closest('li') as HTMLElement
+      await userEvent.pointer({ keys: '[MouseRight]', target: folderRow })
+      expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+    })
+
+    it('right-clicking a folder row without sectionDelete permission does nothing', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, sectionDelete: false } })
+      renderExplorer()
+      const folderRow = (
+        await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
+      ).closest('li') as HTMLElement
+      await userEvent.pointer({ keys: '[MouseRight]', target: folderRow })
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     })
   })
 })

@@ -110,4 +110,36 @@ test.describe('Requirement: Destructive actions are tucked behind a per-row menu
     await page.getByRole('dialog').getByRole('button', { name: /^delete section$/i }).click()
     await expect(content(page).getByText('Auth')).toHaveCount(0)
   })
+
+  test('Scenario: Right-clicking a case or folder row opens its menu at the cursor', async ({ page }) => {
+    await createProjectId(page, 'Right Click Row Menu')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Auth')
+
+    await content(page).getByText('Auth').click({ button: 'right' })
+    await expect(page.getByRole('menuitem', { name: /^delete$/i })).toBeVisible()
+    await page.keyboard.press('Escape')
+
+    await createCase(page, 'Login works')
+    await content(page).getByText('Login works').click({ button: 'right' })
+    await expect(page.getByRole('menuitem', { name: /move to/i })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /^delete$/i })).toBeVisible()
+  })
+
+  test('Scenario: The section tree\'s "New section" action has a visible trigger, not just right-click', async ({
+    page,
+  }) => {
+    await createProjectId(page, 'Tree Visible Trigger')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Auth')
+
+    const tree = page.getByRole('navigation', { name: 'Section tree' })
+    await tree.getByRole('button', { name: /new section in auth/i }).click()
+    await page.getByRole('menuitem', { name: /new section/i }).click()
+    await page.getByLabel('New section name').fill('2FA')
+    await page.getByLabel('New section name').press('Enter')
+
+    await content(page).getByText('Auth').click()
+    await expect(content(page).getByText('2FA')).toBeVisible()
+  })
 })

@@ -112,6 +112,24 @@ describe('FolderTree', () => {
     expect(onNewSubfolder).toHaveBeenCalledWith('transferencias')
   })
 
+  it('also offers "new subfolder" via a visible "⋯" trigger on every node, not just right-click', async () => {
+    const onNewSubfolder = vi.fn()
+    render(
+      <FolderTree
+        folders={folders}
+        rootId="root"
+        selectedId="transferencias"
+        expanded={new Set()}
+        onSelect={vi.fn()}
+        onToggle={vi.fn()}
+        onNewSubfolder={onNewSubfolder}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /new section in transferencias/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /new section/i }))
+    expect(onNewSubfolder).toHaveBeenCalledWith('transferencias')
+  })
+
   it('renders an inline editable row as a child of the folder being created in, without changing selection', () => {
     render(
       <FolderTree
@@ -243,19 +261,22 @@ describe('FolderTree', () => {
 
   it('closes the context menu when clicking outside it', async () => {
     render(
-      <FolderTree
-        folders={folders}
-        rootId="root"
-        selectedId="transferencias"
-        expanded={new Set()}
-        onSelect={vi.fn()}
-        onToggle={vi.fn()}
-        onNewSubfolder={vi.fn()}
-      />,
+      <div>
+        <FolderTree
+          folders={folders}
+          rootId="root"
+          selectedId="transferencias"
+          expanded={new Set()}
+          onSelect={vi.fn()}
+          onToggle={vi.fn()}
+          onNewSubfolder={vi.fn()}
+        />
+        <button type="button">Elsewhere</button>
+      </div>,
     )
     await userEvent.pointer({ keys: '[MouseRight]', target: screen.getByText('Transferencias') })
     expect(await screen.findByRole('menuitem', { name: /new section/i })).toBeInTheDocument()
-    await userEvent.click(screen.getByTestId('context-menu-backdrop'))
+    await userEvent.click(screen.getByRole('button', { name: 'Elsewhere' }))
     expect(screen.queryByRole('menuitem', { name: /new section/i })).not.toBeInTheDocument()
   })
 })

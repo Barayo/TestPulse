@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { FolderPlusIcon } from 'lucide-react'
+import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from './RowActionMenu'
 
 export type TreeFolder = { id: string; name: string; parentFolderId?: string }
 
@@ -70,47 +72,6 @@ function InlineNewFolderRow({
   )
 }
 
-function ContextMenu({
-  x,
-  y,
-  onNewSubfolder,
-  onClose,
-}: {
-  x: number
-  y: number
-  onNewSubfolder: () => void
-  onClose: () => void
-}) {
-  return (
-    <>
-      {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-      <div
-        data-testid="context-menu-backdrop"
-        className="fixed inset-0 z-40"
-        onClick={onClose}
-        onContextMenu={(e) => e.preventDefault()}
-      />
-      <div
-        role="menu"
-        className="fixed z-50 min-w-40 rounded-md border bg-popover p-1 text-sm shadow-md"
-        style={{ left: x, top: y }}
-      >
-        <button
-          role="menuitem"
-          type="button"
-          className="w-full rounded px-2 py-1.5 text-left hover:bg-accent"
-          onClick={() => {
-            onNewSubfolder()
-            onClose()
-          }}
-        >
-          New section
-        </button>
-      </div>
-    </>
-  )
-}
-
 function TreeNode({
   folder,
   depth,
@@ -130,11 +91,18 @@ function TreeNode({
   folder: TreeFolder
   depth: number
 } & Omit<Props, 'folders' | 'rootId'> & { folders: TreeFolder[] }) {
-  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const menuRef = useRef<RowActionMenuHandle>(null)
   const children = folders.filter((f) => f.parentFolderId === folder.id)
   const isExpanded = expanded.has(folder.id)
   const isSelected = folder.id === selectedId
+  const menuItems: RowActionMenuItem[] = [
+    {
+      label: 'New section',
+      icon: <FolderPlusIcon className="size-4" aria-hidden="true" />,
+      onSelect: () => onNewSubfolder(folder.id),
+    },
+  ]
 
   return (
     <div>
@@ -143,7 +111,7 @@ function TreeNode({
         style={{ paddingLeft: indentPx(depth) }}
         onContextMenu={(e) => {
           e.preventDefault()
-          setMenu({ x: e.clientX, y: e.clientY })
+          menuRef.current?.openAt(e.clientX, e.clientY)
         }}
         onDragOver={(e) => {
           e.preventDefault()
@@ -169,9 +137,15 @@ function TreeNode({
         ) : (
           <span className="w-3 shrink-0" />
         )}
-        <button type="button" title={folder.name} className="truncate text-left" onClick={() => onSelect(folder.id)}>
+        <button
+          type="button"
+          title={folder.name}
+          className="flex-1 truncate text-left"
+          onClick={() => onSelect(folder.id)}
+        >
           {folder.name}
         </button>
+        <RowActionMenu ref={menuRef} label={`New section in ${folder.name}`} items={menuItems} />
       </div>
       {isExpanded &&
         children.map((child) => (
@@ -200,14 +174,6 @@ function TreeNode({
           onChange={(v) => onNewFolderValueChange?.(v)}
           onConfirm={() => onConfirmNewFolder?.()}
           onCancel={() => onCancelNewFolder?.()}
-        />
-      )}
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          onNewSubfolder={() => onNewSubfolder(folder.id)}
-          onClose={() => setMenu(null)}
         />
       )}
     </div>
