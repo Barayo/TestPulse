@@ -185,7 +185,14 @@ resolve to an authenticated actor:
 - **Web UI**: session cookie set by `POST /api/v1/auth/login`. The cookie is
   `HttpOnly`, `SameSite=Lax`, and `Secure` whenever the request itself
   arrived over TLS — see [Deployment](deployment.md#security-status) for the
-  current HTTPS status.
+  current HTTPS status. If the session goes invalid while the app is
+  already in use (cookie expiry, revocation), a `401` on any request opens
+  a non-dismissable login modal over the current view rather than an empty
+  page or a route change (`handle-session-expiry`) — the email of whoever
+  was logged in is pre-filled but can be changed. On success the app
+  reloads: the same URL if it's the same user, or the home route if a
+  different user logged in instead, since data already held in memory may
+  belong to the previous session.
 - **Agents**: `Authorization: Bearer tp_<token>`, created via
   `POST /api/v1/tokens` by any authenticated user. A token acts as its own
   actor — distinct from, and never impersonating, the human who created it

@@ -8,6 +8,7 @@ import { useActiveProjectId } from '@/lib/useActiveProject'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
 import { DataRevisionProvider } from '@/lib/DataRevision'
 import { AuthProvider, useAuth } from '@/lib/useAuth'
+import { SessionExpiredModal } from '@/components/SessionExpiredModal'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectPage from '@/pages/ProjectPage'
 import SuitesPage from '@/pages/SuitesPage'
@@ -155,6 +156,7 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <DataRevisionProvider>
+          <SessionExpiredModal />
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route path="/" element={<RequireAuth><ProjectsPage /></RequireAuth>} />

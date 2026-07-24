@@ -3,6 +3,7 @@ import { render, waitFor } from '@testing-library/react'
 import { renderHook, act } from '@testing-library/react'
 import { AuthProvider, useAuth } from './useAuth'
 import { api } from '@/lib/api'
+import { notifySessionExpired } from '@/lib/sessionExpiry'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
@@ -58,7 +59,7 @@ describe('useAuth', () => {
     await act(async () => {
       outcome = await result.current.login('a@b.com', 'correcthorse')
     })
-    expect(outcome).toEqual({ ok: true })
+    expect(outcome).toEqual({ ok: true, user: { id: 'u1', email: 'a@b.com', isTenantAdmin: false } })
     expect(result.current.user).toEqual({ id: 'u1', email: 'a@b.com', isTenantAdmin: false })
   })
 
@@ -90,6 +91,33 @@ describe('useAuth', () => {
       await result.current.logout()
     })
     expect(result.current.user).toBeNull()
+  })
+
+  it('sets sessionExpired when notified while a user is authenticated', async () => {
+    mockGET.mockResolvedValue({
+      data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },
+      response: { ok: true },
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+    await waitFor(() => expect(result.current.user).not.toBeNull())
+    expect(result.current.sessionExpired).toBe(false)
+
+    act(() => notifySessionExpired())
+
+    expect(result.current.sessionExpired).toBe(true)
+    // The user is never cleared when expiry is detected — RequireAuth's own
+    // redirect must not race the session-expiry modal (handle-session-expiry).
+    expect(result.current.user).not.toBeNull()
+  })
+
+  it('ignores a session-expiry notification when there was never a user (first load)', async () => {
+    mockGET.mockResolvedValue({ data: undefined, response: { ok: false } })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+    await waitFor(() => expect(result.current.loading).toBe(false))
+
+    act(() => notifySessionExpired())
+
+    expect(result.current.sessionExpired).toBe(false)
   })
 
   it('throws when used outside an AuthProvider', () => {

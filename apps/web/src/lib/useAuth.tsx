@@ -1,13 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
 import { api } from '@/lib/api'
+import { onSessionExpired } from '@/lib/sessionExpiry'
 
 export type AuthUser = { id: string; email: string; isTenantAdmin: boolean }
 
-type LoginResult = { ok: true } | { ok: false; error: string }
+type LoginResult = { ok: true; user: AuthUser } | { ok: false; error: string }
 
 type AuthContextValue = {
   user: AuthUser | null
   loading: boolean
+  sessionExpired: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   logout: () => Promise<void>
 }
@@ -20,6 +22,9 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  const [sessionExpired, setSessionExpired] = useState(false)
+  const userRef = useRef<AuthUser | null>(null)
+  userRef.current = user
 
   useEffect(() => {
     let cancelled = false
@@ -40,13 +45,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
+  // A 401 only means "your session went bad mid-use" if there was a session
+  // to begin with — otherwise it's the ordinary first-load case, already
+  // handled by RequireAuth's redirect. Never clears `user` here: that's
+  // what keeps RequireAuth's own redirect from racing this modal
+  // (handle-session-expiry design.md).
+  useEffect(() => onSessionExpired(() => {
+    if (userRef.current !== null) setSessionExpired(true)
+  }), [])
+
   const login = useCallback(async (email: string, password: string): Promise<LoginResult> => {
     const { data, response } = await api.POST('/api/v1/auth/login', { body: { email, password } })
     if (!response.ok || !data) {
       return { ok: false, error: 'Invalid email or password' }
     }
-    setUser(data as AuthUser)
-    return { ok: true }
+    const authUser = data as AuthUser
+    setUser(authUser)
+    return { ok: true, user: authUser }
   }, [])
 
   const logout = useCallback(async () => {
@@ -55,7 +70,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>{children}</AuthContext.Provider>
+    <AuthContext.Provider value={{ user, loading, sessionExpired, login, logout }}>
+      {children}
+    </AuthContext.Provider>
   )
 }
 
