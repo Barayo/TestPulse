@@ -308,6 +308,22 @@ func (s *Service) DeleteFolder(ctx context.Context, folderID string) error {
 	return nil
 }
 
+// FolderDeletePreview previews how many cases and descendant folders a
+// delete of folderID would remove, for the confirmation dialog to show
+// before the user confirms (add-delete-mode).
+type FolderDeletePreview struct {
+	CaseCount   int `json:"caseCount"`
+	FolderCount int `json:"folderCount"`
+}
+
+func (s *Service) FolderDeletePreview(ctx context.Context, folderID string) (FolderDeletePreview, error) {
+	caseCount, folderCount, err := s.store.Folders.SubtreeCounts(ctx, folderID)
+	if err != nil {
+		return FolderDeletePreview{}, err
+	}
+	return FolderDeletePreview{CaseCount: caseCount, FolderCount: folderCount}, nil
+}
+
 // --- Suites ---
 
 func (s *Service) CreateSuite(ctx context.Context, projectID, name string) (domain.Suite, error) {

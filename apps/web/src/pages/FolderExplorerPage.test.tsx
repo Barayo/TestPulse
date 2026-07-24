@@ -18,11 +18,26 @@ function makeDataTransfer() {
 }
 
 vi.mock('@/lib/api', () => ({
-  api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() },
+  api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() },
 }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 const mockPUT = vi.mocked(api.PUT)
+const mockDELETE = vi.mocked(api.DELETE)
+
+const allPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
 
 const root = { id: 'root', projectId: 'p1', name: 'Root', createdAt: '' }
 const transferencias = { id: 'transferencias', projectId: 'p1', parentFolderId: 'root', name: 'Transferencias', createdAt: '' }
@@ -61,12 +76,19 @@ function mockExplorerAPI(overrides: Partial<Record<string, unknown>> = {}) {
         data: overrides.suites ?? [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
       })
+    if (path === '/api/v1/projects/{projectKey}/permissions')
+      return Promise.resolve({ data: overrides.permissions ?? allPermissions, response: { ok: true } })
     if (path === '/api/v1/cases/{caseKey}/versions' && options?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: [
           { caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' },
           { caseId: 'c1', version: 2, content: limitCase.content, createdAt: '2026-02-01T00:00:00Z' },
         ],
+        response: { ok: true },
+      })
+    if (path === '/api/v1/folders/{folderId}/delete-preview')
+      return Promise.resolve({
+        data: (overrides.deletePreview as Record<string, unknown>) ?? { caseCount: 1, folderCount: 0 },
         response: { ok: true },
       })
     return Promise.resolve({ data: [], response: { ok: true } })
@@ -440,6 +462,136 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       await screen.findByRole('list', { name: 'Section contents' })
       expect(screen.queryByRole('button', { name: /browse sections/i })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('delete mode (add-delete-mode)', () => {
+    it('hides the delete mode toggle entirely for a user with neither caseDelete nor sectionDelete permission', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, caseDelete: false, sectionDelete: false } })
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('button', { name: /delete mode/i })).not.toBeInTheDocument()
+    })
+
+    it('shows the toggle, off by default, for a user with delete permission', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const toggle = await screen.findByRole('button', { name: /delete mode/i })
+      expect(toggle).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.queryByRole('button', { name: /^delete folder$/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^delete case$/i })).not.toBeInTheDocument()
+    })
+
+    it('reveals delete affordances on folder and case rows when toggled on, and hides them again when toggled off', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const toggle = await screen.findByRole('button', { name: /delete mode/i })
+
+      await userEvent.click(toggle)
+      expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      expect(await screen.findAllByRole('button', { name: /^delete section$/i })).toHaveLength(1)
+      expect(screen.getAllByRole('button', { name: /^delete case$/i })).toHaveLength(1)
+
+      await userEvent.click(toggle)
+      expect(toggle).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.queryByRole('button', { name: /^delete section$/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^delete case$/i })).not.toBeInTheDocument()
+    })
+
+    it('only shows the case delete affordance without caseDelete permission, and the folder one without sectionDelete', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, caseDelete: false } })
+      renderExplorer()
+      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
+      expect(screen.getByRole('button', { name: /^delete section$/i })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^delete case$/i })).not.toBeInTheDocument()
+    })
+
+    it('deleting a case shows a confirmation naming it; canceling makes no request', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^delete case$/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/daily transfer limit/i)).toBeInTheDocument()
+      await userEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
+
+      expect(mockDELETE).not.toHaveBeenCalled()
+      expect(screen.getByText('Daily transfer limit')).toBeInTheDocument()
+    })
+
+    it('confirming a case delete calls the delete endpoint and removes the row from view', async () => {
+      mockExplorerAPI()
+      mockDELETE.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^delete case$/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: /^delete case$/i }))
+
+      await waitFor(() => {
+        expect(mockDELETE).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({ params: { path: { caseKey: 'c1' } } }),
+        )
+      })
+    })
+
+    it('deleting a folder previews its subtree size in the confirmation before removing it', async () => {
+      mockExplorerAPI({ deletePreview: { caseCount: 3, folderCount: 2 } })
+      mockDELETE.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^delete section$/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/nacionales/i)).toBeInTheDocument()
+      expect(within(dialog).getByText(/3 case/i)).toBeInTheDocument()
+      expect(within(dialog).getByText(/2 subsection/i)).toBeInTheDocument()
+
+      await userEvent.click(within(dialog).getByRole('button', { name: /^delete section$/i }))
+      await waitFor(() => {
+        expect(mockDELETE).toHaveBeenCalledWith(
+          '/api/v1/folders/{folderId}',
+          expect.objectContaining({ params: { path: { folderId: 'nacionales' } } }),
+        )
+      })
+    })
+
+    it('canceling a folder delete confirmation makes no request and leaves the folder in place', async () => {
+      mockExplorerAPI({ deletePreview: { caseCount: 0, folderCount: 0 } })
+      renderExplorer()
+      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^delete section$/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
+
+      expect(mockDELETE).not.toHaveBeenCalled()
+      const list = screen.getByRole('list', { name: 'Section contents' })
+      expect(within(list).getByText('Nacionales')).toBeInTheDocument()
+    })
+
+    it('uses singular wording for a subtree of exactly one case and one subsection', async () => {
+      mockExplorerAPI({ deletePreview: { caseCount: 1, folderCount: 1 } })
+      renderExplorer()
+      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^delete section$/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/1 case and 1 subsection\./i)).toBeInTheDocument()
+    })
+
+    it('closing the delete confirmation via Escape makes no request', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      await userEvent.click(await screen.findByRole('button', { name: /delete mode/i }))
+      await userEvent.click(screen.getByRole('button', { name: /^delete case$/i }))
+      await screen.findByRole('dialog')
+
+      await userEvent.keyboard('{Escape}')
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+      expect(mockDELETE).not.toHaveBeenCalled()
     })
   })
 })

@@ -100,7 +100,10 @@ func TestScenario_MoveCaseOverHTTP(t *testing.T) {
 	}
 }
 
-func TestScenario_DeleteFolderReparentsOverHTTP(t *testing.T) {
+// TestScenario_DeleteFolderCascadesOverHTTP covers add-delete-mode's
+// "Deleting a folder cascades to its subtree" requirement, replacing the
+// old reparent-on-delete behavior.
+func TestScenario_DeleteFolderCascadesOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
@@ -118,25 +121,27 @@ func TestScenario_DeleteFolderReparentsOverHTTP(t *testing.T) {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key),
 		jmap{"title": "case in auth", "folderId": auth.ID}, 201, &c)
 
+	// Preview before deleting: 1 case, 1 subfolder (login) in auth's subtree.
+	var preview struct {
+		CaseCount   int `json:"caseCount"`
+		FolderCount int `json:"folderCount"`
+	}
+	call(t, h, "GET", "/api/v1/folders/"+auth.ID+"/delete-preview", nil, 200, &preview)
+	if preview.CaseCount != 1 || preview.FolderCount != 1 {
+		t.Errorf("preview = %+v, want caseCount=1 folderCount=1", preview)
+	}
+
 	call(t, h, "DELETE", "/api/v1/folders/"+auth.ID, nil, 204, nil)
 
-	var movedFolders []struct {
-		ID             string
-		ParentFolderID string `json:"parentFolderId"`
-	}
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &movedFolders)
-	for _, f := range movedFolders {
-		if f.ID == login.ID && f.ParentFolderID != root {
-			t.Errorf("subfolder not reparented: %+v", f)
+	var remaining []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &remaining)
+	for _, f := range remaining {
+		if f.ID == auth.ID || f.ID == login.ID {
+			t.Errorf("deleted folder %q still listed", f.ID)
 		}
 	}
-	var movedCase struct {
-		FolderID string `json:"folderId"`
-	}
-	call(t, h, "GET", "/api/v1/cases/"+c.Key, nil, 200, &movedCase)
-	if movedCase.FolderID != root {
-		t.Errorf("case not reparented: folderId = %q, want root %q", movedCase.FolderID, root)
-	}
+
+	call(t, h, "GET", "/api/v1/cases/"+c.Key, nil, 404, nil)
 }
 
 func TestScenario_RootFolderNotDeletableOverHTTP(t *testing.T) {

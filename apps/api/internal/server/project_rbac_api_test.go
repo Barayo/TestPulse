@@ -345,3 +345,46 @@ func TestScenario_NonTenantAdminCannotManageTeamsOverHTTP(t *testing.T) {
 	var errBody jmap
 	callAs(t, handler, cookie, "POST", "/api/v1/teams", jmap{"name": "Sneaky"}, 403, &errBody)
 }
+
+// TestScenario_MyPermissionsExposesRealFlagsOverHTTP covers add-delete-
+// mode's dependency: the frontend needs to know its own effective
+// permissions to hide (not just disable) permission-gated controls.
+func TestScenario_MyPermissionsExposesRealFlagsOverHTTP(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+	projectAdminRoleID := roleIDByName(t, handler, admin, "Project Admin")
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+
+	// Tenant Admin: every flag true, even with no explicit membership.
+	var adminPerms jmap
+	callAs(t, handler, admin, "GET", "/api/v1/projects/"+projectKey+"/permissions", nil, 200, &adminPerms)
+	if adminPerms["sectionDelete"] != true || adminPerms["caseDelete"] != true {
+		t.Errorf("Tenant Admin permissions = %+v, want every flag true", adminPerms)
+	}
+
+	var user jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "projectadmin@example.com", "password": "correcthorse"}, 201, &user)
+	userID, _ := user["id"].(string)
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
+		jmap{"roleId": projectAdminRoleID}, 204, nil)
+	paCookie := loginCookie(t, handler, "projectadmin@example.com", "correcthorse")
+
+	var paPerms jmap
+	callAs(t, handler, paCookie, "GET", "/api/v1/projects/"+projectKey+"/permissions", nil, 200, &paPerms)
+	if paPerms["sectionDelete"] != true || paPerms["caseDelete"] != true {
+		t.Errorf("Project Admin permissions = %+v, want sectionDelete/caseDelete true", paPerms)
+	}
+
+	// A user with no membership gets all-false, not a 403 or 404 — this
+	// endpoint answers "what can I do", which is always a valid question.
+	var outsider jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "outsider2@example.com", "password": "correcthorse"}, 201, &outsider)
+	outsiderCookie := loginCookie(t, handler, "outsider2@example.com", "correcthorse")
+	var outsiderPerms jmap
+	callAs(t, handler, outsiderCookie, "GET", "/api/v1/projects/"+projectKey+"/permissions", nil, 403, &outsiderPerms)
+}

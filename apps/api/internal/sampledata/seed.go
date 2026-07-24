@@ -167,6 +167,16 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if _, err := Filler(ctx, svc, p.ID, auth.ID, "Authentication", "case", 2); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
+	// A real nested subsection, so add-delete-mode's cascade-count
+	// confirmation has something non-trivial to show on Authentication —
+	// not just direct-child cases, but a subsection with its own case too.
+	twoFactorFolder, err := Folder(ctx, svc, p.ID, auth.ID, "Two-Factor")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := svc.MoveCase(ctx, twoFactor.ID, twoFactorFolder.ID); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
 
 	// --- Checkout cases --------------------------------------------------
 

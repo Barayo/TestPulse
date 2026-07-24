@@ -243,6 +243,54 @@ func TestProjectCreationCreatesRootFolder(t *testing.T) {
 	}
 }
 
+func TestFolderSoftDeleteColumnAndFilteredIndexes(t *testing.T) {
+	pool := testPool(t)
+	resetSchema(t, pool)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	ctx := context.Background()
+
+	var projectID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO projects (key, name) VALUES ('P', 'p') RETURNING id`).Scan(&projectID); err != nil {
+		t.Fatal(err)
+	}
+	root := rootFolder(t, pool, projectID)
+
+	var subID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO test_case_folders (project_id, parent_folder_id, name) VALUES ($1, $2, 'Auth') RETURNING id, deleted`,
+		projectID, root).Scan(&subID, new(bool)); err != nil {
+		t.Fatalf("insert subfolder (expected a deleted column to exist): %v", err)
+	}
+
+	var deleted bool
+	if err := pool.QueryRow(ctx, `SELECT deleted FROM test_case_folders WHERE id = $1`, subID).Scan(&deleted); err != nil {
+		t.Fatal(err)
+	}
+	if deleted {
+		t.Error("new folder deleted = true, want false by default")
+	}
+
+	if _, err := pool.Exec(ctx, `UPDATE test_case_folders SET deleted = true WHERE id = $1`, subID); err != nil {
+		t.Fatalf("soft-deleting folder: %v", err)
+	}
+
+	// A deleted folder is excluded by the filtered listing indexes' WHERE
+	// NOT deleted clause — verified functionally: a query mirroring the
+	// index predicate returns nothing for the deleted row.
+	var count int
+	if err := pool.QueryRow(ctx,
+		`SELECT count(*) FROM test_case_folders WHERE project_id = $1 AND NOT deleted AND id = $2`,
+		projectID, subID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 {
+		t.Errorf("deleted folder still matches WHERE NOT deleted, count = %d, want 0", count)
+	}
+}
+
 func TestCaseFolderIsMandatoryAndNested(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)

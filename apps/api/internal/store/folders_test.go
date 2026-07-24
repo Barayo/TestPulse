@@ -124,7 +124,10 @@ func TestMovingCaseDoesNotAffectSuiteMembership(t *testing.T) {
 	}
 }
 
-func TestDeleteFolderReparentsChildrenAndCases(t *testing.T) {
+// TestDeleteFolderCascadesSoftDeleteToSubtree covers add-delete-mode:
+// deleting a folder soft-deletes its entire subtree (folders and cases) in
+// place, replacing the old reparent-on-delete behavior.
+func TestDeleteFolderCascadesSoftDeleteToSubtree(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	p := mustProject(t, s)
@@ -135,19 +138,81 @@ func TestDeleteFolderReparentsChildrenAndCases(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	rootCase := mustCase(t, s, p.ID, "unrelated case in root")
 
 	if err := s.Folders.Delete(ctx, auth.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
 
-	// "login" subfolder and the case reparent to auth's parent (root).
-	movedFolder, err := s.Folders.Get(ctx, login.ID)
-	if err != nil || movedFolder.ParentFolderID != root.ID {
-		t.Errorf("subfolder not reparented to root: %+v, %v", movedFolder, err)
+	// The deleted folder, its subfolder, and the case in its subtree are
+	// all gone (soft-deleted, so Get returns ErrNotFound like a deleted
+	// case does).
+	if _, err := s.Folders.Get(ctx, auth.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Get(auth) after delete = %v, want ErrNotFound", err)
 	}
-	movedCase, err := s.Cases.Get(ctx, c.ID)
-	if err != nil || movedCase.FolderID != root.ID {
-		t.Errorf("case not reparented to root: %+v, %v", movedCase, err)
+	if _, err := s.Folders.Get(ctx, login.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Get(login) after delete = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Cases.Get(ctx, c.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Get(case) after delete = %v, want ErrNotFound", err)
+	}
+
+	// Deleted folders are excluded from List.
+	remaining, err := s.Folders.List(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, f := range remaining {
+		if f.ID == auth.ID || f.ID == login.ID {
+			t.Errorf("deleted folder %q still present in List", f.ID)
+		}
+	}
+
+	// A case outside the deleted subtree is unaffected.
+	if _, err := s.Cases.Get(ctx, rootCase.ID); err != nil {
+		t.Errorf("unrelated case in root affected by unrelated subtree delete: %v", err)
+	}
+}
+
+// TestSubtreeCountsForDeletePreview covers the confirmation dialog's
+// pre-check: the number of cases and folders a delete would remove,
+// computed before the user confirms.
+func TestSubtreeCountsForDeletePreview(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	root, _ := s.Folders.Root(ctx, p.ID)
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
+	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login")
+	if _, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("case in auth")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Cases.Create(ctx, p.ID, login.ID, defaultContent("case in login")); err != nil {
+		t.Fatal(err)
+	}
+
+	caseCount, folderCount, err := s.Folders.SubtreeCounts(ctx, auth.ID)
+	if err != nil {
+		t.Fatalf("SubtreeCounts: %v", err)
+	}
+	// auth's subtree: auth + login = 2 folders (folderCount counts
+	// descendants, not including auth itself, per the dialog copy "N
+	// cases and M subfolders").
+	if folderCount != 1 {
+		t.Errorf("folderCount = %d, want 1 (login)", folderCount)
+	}
+	if caseCount != 2 {
+		t.Errorf("caseCount = %d, want 2", caseCount)
+	}
+
+	// A leaf folder with nothing in it previews as zero/zero.
+	empty, _ := s.Folders.Create(ctx, p.ID, root.ID, "Empty")
+	caseCount, folderCount, err = s.Folders.SubtreeCounts(ctx, empty.ID)
+	if err != nil {
+		t.Fatalf("SubtreeCounts(empty): %v", err)
+	}
+	if caseCount != 0 || folderCount != 0 {
+		t.Errorf("empty folder counts = %d/%d, want 0/0", caseCount, folderCount)
 	}
 }
 

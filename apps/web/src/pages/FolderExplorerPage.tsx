@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { FolderIcon, FileTextIcon, FolderInputIcon } from 'lucide-react'
+import { FolderIcon, FileTextIcon, FolderInputIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
@@ -8,15 +8,20 @@ import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useBumpDataRevision } from '@/lib/DataRevision'
+import { useProjectPermissions } from '@/lib/useProjectPermissions'
 import type { components } from '@testpulse/shared/api'
 
 type Folder = components['schemas']['Folder']
 type TestCase = components['schemas']['TestCase']
 type Suite = components['schemas']['Suite']
 type Project = components['schemas']['Project']
+
+type DeleteTarget =
+  | { kind: 'case'; key: string; title: string }
+  | { kind: 'folder'; id: string; name: string; caseCount: number; folderCount: number }
 
 type DrawerState = { mode: 'create' }
 
@@ -59,6 +64,11 @@ export default function FolderExplorerPage() {
   const [contentCreatingFolder, setContentCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
+  const [deleteMode, setDeleteMode] = useState(false)
+  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+
+  const permissions = useProjectPermissions(projectKey)
+  const canDeleteAnything = Boolean(permissions?.caseDelete || permissions?.sectionDelete)
 
   const load = useCallback(async () => {
     if (!projectKey) return
@@ -129,6 +139,31 @@ export default function FolderExplorerPage() {
       params: { path: { caseKey } },
       body: { folderId: targetFolderId },
     })
+    await load()
+    bumpLanding()
+  }
+
+  async function requestDeleteFolder(folder: Folder) {
+    const { data: preview } = await api.GET('/api/v1/folders/{folderId}/delete-preview', {
+      params: { path: { folderId: folder.id } },
+    })
+    setDeleteTarget({
+      kind: 'folder',
+      id: folder.id,
+      name: folder.name,
+      caseCount: preview?.caseCount ?? 0,
+      folderCount: preview?.folderCount ?? 0,
+    })
+  }
+
+  async function confirmDelete() {
+    if (!deleteTarget) return
+    if (deleteTarget.kind === 'case') {
+      await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey: deleteTarget.key } } })
+    } else {
+      await api.DELETE('/api/v1/folders/{folderId}', { params: { path: { folderId: deleteTarget.id } } })
+    }
+    setDeleteTarget(null)
     await load()
     bumpLanding()
   }
@@ -220,6 +255,16 @@ export default function FolderExplorerPage() {
                 Browse sections
               </Button>
             )}
+            {canDeleteAnything && (
+              <Button
+                type="button"
+                variant={deleteMode ? 'destructive' : 'outline'}
+                aria-pressed={deleteMode}
+                onClick={() => setDeleteMode((prev) => !prev)}
+              >
+                Delete mode
+              </Button>
+            )}
             <Button
               type="button"
               variant="outline"
@@ -264,7 +309,7 @@ export default function FolderExplorerPage() {
                   {subfolders.map((f) => (
                     <li
                       key={f.id}
-                      className={`border-b px-3 py-2 text-sm last:border-b-0 ${dragOverFolderId === f.id ? 'bg-primary/10' : ''}`}
+                      className={`flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0 ${dragOverFolderId === f.id ? 'bg-primary/10' : ''}`}
                       onDragOver={(e) => {
                         e.preventDefault()
                         setDragOverFolderId(f.id)
@@ -279,12 +324,22 @@ export default function FolderExplorerPage() {
                     >
                       <button
                         type="button"
-                        className="flex w-full items-center gap-2 text-left"
+                        className="flex flex-1 items-center gap-2 text-left"
                         onClick={() => navigate(`/projects/${projectKey}/library/${f.id}`)}
                       >
                         <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
                         <span>{f.name}</span>
                       </button>
+                      {deleteMode && permissions?.sectionDelete && (
+                        <button
+                          type="button"
+                          aria-label="Delete section"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => void requestDeleteFolder(f)}
+                        >
+                          <Trash2Icon className="size-4" aria-hidden="true" />
+                        </button>
+                      )}
                     </li>
                   ))}
                   {casesHere.map((c) => (
@@ -321,6 +376,16 @@ export default function FolderExplorerPage() {
                       >
                         <FolderInputIcon className="size-4" aria-hidden="true" />
                       </button>
+                      {deleteMode && permissions?.caseDelete && (
+                        <button
+                          type="button"
+                          aria-label="Delete case"
+                          className="text-muted-foreground hover:text-destructive"
+                          onClick={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
+                        >
+                          <Trash2Icon className="size-4" aria-hidden="true" />
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -371,6 +436,46 @@ export default function FolderExplorerPage() {
           onCreate={(input) => void createCase(input)}
         />
       )}
+
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          {deleteTarget?.kind === 'case' && (
+            <>
+              <DialogTitle>Delete case?</DialogTitle>
+              <DialogDescription>
+                Delete case &ldquo;{deleteTarget.title}&rdquo;? This cannot be undone.
+              </DialogDescription>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={() => void confirmDelete()}>
+                  Delete case
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+          {deleteTarget?.kind === 'folder' && (
+            <>
+              <DialogTitle>Delete section?</DialogTitle>
+              <DialogDescription>
+                Delete section &ldquo;{deleteTarget.name}&rdquo; and everything in it? This removes{' '}
+                {deleteTarget.caseCount} case{deleteTarget.caseCount === 1 ? '' : 's'} and{' '}
+                {deleteTarget.folderCount} subsection{deleteTarget.folderCount === 1 ? '' : 's'}. This cannot be
+                undone.
+              </DialogDescription>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={() => void confirmDelete()}>
+                  Delete section
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

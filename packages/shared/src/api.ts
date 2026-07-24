@@ -188,8 +188,27 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        /** Delete a folder, reparenting its child folders and cases to its parent */
+        /** Delete a folder (Tenant Admin or sectionDelete permission). Cascading soft delete (add-delete-mode): the folder and every folder and case anywhere in its subtree are soft-deleted, not reparented. The root folder cannot be deleted. */
         delete: operations["deleteFolder"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/folders/{folderId}/delete-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folderId: string;
+            };
+            cookie?: never;
+        };
+        /** Preview how many cases and descendant folders a delete of this folder would remove (add-delete-mode) — computed before the confirmation dialog opens, not part of the delete response. */
+        get: operations["folderDeletePreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -228,7 +247,7 @@ export interface paths {
         /** Edit a case (creates a new immutable version) */
         put: operations["editCase"];
         post?: never;
-        /** Soft-delete a case (versions stay readable in runs) */
+        /** Soft-delete a case (Tenant Admin or caseDelete permission) — versions stay readable in runs */
         delete: operations["deleteCase"];
         options?: never;
         head?: never;
@@ -765,6 +784,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/permissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** The authenticated caller's own effective permissions on this project (add-delete-mode) — a Tenant Admin gets every flag true; a non-member gets every flag false, not an error, so the frontend can hide permission-gated controls entirely rather than just disabling them. */
+        get: operations["myPermissions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/members/{userId}": {
         parameters: {
             query?: never;
@@ -852,6 +890,12 @@ export interface components {
             name: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        FolderDeletePreview: {
+            /** @description Cases anywhere in the folder's subtree that would be soft-deleted. */
+            caseCount: number;
+            /** @description Descendant folders (not including this one) that would be soft-deleted. */
+            folderCount: number;
         };
         NewFolder: {
             name: string;
@@ -1068,6 +1112,20 @@ export interface components {
             deactivate?: boolean;
             /** @description Set true to reactivate a previously-deactivated user. */
             reactivate?: boolean;
+        };
+        /** @description A resolved, unioned set of permission flags — the caller's own effective permissions on one project (add-delete-mode), not a role definition. */
+        Permissions: {
+            read: boolean;
+            caseCreate: boolean;
+            caseEdit: boolean;
+            caseDelete: boolean;
+            sectionCreate: boolean;
+            sectionDelete: boolean;
+            suiteCreate: boolean;
+            suiteEditMembership: boolean;
+            runCreate: boolean;
+            runRecordResult: boolean;
+            manageProject: boolean;
         };
         /** @description A fully custom, instance-wide role (add-project-rbac design.md D10): the Tenant Admin creates/renames/deletes roles and toggles their permission flags freely. A user's effective permissions on a project are the union of every role granted to them directly or via a team (not a single "highest" role — there is no fixed ranking). Ten concrete, per-resource flags (design.md D11) rather than a handful of broad ones — e.g. caseCreate is independent of caseDelete. */
         Role: {
@@ -1568,6 +1626,33 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    folderDeletePreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Subtree counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FolderDeletePreview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -1668,6 +1753,8 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2650,6 +2737,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectMembership"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    myPermissions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The caller's effective permissions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Permissions"];
                 };
             };
             401: components["responses"]["Unauthorized"];

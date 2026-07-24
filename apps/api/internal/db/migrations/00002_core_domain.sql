@@ -37,10 +37,11 @@ CREATE TABLE test_case_folders (
     project_id        uuid NOT NULL REFERENCES projects (id),
     parent_folder_id  uuid REFERENCES test_case_folders (id),
     name              text NOT NULL CHECK (name <> ''),
+    deleted           boolean NOT NULL DEFAULT false,
     created_at        timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX test_case_folders_project_idx ON test_case_folders (project_id);
-CREATE INDEX test_case_folders_parent_idx ON test_case_folders (parent_folder_id);
+CREATE INDEX test_case_folders_project_idx ON test_case_folders (project_id) WHERE NOT deleted;
+CREATE INDEX test_case_folders_parent_idx ON test_case_folders (parent_folder_id) WHERE NOT deleted;
 -- At most one root (NULL-parent) folder per project.
 CREATE UNIQUE INDEX test_case_folders_one_root_idx
     ON test_case_folders (project_id) WHERE parent_folder_id IS NULL;

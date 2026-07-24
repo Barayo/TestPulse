@@ -1,0 +1,105 @@
+import { test, expect, type Browser, type Page } from '@playwright/test'
+import { unique } from './support'
+
+// BDD E2E for add-delete-mode, mapped to
+// openspec/changes/add-delete-mode/specs/test-authoring/spec.md scenarios.
+// GIVEN: the compose stack is up (make e2e), with a fresh database, and the
+// default authenticated page (global-setup.ts) is the Tenant Admin.
+
+async function createProjectId(page: Page, label: string): Promise<string> {
+  const projectName = unique(label)
+  await page.goto('/')
+  await page.getByRole('button', { name: /new project/i }).click()
+  await page.getByLabel('Name').fill(projectName)
+  await page.getByRole('button', { name: /^create$/i }).click()
+  await page.waitForURL(/\/projects\//)
+  return new URL(page.url()).pathname.split('/')[2]
+}
+
+async function openFolderExplorer(page: Page) {
+  const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
+  const getStarted = page.getByRole('button', { name: /add your first test case/i })
+  await goToLibrary.or(getStarted).click()
+  await page.waitForURL(/\/library/)
+}
+
+function content(page: Page) {
+  return page.getByRole('list', { name: 'Section contents' })
+}
+
+async function createFolderInOpenFolder(page: Page, name: string) {
+  await page.getByRole('button', { name: /^\+ new section$/i }).click()
+  await page.getByLabel('New section name').fill(name)
+  await page.getByLabel('New section name').press('Enter')
+  await expect(content(page).getByText(name)).toBeVisible()
+}
+
+async function createCase(page: Page, title: string) {
+  await page.getByRole('button', { name: /new test case/i }).click()
+  await page.getByLabel(/^title$/i).fill(title)
+  await page.getByRole('button', { name: /create test case/i }).click()
+  await expect(page.getByText(title)).toBeVisible()
+}
+
+async function loginAsNewUser(adminPage: Page, browser: Browser, label: string): Promise<{ page: Page; userId: string }> {
+  const email = `${unique(label).replace(/\s+/g, '-').toLowerCase()}@example.com`
+  const password = 'correcthorse'
+  const created = await (await adminPage.request.post('/api/v1/users', { data: { email, password } })).json()
+
+  const context = await browser.newContext()
+  const page = await context.newPage()
+  const loginResponse = await page.request.post('/api/v1/auth/login', { data: { email, password } })
+  expect(loginResponse.ok()).toBe(true)
+  return { page, userId: created.id }
+}
+
+async function assignRole(adminPage: Page, projectId: string, userId: string, roleName: string) {
+  const roles: { id: string; name: string }[] = await (await adminPage.request.get('/api/v1/roles')).json()
+  const roleId = roles.find((r) => r.name === roleName)?.id
+  if (!roleId) throw new Error(`no seeded role named "${roleName}" found`)
+  const res = await adminPage.request.put(`/api/v1/projects/${projectId}/members/${userId}`, { data: { roleId } })
+  expect(res.status()).toBe(204)
+}
+
+test.describe('Requirement: Destructive actions require delete mode and confirmation', () => {
+  test('Scenario: Delete mode is unavailable without delete permission', async ({ page, browser }) => {
+    const projectId = await createProjectId(page, 'Delete Mode Visibility')
+    const { page: testerPage, userId } = await loginAsNewUser(page, browser, 'Tester No Delete')
+    await assignRole(page, projectId, userId, 'Tester')
+
+    await testerPage.goto(`/projects/${projectId}/library`)
+    await expect(testerPage.getByRole('button', { name: /delete mode/i })).toHaveCount(0)
+  })
+
+  test('Scenario: Enabling delete mode reveals delete actions; deleting a folder cascades to its subtree', async ({
+    page,
+  }) => {
+    await createProjectId(page, 'Delete Mode Cascade')
+    await openFolderExplorer(page)
+
+    // A subfolder with a case inside, so the confirmation preview has
+    // something non-trivial to show.
+    await createFolderInOpenFolder(page, 'Auth')
+    await content(page).getByText('Auth').click()
+    await createCase(page, 'Login works')
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByText('Library').click()
+
+    // No delete affordance until delete mode is switched on.
+    await expect(page.getByRole('button', { name: /^delete section$/i })).toHaveCount(0)
+    await page.getByRole('button', { name: /delete mode/i }).click()
+    await expect(page.getByRole('button', { name: /^delete section$/i })).toBeVisible()
+
+    await page.getByRole('button', { name: /^delete section$/i }).click()
+    const dialog = page.getByRole('dialog')
+    await expect(dialog.getByText(/1 case/i)).toBeVisible()
+
+    // Cancel first: nothing changes.
+    await dialog.getByRole('button', { name: /^cancel$/i }).click()
+    await expect(content(page).getByText('Auth')).toBeVisible()
+
+    // Confirm: the folder and its case are gone.
+    await page.getByRole('button', { name: /^delete section$/i }).click()
+    await page.getByRole('dialog').getByRole('button', { name: /^delete section$/i }).click()
+    await expect(content(page).getByText('Auth')).toHaveCount(0)
+  })
+})

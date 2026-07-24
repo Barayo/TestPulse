@@ -140,6 +140,67 @@ func TestSeedContentCoversClassificationFieldsAndVersioning(t *testing.T) {
 	}
 }
 
+// TestSeedContentHasARealNestedSubsection covers add-delete-mode's showcase
+// task: the Sample Project must have a subsection nested under a top-level
+// section (depth ≥ 2), with a case inside it, so delete mode's cascade
+// confirmation has something non-trivial to preview — not just a flat list
+// of top-level sections each holding cases directly.
+func TestSeedContentHasARealNestedSubsection(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	folders, err := svc.ListFolders(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	root := ""
+	for _, f := range folders {
+		if f.ParentFolderID == "" {
+			root = f.ID
+		}
+	}
+	if root == "" {
+		t.Fatal("no root folder found")
+	}
+	topLevel := map[string]bool{}
+	for _, f := range folders {
+		if f.ParentFolderID == root {
+			topLevel[f.ID] = true
+		}
+	}
+
+	var nested string
+	for _, f := range folders {
+		if f.ParentFolderID != "" && f.ParentFolderID != root && topLevel[f.ParentFolderID] {
+			nested = f.ID
+			break
+		}
+	}
+	if nested == "" {
+		t.Fatal("no folder nested two levels deep (a subsection of a top-level section) found")
+	}
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var sawCaseInNestedFolder bool
+	for _, c := range cases {
+		if c.FolderID == nested {
+			sawCaseInNestedFolder = true
+		}
+	}
+	if !sawCaseInNestedFolder {
+		t.Error("nested subsection has no case in it — nothing for the cascade-count preview to show")
+	}
+}
+
 // TestSeedContentHasAFlakyVersion covers "Sample Project demonstrates the
 // flaky-test signal": at least one case's currently-pinned version has
 // mixed pass/fail(blocked) executions, which is what VersionDetailDialog's

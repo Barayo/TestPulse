@@ -79,7 +79,8 @@ exactly one folder, defaulting to the project's root; see
 | Method | Path | Description |
 |---|---|---|
 | GET / POST | `/api/v1/projects/{projectKey}/folders` | List all folders (flat) / create a subfolder (`name`, `parentFolderId` — always required) |
-| DELETE | `/api/v1/folders/{folderId}` | Delete, reparenting child folders and cases to its parent; the root folder cannot be deleted (`400`) |
+| GET | `/api/v1/folders/{folderId}/delete-preview` | Preview a delete's blast radius: `caseCount`/`folderCount` in the subtree, for the confirmation dialog to show before the user confirms (`add-delete-mode`) |
+| DELETE | `/api/v1/folders/{folderId}` | Cascading soft delete: the folder and every folder/case in its subtree (`add-delete-mode`, replacing the old reparent behavior); the root folder cannot be deleted (`400`) |
 | PUT | `/api/v1/cases/{caseKey}/folder` | Move a case to a different folder (`folderId`) — suite membership is unaffected |
 
 **Suites**
@@ -168,6 +169,7 @@ display/sort order only, never compared for authorization — see
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/projects/{projectKey}/members` | List a project's directly-assigned users and assigned teams with their `roleId` — Read+ |
+| GET | `/api/v1/projects/{projectKey}/permissions` | The caller's own effective permission flags on this project — Read+; a Tenant Admin gets every flag `true`. Built for the frontend to hide (not just disable) permission-gated controls (`add-delete-mode`) |
 | PUT | `/api/v1/projects/{projectKey}/members/{userId}` | Assign/change a user's project role (`roleId`: a `Role.id`) — Tenant Admin only |
 | DELETE | `/api/v1/projects/{projectKey}/members/{userId}` | Remove a user's direct project role assignment — Tenant Admin only |
 | PUT | `/api/v1/projects/{projectKey}/teams/{teamId}` | Assign/change a team's project role (`roleId`) — Tenant Admin only |

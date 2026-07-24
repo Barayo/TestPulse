@@ -313,3 +313,50 @@ func TestSetProjectMemberValidatesRole(t *testing.T) {
 		t.Fatalf("err = %v, want ValidationError", err)
 	}
 }
+
+// TestMyPermissionsExposesEffectivePermissionsForTheFrontend covers
+// add-delete-mode's requirement that permission-gated UI (like the delete
+// mode toggle) hide controls entirely, not just disable them — which needs
+// a way for the frontend to learn the caller's own effective permissions.
+func TestMyPermissionsExposesEffectivePermissionsForTheFrontend(t *testing.T) {
+	s := testService(t)
+	admin := actorFor(mustCreateUser(t, s, "admin@example.com", "correcthorse", true))
+	member := mustCreateUser(t, s, "member@example.com", "correcthorse", false)
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// A Tenant Admin has every flag, even with no explicit membership row.
+	perms, err := s.MyPermissions(ctx, admin, project.ID)
+	if err != nil || !perms.Has(domain.PermSectionDelete) || !perms.Has(domain.PermCaseDelete) {
+		t.Fatalf("Tenant Admin MyPermissions = %+v, %v; want every flag true", perms, err)
+	}
+
+	// A non-Tenant-Admin with no membership gets all-false, not an error —
+	// the frontend needs a normal response to hide UI, not a failure to
+	// handle.
+	memberActor := domain.Actor{ID: member.ID, EffectiveUserID: member.ID}
+	perms, err = s.MyPermissions(ctx, memberActor, project.ID)
+	if err != nil {
+		t.Fatalf("MyPermissions for unmembered user: %v", err)
+	}
+	if perms.Has(domain.PermRead) || perms.Has(domain.PermSectionDelete) {
+		t.Errorf("unmembered user's permissions = %+v, want all false", perms)
+	}
+
+	// Once assigned a role, MyPermissions reflects it.
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Deleter (my-permissions-test)", CanRead: true, CanSectionDelete: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, project.ID, member.ID, role.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+	perms, err = s.MyPermissions(ctx, memberActor, project.ID)
+	if err != nil || !perms.Has(domain.PermSectionDelete) || perms.Has(domain.PermCaseDelete) {
+		t.Fatalf("member MyPermissions = %+v, %v; want sectionDelete true, caseDelete false", perms, err)
+	}
+}

@@ -218,11 +218,36 @@ paths:
       - { name: folderId, in: path, required: true, schema: { type: string } }
     delete:
       operationId: deleteFolder
-      summary: Delete a folder, reparenting its child folders and cases to its parent
+      summary: >-
+        Delete a folder (Tenant Admin or sectionDelete permission).
+        Cascading soft delete (add-delete-mode): the folder and every folder
+        and case anywhere in its subtree are soft-deleted, not reparented.
+        The root folder cannot be deleted.
       tags: [folders]
       responses:
         "204": { description: Deleted }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/folders/{folderId}/delete-preview:
+    parameters:
+      - { name: folderId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: folderDeletePreview
+      summary: >-
+        Preview how many cases and descendant folders a delete of this
+        folder would remove (add-delete-mode) — computed before the
+        confirmation dialog opens, not part of the delete response.
+      tags: [folders]
+      responses:
+        "200":
+          description: Subtree counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolderDeletePreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/cases/{caseKey}/folder:
     parameters:
@@ -277,10 +302,14 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
     delete:
       operationId: deleteCase
-      summary: Soft-delete a case (versions stay readable in runs)
+      summary: >-
+        Soft-delete a case (Tenant Admin or caseDelete permission) — versions
+        stay readable in runs
       tags: [cases]
       responses:
         "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/cases/{caseKey}/versions:
     parameters:
@@ -903,6 +932,27 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/permissions:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: myPermissions
+      summary: >-
+        The authenticated caller's own effective permissions on this
+        project (add-delete-mode) — a Tenant Admin gets every flag true; a
+        non-member gets every flag false, not an error, so the frontend can
+        hide permission-gated controls entirely rather than just disabling
+        them.
+      tags: [projects]
+      responses:
+        "200":
+          description: The caller's effective permissions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Permissions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/projects/{projectKey}/members/{userId}:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -1052,6 +1102,16 @@ components:
           description: Absent for a project's root folder.
         name: { type: string }
         createdAt: { type: string, format: date-time }
+    FolderDeletePreview:
+      type: object
+      required: [caseCount, folderCount]
+      properties:
+        caseCount:
+          type: integer
+          description: Cases anywhere in the folder's subtree that would be soft-deleted.
+        folderCount:
+          type: integer
+          description: Descendant folders (not including this one) that would be soft-deleted.
     NewFolder:
       type: object
       required: [name, parentFolderId]
@@ -1350,6 +1410,27 @@ components:
         reactivate:
           type: boolean
           description: Set true to reactivate a previously-deactivated user.
+    Permissions:
+      type: object
+      description: >-
+        A resolved, unioned set of permission flags — the caller's own
+        effective permissions on one project (add-delete-mode), not a role
+        definition.
+      required:
+        [read, caseCreate, caseEdit, caseDelete, sectionCreate, sectionDelete,
+         suiteCreate, suiteEditMembership, runCreate, runRecordResult, manageProject]
+      properties:
+        read: { type: boolean }
+        caseCreate: { type: boolean }
+        caseEdit: { type: boolean }
+        caseDelete: { type: boolean }
+        sectionCreate: { type: boolean }
+        sectionDelete: { type: boolean }
+        suiteCreate: { type: boolean }
+        suiteEditMembership: { type: boolean }
+        runCreate: { type: boolean }
+        runRecordResult: { type: boolean }
+        manageProject: { type: boolean }
     Role:
       type: object
       description: >-

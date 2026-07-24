@@ -49,6 +49,7 @@ func (r *FolderRepo) ProjectID(ctx context.Context, folderID string) (string, er
 }
 
 // Root returns a project's automatically-created root folder (design D8).
+// The root folder is never deletable, so no deleted filter is needed here.
 func (r *FolderRepo) Root(ctx context.Context, projectID string) (domain.Folder, error) {
 	row := r.pool.QueryRow(ctx,
 		`SELECT `+folderColumns+` FROM test_case_folders
@@ -56,9 +57,11 @@ func (r *FolderRepo) Root(ctx context.Context, projectID string) (domain.Folder,
 	return scanFolder(row)
 }
 
+// Get returns ErrNotFound for a soft-deleted folder, matching CaseRepo.Get's
+// behavior for a soft-deleted case (add-delete-mode).
 func (r *FolderRepo) Get(ctx context.Context, folderID string) (domain.Folder, error) {
 	row := r.pool.QueryRow(ctx,
-		`SELECT `+folderColumns+` FROM test_case_folders WHERE id = $1`, folderID)
+		`SELECT `+folderColumns+` FROM test_case_folders WHERE id = $1 AND NOT deleted`, folderID)
 	return scanFolder(row)
 }
 
@@ -72,11 +75,11 @@ func (r *FolderRepo) Create(ctx context.Context, projectID, parentFolderID, name
 	return scanFolder(row)
 }
 
-// List returns every folder in a project (flat; callers reconstruct the
-// tree from ParentFolderID).
+// List returns every non-deleted folder in a project (flat; callers
+// reconstruct the tree from ParentFolderID).
 func (r *FolderRepo) List(ctx context.Context, projectID string) ([]domain.Folder, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT `+folderColumns+` FROM test_case_folders WHERE project_id = $1 ORDER BY created_at`,
+		`SELECT `+folderColumns+` FROM test_case_folders WHERE project_id = $1 AND NOT deleted ORDER BY created_at`,
 		projectID)
 	if err != nil {
 		return nil, err
@@ -94,9 +97,23 @@ func (r *FolderRepo) List(ctx context.Context, projectID string) ([]domain.Folde
 	return folders, rows.Err()
 }
 
-// Delete removes a non-root folder, reparenting its direct child folders and
-// cases to the deleted folder's parent (design D8). The root folder cannot
-// be deleted.
+// subtreeCTE finds every folder in folderID's subtree, including folderID
+// itself, via a recursive walk of parent_folder_id — arbitrarily deep,
+// avoiding N+1 queries or loading the tree into Go to walk it (add-delete-
+// mode design.md).
+const subtreeCTE = `
+	WITH RECURSIVE subtree AS (
+		SELECT id FROM test_case_folders WHERE id = $1
+		UNION ALL
+		SELECT f.id FROM test_case_folders f
+		JOIN subtree s ON f.parent_folder_id = s.id
+		WHERE NOT f.deleted
+	)`
+
+// Delete soft-deletes a non-root folder and every folder and case anywhere
+// in its subtree, in one transaction (add-delete-mode) — replacing the
+// previous reparent-then-hard-delete behavior. The root folder cannot be
+// deleted.
 func (r *FolderRepo) Delete(ctx context.Context, folderID string) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
@@ -119,17 +136,29 @@ func (r *FolderRepo) Delete(ctx context.Context, folderID string) error {
 	}
 
 	if _, err := tx.Exec(ctx,
-		`UPDATE test_case_folders SET parent_folder_id = $2 WHERE parent_folder_id = $1`,
-		folderID, *parentFolderID); err != nil {
+		subtreeCTE+` UPDATE test_cases SET deleted = true
+		 WHERE folder_id IN (SELECT id FROM subtree) AND NOT deleted`,
+		folderID); err != nil {
 		return err
 	}
 	if _, err := tx.Exec(ctx,
-		`UPDATE test_cases SET folder_id = $2 WHERE folder_id = $1`,
-		folderID, *parentFolderID); err != nil {
-		return err
-	}
-	if _, err := tx.Exec(ctx, `DELETE FROM test_case_folders WHERE id = $1`, folderID); err != nil {
+		subtreeCTE+` UPDATE test_case_folders SET deleted = true
+		 WHERE id IN (SELECT id FROM subtree)`,
+		folderID); err != nil {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// SubtreeCounts previews how many cases and descendant folders (not
+// including folderID itself) a delete of folderID would remove — computed
+// before the confirmation dialog opens (add-delete-mode design.md).
+func (r *FolderRepo) SubtreeCounts(ctx context.Context, folderID string) (caseCount, folderCount int, err error) {
+	err = r.pool.QueryRow(ctx,
+		subtreeCTE+`
+		 SELECT
+		   (SELECT count(*) FROM test_cases WHERE folder_id IN (SELECT id FROM subtree) AND NOT deleted),
+		   (SELECT count(*) FROM subtree) - 1`,
+		folderID).Scan(&caseCount, &folderCount)
+	return caseCount, folderCount, err
 }

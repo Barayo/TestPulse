@@ -43,6 +43,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/runs", h.createRun)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/imports", h.importResults)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/members", h.getProjectMembership)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/permissions", h.myPermissions)
 			r.With(requireTenantAdmin).Put("/members/{userID}", h.setProjectMember)
 			r.With(requireTenantAdmin).Delete("/members/{userID}", h.removeProjectMember)
 			r.With(requireTenantAdmin).Put("/teams/{teamID}", h.setProjectTeamRole)
@@ -59,6 +60,7 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
 	})
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
+	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Get("/folders/{folderID}/delete-preview", h.folderDeletePreview)
 	r.Route("/suites/{suiteKey}/cases/{caseKey}", func(r chi.Router) {
 		r.Use(h.resolveKey("suiteKey", h.svc.SuiteIDByKey), h.resolveKey("caseKey", h.svc.CaseIDByKey))
 		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Put("/", h.addCaseToSuite)
@@ -196,6 +198,12 @@ func (h *api) getProjectMembership(w http.ResponseWriter, r *http.Request) {
 	h.respond(w, http.StatusOK, m, err)
 }
 
+func (h *api) myPermissions(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	perms, err := h.svc.MyPermissions(r.Context(), actor, resolvedID(r, "projectKey"))
+	h.respond(w, http.StatusOK, perms, err)
+}
+
 func (h *api) setProjectMember(w http.ResponseWriter, r *http.Request) {
 	actor, _ := domain.ActorFromContext(r.Context())
 	in, err := decode[struct {
@@ -316,6 +324,11 @@ func (h *api) moveCase(w http.ResponseWriter, r *http.Request) {
 func (h *api) deleteFolder(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.DeleteFolder(r.Context(), chi.URLParam(r, "folderID"))
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) folderDeletePreview(w http.ResponseWriter, r *http.Request) {
+	preview, err := h.svc.FolderDeletePreview(r.Context(), chi.URLParam(r, "folderID"))
+	h.respond(w, http.StatusOK, preview, err)
 }
 
 // --- Suites ---

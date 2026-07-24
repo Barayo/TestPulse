@@ -18,6 +18,26 @@ func (s *Service) EffectivePermissions(ctx context.Context, actor domain.Actor, 
 	return s.store.ProjectMembers.EffectivePermissions(ctx, actor.EffectiveUserID, projectID)
 }
 
+// MyPermissions is EffectivePermissions with the Tenant Admin bypass
+// applied and "no membership" turned into an ordinary all-false result
+// instead of an error — built for the frontend to ask "what can I do here"
+// so it can hide permission-gated controls entirely rather than just
+// disabling them (add-delete-mode).
+func (s *Service) MyPermissions(ctx context.Context, actor domain.Actor, projectID string) (domain.Permissions, error) {
+	if actor.IsTenantAdmin {
+		return domain.Permissions{
+			Read: true, CaseCreate: true, CaseEdit: true, CaseDelete: true,
+			SectionCreate: true, SectionDelete: true, SuiteCreate: true, SuiteEditMembership: true,
+			RunCreate: true, RunRecordResult: true, ManageProject: true,
+		}, nil
+	}
+	perms, err := s.EffectivePermissions(ctx, actor, projectID)
+	if errors.Is(err, store.ErrNotFound) {
+		return domain.Permissions{}, nil
+	}
+	return perms, err
+}
+
 // --- Roles (add-project-rbac design.md D10 — fully custom, instance-wide) ---
 
 func (s *Service) CreateRole(ctx context.Context, actor domain.Actor, role domain.Role) (domain.Role, error) {
