@@ -1,6 +1,6 @@
 ## 0. Design validation (blocks everything else)
 
-- [ ] 0.1 User reviews the Fable-5-drafted interactive HTML mockup (create + edit screens) before any real component work starts. Revise the mockup, not real code, if changes are requested.
+- [x] 0.1 User reviews the Fable-5-drafted interactive HTML mockup (create + edit screens) before any real component work starts. Approved as-is: checkbox-grid, filter-safe selection, persistent selection bar, empty states.
 
 ## 1. Shared component — TDD
 

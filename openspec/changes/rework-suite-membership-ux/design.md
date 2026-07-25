@@ -2,6 +2,8 @@
 
 `CasePicker.tsx` and `SuiteDrawer.tsx` exist only for suite membership (confirmed: no other importers besides their own test files; `UserPicker.tsx` only references `CasePicker.tsx` in a comment describing a similar-but-separate pattern, not an import). Suite membership is already a plain n:m relationship at the API layer (`PUT`/`DELETE /suites/{suiteKey}/cases/{caseKey}`, one call per case) — nothing about the API needs to change, only how the UI drives it. A user-reported mockup validation pass (Fable-5-drafted interactive HTML) precedes implementation here, per the user's explicit request to validate the design before writing code.
 
+**Validated mockup**: `mockup.html` in this change directory (approved as-is, task 0.1) — the reference for the checkbox-grid's visual/interaction shape: filter row (Tag/Priority/Platform/Test Type + Clear filters), scrollable row list with pill-tagged cases, a persistent selection bar below the grid, and distinct empty states for "no cases match" vs. a freshly-created suite. Open it directly in a browser (self-contained HTML, no build step) to see the exact interaction being implemented.
+
 ## Goals / Non-Goals
 
 **Goals:**

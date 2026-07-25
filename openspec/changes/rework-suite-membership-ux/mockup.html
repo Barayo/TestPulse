@@ -1,0 +1,574 @@
+<title>Suite membership — checkbox-grid mockup</title>
+<style>
+  :root {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --destructive-tint: #FCEAE6; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --radius: 0.5rem; --radius-sm: 0.3rem; --radius-md: 0.4rem; --radius-lg: 0.5rem; --radius-xl: 0.7rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+      --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+      --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+      --destructive: #FF6B57; --destructive-tint: #2A1815; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+    --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+    --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+    --destructive: #FF6B57; --destructive-tint: #2A1815; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+  }
+  :root[data-theme="light"] {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --destructive-tint: #FCEAE6; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { overflow-x: hidden; }
+
+  .tp-mock-page {
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--background);
+    color: var(--foreground);
+    min-height: 100vh;
+    padding: 1.5rem 1.25rem 3rem;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+
+  .tp-mock-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+    max-width: 900px;
+    margin: 0 auto;
+  }
+  .tp-mock-topbar-left { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; }
+  .tp-mock-badge {
+    font-size: .65rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted-foreground); background: var(--muted); border: 1px solid var(--border);
+    padding: .25rem .5rem; border-radius: var(--radius-sm);
+  }
+  .tp-tabs { display: flex; gap: .25rem; background: var(--muted); padding: .25rem; border-radius: var(--radius-md); }
+  .tp-tab {
+    font: inherit; font-size: .85rem; font-weight: 600; color: var(--muted-foreground);
+    background: transparent; border: none; padding: .4rem .8rem; border-radius: var(--radius-sm);
+    cursor: pointer;
+  }
+  .tp-tab:hover { color: var(--foreground); }
+  .tp-tab.is-active { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .tp-tab:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  .tp-theme-toggle {
+    font: inherit; font-size: .8rem; font-weight: 600; color: var(--foreground);
+    background: var(--card); border: 1px solid var(--border); padding: .45rem .75rem;
+    border-radius: var(--radius-md); cursor: pointer; display: inline-flex; align-items: center; gap: .4rem;
+  }
+  .tp-theme-toggle:hover { border-color: var(--ring); }
+  .tp-theme-toggle:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  .tp-mock-caption {
+    max-width: 900px; margin: .85rem auto 1.5rem; color: var(--muted-foreground);
+    font-size: .85rem; line-height: 1.5;
+  }
+
+  .tp-app-frame {
+    max-width: 900px; margin: 0 auto; background: var(--card); color: var(--card-foreground);
+    border: 1px solid var(--border); border-radius: var(--radius-xl);
+    box-shadow: 0 1px 3px rgba(11,46,44,.06), 0 8px 24px rgba(11,46,44,.05);
+    overflow: hidden;
+  }
+
+  .tp-app-header {
+    padding: 1rem 1.5rem; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  }
+  .tp-app-brand { font-weight: 700; font-size: .95rem; display: flex; align-items: center; gap: .5rem; }
+  .tp-brand-dot { width: .55rem; height: .55rem; border-radius: 50%; background: var(--primary); display: inline-block; }
+  .tp-app-crumb { font-size: .8rem; color: var(--muted-foreground); }
+  .tp-app-crumb span { color: var(--foreground); font-weight: 600; }
+
+  .tp-screen { padding: 1.5rem; display: none; }
+  .tp-screen.is-active { display: block; }
+
+  .tp-toast {
+    display: none; align-items: center; gap: .6rem; background: var(--accent); color: var(--accent-foreground);
+    border: 1px solid var(--primary); border-radius: var(--radius-md); padding: .7rem 1rem; margin-bottom: 1.1rem;
+    font-size: .85rem; font-weight: 600;
+  }
+  .tp-toast.is-visible { display: flex; }
+  .tp-toast-icon {
+    width: 1.3rem; height: 1.3rem; border-radius: 50%; background: var(--primary); color: var(--primary-foreground);
+    display: inline-flex; align-items: center; justify-content: center; font-size: .75rem; flex-shrink: 0;
+  }
+  .tp-toast-close {
+    margin-left: auto; background: none; border: none; color: var(--accent-foreground); cursor: pointer;
+    font-size: .9rem; opacity: .6; padding: .2rem;
+  }
+  .tp-toast-close:hover { opacity: 1; }
+
+  .tp-field-group { margin-bottom: 1.25rem; }
+  .tp-label {
+    display: block; font-size: .78rem; font-weight: 700; color: var(--muted-foreground);
+    text-transform: uppercase; letter-spacing: .04em; margin-bottom: .4rem;
+  }
+  .tp-name-input {
+    font: inherit; font-size: .95rem; width: 100%; max-width: 420px; padding: .6rem .75rem;
+    border: 1px solid var(--input); border-radius: var(--radius-md); background: var(--background);
+    color: var(--foreground);
+  }
+  .tp-name-input:focus-visible, .tp-name-input:focus { outline: 2px solid var(--ring); outline-offset: 1px; border-color: var(--ring); }
+  .tp-suite-name-static {
+    font-size: 1.05rem; font-weight: 700; display: inline-flex; align-items: center; gap: .5rem;
+  }
+  .tp-suite-name-static .tp-pill { font-weight: 600; }
+
+  .tp-filter-bar {
+    display: flex; gap: .6rem; flex-wrap: wrap; align-items: center; margin-bottom: .75rem;
+    padding-bottom: 1rem; border-bottom: 1px solid var(--border);
+  }
+  .tp-select {
+    font: inherit; font-size: .82rem; color: var(--foreground); background: var(--background);
+    border: 1px solid var(--input); border-radius: var(--radius-md); padding: .45rem .6rem;
+    min-width: 8.5rem;
+  }
+  .tp-select:focus-visible, .tp-select:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+  .tp-clear-btn {
+    font: inherit; font-size: .8rem; font-weight: 600; color: var(--primary); background: none;
+    border: none; cursor: pointer; padding: .45rem .3rem; text-decoration: underline; text-underline-offset: 2px;
+  }
+  .tp-clear-btn:disabled { color: var(--muted-foreground); cursor: default; text-decoration: none; }
+  .tp-clear-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  .tp-row-count { font-size: .78rem; color: var(--muted-foreground); margin: 0 0 .6rem; }
+  .tp-row-count strong { color: var(--foreground); font-variant-numeric: tabular-nums; }
+
+  .tp-grid-scroll {
+    max-height: 380px; overflow-y: auto; overflow-x: hidden; border: 1px solid var(--border);
+    border-radius: var(--radius-md); background: var(--background);
+  }
+
+  .tp-row {
+    display: flex; align-items: flex-start; gap: .7rem; padding: .65rem .85rem;
+    border-bottom: 1px solid var(--border); cursor: pointer;
+  }
+  .tp-row:last-child { border-bottom: none; }
+  .tp-row:hover { background: var(--accent); }
+  .tp-row.is-checked { background: var(--accent); }
+
+  .tp-row-checkbox {
+    width: 1.05rem; height: 1.05rem; margin-top: .15rem; flex-shrink: 0; accent-color: var(--primary);
+    cursor: pointer;
+  }
+  .tp-row-checkbox:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  .tp-row-main { display: flex; flex-direction: column; gap: .35rem; min-width: 0; }
+  .tp-row-title { font-size: .88rem; font-weight: 600; color: var(--foreground); line-height: 1.35; }
+  .tp-row-pills { display: flex; gap: .35rem; flex-wrap: wrap; }
+
+  .tp-pill {
+    font-size: .68rem; font-weight: 600; padding: .12rem .5rem; border-radius: 999px;
+    background: var(--muted); color: var(--muted-foreground); white-space: nowrap;
+    text-transform: capitalize;
+  }
+  .tp-pill-priority-low { background: var(--muted); color: var(--muted-foreground); }
+  .tp-pill-priority-medium { background: var(--border); color: var(--foreground); }
+  .tp-pill-priority-high { background: var(--secondary); color: var(--secondary-foreground); }
+  .tp-pill-priority-critical { background: var(--destructive); color: #fff; }
+
+  .tp-empty-state {
+    padding: 2.5rem 1.5rem; text-align: center; color: var(--muted-foreground); font-size: .88rem;
+  }
+  .tp-empty-state strong { display: block; color: var(--foreground); font-size: .95rem; margin-bottom: .3rem; }
+
+  .tp-selection-bar {
+    margin-top: 1rem; padding: .85rem 1.1rem; border-radius: var(--radius-md);
+    background: var(--accent); border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+    transition: background-color .15s ease;
+  }
+  .tp-selection-bar.is-empty { background: var(--muted); }
+  .tp-selection-count { font-size: .9rem; font-weight: 700; color: var(--foreground); font-variant-numeric: tabular-nums; }
+  .tp-selection-bar.is-empty .tp-selection-count { font-weight: 500; color: var(--muted-foreground); }
+  .tp-selection-sub { font-size: .78rem; color: var(--muted-foreground); font-weight: 400; margin-left: .4rem; }
+
+  .tp-primary-btn {
+    font: inherit; font-size: .88rem; font-weight: 700; padding: .6rem 1.1rem; border-radius: var(--radius-md);
+    border: 1px solid transparent; cursor: pointer; background: var(--primary); color: var(--primary-foreground);
+  }
+  .tp-primary-btn:hover:not(:disabled) { filter: brightness(1.05); }
+  .tp-primary-btn:disabled {
+    background: var(--muted); color: var(--muted-foreground); cursor: not-allowed; border-color: var(--border);
+  }
+  .tp-primary-btn:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  @media (max-width: 560px) {
+    .tp-select { min-width: 45%; flex: 1 1 45%; }
+    .tp-grid-scroll { max-height: 320px; }
+  }
+</style>
+
+<div class="tp-mock-page" id="mockPage">
+  <div class="tp-mock-topbar">
+    <div class="tp-mock-topbar-left">
+      <span class="tp-mock-badge">UX mockup</span>
+      <div class="tp-tabs" role="tablist" aria-label="Screens">
+        <button class="tp-tab is-active" data-screen="create" role="tab" aria-selected="true" type="button">Create suite</button>
+        <button class="tp-tab" data-screen="edit" role="tab" aria-selected="false" type="button">Edit suite membership</button>
+      </div>
+    </div>
+    <button class="tp-theme-toggle" id="themeToggle" type="button">
+      <span id="themeToggleIcon">&#9789;</span> <span id="themeToggleLabel">Dark</span>
+    </button>
+  </div>
+
+  <p class="tp-mock-caption">
+    Validating the shared checkbox-grid component used both to create a suite and to edit its membership.
+    Checked cases are tracked by ID, independent of the active filters — check a few, filter them out of view,
+    then clear the filters to confirm they're still checked.
+  </p>
+
+  <div class="tp-app-frame">
+    <div class="tp-app-header">
+      <div class="tp-app-brand"><span class="tp-brand-dot"></span>TestPulse</div>
+      <div class="tp-app-crumb" id="appCrumb">Sample Project / Test Suites / <span>New suite</span></div>
+    </div>
+
+    <!-- Screen 1: Create suite -->
+    <div class="tp-screen is-active" id="screen-create">
+      <div class="tp-toast" id="toast-create">
+        <span class="tp-toast-icon">&#10003;</span>
+        <span id="toast-create-text">Suite created.</span>
+        <button class="tp-toast-close" id="toast-create-close" type="button" aria-label="Dismiss">&times;</button>
+      </div>
+
+      <div class="tp-field-group">
+        <label class="tp-label" for="suiteNameInput">Suite name</label>
+        <input class="tp-name-input" id="suiteNameInput" type="text" placeholder="e.g. Regression pass — Q3" autocomplete="off">
+      </div>
+
+      <div class="tp-label" style="margin-bottom:.5rem;">Add cases</div>
+      <div class="tp-filter-bar" id="filterBar-create"></div>
+      <p class="tp-row-count" id="rowCount-create"></p>
+      <div class="tp-grid-scroll" id="grid-create"></div>
+
+      <div class="tp-selection-bar" id="selectionBar-create">
+        <span class="tp-selection-count" id="selectionCount-create"></span>
+        <button class="tp-primary-btn" id="commitBtn-create" type="button" disabled>Create suite (0)</button>
+      </div>
+    </div>
+
+    <!-- Screen 2: Edit suite membership -->
+    <div class="tp-screen" id="screen-edit">
+      <div class="tp-toast" id="toast-edit">
+        <span class="tp-toast-icon">&#10003;</span>
+        <span id="toast-edit-text">Changes saved.</span>
+        <button class="tp-toast-close" id="toast-edit-close" type="button" aria-label="Dismiss">&times;</button>
+      </div>
+
+      <div class="tp-field-group">
+        <span class="tp-label">Suite</span>
+        <span class="tp-suite-name-static">Smoke Tests <span class="tp-pill">6 cases</span></span>
+      </div>
+
+      <div class="tp-label" style="margin-bottom:.5rem;">Cases in this suite</div>
+      <div class="tp-filter-bar" id="filterBar-edit"></div>
+      <p class="tp-row-count" id="rowCount-edit"></p>
+      <div class="tp-grid-scroll" id="grid-edit"></div>
+
+      <div class="tp-selection-bar" id="selectionBar-edit">
+        <span class="tp-selection-count" id="selectionCount-edit"></span>
+        <button class="tp-primary-btn" id="commitBtn-edit" type="button" disabled>Save changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  var CASES = [
+    { id: 1, title: "User can log in with valid credentials", tag: "auth", priority: "high", platform: "web", type: "functional" },
+    { id: 2, title: "Login is rejected for the wrong password", tag: "negative", priority: "high", platform: "web", type: "functional" },
+    { id: 3, title: "Login is rejected for an unknown email", tag: "negative", priority: "medium", platform: "web", type: "functional" },
+    { id: 4, title: "Two-factor prompt is required for a new device", tag: "security", priority: "critical", platform: "web", type: "e2e" },
+    { id: 5, title: "Two-factor code expires after 5 minutes", tag: "security", priority: "medium", platform: "web", type: "functional" },
+    { id: 6, title: "Password reset email is sent for a valid account", tag: "auth", priority: "medium", platform: "web", type: "functional" },
+    { id: 7, title: "Password reset link expires after 24 hours", tag: "security", priority: "medium", platform: "web", type: "functional" },
+    { id: 8, title: "Account locks after 5 failed login attempts", tag: "security", priority: "critical", platform: "web", type: "functional" },
+    { id: 9, title: "Session expires after 30 minutes of inactivity", tag: "security", priority: "medium", platform: "web", type: "regression" },
+    { id: 10, title: "Remember me keeps the session active across restarts", tag: "auth", priority: "low", platform: "desktop", type: "regression" },
+    { id: 11, title: "Login works with SSO via Google", tag: "auth", priority: "high", platform: "web", type: "e2e" },
+    { id: 12, title: "Login works with SSO via Microsoft", tag: "auth", priority: "high", platform: "web", type: "e2e" },
+    { id: 13, title: "Mobile login supports biometric unlock", tag: "auth", priority: "medium", platform: "mobile", type: "functional" },
+    { id: 14, title: "API login returns a valid JWT token", tag: "auth", priority: "high", platform: "api", type: "api" },
+    { id: 15, title: "API login rejects malformed request bodies", tag: "negative", priority: "medium", platform: "api", type: "api" },
+    { id: 16, title: "Checkout completes with a valid card", tag: "checkout", priority: "critical", platform: "web", type: "e2e" },
+    { id: 17, title: "Checkout blocks an expired card", tag: "negative", priority: "high", platform: "web", type: "functional" },
+    { id: 18, title: "Checkout blocks an invalid CVV", tag: "negative", priority: "high", platform: "web", type: "functional" },
+    { id: 19, title: "Checkout applies a valid promo code", tag: "checkout", priority: "medium", platform: "web", type: "functional" },
+    { id: 20, title: "Checkout rejects an expired promo code", tag: "negative", priority: "low", platform: "web", type: "functional" },
+    { id: 21, title: "Checkout supports PayPal as a payment method", tag: "checkout", priority: "medium", platform: "web", type: "e2e" },
+    { id: 22, title: "Checkout supports Apple Pay on mobile", tag: "checkout", priority: "medium", platform: "mobile", type: "e2e" },
+    { id: 23, title: "Cart total updates when quantity changes", tag: "checkout", priority: "medium", platform: "web", type: "functional" },
+    { id: 24, title: "Cart persists items across a browser restart", tag: "regression", priority: "low", platform: "web", type: "regression" },
+    { id: 25, title: "Checkout shows an order summary before payment", tag: "checkout", priority: "low", platform: "web", type: "functional" },
+    { id: 26, title: "Checkout API rejects an out-of-stock item", tag: "negative", priority: "high", platform: "api", type: "api" },
+    { id: 27, title: "Checkout confirmation email is sent after purchase", tag: "checkout", priority: "medium", platform: "web", type: "e2e" },
+    { id: 28, title: "Guest checkout does not require an account", tag: "checkout", priority: "low", platform: "web", type: "functional" },
+    { id: 29, title: "Desktop app checkout mirrors the web flow", tag: "regression", priority: "low", platform: "desktop", type: "regression" },
+    { id: 30, title: "Smoke: core login-to-checkout path succeeds end to end", tag: "smoke", priority: "critical", platform: "web", type: "e2e" }
+  ];
+
+  var FILTER_FIELDS = [
+    { key: "tag", label: "All tags" },
+    { key: "priority", label: "All priorities" },
+    { key: "platform", label: "All platforms" },
+    { key: "type", label: "All test types" }
+  ];
+
+  var EDIT_INITIAL = [1, 4, 8, 14, 16, 30];
+
+  function uniqueValues(field) {
+    var set = {};
+    CASES.forEach(function (c) { set[c[field]] = true; });
+    return Object.keys(set).sort();
+  }
+
+  function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+  function setsEqual(a, b) {
+    if (a.size !== b.size) return false;
+    var equal = true;
+    a.forEach(function (v) { if (!b.has(v)) equal = false; });
+    return equal;
+  }
+
+  function matchesFilters(c, filters) {
+    return (!filters.tag || c.tag === filters.tag) &&
+      (!filters.priority || c.priority === filters.priority) &&
+      (!filters.platform || c.platform === filters.platform) &&
+      (!filters.type || c.type === filters.type);
+  }
+
+  function makeScreen(prefix, opts) {
+    var screen = {
+      prefix: prefix,
+      selected: new Set(opts.initialSelected || []),
+      baseline: new Set(opts.initialSelected || []),
+      filters: { tag: "", priority: "", platform: "", type: "" },
+      mode: opts.mode
+    };
+
+    var filterBar = document.getElementById("filterBar-" + prefix);
+    var grid = document.getElementById("grid-" + prefix);
+    var rowCountEl = document.getElementById("rowCount-" + prefix);
+    var selectionBar = document.getElementById("selectionBar-" + prefix);
+    var selectionCountEl = document.getElementById("selectionCount-" + prefix);
+    var commitBtn = document.getElementById("commitBtn-" + prefix);
+
+    // Build filter selects
+    FILTER_FIELDS.forEach(function (field) {
+      var wrap = document.createElement("select");
+      wrap.className = "tp-select";
+      wrap.id = "filter-" + prefix + "-" + field.key;
+      wrap.setAttribute("aria-label", field.label);
+      var optAll = document.createElement("option");
+      optAll.value = "";
+      optAll.textContent = field.label;
+      wrap.appendChild(optAll);
+      uniqueValues(field.key).forEach(function (v) {
+        var o = document.createElement("option");
+        o.value = v;
+        o.textContent = capitalize(v);
+        wrap.appendChild(o);
+      });
+      wrap.addEventListener("change", function () {
+        screen.filters[field.key] = wrap.value;
+        renderGrid();
+      });
+      filterBar.appendChild(wrap);
+    });
+
+    var clearBtn = document.createElement("button");
+    clearBtn.type = "button";
+    clearBtn.className = "tp-clear-btn";
+    clearBtn.textContent = "Clear filters";
+    clearBtn.disabled = true;
+    clearBtn.addEventListener("click", function () {
+      screen.filters = { tag: "", priority: "", platform: "", type: "" };
+      FILTER_FIELDS.forEach(function (field) {
+        document.getElementById("filter-" + prefix + "-" + field.key).value = "";
+      });
+      renderGrid();
+    });
+    filterBar.appendChild(clearBtn);
+
+    function anyFilterActive() {
+      return !!(screen.filters.tag || screen.filters.priority || screen.filters.platform || screen.filters.type);
+    }
+
+    function renderGrid() {
+      clearBtn.disabled = !anyFilterActive();
+      var visible = CASES.filter(function (c) { return matchesFilters(c, screen.filters); });
+      rowCountEl.innerHTML = "Showing <strong>" + visible.length + "</strong> of " + CASES.length + " cases";
+
+      grid.innerHTML = "";
+      if (visible.length === 0) {
+        var empty = document.createElement("div");
+        empty.className = "tp-empty-state";
+        empty.innerHTML = "<strong>No cases match these filters</strong>Try a different combination, or clear the filters to see all cases.";
+        grid.appendChild(empty);
+        return;
+      }
+
+      visible.forEach(function (c) {
+        var row = document.createElement("label");
+        row.className = "tp-row" + (screen.selected.has(c.id) ? " is-checked" : "");
+        row.setAttribute("data-id", c.id);
+
+        var cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.className = "tp-row-checkbox";
+        cb.checked = screen.selected.has(c.id);
+        cb.setAttribute("aria-label", "Select case: " + c.title);
+        cb.addEventListener("change", function () {
+          if (cb.checked) { screen.selected.add(c.id); } else { screen.selected.delete(c.id); }
+          row.className = "tp-row" + (cb.checked ? " is-checked" : "");
+          updateSelectionBar();
+        });
+
+        var main = document.createElement("span");
+        main.className = "tp-row-main";
+
+        var title = document.createElement("span");
+        title.className = "tp-row-title";
+        title.textContent = c.title;
+
+        var pills = document.createElement("span");
+        pills.className = "tp-row-pills";
+        pills.innerHTML =
+          '<span class="tp-pill">' + c.tag + '</span>' +
+          '<span class="tp-pill tp-pill-priority-' + c.priority + '">' + c.priority + '</span>' +
+          '<span class="tp-pill">' + c.platform + '</span>' +
+          '<span class="tp-pill">' + c.type + '</span>';
+
+        main.appendChild(title);
+        main.appendChild(pills);
+        row.appendChild(cb);
+        row.appendChild(main);
+        grid.appendChild(row);
+      });
+    }
+
+    function updateSelectionBar() {
+      var n = screen.selected.size;
+      selectionBar.classList.toggle("is-empty", n === 0);
+
+      if (screen.mode === "create") {
+        selectionCountEl.textContent = n === 0 ? "No cases selected yet" : n + " selected";
+        var nameFilled = document.getElementById("suiteNameInput").value.trim().length > 0;
+        commitBtn.textContent = "Create suite (" + n + ")";
+        commitBtn.disabled = !nameFilled;
+      } else {
+        selectionCountEl.textContent = n === 0 ? "No cases selected" : n + " selected";
+        var changed = !setsEqual(screen.selected, screen.baseline);
+        selectionCountEl.innerHTML += changed
+          ? '<span class="tp-selection-sub">(changed from ' + screen.baseline.size + ')</span>'
+          : '<span class="tp-selection-sub">(unchanged)</span>';
+        commitBtn.disabled = !changed;
+      }
+    }
+
+    renderGrid();
+    updateSelectionBar();
+
+    return { renderGrid: renderGrid, updateSelectionBar: updateSelectionBar, screen: screen };
+  }
+
+  var createCtl = makeScreen("create", { mode: "create", initialSelected: [] });
+  var editCtl = makeScreen("edit", { mode: "edit", initialSelected: EDIT_INITIAL });
+
+  // Name input drives the create button's enabled state
+  var nameInput = document.getElementById("suiteNameInput");
+  nameInput.addEventListener("input", function () { createCtl.updateSelectionBar(); });
+
+  // Create suite commit
+  document.getElementById("commitBtn-create").addEventListener("click", function () {
+    var name = nameInput.value.trim();
+    if (!name) return;
+    var n = createCtl.screen.selected.size;
+    var toast = document.getElementById("toast-create");
+    document.getElementById("toast-create-text").textContent =
+      'Suite "' + name + '" created with ' + n + (n === 1 ? " case" : " cases") + ".";
+    toast.classList.add("is-visible");
+  });
+  document.getElementById("toast-create-close").addEventListener("click", function () {
+    document.getElementById("toast-create").classList.remove("is-visible");
+  });
+
+  // Save changes commit (edit screen)
+  document.getElementById("commitBtn-edit").addEventListener("click", function () {
+    var n = editCtl.screen.selected.size;
+    editCtl.screen.baseline = new Set(editCtl.screen.selected);
+    editCtl.updateSelectionBar();
+    var toast = document.getElementById("toast-edit");
+    document.getElementById("toast-edit-text").textContent =
+      "Changes saved. Smoke Tests now has " + n + (n === 1 ? " case" : " cases") + ".";
+    toast.classList.add("is-visible");
+  });
+  document.getElementById("toast-edit-close").addEventListener("click", function () {
+    document.getElementById("toast-edit").classList.remove("is-visible");
+  });
+
+  // Tab switching
+  var tabs = document.querySelectorAll(".tp-tab");
+  tabs.forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      tabs.forEach(function (t) {
+        t.classList.remove("is-active");
+        t.setAttribute("aria-selected", "false");
+      });
+      tab.classList.add("is-active");
+      tab.setAttribute("aria-selected", "true");
+
+      var target = tab.getAttribute("data-screen");
+      document.getElementById("screen-create").classList.toggle("is-active", target === "create");
+      document.getElementById("screen-edit").classList.toggle("is-active", target === "edit");
+      document.getElementById("appCrumb").innerHTML = target === "create"
+        ? "Sample Project / Test Suites / <span>New suite</span>"
+        : "Sample Project / Test Suites / <span>Smoke Tests</span> / Edit membership";
+    });
+  });
+
+  // Theme toggle
+  var root = document.documentElement;
+  var toggleBtn = document.getElementById("themeToggle");
+  var toggleLabel = document.getElementById("themeToggleLabel");
+  var toggleIcon = document.getElementById("themeToggleIcon");
+  function prefersDark() { return window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches; }
+  function effectiveIsDark() {
+    var explicit = root.getAttribute("data-theme");
+    if (explicit === "dark") return true;
+    if (explicit === "light") return false;
+    return prefersDark();
+  }
+  function syncToggleLabel() {
+    var dark = effectiveIsDark();
+    toggleLabel.textContent = dark ? "Light" : "Dark";
+    toggleIcon.innerHTML = dark ? "&#9728;" : "&#9789;";
+  }
+  toggleBtn.addEventListener("click", function () {
+    root.setAttribute("data-theme", effectiveIsDark() ? "light" : "dark");
+    syncToggleLabel();
+  });
+  syncToggleLabel();
+})();
+</script>
