@@ -93,6 +93,16 @@ func (r *RunRepo) ItemProjectID(ctx context.Context, itemID string) (string, err
 // Create inserts a run and pins each case to its current version (D2), all
 // in one transaction.
 func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []string) (domain.Run, error) {
+	return r.create(ctx, projectID, name, "", caseIDs)
+}
+
+// CreateWithSuite is Create for a run built from a suite (link-runs-to-suite)
+// — the run records suiteID as its source, exposed as Run.SuiteKey.
+func (r *RunRepo) CreateWithSuite(ctx context.Context, projectID, name, suiteID string, caseIDs []string) (domain.Run, error) {
+	return r.create(ctx, projectID, name, suiteID, caseIDs)
+}
+
+func (r *RunRepo) create(ctx context.Context, projectID, name, suiteID string, caseIDs []string) (domain.Run, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.Run{}, err
@@ -104,16 +114,28 @@ func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []
 		return domain.Run{}, fmt.Errorf("claiming run key: %w", err)
 	}
 
+	var suiteIDArg any
+	if suiteID != "" {
+		suiteIDArg = suiteID
+	}
+
 	var run domain.Run
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_runs (key, project_id, name) VALUES ($1, $2, $3)
-		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name,
+		`INSERT INTO test_runs (key, project_id, name, suite_id) VALUES ($1, $2, $3, $4)
+		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name, suiteIDArg,
 	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.Status, &run.CreatedAt)
 	if err != nil {
 		return domain.Run{}, err
 	}
 	if err := tx.QueryRow(ctx, `SELECT key FROM projects WHERE id = $1`, projectID).Scan(&run.ProjectKey); err != nil {
 		return domain.Run{}, err
+	}
+	if suiteID != "" {
+		var suiteKey string
+		if err := tx.QueryRow(ctx, `SELECT key FROM test_suites WHERE id = $1`, suiteID).Scan(&suiteKey); err != nil {
+			return domain.Run{}, err
+		}
+		run.SuiteKey = &suiteKey
 	}
 	for _, caseID := range caseIDs {
 		if err := pinItem(ctx, tx, run.ID, caseID, ""); err != nil {
@@ -235,10 +257,12 @@ func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID, testName string) err
 func (r *RunRepo) Get(ctx context.Context, runID string) (domain.Run, error) {
 	var run domain.Run
 	err := r.pool.QueryRow(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, tr.created_at
-		 FROM test_runs tr JOIN projects p ON p.id = tr.project_id
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.created_at
+		 FROM test_runs tr
+		 JOIN projects p ON p.id = tr.project_id
+		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
 		 WHERE tr.id = $1`, runID,
-	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.CreatedAt)
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Run{}, ErrNotFound
 	}
@@ -287,8 +311,10 @@ func (r *RunRepo) IDByKey(ctx context.Context, key string) (string, error) {
 
 func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, tr.created_at
-		 FROM test_runs tr JOIN projects p ON p.id = tr.project_id
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.created_at
+		 FROM test_runs tr
+		 JOIN projects p ON p.id = tr.project_id
+		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
 		 WHERE tr.project_id = $1 ORDER BY tr.created_at DESC`, projectID)
 	if err != nil {
 		return nil, err
@@ -298,7 +324,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	runs := []domain.Run{}
 	for rows.Next() {
 		var run domain.Run
-		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.CreatedAt); err != nil {
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.CreatedAt); err != nil {
 			return nil, err
 		}
 		runs = append(runs, run)

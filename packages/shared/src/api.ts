@@ -975,6 +975,8 @@ export interface components {
             name: string;
             /** @description Runs are created open; a closed run's items become read-only until reopened. */
             status: components["schemas"]["RunStatus"];
+            /** @description The key of the suite this run was created from, if any. Absent (null) for a run created from an explicit case list, or via execution import. Set once at creation and never changes; unaffected by later deletion of the suite itself. */
+            suiteKey?: string | null;
             /** Format: date-time */
             createdAt: string;
         };

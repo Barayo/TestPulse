@@ -388,7 +388,13 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 			unique = append(unique, id)
 		}
 	}
-	run, err := s.store.Runs.Create(ctx, projectID, in.Name, unique)
+	var run domain.Run
+	var err error
+	if in.SuiteID != "" {
+		run, err = s.store.Runs.CreateWithSuite(ctx, projectID, in.Name, in.SuiteID, unique)
+	} else {
+		run, err = s.store.Runs.Create(ctx, projectID, in.Name, unique)
+	}
 	if err != nil {
 		return domain.Run{}, err
 	}

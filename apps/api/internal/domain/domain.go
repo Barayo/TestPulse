@@ -285,7 +285,11 @@ type Run struct {
 	ProjectKey string    `json:"projectKey"`
 	Name       string    `json:"name"`
 	Status     RunStatus `json:"status"`
-	CreatedAt  time.Time `json:"createdAt"`
+	// SuiteKey is the key of the suite this run was created from, if any
+	// (link-runs-to-suite). Nil for a run created from an explicit case
+	// list, or via execution import.
+	SuiteKey  *string   `json:"suiteKey,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
 }
 
 // RunStatus is a run's open/closed lifecycle state (add-run-lifecycle-status).

@@ -423,6 +423,107 @@ func TestRunPinsVersionAtCreation(t *testing.T) {
 	}
 }
 
+// TestRunRecordsSourceSuite covers link-runs-to-suite's "A run created from
+// a suite records that suite" scenario.
+func TestRunRecordsSourceSuite(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	run, err := s.Runs.CreateWithSuite(ctx, p.ID, "sprint 1", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	if run.SuiteKey == nil || *run.SuiteKey != suite.Key {
+		t.Fatalf("SuiteKey = %v, want %q", run.SuiteKey, suite.Key)
+	}
+
+	got, err := s.Runs.Get(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SuiteKey == nil || *got.SuiteKey != suite.Key {
+		t.Fatalf("Get().SuiteKey = %v, want %q", got.SuiteKey, suite.Key)
+	}
+}
+
+// TestRunWithoutSuiteHasNoSuiteKey covers link-runs-to-suite's "A run
+// created without a suite has no suite reference" scenario.
+func TestRunWithoutSuiteHasNoSuiteKey(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+
+	run, err := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	if run.SuiteKey != nil {
+		t.Errorf("SuiteKey = %v, want nil", run.SuiteKey)
+	}
+
+	got, err := s.Runs.Get(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SuiteKey != nil {
+		t.Errorf("Get().SuiteKey = %v, want nil", got.SuiteKey)
+	}
+
+	runs, err := s.Runs.List(ctx, p.ID)
+	if err != nil || len(runs) != 1 {
+		t.Fatalf("List = %d, %v; want 1", len(runs), err)
+	}
+	if runs[0].SuiteKey != nil {
+		t.Errorf("List()[0].SuiteKey = %v, want nil", runs[0].SuiteKey)
+	}
+}
+
+// TestDeletingSuiteClearsRunReference covers link-runs-to-suite's "Deleting
+// a suite does not affect runs created from it" scenario.
+func TestDeletingSuiteClearsRunReference(t *testing.T) {
+	// testutil.Pool resets the schema on every call, so this test must
+	// reuse a single pool throughout rather than calling testStore(t)
+	// (which would call it once) and testutil.Pool again separately.
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+	run, err := s.Runs.CreateWithSuite(ctx, p.ID, "sprint 1", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	// No service-level suite-delete exists yet — exercise the FK's
+	// ON DELETE SET NULL constraint directly.
+	if _, err := pool.Exec(ctx, `DELETE FROM test_suites WHERE id = $1`, suite.ID); err != nil {
+		t.Fatalf("delete suite: %v", err)
+	}
+
+	got, err := s.Runs.Get(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Get after suite deletion: %v", err)
+	}
+	if got.SuiteKey != nil {
+		t.Errorf("SuiteKey after suite deletion = %v, want nil", got.SuiteKey)
+	}
+	items, err := s.Runs.Items(ctx, run.ID, "")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("run items unaffected: %d, %v; want 1", len(items), err)
+	}
+}
+
 // TestNewRunStartsOpen covers add-run-lifecycle-status's "New run starts
 // open" scenario.
 func TestNewRunStartsOpen(t *testing.T) {
