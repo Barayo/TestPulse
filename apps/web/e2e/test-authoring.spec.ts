@@ -102,24 +102,28 @@ test.describe('Requirement: Test suite grouping', () => {
 
     await page.goBack()
     await page.getByRole('button', { name: 'Go to Suites' }).click()
+    // Naming and selecting cases happen in one screen (rework-suite-membership-ux)
+    // — no separate "create empty, then add cases" step.
     await page.getByLabel(/suite name/i).fill('Smoke')
-    await page.getByRole('button', { name: 'Create suite' }).click()
-    await expect(page.getByText(/Smoke/).first()).toBeVisible()
+    await page.getByRole('checkbox', { name: 'Case A' }).check()
+    await page.getByRole('button', { name: /create suite \(1\)/i }).click()
+    await expect(page.getByRole('list', { name: 'Suites' }).getByText('Smoke')).toBeVisible()
+    await expect(page.getByRole('list', { name: 'Suites' }).getByText(/^1 case$/)).toBeVisible()
 
-    // Membership lives in the suite's drawer, not inline on the list
+    // Membership lives in the suite's edit view, not inline on the list
     // (redesign-ui follow-up: the list stays a clean name+count row).
     await page.getByText('Smoke').click()
     const dialog = page.getByRole('dialog', { name: 'Smoke' })
-    await dialog.getByRole('button', { name: /add case/i }).click()
-    await page.getByRole('dialog', { name: /add a case/i }).getByText('Case A').click()
-    await expect(dialog.getByText(/^1 case$/)).toBeVisible()
+    await expect(dialog.getByRole('checkbox', { name: 'Case A' })).toBeChecked()
 
-    await dialog.getByRole('button', { name: /remove case a/i }).click()
-    await expect(dialog.getByText(/^0 cases$/)).toBeVisible()
-    // Case A still exists in the project — it reappears as a selectable
-    // option in the suite's search picker.
-    await dialog.getByRole('button', { name: /add case/i }).click()
-    await expect(page.getByRole('dialog', { name: /add a case/i }).getByText('Case A')).toBeVisible()
+    await dialog.getByRole('checkbox', { name: 'Case A' }).uncheck()
+    await dialog.getByRole('button', { name: /save changes/i }).click()
+    await expect(page.getByRole('list', { name: 'Suites' }).getByText(/^0 cases$/)).toBeVisible()
+
+    // Case A still exists in the project — it's still a selectable (just
+    // unchecked) row, not gone from the grid entirely.
+    await page.getByText('Smoke').click()
+    await expect(page.getByRole('dialog', { name: 'Smoke' }).getByRole('checkbox', { name: 'Case A' })).not.toBeChecked()
   })
 })
 

@@ -9,9 +9,12 @@ type Props = {
   onSelect: (userId: string) => void
 }
 
-// Mirrors CasePicker.tsx — same search-dialog-over-a-list-of-options shape,
-// just users instead of cases (add-project-rbac: TeamDrawer/project Members
-// both need "pick a user not already in this list").
+// A search-dialog-over-a-list-of-options picker for a single pick at a time
+// (add-project-rbac: TeamDrawer/project Members both need "pick a user not
+// already in this list") — a fine shape for a short, rarely-changing list
+// like a team's members, unlike suite membership, which moved to a
+// checkbox-grid (rework-suite-membership-ux) once one-at-a-time selection
+// stopped scaling.
 export function UserPicker({ users, onSelect }: Props) {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')

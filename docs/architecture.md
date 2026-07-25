@@ -70,7 +70,9 @@ recorded in the OpenSpec change `establish-architecture` (see
   library explorer (`FolderExplorerPage` + `FolderTree` — user-facing copy
   says "Library"/"Section," the underlying `Folder` domain type/API/table
   names are unchanged) for browsing/creating sections and cases, a
-  `SuiteDrawer` for per-suite case membership, and a breadcrumb trail
+  `SuiteCaseGrid` (a filterable checkbox-grid shared by suite creation and
+  membership editing, `rework-suite-membership-ux`) for per-suite case
+  membership, and a breadcrumb trail
   (`Breadcrumbs`) throughout — see the `redesign-ui` change's `design.md`
   for the full rationale.
 
