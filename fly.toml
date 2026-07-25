@@ -1,0 +1,22 @@
+# fly.toml app configuration file for the dogfood/evaluation instance at
+# https://testpulse.fly.dev — kept in the repo so Fly's GitHub-linked
+# auto-deploy doesn't silently drift back to its own defaults (region,
+# always-on) on the next push. See docs/deployment.md for the general
+# (non-Fly-specific) deployment story; this file is specific to this one
+# instance.
+
+app = 'testpulse'
+primary_region = 'lhr'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ['app']
+
+[[vm]]
+  cpu_kind = 'shared'
+  cpus = 1
+  memory_mb = 256
