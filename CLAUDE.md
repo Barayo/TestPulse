@@ -74,14 +74,22 @@ dev-web / generate / sync-web / compose-up`. See `docs/development.md`.
 - Modular monolith: one Go binary (chi, pgx, goose migrations in
   `apps/api/internal/db/migrations/`), web bundle embedded via
   `apps/api/internal/web` (placeholder `dist/index.html` stays committed).
-- **Pre-1.0 migration policy**: no real deployment has data to preserve yet,
-  so there is no upgrade path to protect. Amend the existing migration file
-  for the schema in question in place — don't stack a new `000N_*.sql` file
-  on every domain change. goose itself stays (its version-tracking is what
-  makes "migrations apply automatically and idempotently at startup" true,
-  a `platform-deployment` spec requirement) — only the "one file per change"
-  habit stops. Switch to real incremental migrations once something ships
-  that people actually run with real data (first public release / v1.0).
+- **Migration policy: real incremental migrations, one file per schema
+  change — never edit a migration file that already exists on `main`.**
+  `testpulse.fly.dev` is a real, continuously-deployed instance with a
+  persistent database; goose tracks applied migrations by *version number*,
+  not content, so editing an already-applied file gets silently skipped on
+  deploy rather than re-run, leaving the live database's schema out of sync
+  with what the code expects. This caused a real production outage
+  (2026-07-25: an edited `00002_core_domain.sql` broke run creation/listing
+  site-wide until a proper `00004_*.sql` file was added). CI enforces this
+  (`migrations` job in `.github/workflows/ci.yml`): a migration file that
+  differs from its version on `main` fails the build. The earlier
+  "amend in place, no stacked files" policy is retired — it assumed no
+  deployment had data to preserve, which stopped being true once
+  `testpulse.fly.dev` became a real running instance. goose itself stays
+  (its version-tracking is what makes "migrations apply automatically and
+  idempotently at startup" true, a `platform-deployment` spec requirement).
 - Contract-first: edit `packages/shared/openapi.yaml` together with Go
   handlers, then `make generate`; CI fails on drift.
 - Config only via `TESTPULSE_*` env vars; required values fail fast by name.
