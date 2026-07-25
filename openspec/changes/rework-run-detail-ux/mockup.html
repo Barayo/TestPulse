@@ -1,0 +1,472 @@
+<title>TestPulse &mdash; Run Detail Rework Mockup (Release 1.2 regression)</title>
+<style>
+  :root {
+    --background:#F7FAFA; --foreground:#0B2E2C; --card:#FFFFFF; --primary:#14B8A6; --primary-foreground:#04211E;
+    --secondary:#F5C84A; --secondary-foreground:#3A2E06; --destructive:#E8553F; --destructive-foreground:#3A0E06;
+    --muted:#F0F3F2; --muted-foreground:#5B6B6A; --accent:#EAFAF7; --border:#E1E8E7; --input:#D8E4E3; --radius:0.5rem;
+    --chart-1:#14B8A6; --chart-2:#F5C84A; --chart-3:#E8553F; --chart-4:#0B2E2C; --chart-5:#5B6B6A;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background:#0B2A28; --foreground:#E6F5F3; --card:#12403C; --primary:#2DD4BF; --primary-foreground:#04211E;
+      --secondary:#FBBF24; --secondary-foreground:#3A2E06; --destructive:#FF6B57; --destructive-foreground:#2B0704;
+      --muted:#163A37; --muted-foreground:#8FBDB8; --accent:#163F3B; --border:#1D524C; --input:#1D524C;
+      --chart-1:#2DD4BF; --chart-2:#FBBF24; --chart-3:#FF6B57; --chart-4:#E6F5F3; --chart-5:#8FBDB8;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background:#0B2A28; --foreground:#E6F5F3; --card:#12403C; --primary:#2DD4BF; --primary-foreground:#04211E;
+    --secondary:#FBBF24; --secondary-foreground:#3A2E06; --destructive:#FF6B57; --destructive-foreground:#2B0704;
+    --muted:#163A37; --muted-foreground:#8FBDB8; --accent:#163F3B; --border:#1D524C; --input:#1D524C;
+    --chart-1:#2DD4BF; --chart-2:#FBBF24; --chart-3:#FF6B57; --chart-4:#E6F5F3; --chart-5:#8FBDB8;
+  }
+  :root[data-theme="light"] {
+    --background:#F7FAFA; --foreground:#0B2E2C; --card:#FFFFFF; --primary:#14B8A6; --primary-foreground:#04211E;
+    --secondary:#F5C84A; --secondary-foreground:#3A2E06; --destructive:#E8553F; --destructive-foreground:#3A0E06;
+    --muted:#F0F3F2; --muted-foreground:#5B6B6A; --accent:#EAFAF7; --border:#E1E8E7; --input:#D8E4E3;
+    --chart-1:#14B8A6; --chart-2:#F5C84A; --chart-3:#E8553F; --chart-4:#0B2E2C; --chart-5:#5B6B6A;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; background: var(--background); color: var(--foreground);
+    font-family: "Geist Variable", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    overflow-x: hidden;
+  }
+  code, .mono { font-family: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+  .tp-heading { font-weight: 900; letter-spacing: -0.02em; }
+  .tp-label { font-family: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.7rem; color: var(--muted-foreground); }
+
+  /* ---------- mockup chrome (not part of the real app) ---------- */
+  .mockup-chrome {
+    position: sticky; top: 0; z-index: 50; display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem; padding: 0.6rem 1.25rem; background: #1a1a1a; color: #eee; font-size: 0.78rem;
+    border-bottom: 2px dashed #555;
+  }
+  .mockup-chrome strong { color: #2DD4BF; }
+  .mockup-chrome button {
+    background: #2b2b2b; color: #eee; border: 1px solid #555; border-radius: 6px; padding: 0.35rem 0.7rem;
+    font-size: 0.78rem; cursor: pointer;
+  }
+  .mockup-chrome button:hover { background: #3a3a3a; }
+  .mockup-note { color: #aaa; }
+
+  .page {
+    max-width: 880px; margin: 0 auto; padding: 1.5rem 1.25rem 4rem; overflow-x: hidden;
+  }
+  .breadcrumbs { display: flex; flex-wrap: wrap; gap: 0.35rem; font-size: 0.8rem; color: var(--muted-foreground); margin-bottom: 1rem; }
+  .breadcrumbs a { color: var(--muted-foreground); text-decoration: none; }
+  .breadcrumbs a:hover { text-decoration: underline; color: var(--foreground); }
+  .breadcrumbs .sep { opacity: 0.5; }
+
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  }
+  .card-header { padding: 1.25rem 1.25rem 1rem; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 0.85rem; }
+  .card-content { padding: 1rem 1.25rem 1.25rem; }
+
+  .header-top-row { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; flex-wrap: wrap; }
+  .run-title { font-size: 1.3rem; margin: 0; }
+  .header-actions { display: flex; align-items: center; gap: 0.5rem; }
+
+  .badge {
+    display: inline-flex; align-items: center; border-radius: 999px; padding: 0.15rem 0.6rem; font-size: 0.72rem;
+    font-weight: 600; border: 1px solid transparent; white-space: nowrap;
+  }
+  .badge-open { background: var(--secondary); color: var(--secondary-foreground); }
+  .badge-closed { background: transparent; border-color: var(--border); color: var(--muted-foreground); }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.35rem; border-radius: var(--radius); border: 1px solid var(--input);
+    background: transparent; color: var(--foreground); font-size: 0.82rem; font-weight: 500; padding: 0.4rem 0.75rem;
+    cursor: pointer; line-height: 1.1;
+  }
+  .btn:hover { background: var(--accent); }
+  .btn-ghost { border-color: transparent; }
+  .btn-ghost:hover { background: var(--accent); }
+
+  /* ---------- meta row: suite link + created date (gap #1 / #4) ---------- */
+  .meta-row {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem 0.9rem; font-size: 0.82rem; color: var(--muted-foreground);
+  }
+  .meta-row .dot-sep { opacity: 0.5; }
+  .suite-link {
+    display: inline-flex; align-items: center; gap: 0.35rem; color: var(--primary); text-decoration: none; font-weight: 600;
+    border-radius: 4px;
+  }
+  .suite-link:hover { text-decoration: underline; }
+  .suite-link svg { flex-shrink: 0; }
+  .adhoc-pill {
+    display: inline-flex; align-items: center; gap: 0.35rem; color: var(--muted-foreground); font-style: italic;
+  }
+
+  /* ---------- status breakdown (existing component, unchanged look) ---------- */
+  .breakdown { display: flex; flex-direction: column; gap: 0.5rem; }
+  .breakdown-headline { display: flex; align-items: baseline; gap: 0.5rem; }
+  .breakdown-pct { font-size: 1.5rem; font-weight: 900; letter-spacing: -0.02em; }
+  .breakdown-sub { font-size: 0.75rem; color: var(--muted-foreground); }
+  .breakdown-bar { display: flex; height: 0.625rem; width: 100%; overflow: hidden; border-radius: 999px; background: var(--border); }
+  .breakdown-seg { height: 100%; }
+  .breakdown-legend { display: flex; flex-wrap: wrap; gap: 0.9rem; font-size: 0.72rem; color: var(--muted-foreground); list-style: none; margin: 0; padding: 0; }
+  .breakdown-legend li { display: flex; align-items: center; gap: 0.4rem; }
+  .legend-swatch { width: 0.5rem; height: 0.5rem; border-radius: 2px; flex-shrink: 0; }
+
+  /* retest texture, identical formula to RunStatusBreakdown.tsx's RETEST_TEXTURE */
+  .texture-retest {
+    background-image: repeating-linear-gradient(135deg, transparent, transparent 3px, color-mix(in srgb, var(--background) 45%, transparent) 3px, color-mix(in srgb, var(--background) 45%, transparent) 6px);
+  }
+
+  /* ---------- filter chips (gap #2) ---------- */
+  .controls-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; padding-top: 0.15rem; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 0.4rem; border-radius: 999px; border: 1px solid var(--border);
+    background: transparent; color: var(--foreground); font-size: 0.76rem; font-weight: 500; padding: 0.3rem 0.65rem 0.3rem 0.5rem;
+    cursor: pointer; transition: background-color 0.12s ease, border-color 0.12s ease;
+  }
+  .chip:hover { background: var(--accent); }
+  .chip[aria-pressed="true"] {
+    background: var(--foreground); color: var(--background); border-color: var(--foreground);
+  }
+  .chip[aria-pressed="true"] .chip-count { color: var(--background); opacity: 0.75; }
+  .chip-dot { width: 0.5rem; height: 0.5rem; border-radius: 2px; flex-shrink: 0; }
+  .chip-count { color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+
+  .group-toggle {
+    display: inline-flex; align-items: center; gap: 0.45rem; font-size: 0.78rem; color: var(--muted-foreground);
+    cursor: pointer; user-select: none; white-space: nowrap;
+  }
+  .switch {
+    position: relative; width: 2rem; height: 1.15rem; border-radius: 999px; background: var(--border); border: 1px solid var(--input);
+    flex-shrink: 0; transition: background-color 0.15s ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 1px; left: 1px; width: 0.95rem; height: 0.95rem; border-radius: 50%;
+    background: var(--card); transition: transform 0.15s ease; box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .group-toggle[aria-checked="true"] .switch { background: var(--primary); border-color: var(--primary); }
+  .group-toggle[aria-checked="true"] .switch::after { transform: translateX(0.85rem); }
+
+  .visible-count { font-size: 0.78rem; color: var(--muted-foreground); padding: 0.6rem 0 0.15rem; }
+  .visible-count strong { color: var(--foreground); font-weight: 700; }
+
+  /* ---------- item list ---------- */
+  .group-heading {
+    display: flex; align-items: center; gap: 0.5rem; margin: 1.1rem 0 0.4rem; font-size: 0.72rem; color: var(--muted-foreground);
+  }
+  .group-heading:first-child { margin-top: 0.25rem; }
+  .group-heading .line { flex: 1; height: 1px; background: var(--border); }
+
+  ul.item-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.4rem; }
+  .item-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; width: 100%;
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 0.55rem 0.75rem; background: var(--card);
+    text-align: left; cursor: pointer; font: inherit; color: inherit;
+  }
+  .item-row:hover { background: var(--accent); }
+  .item-main { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+  .item-title { font-size: 0.88rem; overflow-wrap: anywhere; }
+  .item-title .newer { margin-left: 0.5rem; font-size: 0.72rem; color: var(--muted-foreground); }
+  .item-sub { display: flex; flex-wrap: wrap; gap: 0.5rem; font-size: 0.72rem; color: var(--muted-foreground); }
+
+  .status-badge { display: inline-flex; align-items: center; gap: 0.4rem; flex-shrink: 0; }
+  .status-dot { width: 0.5rem; height: 0.5rem; border-radius: 50%; }
+  .status-label { font-family: "Geist Mono Variable", ui-monospace, "SF Mono", Menlo, Consolas, monospace; text-transform: uppercase; letter-spacing: 0.08em; font-size: 0.68rem; color: var(--muted-foreground); }
+
+  .empty-state { padding: 2rem 1rem; text-align: center; color: var(--muted-foreground); font-size: 0.85rem; }
+
+  /* toast for the mock suite link click */
+  .toast {
+    position: fixed; left: 50%; bottom: 1.5rem; transform: translate(-50%, 0.5rem); background: var(--foreground); color: var(--background);
+    padding: 0.6rem 1rem; border-radius: var(--radius); font-size: 0.8rem; opacity: 0; pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease; z-index: 100; max-width: 90vw; box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .wide-scroll { overflow-x: auto; }
+
+  @media (max-width: 560px) {
+    .header-top-row { flex-direction: column; align-items: flex-start; }
+    .controls-row { flex-direction: column; align-items: flex-start; }
+  }
+</style>
+
+<div class="mockup-chrome">
+  <div><strong>Mockup</strong> <span class="mono">/runs/:runKey</span> <span class="mockup-note">&mdash; reworked Test Run detail page (not live app code)</span></div>
+  <button id="theme-toggle" type="button">Switch to dark theme</button>
+</div>
+
+<div class="page">
+  <nav class="breadcrumbs" aria-label="Breadcrumb">
+    <a href="#">Projects</a><span class="sep">/</span>
+    <a href="#">Sample Project</a><span class="sep">/</span>
+    <span>Release 1.2 regression</span>
+  </nav>
+
+  <div class="card">
+    <div class="card-header">
+      <div class="header-top-row">
+        <h1 class="run-title tp-heading">Release 1.2 regression</h1>
+        <div class="header-actions">
+          <span class="badge badge-open" id="run-status-badge">open</span>
+          <button class="btn" id="close-run-btn" type="button">Close run</button>
+        </div>
+      </div>
+
+      <!-- Gap #1 (suite linkage) + Gap #4 (compact run metadata) -->
+      <div class="meta-row">
+        <a class="suite-link" href="/projects/SAMPLE/suites#suite-SAMPLE-S4" id="suite-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          From suite: Release regression suite
+        </a>
+        <span class="dot-sep">&middot;</span>
+        <span>Created Jul 24, 2026</span>
+      </div>
+
+      <div class="breakdown" id="breakdown"></div>
+
+      <!-- Gap #2 (status filter) + Gap #5 (grouping) -->
+      <div class="controls-row">
+        <div class="filter-chips" id="filter-chips" role="group" aria-label="Filter items by status"></div>
+        <label class="group-toggle" id="group-toggle" role="switch" aria-checked="false" tabindex="0">
+          <span class="switch" aria-hidden="true"></span>
+          Group by status
+        </label>
+      </div>
+    </div>
+
+    <div class="card-content">
+      <p class="visible-count" id="visible-count"></p>
+      <div class="wide-scroll">
+        <div id="item-list-root"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ---------------------------------------------------------------------
+  // Theme toggle
+  // ---------------------------------------------------------------------
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('theme-toggle');
+  function applyThemeLabel() {
+    var current = root.getAttribute('data-theme');
+    var effectiveDark = current ? current === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    themeBtn.textContent = effectiveDark ? 'Switch to light theme' : 'Switch to dark theme';
+  }
+  themeBtn.addEventListener('click', function () {
+    var current = root.getAttribute('data-theme');
+    var effectiveDark = current ? current === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.setAttribute('data-theme', effectiveDark ? 'light' : 'dark');
+    applyThemeLabel();
+  });
+  applyThemeLabel();
+
+  // ---------------------------------------------------------------------
+  // Status vocabulary &mdash; mirrors STATUS_COLOR / STATUS_LABEL / STATUS_ORDER
+  // in RunStatusBreakdown.tsx and the dot classes in StatusBadge.tsx.
+  // Aggregate views (bar, legend, filter chips) use the chart-N palette;
+  // per-item StatusBadge dots use the separate semantic-token system
+  // (pass=primary, failed/blocked=destructive, skipped=secondary/70,
+  // pending/retest=neutral) exactly as already shipped &mdash; not reinterpreted.
+  // ---------------------------------------------------------------------
+  var STATUS_ORDER = ['pass', 'failed', 'blocked', 'skipped', 'retest', 'pending'];
+  var STATUS_LABEL = { pass: 'Pass', failed: 'Failed', blocked: 'Blocked', skipped: 'Skipped', retest: 'Retest', pending: 'Pending' };
+  var CHART_COLOR_VAR = { pass: '--chart-1', skipped: '--chart-2', failed: '--chart-3', blocked: '--chart-4', pending: '--chart-5', retest: '--chart-5' };
+  var DOT_COLOR_VAR = { pending: null, pass: '--primary', failed: '--destructive', skipped: '--secondary', blocked: '--destructive', retest: null };
+
+  var items = [
+    { title: 'User can log in with valid credentials', status: 'pass', testName: 'auth.login_valid_credentials', platform: 'web', tags: ['smoke'] },
+    { title: 'Login is rejected for the wrong password', status: 'pass', testName: 'auth.login_invalid_password', platform: 'web', tags: ['smoke'] },
+    { title: 'Password reset email is sent', status: 'pass', testName: 'auth.password_reset_email', platform: 'web', tags: [] },
+    { title: 'Session expires after inactivity', status: 'pass', testName: 'auth.session_timeout', platform: 'web', tags: ['regression'] },
+    { title: 'Two-factor prompt is required for a new device', status: 'pass', testName: 'auth.mfa_new_device', platform: 'web', tags: ['security'] },
+    { title: 'Checkout completes with a valid card', status: 'pass', testName: 'checkout.valid_card', platform: 'web', tags: ['smoke', 'checkout'] },
+    { title: 'Checkout blocks an expired card', status: 'pass', testName: 'checkout.expired_card', platform: 'web', tags: ['checkout'] },
+    { title: 'Checkout fails gracefully with a declined card', status: 'failed', testName: 'checkout.declined_card', platform: 'web', tags: ['checkout'], newer: true },
+    { title: 'Apply discount code at checkout', status: 'pass', testName: 'checkout.discount_code', platform: 'web', tags: ['checkout'] },
+    { title: 'Guest checkout completes without an account', status: 'pass', testName: 'checkout.guest_flow', platform: 'iOS', tags: ['checkout', 'mobile'] },
+    { title: 'Update profile display name', status: 'pass', testName: 'profile.update_display_name', platform: 'web', tags: [] },
+    { title: 'Change timezone preference', status: 'skipped', testName: 'profile.change_timezone', platform: 'web', tags: [] },
+    { title: 'Avatar upload accepts JPEG and PNG', status: 'blocked', testName: 'profile.avatar_upload', platform: 'web', tags: ['media'] },
+    { title: 'Email notification opt-out is respected', status: 'pass', testName: 'notifications.email_opt_out', platform: 'web', tags: [] },
+    { title: 'Push notification arrives within 30 seconds', status: 'retest', testName: 'notifications.push_latency', platform: 'Android', tags: ['mobile'], newer: true },
+    { title: 'Report export respects the date range filter', status: 'pass', testName: 'reporting.export_date_range', platform: 'web', tags: ['reporting'] },
+    { title: 'Report export handles an empty result set', status: 'failed', testName: 'reporting.export_empty_state', platform: 'web', tags: ['reporting'] },
+    { title: 'Dashboard widgets reflect the selected date range', status: 'pass', testName: 'reporting.dashboard_date_range', platform: 'web', tags: ['reporting'] },
+    { title: 'Bulk export queues for large report ranges', status: 'pending', testName: 'reporting.bulk_export_queue', platform: 'web', tags: ['reporting'] },
+    { title: 'Saved filters persist across sessions', status: 'pass', testName: 'reporting.saved_filters_persist', platform: 'web', tags: [] }
+  ];
+
+  var counts = {};
+  STATUS_ORDER.forEach(function (s) { counts[s] = 0; });
+  items.forEach(function (it) { counts[it.status]++; });
+  var total = items.length;
+
+  // ---------------------------------------------------------------------
+  // Render: status breakdown bar (unchanged design &mdash; RunStatusBreakdown)
+  // ---------------------------------------------------------------------
+  function renderBreakdown() {
+    var el = document.getElementById('breakdown');
+    var passRate = Math.round((counts.pass / total) * 100);
+    var barHtml = STATUS_ORDER.filter(function (s) { return counts[s] > 0; }).map(function (s) {
+      var width = (counts[s] / total) * 100;
+      var texture = s === 'retest' ? ' texture-retest' : '';
+      return '<span class="breakdown-seg' + texture + '" title="' + STATUS_LABEL[s] + ' &middot; ' + counts[s] + '" style="width:' + width + '%;background:var(' + CHART_COLOR_VAR[s] + ')"></span>';
+    }).join('');
+    var legendHtml = STATUS_ORDER.map(function (s) {
+      var texture = s === 'retest' ? ' texture-retest' : '';
+      return '<li><span class="legend-swatch' + texture + '" style="background:var(' + CHART_COLOR_VAR[s] + ')"></span><span>' + STATUS_LABEL[s] + '</span><span>' + counts[s] + '</span></li>';
+    }).join('');
+    el.innerHTML =
+      '<div class="breakdown-headline"><span class="breakdown-pct">' + passRate + '%</span><span class="breakdown-sub">pass &middot; ' + total + ' items</span></div>' +
+      '<div class="breakdown-bar">' + barHtml + '</div>' +
+      '<ul class="breakdown-legend" aria-label="Status breakdown">' + legendHtml + '</ul>';
+  }
+
+  // ---------------------------------------------------------------------
+  // Filter chips (gap #2) &mdash; single-select, mirrors legend vocabulary
+  // ---------------------------------------------------------------------
+  var activeFilter = null; // null = "All"
+  var groupEnabled = false;
+
+  function renderChips() {
+    var el = document.getElementById('filter-chips');
+    var chips = ['<button type="button" class="chip" data-status="" aria-pressed="' + (activeFilter === null) + '">All <span class="chip-count">' + total + '</span></button>'];
+    STATUS_ORDER.forEach(function (s) {
+      if (counts[s] === 0) return;
+      var texture = s === 'retest' ? ' texture-retest' : '';
+      chips.push(
+        '<button type="button" class="chip" data-status="' + s + '" aria-pressed="' + (activeFilter === s) + '">' +
+        '<span class="chip-dot' + texture + '" style="background:var(' + CHART_COLOR_VAR[s] + ')"></span>' +
+        STATUS_LABEL[s] + ' <span class="chip-count">' + counts[s] + '</span>' +
+        '</button>'
+      );
+    });
+    el.innerHTML = chips.join('');
+    Array.prototype.forEach.call(el.querySelectorAll('.chip'), function (btn) {
+      btn.addEventListener('click', function () {
+        var status = btn.getAttribute('data-status');
+        activeFilter = status === '' ? null : status;
+        renderChips();
+        renderList();
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Item list (flat, filtered, and/or grouped) &mdash; gaps #2, #3, #5
+  // ---------------------------------------------------------------------
+  function statusDotStyle(status) {
+    var varName = DOT_COLOR_VAR[status];
+    if (!varName) return 'background:var(--muted-foreground);opacity:0.4'; // pending, retest
+    if (status === 'skipped') return 'background:var(' + varName + ');opacity:0.7';
+    return 'background:var(' + varName + ')'; // pass, failed, blocked
+  }
+
+  function itemRowHtml(it) {
+    var subParts = [];
+    if (it.testName) subParts.push('<span>' + it.testName + '</span>');
+    if (it.platform) subParts.push('<span>' + it.platform + '</span>');
+    it.tags.forEach(function (t) { subParts.push('<span>' + t + '</span>'); });
+    var sub = subParts.length ? '<span class="item-sub">' + subParts.join('') + '</span>' : '';
+    var newer = it.newer ? '<span class="newer">(newer version available)</span>' : '';
+    return (
+      '<li>' +
+      '<button type="button" class="item-row" data-title="' + it.title.replace(/"/g, '&quot;') + '">' +
+      '<span class="item-main"><span class="item-title">' + it.title + newer + '</span>' + sub + '</span>' +
+      '<span class="status-badge"><span class="status-dot" style="' + statusDotStyle(it.status) + '"></span><span class="status-label">' + it.status + '</span></span>' +
+      '</button></li>'
+    );
+  }
+
+  function renderList() {
+    var visible = items.filter(function (it) { return activeFilter === null || it.status === activeFilter; });
+    document.getElementById('visible-count').innerHTML =
+      'Showing <strong>' + visible.length + '</strong> of ' + total + ' items' + (activeFilter ? ' &mdash; filtered to ' + STATUS_LABEL[activeFilter].toLowerCase() : '');
+
+    var root = document.getElementById('item-list-root');
+    if (visible.length === 0) {
+      root.innerHTML = '<div class="empty-state">No items match this filter.</div>';
+      return;
+    }
+
+    if (!groupEnabled) {
+      root.innerHTML = '<ul class="item-list">' + visible.map(itemRowHtml).join('') + '</ul>';
+    } else {
+      var html = '';
+      STATUS_ORDER.forEach(function (s) {
+        var group = visible.filter(function (it) { return it.status === s; });
+        if (group.length === 0) return;
+        html += '<div class="group-heading"><span class="tp-label">' + STATUS_LABEL[s] + ' &middot; ' + group.length + '</span><span class="line"></span></div>';
+        html += '<ul class="item-list">' + group.map(itemRowHtml).join('') + '</ul>';
+      });
+      root.innerHTML = html;
+    }
+
+    Array.prototype.forEach.call(root.querySelectorAll('.item-row'), function (btn) {
+      btn.addEventListener('click', function () {
+        showToast('Would navigate to the execution page for "' + btn.getAttribute('data-title') + '".');
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------------
+  // Grouping toggle (gap #5)
+  // ---------------------------------------------------------------------
+  var groupToggle = document.getElementById('group-toggle');
+  function setGroup(val) {
+    groupEnabled = val;
+    groupToggle.setAttribute('aria-checked', String(val));
+    renderList();
+  }
+  groupToggle.addEventListener('click', function () { setGroup(!groupEnabled); });
+  groupToggle.addEventListener('keydown', function (e) {
+    if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); setGroup(!groupEnabled); }
+  });
+
+  // ---------------------------------------------------------------------
+  // Suite link (gap #1) &mdash; real target pattern already used by SuitesPage
+  // (?#suite-{key} hash deep-link), intercepted here only because this is
+  // a standalone mockup with nowhere to navigate to.
+  // ---------------------------------------------------------------------
+  document.getElementById('suite-link').addEventListener('click', function (e) {
+    e.preventDefault();
+    showToast('Would navigate to: /projects/SAMPLE/suites#suite-SAMPLE-S4 (opens Suites page with this suite expanded).');
+  });
+
+  // ---------------------------------------------------------------------
+  // Close / reopen (visual only, mirrors existing lifecycle button)
+  // ---------------------------------------------------------------------
+  var runOpen = true;
+  document.getElementById('close-run-btn').addEventListener('click', function () {
+    runOpen = !runOpen;
+    var badge = document.getElementById('run-status-badge');
+    var btn = document.getElementById('close-run-btn');
+    if (runOpen) {
+      badge.textContent = 'open'; badge.className = 'badge badge-open'; btn.textContent = 'Close run';
+    } else {
+      badge.textContent = 'closed'; badge.className = 'badge badge-closed'; btn.textContent = 'Reopen';
+    }
+  });
+
+  // ---------------------------------------------------------------------
+  // Toast helper
+  // ---------------------------------------------------------------------
+  var toastTimer;
+  function showToast(msg) {
+    var el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove('show'); }, 2600);
+  }
+
+  renderBreakdown();
+  renderChips();
+  renderList();
+</script>
