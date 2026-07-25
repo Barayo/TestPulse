@@ -120,12 +120,6 @@ CREATE TABLE test_runs (
     -- open/closed lifecycle (add-run-lifecycle-status): a closed run's
     -- items become read-only.
     status      text NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
-    -- The suite a run was created from, if any (link-runs-to-suite). Nullable:
-    -- a run may be created from an explicit case list, or imported, with no
-    -- suite. SET NULL on suite deletion — a run's results must outlive the
-    -- suite that once sourced it, same reproducibility guarantee as case
-    -- version pinning.
-    suite_id    uuid REFERENCES test_suites (id) ON DELETE SET NULL,
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX test_runs_project_idx ON test_runs (project_id);
