@@ -6,7 +6,12 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
-  reporter: process.env.CI ? 'github' : 'list',
+  // In CI, 'junit' feeds docs/importing-results.md's importer — case keys
+  // are matched via test.info().annotations (see scripts/dogfood), which
+  // only reach the report's <properties> with embedAnnotationsAsProperties.
+  reporter: process.env.CI
+    ? [['github'], ['junit', { outputFile: 'e2e-results.xml', embedAnnotationsAsProperties: true }]]
+    : 'list',
   globalSetup: './e2e/global-setup.ts',
   use: {
     baseURL: process.env.E2E_BASE_URL ?? 'http://localhost:8080',

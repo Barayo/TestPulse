@@ -105,6 +105,18 @@ jobs:
         with:
           name: playwright-report
           path: apps/web/playwright-report/
+      - name: Report results to dogfood instance
+        # Dogfooding (ROADMAP.md v0.1): TestPulse's own e2e suite reports
+        # into a live TestPulse project. main only — PR branches would
+        # otherwise flood the dogfood project with noise, and forked PRs
+        # don't get repo secrets anyway. always() so real failures land
+        # too, not just green runs.
+        if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          curl -sS -X POST https://testpulse.fly.dev/api/v1/projects/TD/imports \
+            -H "Authorization: Bearer ${{ secrets.TESTPULSE_DOGFOOD_TOKEN }}" \
+            -H 'Content-Type: application/json' \
+            -d "$(jq -n --rawfile report apps/web/e2e-results.xml '{format: "junit-xml", report: $report}')"
 
   helm:
     name: Helm chart

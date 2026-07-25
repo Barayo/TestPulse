@@ -57,3 +57,16 @@ unit + integration tests with the coverage gate, against a Postgres service
 container), **Web** (lint, typecheck, unit tests with coverage thresholds,
 build), **E2E** (compose stack + Playwright, traces uploaded on failure), and
 **Helm/DCO** checks.
+
+## Dogfooding
+
+On every push to `main`, the E2E job also reports its own results into a
+live TestPulse instance (ROADMAP.md v0.1's dogfooding validation loop):
+each `apps/web/e2e/*.spec.ts` scenario is tagged with
+`test.info().annotations.push({ type: 'testpulse_case_key', ... })`, the
+`junit` reporter embeds those as report `<properties>`
+(`embedAnnotationsAsProperties`, `playwright.config.ts`), and CI `POST`s
+the resulting JUnit XML to the importer
+([Importing results](importing-results.md)). Cases were populated once via
+`scripts/dogfood/populate-and-tag.mjs`; that script isn't idempotent and
+isn't meant to be re-run.
