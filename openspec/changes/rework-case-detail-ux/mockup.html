@@ -1,0 +1,862 @@
+<meta charset="utf-8">
+<title>TestPulse — Case Detail Rework Mockup</title>
+<style>
+  :root {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --chart-1: #14B8A6; --chart-2: #F5C84A; --chart-3: #E8553F; --chart-4: #7C6FE0; --chart-5: #9AA6A4;
+    --status-progress-bg: #FCEFCF; --status-progress-fg: #8A6A12;
+    --radius: 0.5rem;
+    --shadow-color: 11, 46, 44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+      --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+      --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+      --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+      --chart-1: #2DD4BF; --chart-2: #FBBF24; --chart-3: #FF6B57; --chart-4: #9C90F5; --chart-5: #6E8582;
+      --status-progress-bg: #3A2F12; --status-progress-fg: #F3CE6E;
+      --shadow-color: 0, 0, 0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+    --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+    --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+    --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+    --chart-1: #2DD4BF; --chart-2: #FBBF24; --chart-3: #FF6B57; --chart-4: #9C90F5; --chart-5: #6E8582;
+    --status-progress-bg: #3A2F12; --status-progress-fg: #F3CE6E;
+    --shadow-color: 0, 0, 0;
+  }
+  :root[data-theme="light"] {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --chart-1: #14B8A6; --chart-2: #F5C84A; --chart-3: #E8553F; --chart-4: #7C6FE0; --chart-5: #9AA6A4;
+    --status-progress-bg: #FCEFCF; --status-progress-fg: #8A6A12;
+    --shadow-color: 11, 46, 44;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; max-width: 100%; overflow-x: hidden; }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+  button, input, select, textarea { font-family: inherit; font-size: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  /* ---------- mockup-only chrome ---------- */
+  .mock-chrome {
+    background: repeating-linear-gradient(135deg, var(--muted), var(--muted) 10px, var(--accent) 10px, var(--accent) 20px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+  }
+  .mock-chrome-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .mock-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    background: var(--foreground); color: var(--background); padding: 3px 8px; border-radius: 999px; flex-shrink: 0;
+  }
+  .mock-label { font-size: 12.5px; color: var(--muted-foreground); flex: 1; min-width: 200px; }
+  .mock-hint { font-size: 12px; color: var(--muted-foreground); font-style: italic; }
+  .mock-hint b { color: var(--foreground); font-style: normal; font-weight: 600; }
+  .mock-theme-btn {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 6px 12px; font-size: 12.5px; font-weight: 500; flex-shrink: 0;
+  }
+  .mock-theme-btn:hover { border-color: var(--primary); }
+
+  /* ---------- simulated app shell ---------- */
+  .app-shell { max-width: 1180px; margin: 0 auto; }
+  .app-topbar { padding: 16px 20px 0; }
+  .app-brand { font-weight: 700; font-size: 14px; letter-spacing: -0.01em; color: var(--primary); margin-bottom: 10px; }
+  .fake-url {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11.5px; color: var(--muted-foreground);
+    background: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;
+    display: inline-block; margin-bottom: 14px;
+  }
+  .app-main { padding: 4px 20px 80px; }
+
+  /* ---------- breadcrumb ---------- */
+  .breadcrumb { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 14px; }
+  .breadcrumb .sep { color: var(--border); }
+  .breadcrumb .current { color: var(--foreground); font-weight: 600; }
+
+  /* ---------- header ---------- */
+  .case-header {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 22px;
+  }
+  .case-header-left { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .back-link { font-size: 22px; line-height: 1; color: var(--primary); background: none; border: none; flex-shrink: 0; }
+  .back-link:hover { color: color-mix(in srgb, var(--primary) 70%, transparent); }
+  .case-title { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+  .case-header-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px; border-radius: var(--radius); padding: 8px 14px;
+    font-size: 13.5px; font-weight: 600; border: 1px solid transparent; white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-secondary { background: var(--card); color: var(--foreground); border-color: var(--border); }
+  .btn-secondary:hover { border-color: var(--primary); }
+  .btn-ghost { background: transparent; color: var(--muted-foreground); border-color: transparent; }
+  .btn-ghost:hover { color: var(--foreground); background: var(--muted); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ---------- header actions menu ---------- */
+  .actions-wrap { position: relative; }
+  .actions-trigger {
+    display: flex; align-items: center; justify-content: center; width: 32px; height: 32px;
+    border-radius: var(--radius); border: 1px solid var(--border); background: var(--card); color: var(--muted-foreground);
+  }
+  .actions-trigger:hover { color: var(--foreground); border-color: var(--primary); }
+  .actions-menu {
+    position: absolute; right: 0; top: calc(100% + 6px); z-index: 40;
+    width: 190px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 8px 24px rgba(var(--shadow-color), 0.14); padding: 4px; display: none;
+  }
+  .actions-menu.open { display: block; }
+  .actions-menu-item {
+    display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; padding: 8px 10px;
+    border-radius: 6px; font-size: 13px; font-weight: 500; background: none; border: none; color: var(--foreground);
+  }
+  .actions-menu-item:hover { background: var(--accent); }
+  .actions-menu-item.danger { color: var(--destructive); }
+  .actions-menu-item.danger:hover { background: color-mix(in srgb, var(--destructive) 12%, transparent); }
+  .actions-menu-sep { height: 1px; background: var(--border); margin: 4px 2px; }
+
+  /* ---------- grid shell (unchanged 1fr/320px contract, view & edit alike) ---------- */
+  .case-grid { display: grid; grid-template-columns: 1fr 320px; gap: 28px; align-items: start; }
+  @media (max-width: 760px) {
+    .case-grid { grid-template-columns: 1fr; }
+  }
+
+  .col-title {
+    font-size: 12px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground);
+    margin: 0 0 10px;
+  }
+
+  /* ---------- steps (view mode) ---------- */
+  .steps-card { background: var(--card); border: 1px solid var(--border); border-radius: 1rem; overflow: hidden; overflow-x: auto; }
+  .step-row { display: flex; gap: 14px; padding: 16px 18px; border-bottom: 1px solid var(--border); }
+  .step-row:last-child { border-bottom: none; }
+  .step-num {
+    flex-shrink: 0; width: 28px; height: 28px; border-radius: 999px; background: color-mix(in srgb, var(--primary) 12%, transparent);
+    color: var(--primary); font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center;
+  }
+  .step-body { min-width: 0; display: flex; flex-direction: column; gap: 8px; padding-top: 2px; }
+  .step-action { font-size: 14.5px; line-height: 1.55; }
+  .step-expected {
+    border: 1px solid color-mix(in srgb, var(--primary) 22%, var(--border)); background: color-mix(in srgb, var(--primary) 6%, transparent);
+    border-radius: 8px; padding: 8px 10px; font-size: 13.5px; line-height: 1.5;
+  }
+  .step-expected-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--primary); margin-right: 6px; }
+
+  /* ---------- pills (shared vocabulary from Library/Suites rework) ---------- */
+  .pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; font-size: 11px; font-weight: 500; line-height: 1.6; white-space: nowrap; }
+  .pill-tag { background: var(--accent); color: var(--accent-foreground); }
+  .pill-suite { background: var(--accent); color: var(--accent-foreground); border: 1px solid var(--border); font-weight: 500; }
+  .pill-outline { background: transparent; border: 1px solid var(--border); color: var(--muted-foreground); font-weight: 500; }
+  .pill-priority-critical { background: var(--destructive); color: #fff; }
+  .pill-priority-high { background: color-mix(in srgb, var(--destructive) 16%, var(--card)); color: var(--destructive); }
+  .pill-priority-medium { background: color-mix(in srgb, var(--secondary) 30%, var(--card)); color: color-mix(in srgb, var(--secondary-foreground) 80%, var(--foreground)); }
+  .pill-priority-low { background: var(--muted); color: var(--muted-foreground); font-weight: 500; }
+  .pill-auto { background: var(--accent); color: var(--primary); font-weight: 600; }
+  .pill-manual { background: transparent; border: 1px solid var(--border); color: var(--muted-foreground); font-weight: 500; }
+  .version-chip { font-family: ui-monospace, monospace; font-size: 11px; background: var(--muted); color: var(--muted-foreground); padding: 2px 7px; border-radius: 5px; }
+
+  /* ---------- sidebar (view mode) ---------- */
+  .sidebar { display: flex; flex-direction: column; gap: 4px; background: color-mix(in srgb, var(--muted) 60%, transparent); border-radius: 1rem; padding: 20px; position: sticky; top: 16px; }
+  .sidebar-section { border-bottom: 1px solid var(--border); padding: 16px 0; }
+  .sidebar-section:first-child { padding-top: 2px; }
+  .sidebar-section:last-child { border-bottom: none; padding-bottom: 2px; }
+  .sidebar-section-title { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); margin: 0 0 10px; }
+
+  .prop-row { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; padding: 5px 0; }
+  .prop-row.wrap { align-items: flex-start; }
+  .prop-label { font-family: ui-monospace, monospace; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted-foreground); flex-shrink: 0; }
+  .prop-value { font-size: 13.5px; text-align: right; }
+  .prop-value.pills { display: flex; flex-wrap: wrap; gap: 5px; justify-content: flex-end; }
+  .prop-empty { color: var(--muted-foreground); }
+
+  /* ---------- results panel ---------- */
+  .results-empty-stat { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; color: var(--muted-foreground); opacity: 0.5; }
+  .results-empty-sub { font-size: 11px; color: var(--muted-foreground); margin-left: 6px; }
+  .results-bars { display: flex; align-items: flex-end; gap: 4px; height: 40px; margin: 10px 0 12px; }
+  .results-bar {
+    flex: 1; border-radius: 4px 4px 0 0;
+    background-image: repeating-linear-gradient(135deg, var(--border), var(--border) 3px, transparent 3px, transparent 7px);
+    background-color: color-mix(in srgb, var(--muted) 70%, transparent);
+    border: 1px solid var(--border); border-bottom: none;
+  }
+  .results-copy { font-size: 12.5px; color: var(--muted-foreground); margin: 0 0 4px; }
+  .results-subcopy { font-size: 11.5px; color: var(--muted-foreground); opacity: 0.85; margin: 0; }
+
+  /* ---------- version history ---------- */
+  .version-list { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .version-row-btn {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; text-align: left;
+    padding: 9px 11px; background: var(--card); border: none; border-bottom: 1px solid var(--border);
+  }
+  .version-item:last-child .version-row-btn { border-bottom: none; }
+  .version-row-btn:hover { background: var(--accent); }
+  .version-item.expanded .version-row-btn { background: var(--accent); }
+  .version-left { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .version-top { display: flex; align-items: center; gap: 7px; }
+  .version-num { font-weight: 700; font-size: 13px; }
+  .version-signal { font-size: 11px; color: var(--muted-foreground); }
+  .version-meta { font-size: 11px; color: var(--muted-foreground); flex-shrink: 0; text-align: right; }
+  .version-caret { font-size: 11px; color: var(--muted-foreground); transition: transform 0.15s; flex-shrink: 0; }
+  .version-item.expanded .version-caret { transform: rotate(90deg); }
+  .badge-current {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+    background: var(--primary); color: var(--primary-foreground); padding: 2px 7px; border-radius: 999px;
+  }
+  .version-detail { display: none; background: var(--card); border-bottom: 1px solid var(--border); padding: 10px 12px 12px 30px; }
+  .version-item:last-child .version-detail { border-bottom: none; }
+  .version-item.expanded .version-detail { display: block; }
+  .version-diff-line { font-size: 12px; margin: 4px 0; line-height: 1.5; }
+  .version-diff-field { font-family: ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); margin-right: 5px; }
+  .diff-before { color: var(--muted-foreground); text-decoration: line-through; }
+  .diff-arrow { margin: 0 5px; color: var(--muted-foreground); }
+  .diff-step { font-family: ui-monospace, monospace; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--primary); margin-right: 5px; }
+
+  /* ---------- edit mode ---------- */
+  .edit-title-field { margin-bottom: 16px; }
+  .field-label { display: block; font-size: 12.5px; font-weight: 600; margin-bottom: 5px; }
+  .text-input, textarea.text-input {
+    width: 100%; border: 1px solid var(--input); border-radius: 8px; padding: 8px 10px; background: var(--card); color: var(--foreground);
+  }
+  .text-input:focus { border-color: var(--ring); }
+  textarea.text-input { resize: vertical; min-height: 44px; font-family: inherit; line-height: 1.5; }
+
+  .edit-steps-list { display: flex; flex-direction: column; gap: 10px; }
+  .edit-step-row { display: flex; gap: 10px; align-items: flex-start; background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px; }
+  .edit-step-num { flex-shrink: 0; width: 24px; height: 24px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); font-weight: 700; font-size: 12px; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+  .edit-step-fields { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .edit-step-remove { flex-shrink: 0; background: none; border: none; color: var(--muted-foreground); font-size: 16px; padding: 2px 4px; margin-top: 2px; }
+  .edit-step-remove:hover { color: var(--destructive); }
+  .add-step-btn { align-self: flex-start; }
+
+  .sidebar-edit-field { margin-bottom: 12px; }
+  .sidebar-edit-field:last-child { margin-bottom: 0; }
+  .sidebar-edit-row { display: flex; gap: 8px; }
+  .sidebar-edit-row .sidebar-edit-field { flex: 1; }
+  .checkbox-field { display: flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 600; margin-top: 6px; }
+  .checkbox-field input { width: 15px; height: 15px; accent-color: var(--primary); }
+  select.text-input { appearance: none; }
+
+  .save-bar {
+    display: none; align-items: center; justify-content: space-between; gap: 12px;
+    position: sticky; bottom: 14px; margin-top: 22px;
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 18px; box-shadow: 0 4px 16px rgba(var(--shadow-color), 0.12);
+  }
+  .save-bar.visible { display: flex; }
+  .save-bar-note { font-size: 12px; color: var(--muted-foreground); }
+  .save-bar-actions { display: flex; gap: 8px; }
+
+  [data-editing-hide].hidden-in-edit { display: none; }
+
+  /* ---------- modal ---------- */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(var(--shadow-color), 0.45); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 50; }
+  .modal-overlay[hidden] { display: none; }
+  .modal { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px; width: 100%; max-width: 380px; display: flex; flex-direction: column; gap: 12px; }
+  .modal h2 { font-size: 16px; margin: 0; }
+  .modal p { margin: 0; font-size: 13px; color: var(--muted-foreground); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+  .btn-destructive { background: var(--destructive); color: #fff; border-color: var(--destructive); }
+  .btn-destructive:hover { filter: brightness(1.06); }
+
+  /* ---------- toast ---------- */
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+    background: var(--foreground); color: var(--background); padding: 10px 18px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500; box-shadow: 0 6px 20px rgba(var(--shadow-color), 0.25); z-index: 100;
+  }
+  .toast[hidden] { display: none; }
+</style>
+
+<div class="mock-chrome">
+  <div class="mock-chrome-inner">
+    <span class="mock-badge">Prototype</span>
+    <span class="mock-label">Case detail rework — click-through mockup for stakeholder review (not real data)</span>
+    <span class="mock-hint">Try: <b>Edit</b> a field then Save (adds v5) · click a version row for a diff · use the <b>⋯</b> menu</span>
+    <button class="mock-theme-btn" id="themeToggle" type="button">🌙 Dark mode</button>
+  </div>
+</div>
+
+<div class="app-shell">
+  <div class="app-topbar">
+    <div class="app-brand">TestPulse</div>
+    <div class="fake-url">app.testpulse.dev/projects/sample/cases/142</div>
+  </div>
+
+  <main class="app-main">
+    <div class="breadcrumb">
+      <span>Projects</span><span class="sep">/</span>
+      <span>Sample Project</span><span class="sep">/</span>
+      <span>Library</span><span class="sep">/</span>
+      <span class="current">Checkout</span>
+    </div>
+
+    <div class="case-header">
+      <div class="case-header-left">
+        <button class="back-link" id="backLink" type="button" aria-label="Back to Checkout" data-editing-hide>←</button>
+        <h1 class="case-title" id="caseTitleHeading"></h1>
+      </div>
+      <div class="case-header-right" data-editing-hide>
+        <div class="actions-wrap" id="actionsWrap">
+          <button class="actions-trigger" id="actionsTrigger" type="button" aria-haspopup="menu" aria-expanded="false" aria-label="Actions for this case">⋯</button>
+          <div class="actions-menu" id="actionsMenu" role="menu" aria-label="Case actions">
+            <button class="actions-menu-item" type="button" role="menuitem" id="btnMoveTo">📁 Move to…</button>
+            <div class="actions-menu-sep"></div>
+            <button class="actions-menu-item danger" type="button" role="menuitem" id="btnDeleteCase">🗑 Delete</button>
+          </div>
+        </div>
+        <button class="btn btn-primary" id="btnEdit" type="button">Edit</button>
+      </div>
+    </div>
+
+    <div class="case-grid">
+      <!-- ============ LEFT COLUMN ============ -->
+      <div>
+        <div id="viewSteps">
+          <p class="col-title">Steps</p>
+          <div class="steps-card" id="stepsCard"></div>
+        </div>
+
+        <div id="editForm" style="display:none;">
+          <div class="edit-title-field">
+            <label class="field-label" for="editTitleInput">Title</label>
+            <input class="text-input" id="editTitleInput" type="text" />
+          </div>
+          <p class="col-title">Steps</p>
+          <div class="edit-steps-list" id="editStepsList"></div>
+          <button class="btn btn-secondary add-step-btn" id="btnAddStep" type="button" style="margin-top:10px;">+ Add step</button>
+        </div>
+      </div>
+
+      <!-- ============ RIGHT COLUMN (sidebar — same shell in view & edit) ============ -->
+      <div class="sidebar" data-testid="case-sidebar">
+        <div class="sidebar-section">
+          <p class="sidebar-section-title">Properties</p>
+          <div id="propsView"></div>
+          <div id="propsEdit" style="display:none;"></div>
+        </div>
+
+        <div class="sidebar-section">
+          <p class="sidebar-section-title">Results</p>
+          <div class="results-bars" aria-hidden="true" id="resultsBars"></div>
+          <p class="results-copy">No result history yet</p>
+          <p class="results-subcopy">Results appear here once this case runs inside a suite.</p>
+        </div>
+
+        <div class="sidebar-section">
+          <p class="sidebar-section-title">Version history</p>
+          <div class="version-list" id="versionList" aria-label="Version history"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="save-bar" id="saveBar">
+      <span class="save-bar-note" id="saveBarNote">Editing this case — Properties are editable in the sidebar too.</span>
+      <div class="save-bar-actions">
+        <button class="btn btn-secondary" id="btnCancelEdit" type="button">Cancel</button>
+        <button class="btn btn-primary" id="btnSaveEdit" type="button">Save changes</button>
+      </div>
+    </div>
+  </main>
+</div>
+
+<div class="modal-overlay" id="overlayDelete" hidden>
+  <div class="modal">
+    <h2>Delete this case?</h2>
+    <p id="deleteConfirmText">This cannot be undone. Its results history and suite memberships are removed too.</p>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="btnCancelDelete" type="button">Cancel</button>
+      <button class="btn btn-destructive" id="btnConfirmDelete" type="button">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- theme toggle ---------------- */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeToggle');
+  function prefersDark() { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
+  function applyThemeButtonLabel() {
+    var isDark = root.getAttribute('data-theme') === 'dark' || (!root.getAttribute('data-theme') && prefersDark());
+    themeBtn.textContent = isDark ? '☀️ Light mode' : '🌙 Dark mode';
+  }
+  themeBtn.addEventListener('click', function () {
+    var current = root.getAttribute('data-theme') || (prefersDark() ? 'dark' : 'light');
+    root.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    applyThemeButtonLabel();
+  });
+  applyThemeButtonLabel();
+
+  /* ---------------- helpers ---------------- */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.hidden = false;
+    window.clearTimeout(showToast._h);
+    showToast._h = window.setTimeout(function () { t.hidden = true; }, 2600);
+  }
+  function priorityPill(p) { return '<span class="pill pill-priority-' + esc(p) + '">' + capitalize(p) + '</span>'; }
+  function outlinePill(v) { return '<span class="pill pill-outline">' + esc(v) + '</span>'; }
+  function tagPill(v) { return '<span class="pill pill-tag">' + esc(v) + '</span>'; }
+  function suitePill(v) { return '<span class="pill pill-suite">' + esc(v) + '</span>'; }
+  function automatedPill(auto) { return auto ? '<span class="pill pill-auto">Automated</span>' : '<span class="pill pill-manual">Manual</span>'; }
+  function capitalize(s) { return String(s).charAt(0).toUpperCase() + String(s).slice(1); }
+
+  /* ---------------- mock domain data ---------------- */
+  // Version 1..4 content snapshots, oldest first — mirrors what
+  // VersionDetailDialog already receives (a full CaseContent per version),
+  // so the "what changed" signal below is computed client-side for free.
+  var versionContents = [
+    { // v1 — initial
+      title: 'Apply discount code to cart',
+      priority: 'medium',
+      tags: ['checkout'],
+      platform: 'web',
+      testType: 'functional',
+      automated: false,
+      steps: [
+        { action: 'Add an item to the cart and proceed to checkout.', expected: 'Cart summary shows item count and subtotal.' },
+        { action: 'Enter a valid discount code and submit.', expected: 'Discount line item appears and total updates.' }
+      ]
+    },
+    { // v2 — title changed only
+      title: 'Apply expired discount code shows inline error',
+      priority: 'medium',
+      tags: ['checkout'],
+      platform: 'web',
+      testType: 'functional',
+      automated: false,
+      steps: [
+        { action: 'Add an item to the cart and proceed to checkout.', expected: 'Cart summary shows item count and subtotal.' },
+        { action: 'Enter a valid discount code and submit.', expected: 'Discount line item appears and total updates.' }
+      ]
+    },
+    { // v3 — tags + platform changed
+      title: 'Apply expired discount code shows inline error',
+      priority: 'medium',
+      tags: ['checkout', 'regression', 'discounts'],
+      platform: 'web, mobile',
+      testType: 'functional',
+      automated: false,
+      steps: [
+        { action: 'Add an item to the cart and proceed to checkout.', expected: 'Cart summary shows item count and subtotal.' },
+        { action: 'Enter a valid discount code and submit.', expected: 'Discount line item appears and total updates.' }
+      ]
+    },
+    { // v4 — current — steps + priority changed
+      title: 'Apply expired discount code shows inline error',
+      priority: 'high',
+      tags: ['checkout', 'regression', 'discounts'],
+      platform: 'web, mobile',
+      testType: 'functional',
+      automated: true,
+      steps: [
+        { action: 'Add two items to the cart and proceed to checkout.', expected: 'Cart summary displays item count and subtotal.' },
+        { action: 'Enter an expired discount code in the promo field and submit.', expected: 'Inline error "This code has expired" appears beneath the field; subtotal is unchanged.' },
+        { action: 'Enter a valid discount code and submit.', expected: 'Discount line item appears and total updates immediately.' }
+      ]
+    }
+  ];
+  var versionDates = ['Apr 2, 2026', 'Apr 30, 2026', 'Jun 6, 2026', '4 days ago'];
+  var suiteNames = ['Regression — Checkout', 'Nightly'];
+
+  var state = {
+    currentVersion: versionContents.length,
+    isEditing: false,
+    editTitle: '',
+    editSteps: [],
+    editPriority: 'medium',
+    editTags: '',
+    editPlatform: '',
+    editTestType: '',
+    editAutomated: false,
+    expandedVersion: null
+  };
+
+  function currentContent() { return versionContents[state.currentVersion - 1]; }
+
+  /* ---------------- diff engine (mirrors VersionDetailDialog's scalar+step diff) ---------------- */
+  var SCALAR_FIELDS = [
+    { key: 'title', label: 'Title' },
+    { key: 'priority', label: 'Priority', isPriority: true },
+    { key: 'tags', label: 'Tags', isTags: true },
+    { key: 'platform', label: 'Platform' },
+    { key: 'testType', label: 'Test type' },
+    { key: 'automated', label: 'Automated', isBool: true }
+  ];
+
+  function fieldValue(content, f) {
+    if (f.isTags) return (content.tags || []).join(', ');
+    if (f.isBool) return content[f.key] ? 'Yes' : 'No';
+    return content[f.key];
+  }
+
+  function diffContent(before, after) {
+    var fields = [];
+    SCALAR_FIELDS.forEach(function (f) {
+      var bv = fieldValue(before, f), av = fieldValue(after, f);
+      if (bv !== av) fields.push({ label: f.label, before: bv, after: av, isPriority: f.isPriority, isTags: f.isTags });
+    });
+    var steps = [];
+    var bSteps = before.steps || [], aSteps = after.steps || [];
+    var max = Math.max(bSteps.length, aSteps.length);
+    for (var i = 0; i < max; i++) {
+      var b = bSteps[i], a = aSteps[i];
+      if (b && !a) steps.push({ index: i, kind: 'removed', before: b });
+      else if (!b && a) steps.push({ index: i, kind: 'added', after: a });
+      else if (b && a && (b.action !== a.action || b.expected !== a.expected)) steps.push({ index: i, kind: 'changed', before: b, after: a });
+    }
+    return { fields: fields, steps: steps };
+  }
+
+  // Light change-signal for the version list row — cheap because it's
+  // derived from content already in memory, not a second fetch. Deliberately
+  // terse (labels only, no full values) so it stays a hint, not a diff view.
+  function diffSignal(diff) {
+    var labels = diff.fields.map(function (f) { return f.label; });
+    if (diff.steps.length > 0) labels.push('Steps');
+    if (labels.length === 0) return 'No changes';
+    if (labels.length <= 2) return labels.join(', ') + ' changed';
+    return labels.length + ' fields changed';
+  }
+
+  /* ---------------- rendering: header ---------------- */
+  function renderHeader() {
+    document.getElementById('caseTitleHeading').textContent = currentContent().title;
+  }
+
+  /* ---------------- rendering: steps (view) ---------------- */
+  function renderStepsView() {
+    var steps = currentContent().steps;
+    var card = document.getElementById('stepsCard');
+    card.innerHTML = steps.map(function (s, i) {
+      return '<div class="step-row">' +
+        '<span class="step-num">' + (i + 1) + '</span>' +
+        '<div class="step-body">' +
+          '<p class="step-action">' + esc(s.action) + '</p>' +
+          (s.expected ? '<div class="step-expected"><span class="step-expected-label">Expected</span>' + esc(s.expected) + '</div>' : '') +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* ---------------- rendering: properties (view) ---------------- */
+  function renderPropsView() {
+    var c = currentContent();
+    var html = '';
+    html += propRow('Priority', priorityPill(c.priority));
+    html += propRow('Test type', c.testType ? outlinePill(c.testType) : emptyVal());
+    html += propRow('Automation', automatedPill(c.automated));
+    html += propRow('Platform', c.platform ? c.platform.split(',').map(function (p) { return outlinePill(p.trim()); }).join(' ') : emptyVal(), true);
+    html += propRow('Tags', c.tags.length ? c.tags.map(tagPill).join(' ') : emptyVal(), true);
+    html += propRow('Version', '<span class="version-chip">v' + state.currentVersion + '</span>');
+    html += propRow('In suites', suiteNames.length ? suiteNames.map(suitePill).join(' ') : emptyVal(), true);
+    document.getElementById('propsView').innerHTML = html;
+  }
+  function emptyVal() { return '<span class="prop-empty">—</span>'; }
+  function propRow(label, valueHtml, wrapPills) {
+    return '<div class="prop-row' + (wrapPills ? ' wrap' : '') + '">' +
+      '<span class="prop-label">' + esc(label) + '</span>' +
+      '<span class="prop-value' + (wrapPills ? ' pills' : '') + '">' + valueHtml + '</span>' +
+    '</div>';
+  }
+
+  /* ---------------- rendering: results placeholder ---------------- */
+  function renderResultsBars() {
+    var heights = [55, 35, 65, 30, 50, 40, 60];
+    document.getElementById('resultsBars').innerHTML = heights.map(function (h) {
+      return '<span class="results-bar" style="height:' + h + '%"></span>';
+    }).join('');
+  }
+
+  /* ---------------- rendering: version history ---------------- */
+  function renderVersionList() {
+    var list = document.getElementById('versionList');
+    var rows = [];
+    for (var v = versionContents.length; v >= 1; v--) {
+      var content = versionContents[v - 1];
+      var prev = v > 1 ? versionContents[v - 2] : null;
+      var signal = prev ? diffSignal(diffContent(prev, content)) : 'Initial version';
+      var isCurrent = v === state.currentVersion;
+      var expanded = state.expandedVersion === v;
+      rows.push(
+        '<div class="version-item' + (expanded ? ' expanded' : '') + '" data-version="' + v + '">' +
+          '<button type="button" class="version-row-btn" data-version-toggle="' + v + '">' +
+            '<span class="version-left">' +
+              '<span class="version-top">' +
+                '<span class="version-num">v' + v + '</span>' +
+                (isCurrent ? '<span class="badge-current">current</span>' : '') +
+              '</span>' +
+              '<span class="version-signal">' + esc(signal) + '</span>' +
+            '</span>' +
+            '<span class="version-meta">' + esc(versionDates[v - 1]) + '<br><span class="version-caret">▸</span></span>' +
+          '</button>' +
+          '<div class="version-detail">' + versionDetailHtml(prev, content) + '</div>' +
+        '</div>'
+      );
+    }
+    list.innerHTML = rows.join('');
+
+    Array.prototype.forEach.call(list.querySelectorAll('[data-version-toggle]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var v = Number(btn.getAttribute('data-version-toggle'));
+        state.expandedVersion = state.expandedVersion === v ? null : v;
+        renderVersionList();
+      });
+    });
+  }
+
+  function versionDetailHtml(prev, content) {
+    if (!prev) return '<p class="version-diff-line" style="color:var(--muted-foreground);">This is the first version — nothing to compare against.</p>';
+    var diff = diffContent(prev, content);
+    if (diff.fields.length === 0 && diff.steps.length === 0) {
+      return '<p class="version-diff-line" style="color:var(--muted-foreground);">No changes relative to the previous version.</p>';
+    }
+    var lines = [];
+    diff.fields.forEach(function (f) {
+      var beforeHtml, afterHtml;
+      if (f.isPriority) {
+        beforeHtml = priorityPill(f.before); afterHtml = priorityPill(f.after);
+      } else if (f.isTags) {
+        beforeHtml = f.before ? f.before.split(',').map(function (t) { return tagPill(t.trim()); }).join(' ') : emptyVal();
+        afterHtml = f.after ? f.after.split(',').map(function (t) { return tagPill(t.trim()); }).join(' ') : emptyVal();
+      } else {
+        beforeHtml = '<span class="diff-before">' + esc(f.before || '—') + '</span>';
+        afterHtml = esc(f.after || '—');
+      }
+      lines.push('<div class="version-diff-line"><span class="version-diff-field">' + esc(f.label) + '</span>' + beforeHtml + '<span class="diff-arrow">→</span>' + afterHtml + '</div>');
+    });
+    diff.steps.forEach(function (s) {
+      if (s.kind === 'added') lines.push('<div class="version-diff-line"><span class="diff-step">+ step ' + (s.index + 1) + '</span>' + esc(s.after.action) + '</div>');
+      else if (s.kind === 'removed') lines.push('<div class="version-diff-line"><span class="diff-step">− step ' + (s.index + 1) + '</span><span class="diff-before">' + esc(s.before.action) + '</span></div>');
+      else lines.push('<div class="version-diff-line"><span class="diff-step">~ step ' + (s.index + 1) + '</span><span class="diff-before">' + esc(s.before.action) + '</span><span class="diff-arrow">→</span>' + esc(s.after.action) + '</div>');
+    });
+    return lines.join('');
+  }
+
+  /* ---------------- edit mode ---------------- */
+  function enterEdit() {
+    var c = currentContent();
+    state.isEditing = true;
+    state.editTitle = c.title;
+    state.editSteps = c.steps.map(function (s) { return { action: s.action, expected: s.expected }; });
+    state.editPriority = c.priority;
+    state.editTags = c.tags.join(', ');
+    state.editPlatform = c.platform;
+    state.editTestType = c.testType;
+    state.editAutomated = c.automated;
+
+    document.body.setAttribute('data-editing', 'true');
+    document.getElementById('viewSteps').style.display = 'none';
+    document.getElementById('editForm').style.display = '';
+    document.getElementById('propsView').style.display = 'none';
+    document.getElementById('propsEdit').style.display = '';
+    document.getElementById('saveBar').classList.add('visible');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-editing-hide]'), function (el) { el.classList.add('hidden-in-edit'); });
+    closeActionsMenu();
+
+    renderEditTitle();
+    renderEditSteps();
+    renderPropsEdit();
+  }
+
+  function exitEdit() {
+    state.isEditing = false;
+    document.body.removeAttribute('data-editing');
+    document.getElementById('viewSteps').style.display = '';
+    document.getElementById('editForm').style.display = 'none';
+    document.getElementById('propsView').style.display = '';
+    document.getElementById('propsEdit').style.display = 'none';
+    document.getElementById('saveBar').classList.remove('visible');
+    Array.prototype.forEach.call(document.querySelectorAll('[data-editing-hide]'), function (el) { el.classList.remove('hidden-in-edit'); });
+  }
+
+  function renderEditTitle() {
+    document.getElementById('editTitleInput').value = state.editTitle;
+  }
+
+  function renderEditSteps() {
+    var list = document.getElementById('editStepsList');
+    list.innerHTML = state.editSteps.map(function (s, i) {
+      return '<div class="edit-step-row">' +
+        '<span class="edit-step-num">' + (i + 1) + '</span>' +
+        '<div class="edit-step-fields">' +
+          '<textarea class="text-input" rows="2" data-step-field="action" data-step-index="' + i + '" placeholder="Action">' + esc(s.action) + '</textarea>' +
+          '<textarea class="text-input" rows="2" data-step-field="expected" data-step-index="' + i + '" placeholder="Expected result (optional)">' + esc(s.expected || '') + '</textarea>' +
+        '</div>' +
+        '<button type="button" class="edit-step-remove" data-step-remove="' + i + '" aria-label="Remove step ' + (i + 1) + '">✕</button>' +
+      '</div>';
+    }).join('');
+
+    Array.prototype.forEach.call(list.querySelectorAll('[data-step-field]'), function (el) {
+      el.addEventListener('input', function () {
+        var idx = Number(el.getAttribute('data-step-index'));
+        var field = el.getAttribute('data-step-field');
+        state.editSteps[idx][field] = el.value;
+      });
+    });
+    Array.prototype.forEach.call(list.querySelectorAll('[data-step-remove]'), function (btn) {
+      btn.addEventListener('click', function () {
+        var idx = Number(btn.getAttribute('data-step-remove'));
+        state.editSteps.splice(idx, 1);
+        renderEditSteps();
+      });
+    });
+  }
+
+  document.getElementById('btnAddStep').addEventListener('click', function () {
+    state.editSteps.push({ action: '', expected: '' });
+    renderEditSteps();
+  });
+
+  function renderPropsEdit() {
+    var el = document.getElementById('propsEdit');
+    el.innerHTML =
+      '<div class="sidebar-edit-row">' +
+        '<div class="sidebar-edit-field">' +
+          '<label class="field-label" for="editPriority">Priority</label>' +
+          '<select class="text-input" id="editPriority">' +
+            ['low', 'medium', 'high', 'critical'].map(function (p) {
+              return '<option value="' + p + '"' + (p === state.editPriority ? ' selected' : '') + '>' + capitalize(p) + '</option>';
+            }).join('') +
+          '</select>' +
+        '</div>' +
+      '</div>' +
+      '<div class="sidebar-edit-field">' +
+        '<label class="checkbox-field"><input type="checkbox" id="editAutomated"' + (state.editAutomated ? ' checked' : '') + '> Automated</label>' +
+      '</div>' +
+      '<div class="sidebar-edit-field">' +
+        '<label class="field-label" for="editPlatform">Platform</label>' +
+        '<input class="text-input" id="editPlatform" type="text" value="' + esc(state.editPlatform) + '" placeholder="e.g. web, iOS" />' +
+      '</div>' +
+      '<div class="sidebar-edit-field">' +
+        '<label class="field-label" for="editTestType">Test type</label>' +
+        '<input class="text-input" id="editTestType" type="text" value="' + esc(state.editTestType) + '" placeholder="e.g. functional" />' +
+      '</div>' +
+      '<div class="sidebar-edit-field">' +
+        '<label class="field-label" for="editTags">Tags</label>' +
+        '<input class="text-input" id="editTags" type="text" value="' + esc(state.editTags) + '" placeholder="e.g. smoke, regression" />' +
+      '</div>';
+
+    document.getElementById('editPriority').addEventListener('change', function (e) { state.editPriority = e.target.value; });
+    document.getElementById('editAutomated').addEventListener('change', function (e) { state.editAutomated = e.target.checked; });
+    document.getElementById('editPlatform').addEventListener('input', function (e) { state.editPlatform = e.target.value; });
+    document.getElementById('editTestType').addEventListener('input', function (e) { state.editTestType = e.target.value; });
+    document.getElementById('editTags').addEventListener('input', function (e) { state.editTags = e.target.value; });
+  }
+
+  document.getElementById('editTitleInput').addEventListener('input', function (e) { state.editTitle = e.target.value; });
+
+  document.getElementById('btnEdit').addEventListener('click', enterEdit);
+  document.getElementById('btnCancelEdit').addEventListener('click', function () {
+    exitEdit();
+    showToast('Edit cancelled — no changes saved');
+  });
+
+  document.getElementById('btnSaveEdit').addEventListener('click', function () {
+    var next = {
+      title: state.editTitle.trim() || currentContent().title,
+      priority: state.editPriority,
+      tags: state.editTags.split(',').map(function (t) { return t.trim(); }).filter(Boolean),
+      platform: state.editPlatform.trim(),
+      testType: state.editTestType.trim(),
+      automated: state.editAutomated,
+      steps: state.editSteps.filter(function (s) { return s.action.trim(); })
+    };
+    var diff = diffContent(currentContent(), next);
+    var changed = diff.fields.length > 0 || diff.steps.length > 0;
+    if (changed) {
+      versionContents.push(next);
+      versionDates.push('just now');
+      state.currentVersion = versionContents.length;
+    }
+    exitEdit();
+    renderAll();
+    showToast(changed ? 'Saved — created v' + state.currentVersion : 'Saved — no changes detected, version unchanged');
+  });
+
+  /* ---------------- header actions menu ---------------- */
+  var actionsMenu = document.getElementById('actionsMenu');
+  var actionsTrigger = document.getElementById('actionsTrigger');
+  function closeActionsMenu() {
+    actionsMenu.classList.remove('open');
+    actionsTrigger.setAttribute('aria-expanded', 'false');
+  }
+  actionsTrigger.addEventListener('click', function () {
+    var open = actionsMenu.classList.toggle('open');
+    actionsTrigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('pointerdown', function (e) {
+    if (!document.getElementById('actionsWrap').contains(e.target)) closeActionsMenu();
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') closeActionsMenu();
+  });
+  document.getElementById('btnMoveTo').addEventListener('click', function () {
+    closeActionsMenu();
+    showToast('Move to… — folder picker not wired in this mockup');
+  });
+
+  var overlayDelete = document.getElementById('overlayDelete');
+  document.getElementById('btnDeleteCase').addEventListener('click', function () {
+    closeActionsMenu();
+    overlayDelete.hidden = false;
+  });
+  document.getElementById('btnCancelDelete').addEventListener('click', function () { overlayDelete.hidden = true; });
+  overlayDelete.addEventListener('click', function (e) { if (e.target === overlayDelete) overlayDelete.hidden = true; });
+  document.getElementById('btnConfirmDelete').addEventListener('click', function () {
+    overlayDelete.hidden = true;
+    showToast('Case deleted — would redirect to Library (not wired in this mockup)');
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !overlayDelete.hidden) overlayDelete.hidden = true;
+  });
+
+  document.getElementById('backLink').addEventListener('click', function () {
+    showToast('Back to Checkout — folder navigation not wired in this mockup');
+  });
+
+  /* ---------------- boot ---------------- */
+  function renderAll() {
+    renderHeader();
+    renderStepsView();
+    renderPropsView();
+    renderResultsBars();
+    renderVersionList();
+  }
+  renderAll();
+})();
+</script>
