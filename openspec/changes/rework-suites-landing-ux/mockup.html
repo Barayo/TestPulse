@@ -1,0 +1,927 @@
+<title>TestPulse — Suites Rework Mockup</title>
+<style>
+  :root {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --radius: 0.5rem;
+    --shadow-color: 11, 46, 44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+      --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+      --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+      --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+      --shadow-color: 0, 0, 0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+    --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+    --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+    --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+    --shadow-color: 0, 0, 0;
+  }
+  :root[data-theme="light"] {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --shadow-color: 11, 46, 44;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  button, input, select { font-family: inherit; font-size: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+
+  /* ---------- mockup-only chrome ---------- */
+  .mock-chrome {
+    background: repeating-linear-gradient(135deg, var(--muted), var(--muted) 10px, var(--accent) 10px, var(--accent) 20px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+  }
+  .mock-chrome-inner {
+    max-width: 1180px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .mock-badge {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    background: var(--foreground);
+    color: var(--background);
+    padding: 3px 8px;
+    border-radius: 999px;
+    flex-shrink: 0;
+  }
+  .mock-label {
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+    flex: 1;
+    min-width: 200px;
+  }
+  .mock-hint {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    font-style: italic;
+  }
+  .mock-hint b { color: var(--foreground); font-style: normal; font-weight: 600; }
+  .mock-theme-btn {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 6px 12px;
+    font-size: 12.5px;
+    font-weight: 500;
+    flex-shrink: 0;
+  }
+  .mock-theme-btn:hover { border-color: var(--primary); }
+
+  /* ---------- simulated app shell ---------- */
+  .app-shell { max-width: 1180px; margin: 0 auto; }
+  .app-topbar {
+    padding: 16px 20px 0;
+  }
+  .app-brand {
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: -0.01em;
+    color: var(--primary);
+    margin-bottom: 10px;
+  }
+  .fake-url {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 11.5px;
+    color: var(--muted-foreground);
+    background: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 5px 10px;
+    display: inline-block;
+    margin-bottom: 14px;
+  }
+  .app-main { padding: 4px 20px 60px; }
+  .screen[hidden] { display: none; }
+
+  /* ---------- index screen ---------- */
+  .page-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 22px;
+  }
+  .page-header h1 {
+    font-size: 22px;
+    margin: 0 0 4px;
+    text-wrap: balance;
+  }
+  .page-header p {
+    margin: 0;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: var(--radius);
+    padding: 8px 14px;
+    font-size: 13.5px;
+    font-weight: 600;
+    border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:hover { filter: brightness(1.05); }
+  .btn-secondary { background: var(--card); color: var(--foreground); border-color: var(--border); }
+  .btn-secondary:hover { border-color: var(--primary); }
+  .btn-ghost { background: transparent; color: var(--muted-foreground); border-color: transparent; }
+  .btn-ghost:hover { color: var(--foreground); background: var(--muted); }
+  .btn-destructive { background: transparent; color: var(--destructive); border-color: var(--border); }
+  .btn-destructive:hover { background: var(--destructive); color: #fff; border-color: var(--destructive); }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn:disabled:hover { filter: none; background: var(--primary); }
+
+  .suite-list { display: flex; flex-direction: column; gap: 10px; overflow-x: auto; }
+  .suite-card {
+    display: grid;
+    grid-template-columns: minmax(200px, 1.6fr) 150px 90px 100px 16px;
+    gap: 20px;
+    align-items: center;
+    padding: 16px 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    text-align: left;
+    width: 100%;
+    min-width: 620px;
+    transition: border-color .15s, box-shadow .15s;
+  }
+  .suite-card:hover, .suite-card:focus-visible {
+    border-color: var(--primary);
+    box-shadow: 0 2px 10px rgba(var(--shadow-color), 0.08);
+  }
+  .suite-name-block { min-width: 0; }
+  .suite-name {
+    font-weight: 600;
+    font-size: 14.5px;
+    margin: 0 0 6px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .suite-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .suite-count { font-variant-numeric: tabular-nums; color: var(--foreground); }
+  .suite-count small { display: block; color: var(--muted-foreground); font-size: 11px; font-weight: 400; }
+  .suite-lastrun { font-size: 12.5px; color: var(--muted-foreground); }
+  .suite-chevron { color: var(--muted-foreground); font-size: 16px; justify-self: end; }
+
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.6;
+    white-space: nowrap;
+  }
+  .pill-tag { background: var(--accent); color: var(--accent-foreground); }
+  .pill-overflow { background: var(--muted); color: var(--muted-foreground); }
+  .pill-outline { background: transparent; border: 1px solid var(--border); color: var(--muted-foreground); }
+  .pill-priority-high { background: color-mix(in srgb, var(--destructive) 16%, var(--card)); color: var(--destructive); }
+  .pill-priority-medium { background: color-mix(in srgb, var(--secondary) 30%, var(--card)); color: color-mix(in srgb, var(--secondary-foreground) 80%, var(--foreground)); }
+  .pill-priority-low { background: var(--muted); color: var(--muted-foreground); }
+
+  /* health / pass-rate bar */
+  .health { display: flex; flex-direction: column; gap: 5px; }
+  .health-label { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .health-track { height: 6px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  .health-fill { height: 100%; border-radius: 999px; background: var(--primary); }
+  .health-track.empty {
+    background-image: repeating-linear-gradient(135deg, var(--border), var(--border) 3px, transparent 3px, transparent 7px);
+    background-color: var(--muted);
+  }
+  .health-empty-note { font-size: 11px; color: var(--muted-foreground); font-style: italic; }
+
+  .empty-index {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--muted-foreground);
+  }
+
+  /* ---------- detail screen ---------- */
+  .breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    color: var(--muted-foreground);
+    margin-bottom: 10px;
+  }
+  .breadcrumb button {
+    background: none; border: none; padding: 0; color: var(--muted-foreground); font-weight: 500; font-size: 12.5px;
+  }
+  .breadcrumb button:hover { color: var(--primary); text-decoration: underline; }
+  .breadcrumb .sep { color: var(--border); }
+  .breadcrumb .current { color: var(--foreground); font-weight: 600; }
+
+  .detail-header { margin-bottom: 20px; }
+  .detail-header h1 { font-size: 21px; margin: 0; text-wrap: balance; }
+
+  .detail-layout { display: flex; gap: 22px; align-items: flex-start; }
+  .detail-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .detail-sidebar {
+    width: 300px;
+    flex-shrink: 0;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: sticky;
+    top: 16px;
+  }
+
+  .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .filters select {
+    background: var(--card);
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    padding: 7px 10px;
+    min-width: 130px;
+  }
+  .filters select:hover { border-color: var(--primary); }
+  .clear-filters-btn { font-size: 12.5px; }
+
+  .showing-line { font-size: 12.5px; color: var(--muted-foreground); }
+  .showing-line b { color: var(--foreground); font-variant-numeric: tabular-nums; }
+
+  .case-list {
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    background: var(--card);
+    max-height: 440px;
+    overflow-y: auto;
+    overflow-x: auto;
+  }
+  .case-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .case-row:last-child { border-bottom: none; }
+  .case-row:hover { background: var(--accent); }
+  .case-row input[type="checkbox"] {
+    width: 16px; height: 16px; accent-color: var(--primary); flex-shrink: 0; cursor: pointer;
+  }
+  .case-title { flex: 1; min-width: 160px; font-size: 13.5px; }
+  .case-pills { display: flex; gap: 6px; flex-wrap: wrap; flex-shrink: 0; }
+
+  .case-list-empty {
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+
+  .selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 18px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    position: sticky;
+    bottom: 12px;
+    box-shadow: 0 4px 16px rgba(var(--shadow-color), 0.10);
+  }
+  .selection-count { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .selection-count span { color: var(--primary); }
+
+  /* sidebar */
+  .sidebar-block { display: flex; flex-direction: column; gap: 3px; }
+  .sidebar-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted-foreground); font-weight: 600; }
+  .sidebar-value { font-size: 14px; font-variant-numeric: tabular-nums; }
+  .sidebar-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+  .sidebar-divider { height: 1px; background: var(--border); margin: 2px 0; }
+  .sidebar-actions { display: flex; flex-direction: column; gap: 8px; }
+  .sidebar-actions .btn { justify-content: center; }
+
+  /* ---------- modal ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(var(--shadow-color), 0.45);
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    z-index: 50;
+  }
+  .modal-overlay[hidden] { display: none; }
+  .modal {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+    width: 100%;
+    max-width: 380px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+  .modal[hidden] { display: none; }
+  .modal h2 { font-size: 16px; margin: 0; }
+  .modal p { margin: 0; font-size: 13px; color: var(--muted-foreground); }
+  .modal label { font-size: 12.5px; font-weight: 600; display: block; margin-bottom: 6px; }
+  .modal input[type="text"] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--input);
+    border-radius: 6px;
+    background: var(--background);
+    color: var(--foreground);
+  }
+  .modal input[type="text"]:focus { border-color: var(--ring); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+
+  /* ---------- toast ---------- */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--foreground);
+    color: var(--background);
+    padding: 10px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    box-shadow: 0 6px 20px rgba(var(--shadow-color), 0.25);
+    z-index: 100;
+  }
+  .toast[hidden] { display: none; }
+</style>
+
+<div class="mock-chrome">
+  <div class="mock-chrome-inner">
+    <span class="mock-badge">Prototype</span>
+    <span class="mock-label">Suites rework — click-through mockup for stakeholder review (not real data)</span>
+    <span class="mock-hint">Try: check a few cases → change a filter → clear it → <b>your checks survive</b></span>
+    <button class="mock-theme-btn" id="themeToggle" type="button">🌙 Dark mode</button>
+  </div>
+</div>
+
+<div class="app-shell">
+  <div class="app-topbar">
+    <div class="app-brand">TestPulse</div>
+    <div class="fake-url" id="fakeUrl">app.testpulse.dev/projects/sample/suites</div>
+  </div>
+
+  <main class="app-main">
+
+    <!-- ============ INDEX SCREEN ============ -->
+    <section class="screen" id="screen-index">
+      <div class="page-header">
+        <div>
+          <h1>Suites</h1>
+          <p id="suiteSummary"></p>
+        </div>
+        <button class="btn btn-primary" id="btnNewSuite" type="button">+ New suite</button>
+      </div>
+      <div class="suite-list" id="suiteList"></div>
+    </section>
+
+    <!-- ============ DETAIL SCREEN ============ -->
+    <section class="screen" id="screen-detail" hidden>
+      <div class="breadcrumb">
+        <button type="button" id="crumbSuites">Suites</button>
+        <span class="sep">/</span>
+        <span class="current" id="crumbCurrent">Suite name</span>
+      </div>
+      <div class="detail-header">
+        <h1 id="detailTitle">Suite name</h1>
+      </div>
+
+      <div class="detail-layout">
+        <div class="detail-main">
+          <div class="filters">
+            <select id="filterTag">
+              <option value="">All tags</option>
+              <option value="auth">auth</option>
+              <option value="account">account</option>
+              <option value="checkout">checkout</option>
+              <option value="catalog">catalog</option>
+            </select>
+            <select id="filterPriority">
+              <option value="">All priorities</option>
+              <option value="high">high</option>
+              <option value="medium">medium</option>
+              <option value="low">low</option>
+            </select>
+            <select id="filterPlatform">
+              <option value="">All platforms</option>
+              <option value="web">web</option>
+              <option value="mobile">mobile</option>
+              <option value="api">api</option>
+            </select>
+            <select id="filterType">
+              <option value="">All test types</option>
+              <option value="functional">functional</option>
+              <option value="integration">integration</option>
+              <option value="security">security</option>
+              <option value="contract">contract</option>
+            </select>
+            <button class="btn btn-ghost clear-filters-btn" id="btnClearFilters" type="button">Clear filters</button>
+          </div>
+
+          <div class="showing-line" id="showingLine"></div>
+
+          <div class="case-list" id="caseList"></div>
+
+          <div class="selection-bar">
+            <div class="selection-count" id="selectionCount"><span>0</span> selected</div>
+            <button class="btn btn-primary" id="btnSaveChanges" type="button" disabled>Save changes</button>
+          </div>
+        </div>
+
+        <aside class="detail-sidebar">
+          <div class="sidebar-block">
+            <span class="sidebar-label">Cases</span>
+            <span class="sidebar-value" id="sideCaseCount">0</span>
+          </div>
+          <div class="sidebar-block">
+            <span class="sidebar-label">Pass rate</span>
+            <div id="sideHealth"></div>
+          </div>
+          <div class="sidebar-block">
+            <span class="sidebar-label">Last run</span>
+            <span class="sidebar-value" id="sideLastRun">—</span>
+          </div>
+          <div class="sidebar-block">
+            <span class="sidebar-label">Created</span>
+            <span class="sidebar-value" id="sideCreated">—</span>
+          </div>
+          <div class="sidebar-block">
+            <span class="sidebar-label">Tags</span>
+            <div class="sidebar-tags" id="sideTags"></div>
+          </div>
+          <div class="sidebar-divider"></div>
+          <div class="sidebar-actions">
+            <button class="btn btn-secondary" id="btnRename" type="button">Rename suite</button>
+            <button class="btn btn-destructive" id="btnDeleteSuite" type="button">Delete suite</button>
+          </div>
+        </aside>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ MODALS ============ -->
+<div class="modal-overlay" id="overlayNewSuite" hidden>
+  <div class="modal">
+    <h2>New suite</h2>
+    <div>
+      <label for="inputNewSuiteName">Suite name</label>
+      <input type="text" id="inputNewSuiteName" placeholder="e.g. Regression — Payments" maxlength="80" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnCancelNewSuite" type="button">Cancel</button>
+      <button class="btn btn-primary" id="btnCreateSuite" type="button" disabled>Create</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="overlayRename" hidden>
+  <div class="modal">
+    <h2>Rename suite</h2>
+    <div>
+      <label for="inputRenameName">Suite name</label>
+      <input type="text" id="inputRenameName" maxlength="80" />
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnCancelRename" type="button">Cancel</button>
+      <button class="btn btn-primary" id="btnConfirmRename" type="button" disabled>Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="overlayDelete" hidden>
+  <div class="modal">
+    <h2>Delete suite?</h2>
+    <p id="deleteConfirmText">This removes the suite. Cases stay untouched.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="btnCancelDelete" type="button">Cancel</button>
+      <button class="btn btn-destructive" id="btnConfirmDelete" type="button" style="background:var(--destructive);color:#fff;">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------------- theme toggle ---------------- */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeToggle');
+  function prefersDark() { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
+  function applyThemeButtonLabel() {
+    var isDark = root.getAttribute('data-theme') === 'dark' || (!root.getAttribute('data-theme') && prefersDark());
+    themeBtn.textContent = isDark ? '☀️ Light mode' : '🌙 Dark mode';
+  }
+  themeBtn.addEventListener('click', function () {
+    var current = root.getAttribute('data-theme') || (prefersDark() ? 'dark' : 'light');
+    root.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+    applyThemeButtonLabel();
+  });
+  applyThemeButtonLabel();
+
+  /* ---------------- mock data ---------------- */
+  var casePool = [
+    { id: 1,  title: "Login with valid credentials",      tag: "auth",     priority: "high",   platform: "web",    type: "functional" },
+    { id: 2,  title: "Login with invalid password",       tag: "auth",     priority: "medium", platform: "web",    type: "functional" },
+    { id: 3,  title: "Login with SSO provider",            tag: "account",  priority: "medium", platform: "web",    type: "integration" },
+    { id: 4,  title: "Account lockout after failed attempts", tag: "account", priority: "high", platform: "web",    type: "security" },
+    { id: 5,  title: "Add item to cart",                   tag: "checkout", priority: "high",   platform: "web",    type: "functional" },
+    { id: 6,  title: "Remove item from cart",               tag: "checkout", priority: "low",    platform: "web",    type: "functional" },
+    { id: 7,  title: "Apply discount code",                 tag: "checkout", priority: "medium", platform: "web",    type: "functional" },
+    { id: 8,  title: "Checkout with credit card",            tag: "checkout", priority: "high",   platform: "web",    type: "functional" },
+    { id: 9,  title: "Checkout with PayPal",                 tag: "checkout", priority: "high",   platform: "web",    type: "integration" },
+    { id: 10, title: "Checkout with expired card",           tag: "checkout", priority: "medium", platform: "web",    type: "functional" },
+    { id: 11, title: "Mobile login flow",                    tag: "auth",     priority: "high",   platform: "mobile", type: "functional" },
+    { id: 12, title: "Mobile checkout flow",                 tag: "checkout", priority: "high",   platform: "mobile", type: "functional" },
+    { id: 13, title: "Guest checkout",                       tag: "checkout", priority: "medium", platform: "web",    type: "functional" },
+    { id: 14, title: "API: create order",                    tag: "checkout", priority: "high",   platform: "api",    type: "contract" },
+    { id: 15, title: "API: fetch user profile",              tag: "account",  priority: "medium", platform: "api",    type: "contract" },
+    { id: 16, title: "API: apply discount code",             tag: "checkout", priority: "medium", platform: "api",    type: "contract" },
+    { id: 17, title: "API: cancel order",                    tag: "checkout", priority: "high",   platform: "api",    type: "contract" },
+    { id: 18, title: "API: user session refresh",            tag: "auth",     priority: "medium", platform: "api",    type: "contract" },
+    { id: 19, title: "Search products",                      tag: "catalog",  priority: "low",    platform: "web",    type: "functional" },
+    { id: 20, title: "Add to wishlist",                      tag: "catalog",  priority: "low",    platform: "web",    type: "functional" }
+  ];
+
+  var suites = [
+    { id: 1, name: "Smoke Tests", passRate: 95, lastRun: "2h ago", created: "Jan 12, 2026",
+      tags: ["smoke", "critical"], caseIds: [1, 5, 8, 11, 14] },
+    { id: 2, name: "Regression — Checkout", passRate: 82, lastRun: "3d ago", created: "Feb 3, 2026",
+      tags: ["regression", "checkout", "payments"], caseIds: [5, 6, 7, 8, 9, 10, 12, 13, 16] },
+    { id: 3, name: "Nightly", passRate: 45, lastRun: "6h ago", created: "Nov 28, 2025",
+      tags: ["nightly"], caseIds: [1, 2, 4, 5, 6, 7, 8, 9, 10, 13, 14, 15, 16, 17, 19, 20] },
+    { id: 4, name: "API Contract", passRate: 91, lastRun: "1d ago", created: "Mar 19, 2026",
+      tags: ["api", "contract"], caseIds: [14, 15, 16, 17, 18] },
+    { id: 5, name: "Mobile Smoke", passRate: null, lastRun: null, created: "Jun 30, 2026",
+      tags: ["mobile", "smoke"], caseIds: [11, 12] },
+    { id: 6, name: "Edge Cases", passRate: 68, lastRun: "5d ago", created: "Apr 8, 2026",
+      tags: ["edge-case", "regression", "low-priority", "flaky"], caseIds: [2, 3, 4, 7, 10, 13, 19] }
+  ];
+  var nextSuiteId = 7;
+  var nextIsNewSuite = false; // whether the suite we're about to open was just created (for empty pass-rate copy)
+
+  /* ---------------- shared state ---------------- */
+  var currentSuiteId = null;
+  var selectedIds = new Set();
+  var originalIds = new Set();
+  var filters = { tag: "", priority: "", platform: "", type: "" };
+
+  var screenIndex = document.getElementById('screen-index');
+  var screenDetail = document.getElementById('screen-detail');
+  var fakeUrl = document.getElementById('fakeUrl');
+
+  /* ---------------- helpers ---------------- */
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  function healthMarkup(passRate) {
+    if (passRate === null || passRate === undefined) {
+      return '<div class="health">' +
+        '<div class="health-label"><span>Pass rate</span><span>—</span></div>' +
+        '<div class="health-track empty"></div>' +
+        '<div class="health-empty-note">No runs yet</div>' +
+        '</div>';
+    }
+    return '<div class="health">' +
+      '<div class="health-label"><span>Pass rate</span><span>' + passRate + '%</span></div>' +
+      '<div class="health-track"><div class="health-fill" style="width:' + passRate + '%"></div></div>' +
+      '</div>';
+  }
+
+  function tagPills(tags, max) {
+    max = max || tags.length;
+    var shown = tags.slice(0, max);
+    var overflow = tags.length - shown.length;
+    var html = shown.map(function (t) { return '<span class="pill pill-tag">' + esc(t) + '</span>'; }).join('');
+    if (overflow > 0) html += '<span class="pill pill-tag pill-overflow">+' + overflow + '</span>';
+    return html;
+  }
+
+  function priorityPill(p) {
+    return '<span class="pill pill-priority-' + p + '">' + esc(p) + '</span>';
+  }
+  function outlinePill(v) {
+    return '<span class="pill pill-outline">' + esc(v) + '</span>';
+  }
+
+  function findSuite(id) {
+    for (var i = 0; i < suites.length; i++) if (suites[i].id === id) return suites[i];
+    return null;
+  }
+  function findCase(id) {
+    for (var i = 0; i < casePool.length; i++) if (casePool[i].id === id) return casePool[i];
+    return null;
+  }
+  function showToast(msg) {
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.hidden = false;
+    window.clearTimeout(showToast._h);
+    showToast._h = window.setTimeout(function () { t.hidden = true; }, 2400);
+  }
+
+  /* ---------------- INDEX rendering ---------------- */
+  function renderIndex() {
+    var list = document.getElementById('suiteList');
+    var summary = document.getElementById('suiteSummary');
+    summary.textContent = suites.length + (suites.length === 1 ? ' suite' : ' suites') + ' in this project';
+
+    if (suites.length === 0) {
+      list.innerHTML = '<div class="empty-index">No suites yet. Create one to start grouping cases for a run.</div>';
+      return;
+    }
+
+    list.innerHTML = suites.map(function (s) {
+      return '<button class="suite-card" type="button" data-suite-id="' + s.id + '">' +
+        '<div class="suite-name-block">' +
+          '<p class="suite-name">' + esc(s.name) + '</p>' +
+          '<div class="suite-tags">' + (s.tags.length ? tagPills(s.tags, 3) : '<span class="pill pill-outline">no tags</span>') + '</div>' +
+        '</div>' +
+        healthMarkup(s.passRate) +
+        '<div class="suite-count">' + s.caseIds.length + '<small>' + (s.caseIds.length === 1 ? 'case' : 'cases') + '</small></div>' +
+        '<div class="suite-lastrun">' + (s.lastRun || 'Never run') + '</div>' +
+        '<span class="suite-chevron">›</span>' +
+      '</button>';
+    }).join('');
+
+    Array.prototype.forEach.call(list.querySelectorAll('.suite-card'), function (card) {
+      card.addEventListener('click', function () {
+        showDetail(Number(card.getAttribute('data-suite-id')));
+      });
+    });
+  }
+
+  /* ---------------- DETAIL rendering ---------------- */
+  function resetFilters() {
+    filters = { tag: "", priority: "", platform: "", type: "" };
+    document.getElementById('filterTag').value = "";
+    document.getElementById('filterPriority').value = "";
+    document.getElementById('filterPlatform').value = "";
+    document.getElementById('filterType').value = "";
+  }
+
+  function showDetail(suiteId) {
+    var suite = findSuite(suiteId);
+    if (!suite) return;
+    currentSuiteId = suiteId;
+    selectedIds = new Set(suite.caseIds);
+    originalIds = new Set(suite.caseIds);
+    resetFilters();
+
+    screenIndex.hidden = true;
+    screenDetail.hidden = false;
+    fakeUrl.textContent = 'app.testpulse.dev/projects/sample/suites/' + suiteId;
+
+    renderDetailChrome();
+    renderCaseList();
+    renderSidebar();
+    updateSelectionBar();
+  }
+
+  function showIndex() {
+    currentSuiteId = null;
+    screenDetail.hidden = true;
+    screenIndex.hidden = false;
+    fakeUrl.textContent = 'app.testpulse.dev/projects/sample/suites';
+    renderIndex();
+  }
+
+  function renderDetailChrome() {
+    var suite = findSuite(currentSuiteId);
+    document.getElementById('crumbCurrent').textContent = suite.name;
+    document.getElementById('detailTitle').textContent = suite.name;
+  }
+
+  function passesFilters(c) {
+    return (!filters.tag || c.tag === filters.tag) &&
+           (!filters.priority || c.priority === filters.priority) &&
+           (!filters.platform || c.platform === filters.platform) &&
+           (!filters.type || c.type === filters.type);
+  }
+
+  function renderCaseList() {
+    var visible = casePool.filter(passesFilters);
+    var container = document.getElementById('caseList');
+    document.getElementById('showingLine').innerHTML =
+      'Showing <b>' + visible.length + '</b> of <b>' + casePool.length + '</b> cases';
+
+    var anyFilterActive = filters.tag || filters.priority || filters.platform || filters.type;
+    document.getElementById('btnClearFilters').disabled = !anyFilterActive;
+
+    if (visible.length === 0) {
+      container.innerHTML = '<div class="case-list-empty">No cases match these filters. Try clearing one.</div>';
+      return;
+    }
+
+    container.innerHTML = visible.map(function (c) {
+      var checked = selectedIds.has(c.id) ? ' checked' : '';
+      return '<label class="case-row">' +
+        '<input type="checkbox" data-case-id="' + c.id + '"' + checked + ' />' +
+        '<span class="case-title">' + esc(c.title) + '</span>' +
+        '<span class="case-pills">' +
+          outlinePill(c.tag) + priorityPill(c.priority) + outlinePill(c.platform) + outlinePill(c.type) +
+        '</span>' +
+      '</label>';
+    }).join('');
+
+    Array.prototype.forEach.call(container.querySelectorAll('input[type="checkbox"]'), function (cb) {
+      cb.addEventListener('change', function () {
+        var id = Number(cb.getAttribute('data-case-id'));
+        if (cb.checked) selectedIds.add(id); else selectedIds.delete(id);
+        updateSelectionBar();
+      });
+    });
+  }
+
+  function setsEqual(a, b) {
+    if (a.size !== b.size) return false;
+    for (var v of a) if (!b.has(v)) return false;
+    return true;
+  }
+
+  function updateSelectionBar() {
+    document.getElementById('selectionCount').innerHTML =
+      '<span>' + selectedIds.size + '</span> selected';
+    document.getElementById('btnSaveChanges').disabled = setsEqual(selectedIds, originalIds);
+  }
+
+  function renderSidebar() {
+    var suite = findSuite(currentSuiteId);
+    document.getElementById('sideCaseCount').textContent = suite.caseIds.length;
+    document.getElementById('sideHealth').innerHTML = suite.caseIds.length === 0
+      ? '<div class="health"><div class="health-label"><span>Pass rate</span><span>—</span></div>' +
+        '<div class="health-track empty"></div><div class="health-empty-note">No cases yet</div></div>'
+      : healthMarkup(suite.passRate);
+    document.getElementById('sideLastRun').textContent = suite.lastRun || 'Never run';
+    document.getElementById('sideCreated').textContent = suite.created;
+    document.getElementById('sideTags').innerHTML = suite.tags.length
+      ? tagPills(suite.tags, suite.tags.length)
+      : '<span class="pill pill-outline">no tags</span>';
+  }
+
+  /* ---------------- filter events ---------------- */
+  document.getElementById('filterTag').addEventListener('change', function (e) { filters.tag = e.target.value; renderCaseList(); });
+  document.getElementById('filterPriority').addEventListener('change', function (e) { filters.priority = e.target.value; renderCaseList(); });
+  document.getElementById('filterPlatform').addEventListener('change', function (e) { filters.platform = e.target.value; renderCaseList(); });
+  document.getElementById('filterType').addEventListener('change', function (e) { filters.type = e.target.value; renderCaseList(); });
+  document.getElementById('btnClearFilters').addEventListener('click', function () { resetFilters(); renderCaseList(); });
+
+  /* ---------------- save changes ---------------- */
+  document.getElementById('btnSaveChanges').addEventListener('click', function () {
+    var suite = findSuite(currentSuiteId);
+    suite.caseIds = Array.from(selectedIds);
+    originalIds = new Set(selectedIds);
+    if (suite.caseIds.length > 0 && suite.passRate === null) {
+      // a suite that just got its first cases still shows "no runs yet" until an actual run happens
+    }
+    updateSelectionBar();
+    renderSidebar();
+    showToast('Changes saved — ' + suite.caseIds.length + (suite.caseIds.length === 1 ? ' case' : ' cases') + ' in this suite');
+  });
+
+  /* ---------------- navigation ---------------- */
+  document.getElementById('crumbSuites').addEventListener('click', showIndex);
+
+  /* ---------------- new suite modal ---------------- */
+  var overlayNewSuite = document.getElementById('overlayNewSuite');
+  var inputNewSuiteName = document.getElementById('inputNewSuiteName');
+  var btnCreateSuite = document.getElementById('btnCreateSuite');
+
+  document.getElementById('btnNewSuite').addEventListener('click', function () {
+    inputNewSuiteName.value = "";
+    btnCreateSuite.disabled = true;
+    overlayNewSuite.hidden = false;
+    inputNewSuiteName.focus();
+  });
+  document.getElementById('btnCancelNewSuite').addEventListener('click', function () { overlayNewSuite.hidden = true; });
+  inputNewSuiteName.addEventListener('input', function () {
+    btnCreateSuite.disabled = inputNewSuiteName.value.trim().length === 0;
+  });
+  inputNewSuiteName.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !btnCreateSuite.disabled) btnCreateSuite.click();
+  });
+  btnCreateSuite.addEventListener('click', function () {
+    var name = inputNewSuiteName.value.trim();
+    if (!name) return;
+    var suite = { id: nextSuiteId++, name: name, passRate: null, lastRun: null, created: "Today", tags: [], caseIds: [] };
+    suites.push(suite);
+    overlayNewSuite.hidden = true;
+    showDetail(suite.id);
+    showToast('Suite created — add cases below and save when ready');
+  });
+
+  /* ---------------- rename modal ---------------- */
+  var overlayRename = document.getElementById('overlayRename');
+  var inputRenameName = document.getElementById('inputRenameName');
+  var btnConfirmRename = document.getElementById('btnConfirmRename');
+
+  document.getElementById('btnRename').addEventListener('click', function () {
+    var suite = findSuite(currentSuiteId);
+    inputRenameName.value = suite.name;
+    btnConfirmRename.disabled = false;
+    overlayRename.hidden = false;
+    inputRenameName.focus();
+    inputRenameName.select();
+  });
+  document.getElementById('btnCancelRename').addEventListener('click', function () { overlayRename.hidden = true; });
+  inputRenameName.addEventListener('input', function () {
+    btnConfirmRename.disabled = inputRenameName.value.trim().length === 0;
+  });
+  inputRenameName.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter' && !btnConfirmRename.disabled) btnConfirmRename.click();
+  });
+  btnConfirmRename.addEventListener('click', function () {
+    var suite = findSuite(currentSuiteId);
+    var name = inputRenameName.value.trim();
+    if (!name) return;
+    suite.name = name;
+    overlayRename.hidden = true;
+    renderDetailChrome();
+    showToast('Suite renamed');
+  });
+
+  /* ---------------- delete modal ---------------- */
+  var overlayDelete = document.getElementById('overlayDelete');
+  document.getElementById('btnDeleteSuite').addEventListener('click', function () {
+    var suite = findSuite(currentSuiteId);
+    document.getElementById('deleteConfirmText').innerHTML =
+      'Delete <strong>' + esc(suite.name) + '</strong>? This cannot be undone. Cases stay in your library.';
+    overlayDelete.hidden = false;
+  });
+  document.getElementById('btnCancelDelete').addEventListener('click', function () { overlayDelete.hidden = true; });
+  document.getElementById('btnConfirmDelete').addEventListener('click', function () {
+    var suite = findSuite(currentSuiteId);
+    suites = suites.filter(function (s) { return s.id !== currentSuiteId; });
+    overlayDelete.hidden = true;
+    showIndex();
+    showToast('Suite "' + suite.name + '" deleted');
+  });
+
+  /* close modals on overlay click (not on modal box click) */
+  [overlayNewSuite, overlayRename, overlayDelete].forEach(function (ov) {
+    ov.addEventListener('click', function (e) { if (e.target === ov) ov.hidden = true; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== 'Escape') return;
+    if (!overlayNewSuite.hidden) overlayNewSuite.hidden = true;
+    if (!overlayRename.hidden) overlayRename.hidden = true;
+    if (!overlayDelete.hidden) overlayDelete.hidden = true;
+  });
+
+  /* ---------------- boot ---------------- */
+  renderIndex();
+})();
+</script>
