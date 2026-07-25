@@ -3,12 +3,13 @@ import { useMatch } from 'react-router-dom'
 import { api } from '@/lib/api'
 
 // A project is "active" on /projects/:projectKey directly, or indirectly on
-// /runs/:runKey (resolved by fetching the run to find its project's key —
-// Run carries projectKey alongside its internal projectId specifically for
-// this, since a run's own route isn't nested under its project's).
+// /runs/:runKey and its sub-routes like /runs/:runKey/items/:caseKey
+// (resolved by fetching the run to find its project's key — Run carries
+// projectKey alongside its internal projectId specifically for this, since
+// a run's own route isn't nested under its project's).
 export function useActiveProjectId(): string | undefined {
   const projectMatch = useMatch('/projects/:projectKey/*')
-  const runMatch = useMatch('/runs/:runKey')
+  const runMatch = useMatch('/runs/:runKey/*')
   const [runProjectKey, setRunProjectKey] = useState<string>()
 
   useEffect(() => {
