@@ -434,7 +434,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
-    await expect(page.getByText('ana: pass')).toBeVisible()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('pass')).toBeVisible()
 
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByLabel(/^name$/i).fill('Run fail')
@@ -444,7 +444,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^failed$/i }).click()
-    await expect(page.getByText('ana: failed')).toBeVisible()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('failed')).toBeVisible()
 
     await page.goto(`/projects/${projectId}/library`)
     await page.getByText('Login works').click()
@@ -453,6 +453,11 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await expect(dialog.getByText('Run pass')).toBeVisible()
     await expect(dialog.getByText('Run fail')).toBeVisible()
     await expect(dialog.getByText(/flaky/i)).toBeVisible()
+
+    // link-run-item-and-case-detail: each execution links to its own run item page.
+    await dialog.getByText('Run pass').click()
+    await expect(page).toHaveURL(/\/runs\/.+\/items\/.+/)
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
   })
 
   test('Scenario: Opening a case navigates to its own route', async ({ page }) => {

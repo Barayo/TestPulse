@@ -788,7 +788,7 @@ func TestExecutionsByCaseGroupedByVersion(t *testing.T) {
 	}
 	var v1Count, v2Count int
 	for _, e := range execs {
-		if e.RunName == "" || e.RunID == "" || e.RunItemID == "" {
+		if e.RunName == "" || e.RunID == "" || e.RunItemID == "" || e.RunKey == "" {
 			t.Errorf("execution missing identifying fields: %+v", e)
 		}
 		switch e.CaseVersion {

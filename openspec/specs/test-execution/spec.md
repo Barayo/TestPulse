@@ -197,7 +197,9 @@ with status, assignee, and identifying metadata (case title, test name,
 platform, tags), plus a run-level status breakdown covering all six
 possible statuses (pending/pass/failed/skipped/blocked/retest) and the
 overall pass rate. Selecting an item SHALL navigate to a dedicated item
-page rather than showing its detail inline.
+page rather than showing its detail inline. Right-clicking an item row
+SHALL open a context menu offering to open the item's execution page or
+jump directly to the case's own page in the Library.
 
 #### Scenario: Board shows a status breakdown for all statuses
 - **WHEN** a user opens a run with items in more than one status
@@ -213,6 +215,11 @@ page rather than showing its detail inline.
 - **WHEN** a user selects an item on the board
 - **THEN** the app navigates to that item's own page rather than showing
   its detail in a pane alongside the list
+
+#### Scenario: Right-click offers a shortcut to the case in the Library
+- **WHEN** a user right-clicks a run item row
+- **THEN** a context menu opens with an option to jump directly to that
+  case's own page in the Library, without opening the execution page first
 
 ### Requirement: Run item detail page
 The web UI SHALL provide a dedicated page per run item, reached from the

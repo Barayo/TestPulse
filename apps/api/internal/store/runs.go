@@ -355,7 +355,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 // needs the cross-run view).
 func (r *RunRepo) ExecutionsByCase(ctx context.Context, caseID string) ([]domain.CaseExecution, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT i.id, i.run_id, tr.name, i.case_version, i.current_status, i.created_at
+		`SELECT i.id, i.run_id, tr.key, tr.name, i.case_version, i.current_status, i.created_at
 		 FROM test_run_items i
 		 JOIN test_runs tr ON tr.id = i.run_id
 		 WHERE i.case_id = $1
@@ -368,7 +368,7 @@ func (r *RunRepo) ExecutionsByCase(ctx context.Context, caseID string) ([]domain
 	execs := []domain.CaseExecution{}
 	for rows.Next() {
 		var e domain.CaseExecution
-		if err := rows.Scan(&e.RunItemID, &e.RunID, &e.RunName, &e.CaseVersion, &e.Status, &e.CreatedAt); err != nil {
+		if err := rows.Scan(&e.RunItemID, &e.RunID, &e.RunKey, &e.RunName, &e.CaseVersion, &e.Status, &e.CreatedAt); err != nil {
 			return nil, err
 		}
 		execs = append(execs, e)

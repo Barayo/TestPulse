@@ -1,11 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
+import { ArrowRightIcon, ExternalLinkIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunStatusBreakdown } from '@/components/RunStatusBreakdown'
+import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import {
   Card,
@@ -19,6 +21,58 @@ type Run = components['schemas']['Run']
 type RunItem = components['schemas']['RunItem']
 type RunSummary = components['schemas']['RunSummary']
 type Project = components['schemas']['Project']
+
+function RunItemRow({
+  item,
+  projectKey,
+  onOpenExecution,
+  onGoToCase,
+}: {
+  item: RunItem
+  projectKey?: string
+  onOpenExecution: () => void
+  onGoToCase: () => void
+}) {
+  const menuRef = useRef<RowActionMenuHandle>(null)
+  const menuItems: RowActionMenuItem[] = [
+    { label: 'Open execution', icon: <ArrowRightIcon className="size-4" aria-hidden="true" />, onSelect: onOpenExecution },
+    { label: 'Go to case in Library', icon: <ExternalLinkIcon className="size-4" aria-hidden="true" />, onSelect: onGoToCase },
+  ]
+
+  return (
+    <li
+      onContextMenu={(e) => {
+        if (!projectKey) return
+        e.preventDefault()
+        menuRef.current?.openAt(e.clientX, e.clientY)
+      }}
+    >
+      <button
+        type="button"
+        onClick={onOpenExecution}
+        className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm hover:bg-accent"
+      >
+        <span className="flex flex-col gap-0.5">
+          <span>
+            {item.content.title}
+            {item.newerVersion && (
+              <span className="ml-2 text-xs text-muted-foreground">(newer version available)</span>
+            )}
+          </span>
+          {(item.testName || item.content.platform || item.content.tags?.length) && (
+            <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              {item.testName && <span>{item.testName}</span>}
+              {item.content.platform && <span>{item.content.platform}</span>}
+              {item.content.tags?.map((tag) => <span key={tag}>{tag}</span>)}
+            </span>
+          )}
+        </span>
+        <StatusBadge status={item.currentStatus} />
+      </button>
+      {projectKey && <RowActionMenu ref={menuRef} label={`Actions for ${item.content.title}`} items={menuItems} />}
+    </li>
+  )
+}
 
 export default function RunPage() {
   const { runKey } = useParams<{ runKey: string }>()
@@ -137,32 +191,13 @@ export default function RunPage() {
         <CardContent>
           <ul className="space-y-2">
             {items.map((item) => (
-              <li key={item.id}>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
-                  className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm hover:bg-accent"
-                >
-                  <span className="flex flex-col gap-0.5">
-                    <span>
-                      {item.content.title}
-                      {item.newerVersion && (
-                        <span className="ml-2 text-xs text-muted-foreground">
-                          (newer version available)
-                        </span>
-                      )}
-                    </span>
-                    {(item.testName || item.content.platform || item.content.tags?.length) && (
-                      <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-                        {item.testName && <span>{item.testName}</span>}
-                        {item.content.platform && <span>{item.content.platform}</span>}
-                        {item.content.tags?.map((tag) => <span key={tag}>{tag}</span>)}
-                      </span>
-                    )}
-                  </span>
-                  <StatusBadge status={item.currentStatus} />
-                </button>
-              </li>
+              <RunItemRow
+                key={item.id}
+                item={item}
+                projectKey={project?.key}
+                onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
+                onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
+              />
             ))}
           </ul>
         </CardContent>

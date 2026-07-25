@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
@@ -149,16 +150,21 @@ export function VersionDetailDialog({ open, onOpenChange, caseKey, version, vers
             ) : (
               <ul className="space-y-1 text-sm">
                 {versionExecutions.map((e) => (
-                  <li key={e.runItemId} className="flex items-center justify-between gap-2">
-                    <span>{e.runName}</span>
-                    <span className="flex items-center gap-1.5">
-                      <span
-                        className="size-2 rounded-sm"
-                        style={{ background: VERDICT_COLOR[e.status] }}
-                        aria-hidden="true"
-                      />
-                      {e.status}
-                    </span>
+                  <li key={e.runItemId}>
+                    <Link
+                      to={`/runs/${e.runKey}/items/${caseKey}`}
+                      className="flex items-center justify-between gap-2 rounded-md px-1.5 py-1 hover:bg-accent hover:underline"
+                    >
+                      <span>{e.runName}</span>
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className="size-2 rounded-sm"
+                          style={{ background: VERDICT_COLOR[e.status] }}
+                          aria-hidden="true"
+                        />
+                        {e.status}
+                      </span>
+                    </Link>
                   </li>
                 ))}
               </ul>

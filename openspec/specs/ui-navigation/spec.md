@@ -220,7 +220,8 @@ sections SHALL collapse into stacked, independently-expandable sections in the s
 as the desktop sidebar, with no content omitted. Selecting a version in the version history
 SHALL open a dialog showing a field-by-field diff against the previous version and the list
 of executions that pinned that version, with a Flaky indicator when both a pass and a
-fail/blocked execution exist for the same version.
+fail/blocked execution exist for the same version. Each listed execution SHALL link to that
+execution's own run item page.
 
 #### Scenario: Opening a case navigates to its own route
 - **WHEN** a user selects a test case from the library content list
@@ -281,6 +282,10 @@ fail/blocked execution exist for the same version.
 #### Scenario: No flaky flag on consistent or unexecuted versions
 - **WHEN** a version's executions are all the same outcome, or the version has never been executed
 - **THEN** the dialog does not show a Flaky flag
+
+#### Scenario: An execution links to its own run item page
+- **WHEN** a user clicks an execution listed in the version detail dialog
+- **THEN** the app navigates to that execution's run item page
 
 ### Requirement: Editing a test case creates a new version
 A user SHALL be able to edit an existing case's title and steps from its view, and saving SHALL create a new immutable version rather than modifying the existing one.

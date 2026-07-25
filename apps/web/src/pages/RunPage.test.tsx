@@ -69,12 +69,18 @@ function ItemPageProbe() {
   return <p data-testid="item-page-probe">item {runKey} {caseKey}</p>
 }
 
+function CaseLibraryProbe() {
+  const { projectKey, caseKey } = useParams<{ projectKey?: string; caseKey?: string }>()
+  return <p data-testid="case-library-probe">case {projectKey} {caseKey}</p>
+}
+
 function renderRun() {
   return render(
     <MemoryRouter initialEntries={['/runs/r1']}>
       <Routes>
         <Route path="/runs/:runKey" element={<RunPage />} />
         <Route path="/runs/:runKey/items/:caseKey" element={<ItemPageProbe />} />
+        <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseLibraryProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -129,6 +135,37 @@ describe('Run execution board', () => {
     mockRunAPI([pendingItem])
     renderRun()
     await userEvent.click(await screen.findByText('Login works'))
+    expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c1')
+  })
+
+  it('the row menu offers "Open execution" and "Go to case in Library"', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+
+    expect(within(row).getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
+    expect(within(row).getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
+  })
+
+  it('"Go to case in Library" navigates straight to the case, without visiting the item page', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(within(row).getByRole('menuitem', { name: /go to case in library/i }))
+
+    expect(await screen.findByTestId('case-library-probe')).toHaveTextContent('case p1 c1')
+    expect(screen.queryByTestId('item-page-probe')).not.toBeInTheDocument()
+  })
+
+  it('"Open execution" from the menu navigates to the item\'s own page', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(within(row).getByRole('menuitem', { name: /open execution/i }))
+
     expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c1')
   })
 

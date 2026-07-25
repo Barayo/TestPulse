@@ -76,7 +76,22 @@ test.describe('Requirement: Run execution board', () => {
     await page.getByLabel(/comment/i).fill('works great')
     await page.getByRole('button', { name: /^pass$/i }).click()
 
-    await expect(page.getByText('ana: pass — works great')).toBeVisible()
+    await expect(page.getByText('ana — works great')).toBeVisible()
+  })
+
+  test('Scenario: Right-click a run item, jump straight to its case in the Library', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Right-Click Project')
+    await page.goto(`/projects/${projectId}/runs`)
+    await page.getByLabel(/^name$/i).fill('Run 1')
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.getByRole('link', { name: 'Run 1' }).click()
+
+    const row = page.getByText('Login works').first().locator('xpath=ancestor::li')
+    await row.click({ button: 'right' })
+    await page.getByRole('menuitem', { name: /go to case in library/i }).click()
+
+    await expect(page).toHaveURL(/\/projects\/.+\/cases\/.+/)
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
   })
 
   test('Scenario: Item page breadcrumb ends at the run, not the item\'s own title', async ({ page }) => {
@@ -106,16 +121,18 @@ test.describe('Requirement: Run item status lifecycle', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^failed$/i }).click()
-    // Scoped to the history line, not just "failed" — the "Failed" verdict
-    // button's own label also matches that substring once it's present.
-    await expect(page.getByText('ana: failed')).toBeVisible()
+    // Scoped to the History list — "failed" also appears in the header
+    // and sidebar Properties status badges, which reflect the same
+    // current status and would otherwise make this ambiguous.
+    const history = page.getByRole('list', { name: /result history/i })
+    await expect(history.getByText('failed')).toBeVisible()
 
     // Still on the item's own page — recording never navigates away.
     await page.getByRole('button', { name: /retest/i }).click()
     await page.getByRole('button', { name: /^pass$/i }).click()
 
-    await expect(page.getByText('ana: failed')).toBeVisible()
-    await expect(page.getByText('ana: pass')).toBeVisible()
+    await expect(history.getByText('failed')).toBeVisible()
+    await expect(history.getByText('pass')).toBeVisible()
   })
 })
 
@@ -145,7 +162,7 @@ test.describe('Requirement: Run open/closed lifecycle', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
-    await expect(page.getByText('ana: pass')).toBeVisible()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('pass')).toBeVisible()
   })
 })
 

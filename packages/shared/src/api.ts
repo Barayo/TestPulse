@@ -944,6 +944,8 @@ export interface components {
         CaseExecution: {
             runItemId: string;
             runId: string;
+            /** @description The run's own key — lets a client link to the run item's own page without a second lookup. */
+            runKey: string;
             runName: string;
             caseVersion: number;
             status: components["schemas"]["Status"];

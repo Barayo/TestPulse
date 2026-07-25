@@ -1170,10 +1170,13 @@ components:
         createdAt: { type: string, format: date-time }
     CaseExecution:
       type: object
-      required: [runItemId, runId, runName, caseVersion, status, createdAt]
+      required: [runItemId, runId, runKey, runName, caseVersion, status, createdAt]
       properties:
         runItemId: { type: string }
         runId: { type: string }
+        runKey:
+          type: string
+          description: The run's own key — lets a client link to the run item's own page without a second lookup.
         runName: { type: string }
         caseVersion: { type: integer }
         status: { $ref: "#/components/schemas/Status" }

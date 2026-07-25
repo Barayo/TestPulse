@@ -8,7 +8,9 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PropertyRow } from '@/components/PropertyRow'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
+import { CaseStepsList } from '@/components/CaseStepsList'
 import { StatusBadge } from '@/components/StatusBadge'
+import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
 
 type Run = components['schemas']['Run']
@@ -16,6 +18,10 @@ type RunItem = components['schemas']['RunItem']
 type Verdict = components['schemas']['Verdict']
 type Result = components['schemas']['Result']
 type Project = components['schemas']['Project']
+
+function isValidDate(iso: string): boolean {
+  return iso !== '' && !Number.isNaN(new Date(iso).getTime())
+}
 
 export default function RunItemDetailPage() {
   const { runKey, caseKey } = useParams<{ runKey: string; caseKey: string }>()
@@ -125,16 +131,9 @@ export default function RunItemDetailPage() {
 
       <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
         <div className="space-y-4">
-          <div>
-            <h3 className="mb-1 text-sm font-medium">Steps</h3>
-            <ol className="list-decimal space-y-1 pl-5 text-sm">
-              {item.content.steps?.map((step, i) => (
-                <li key={i}>
-                  {step.action}
-                  {step.expected && <span className="text-muted-foreground"> → {step.expected}</span>}
-                </li>
-              ))}
-            </ol>
+          <div className="space-y-2">
+            <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">Steps</p>
+            <CaseStepsList steps={item.content.steps} />
           </div>
           {item.content.expectedResult && (
             <div>
@@ -204,7 +203,7 @@ export default function RunItemDetailPage() {
           data-testid="run-item-sidebar"
         >
           <CaseSidebarSection title="Properties">
-            <PropertyRow label="Status" value={item.currentStatus} />
+            <PropertyRow label="Status" value={<StatusBadge status={item.currentStatus} />} />
             {item.testName && <PropertyRow label="Test name" value={item.testName} />}
             <PropertyRow label="Platform" value={item.content.platform} />
             <PropertyRow label="Tags" value={(item.content.tags ?? []).join(', ')} />
@@ -216,11 +215,19 @@ export default function RunItemDetailPage() {
 
           <CaseSidebarSection title="History">
             {results.length > 0 ? (
-              <ul className="space-y-1 text-sm text-muted-foreground">
+              <ul className="space-y-2 text-sm" aria-label="Result history">
                 {results.map((r) => (
-                  <li key={r.id}>
-                    {r.actor}: {r.verdict}
-                    {r.comment && ` — ${r.comment}`}
+                  <li key={r.id} className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <StatusBadge status={r.verdict} />
+                      {isValidDate(r.createdAt) && (
+                        <span className="text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
+                      )}
+                    </div>
+                    <p className="text-muted-foreground">
+                      {r.actor}
+                      {r.comment && ` — ${r.comment}`}
+                    </p>
                   </li>
                 ))}
               </ul>

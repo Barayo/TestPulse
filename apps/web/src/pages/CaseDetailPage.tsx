@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { ListChecksIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { PropertyRow } from '@/components/PropertyRow'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel } from '@/components/CaseResultsPanel'
+import { CaseStepsList } from '@/components/CaseStepsList'
 import { ClassificationEditor, type Priority } from '@/components/ClassificationEditor'
 import { StepEditor, type Step } from '@/components/StepEditor'
 import { VersionDetailDialog } from '@/components/VersionDetailDialog'
@@ -195,45 +194,10 @@ export default function CaseDetailPage() {
         <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
           <div className="space-y-2">
             <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">Steps</p>
-            {testCase.content.steps?.length ? (
-              <Card>
-                <CardContent className="p-0">
-                  <ol className="list-none">
-                    {testCase.content.steps.map((s, i) => (
-                      <li key={i} className="flex gap-3 border-b px-(--card-spacing) py-4 last:border-b-0">
-                        <span
-                          data-testid={`step-number-${i}`}
-                          className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary"
-                          aria-hidden="true"
-                        >
-                          {i + 1}
-                        </span>
-                        <div className="space-y-2 pt-0.5">
-                          <p className="text-base font-medium leading-relaxed">{s.action}</p>
-                          {s.expected && (
-                            <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
-                              <p className="text-base leading-relaxed text-foreground">
-                                <span className="tp-label mr-1.5 text-primary">Expected:</span>
-                                {s.expected}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                      </li>
-                    ))}
-                  </ol>
-                </CardContent>
-              </Card>
-            ) : (
-              <div className="rounded-2xl border border-dashed p-10 text-center">
-                <ListChecksIcon className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
-                <p className="mb-1 text-sm font-medium">No steps yet</p>
-                <p className="mb-4 text-sm text-muted-foreground">
-                  Add steps to describe how to run this test.
-                </p>
-                <Button onClick={() => setIsEditing(true)}>+ Add steps</Button>
-              </div>
-            )}
+            <CaseStepsList
+              steps={testCase.content.steps}
+              emptyStateAction={<Button onClick={() => setIsEditing(true)}>+ Add steps</Button>}
+            />
           </div>
 
           <div

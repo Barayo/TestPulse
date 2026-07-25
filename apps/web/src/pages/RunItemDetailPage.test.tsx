@@ -108,6 +108,14 @@ describe('RunItemDetailPage', () => {
     expect(within(sidebar).getByText('v1')).toBeInTheDocument()
   })
 
+  it('shows the status property with a colored dot, not raw text alone', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(sidebar.querySelector('[data-dot]')).not.toBeNull()
+  })
+
   it('shows a newer-version hint when the case has moved on', async () => {
     mockItemAPI({ ...item, newerVersion: true })
     renderPage()
@@ -156,12 +164,24 @@ describe('RunItemDetailPage', () => {
     })
   })
 
-  it('shows result history', async () => {
+  it('shows result history with a verdict dot, actor, comment, and relative time', async () => {
     mockItemAPI(undefined, undefined, [
-      { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: 'looks good', createdAt: '' },
+      {
+        id: 'res1',
+        runItemId: 'i1',
+        actor: 'ana',
+        verdict: 'pass',
+        comment: 'looks good',
+        createdAt: new Date(Date.now() - 3600_000).toISOString(),
+      },
     ])
     renderPage()
-    expect(await screen.findByText(/ana: pass — looks good/i)).toBeInTheDocument()
+    const history = await screen.findByText(/looks good/i)
+    const row = history.closest('li')!
+    expect(within(row).getByText('pass')).toBeInTheDocument()
+    expect(row.querySelector('[data-dot]')).not.toBeNull()
+    expect(within(row).getByText(/ana/)).toBeInTheDocument()
+    expect(within(row).getByText(/hour ago/i)).toBeInTheDocument()
   })
 
   it('shows the item read-only, without verdict controls, on a closed run', async () => {
