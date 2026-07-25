@@ -8,6 +8,7 @@ test.describe('Requirement: Single-command evaluation via docker-compose', () =>
   test('Scenario: Fresh checkout starts successfully — UI is reachable and healthy', async ({
     page,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-5' })
     // WHEN the user opens the documented localhost port
     await page.goto('/')
 
@@ -25,6 +26,7 @@ test.describe('Requirement: Single-command evaluation via docker-compose', () =>
   test('Scenario: SPA routes are served after a full page load', async ({
     page,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-6' })
     // WHEN the browser loads an unknown client-side path directly
     await page.goto('/some/unrecognized/path')
 
@@ -35,6 +37,7 @@ test.describe('Requirement: Single-command evaluation via docker-compose', () =>
 
 test.describe('Requirement: Health and readiness endpoints', () => {
   test('Scenario: Ready when database is reachable', async ({ request }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-7' })
     // WHEN the readiness endpoint is called while the stack is healthy
     const readyz = await request.get('/readyz')
 
@@ -44,6 +47,7 @@ test.describe('Requirement: Health and readiness endpoints', () => {
   })
 
   test('Scenario: Liveness reports process health', async ({ request }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-8' })
     const healthz = await request.get('/healthz')
     expect(healthz.status()).toBe(200)
   })
@@ -51,6 +55,7 @@ test.describe('Requirement: Health and readiness endpoints', () => {
 
 test.describe('Requirement: Versioned API under /api/v1', () => {
   test('Scenario: Service metadata is exposed', async ({ request }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-9' })
     const meta = await request.get('/api/v1/meta')
     expect(meta.status()).toBe(200)
     expect(await meta.json()).toMatchObject({ name: 'TestPulse' })

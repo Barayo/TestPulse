@@ -63,6 +63,7 @@ async function assignRole(adminPage: Page, projectId: string, userId: string, ro
 
 test.describe('Requirement: Effective project role from membership and teams', () => {
   test('Scenario: User with no membership cannot see a project', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-10' })
     const { projectId } = await createProjectWithCase(page, 'RBAC No Membership')
     const { page: outsiderPage } = await loginAsNewUser(page, browser, 'Outsider')
 
@@ -75,6 +76,7 @@ test.describe('Requirement: Effective project role from membership and teams', (
   })
 
   test('Scenario: Tester can read but cannot modify cases', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-11' })
     const { projectId, caseKey } = await createProjectWithCase(page, 'RBAC Tester')
     const { page: testerPage, userId } = await loginAsNewUser(page, browser, 'Tester User')
     await assignRole(page, projectId, userId, 'Tester')
@@ -90,6 +92,7 @@ test.describe('Requirement: Effective project role from membership and teams', (
   })
 
   test('Scenario: Contributor can edit but cannot delete a case', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-12' })
     const { projectId, caseKey } = await createProjectWithCase(page, 'RBAC Contributor')
     const { page: contributorPage, userId } = await loginAsNewUser(page, browser, 'Contributor User')
     await assignRole(page, projectId, userId, 'Contributor')
@@ -105,6 +108,7 @@ test.describe('Requirement: Effective project role from membership and teams', (
   })
 
   test('Scenario: Project Admin can delete a case', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-13' })
     const { projectId, caseKey } = await createProjectWithCase(page, 'RBAC Project Admin')
     const { page: adminPage, userId } = await loginAsNewUser(page, browser, 'Project Admin User')
     await assignRole(page, projectId, userId, 'Project Admin')

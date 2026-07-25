@@ -66,6 +66,7 @@ test.describe('Requirement: Destructive actions are tucked behind a per-row menu
     page,
     browser,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-1' })
     const projectId = await createProjectId(page, 'Delete Menu Visibility')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Auth')
@@ -81,6 +82,7 @@ test.describe('Requirement: Destructive actions are tucked behind a per-row menu
   test('Scenario: Opening a folder row\'s menu reveals Delete; deleting a folder cascades to its subtree', async ({
     page,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-2' })
     await createProjectId(page, 'Delete Menu Cascade')
     await openFolderExplorer(page)
 
@@ -112,6 +114,7 @@ test.describe('Requirement: Destructive actions are tucked behind a per-row menu
   })
 
   test('Scenario: Right-clicking a case or folder row opens its menu at the cursor', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-3' })
     await createProjectId(page, 'Right Click Row Menu')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Auth')
@@ -129,6 +132,7 @@ test.describe('Requirement: Destructive actions are tucked behind a per-row menu
   test('Scenario: The section tree\'s "New section" action has a visible trigger, not just right-click', async ({
     page,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-4' })
     await createProjectId(page, 'Tree Visible Trigger')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Auth')

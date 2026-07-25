@@ -41,6 +41,7 @@ test.describe('Requirement: Session expiry mid-use prompts re-login without losi
   test('Scenario: A 401 after an established session opens the modal, explains why, and pre-fills email', async ({
     page,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-14' })
     await gotoAuthenticated(page)
 
     await corruptSessionCookie(page)
@@ -54,6 +55,7 @@ test.describe('Requirement: Session expiry mid-use prompts re-login without losi
   })
 
   test('Scenario: The modal cannot be dismissed without logging in', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-15' })
     await gotoAuthenticated(page)
     await corruptSessionCookie(page)
     await triggerMidUseRequest(page)
@@ -65,6 +67,7 @@ test.describe('Requirement: Session expiry mid-use prompts re-login without losi
   })
 
   test('Scenario: Re-authenticating as the same user resumes the same view', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-16' })
     await gotoAuthenticated(page)
     await corruptSessionCookie(page)
     await triggerMidUseRequest(page)
@@ -80,6 +83,7 @@ test.describe('Requirement: Session expiry mid-use prompts re-login without losi
   })
 
   test('Scenario: Re-authenticating as a different user goes home', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-17' })
     const email = `${unique('session-expiry-other').replace(/\s+/g, '-').toLowerCase()}@example.com`
     const password = 'correcthorse'
     await page.request.post('/api/v1/users', { data: { email, password } })

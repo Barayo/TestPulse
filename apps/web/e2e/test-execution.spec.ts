@@ -33,6 +33,7 @@ async function createProjectWithCase(page: Page, label: string): Promise<string>
 
 test.describe('Requirement: Run creation pins case versions', () => {
   test('Scenario: Run pins versions at creation; board shows pinned content', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-24' })
     const projectId = await createProjectWithCase(page, 'Pinning Project')
 
     await page.goto(`/projects/${projectId}/runs`)
@@ -59,6 +60,7 @@ test.describe('Requirement: Run creation pins case versions', () => {
 
 test.describe('Requirement: Run execution board', () => {
   test('Scenario: Execute a case from the board (pass with comment)', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-25' })
     const projectId = await createProjectWithCase(page, 'Execution Project')
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByLabel(/^name$/i).fill('Run 1')
@@ -77,6 +79,7 @@ test.describe('Requirement: Run execution board', () => {
 
 test.describe('Requirement: Run item status lifecycle', () => {
   test('Scenario: Marking retest after a failed verdict', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-26' })
     const projectId = await createProjectWithCase(page, 'Retest Project')
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByLabel(/^name$/i).fill('Run 1')
@@ -103,6 +106,7 @@ test.describe('Requirement: Run item status lifecycle', () => {
 
 test.describe('Requirement: Run open/closed lifecycle', () => {
   test('Scenario: Closing a run blocks recording; reopening allows it again', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-27' })
     const projectId = await createProjectWithCase(page, 'Lifecycle Project')
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByLabel(/^name$/i).fill('Run 1')
@@ -130,6 +134,7 @@ test.describe('Requirement: Run open/closed lifecycle', () => {
 
 test.describe('Requirement: Run summary', () => {
   test('Scenario: Summary counts by status', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-28' })
     const projectId = await createProjectWithCase(page, 'Summary Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')

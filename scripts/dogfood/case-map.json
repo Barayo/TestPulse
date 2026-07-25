@@ -1,0 +1,358 @@
+{
+  "projectKey": "TD",
+  "projectId": "6ac93184-7b60-4b8b-a835-7635bd01daaa",
+  "files": {
+    "delete-mode.spec.ts": {
+      "sectionId": "5b05b077-8233-451f-99ba-fca9c5c0f338",
+      "sectionLabel": "Delete mode",
+      "cases": [
+        {
+          "testTitle": "Scenario: A folder row's menu trigger is not shown without sectionDelete permission",
+          "caseKey": "TD-1",
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — A folder row's menu trigger is not shown without sectionDelete permission"
+        },
+        {
+          "testTitle": "Scenario: Opening a folder row's menu reveals Delete; deleting a folder cascades to its subtree",
+          "caseKey": "TD-2",
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — Opening a folder row's menu reveals Delete; deleting a folder cascades to its subtree"
+        },
+        {
+          "testTitle": "Scenario: Right-clicking a case or folder row opens its menu at the cursor",
+          "caseKey": "TD-3",
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — Right-clicking a case or folder row opens its menu at the cursor"
+        },
+        {
+          "testTitle": "Scenario: The section tree's \"New section\" action has a visible trigger, not just right-click",
+          "caseKey": "TD-4",
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — The section tree's \"New section\" action has a visible trigger, not just right-click"
+        }
+      ]
+    },
+    "platform-deployment.spec.ts": {
+      "sectionId": "9c4d5d3b-79b2-4bb6-8709-344efb167837",
+      "sectionLabel": "Platform & deployment",
+      "cases": [
+        {
+          "testTitle": "Scenario: Fresh checkout starts successfully — UI is reachable and healthy",
+          "caseKey": "TD-5",
+          "caseTitle": "Single-command evaluation via docker-compose — Fresh checkout starts successfully — UI is reachable and healthy"
+        },
+        {
+          "testTitle": "Scenario: SPA routes are served after a full page load",
+          "caseKey": "TD-6",
+          "caseTitle": "Single-command evaluation via docker-compose — SPA routes are served after a full page load"
+        },
+        {
+          "testTitle": "Scenario: Ready when database is reachable",
+          "caseKey": "TD-7",
+          "caseTitle": "Health and readiness endpoints — Ready when database is reachable"
+        },
+        {
+          "testTitle": "Scenario: Liveness reports process health",
+          "caseKey": "TD-8",
+          "caseTitle": "Health and readiness endpoints — Liveness reports process health"
+        },
+        {
+          "testTitle": "Scenario: Service metadata is exposed",
+          "caseKey": "TD-9",
+          "caseTitle": "Versioned API under /api/v1 — Service metadata is exposed"
+        }
+      ]
+    },
+    "project-rbac.spec.ts": {
+      "sectionId": "5e0f3d24-47c7-4d4c-bb45-9065827f716c",
+      "sectionLabel": "Project RBAC",
+      "cases": [
+        {
+          "testTitle": "Scenario: User with no membership cannot see a project",
+          "caseKey": "TD-10",
+          "caseTitle": "Effective project role from membership and teams — User with no membership cannot see a project"
+        },
+        {
+          "testTitle": "Scenario: Tester can read but cannot modify cases",
+          "caseKey": "TD-11",
+          "caseTitle": "Effective project role from membership and teams — Tester can read but cannot modify cases"
+        },
+        {
+          "testTitle": "Scenario: Contributor can edit but cannot delete a case",
+          "caseKey": "TD-12",
+          "caseTitle": "Effective project role from membership and teams — Contributor can edit but cannot delete a case"
+        },
+        {
+          "testTitle": "Scenario: Project Admin can delete a case",
+          "caseKey": "TD-13",
+          "caseTitle": "Effective project role from membership and teams — Project Admin can delete a case"
+        }
+      ]
+    },
+    "session-expiry.spec.ts": {
+      "sectionId": "17ebf56f-db73-471d-8d71-dff1912c7d66",
+      "sectionLabel": "Session expiry",
+      "cases": [
+        {
+          "testTitle": "Scenario: A 401 after an established session opens the modal, explains why, and pre-fills email",
+          "caseKey": "TD-14",
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place — A 401 after an established session opens the modal, explains why, and pre-fills email"
+        },
+        {
+          "testTitle": "Scenario: The modal cannot be dismissed without logging in",
+          "caseKey": "TD-15",
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place — The modal cannot be dismissed without logging in"
+        },
+        {
+          "testTitle": "Scenario: Re-authenticating as the same user resumes the same view",
+          "caseKey": "TD-16",
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place — Re-authenticating as the same user resumes the same view"
+        },
+        {
+          "testTitle": "Scenario: Re-authenticating as a different user goes home",
+          "caseKey": "TD-17",
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place — Re-authenticating as a different user goes home"
+        }
+      ]
+    },
+    "test-authoring.spec.ts": {
+      "sectionId": "6ca8261d-ee06-485a-b1e5-1dc72af4e627",
+      "sectionLabel": "Test authoring",
+      "cases": [
+        {
+          "testTitle": "Scenario: Create a project",
+          "caseKey": "TD-18",
+          "caseTitle": "Project management — Create a project"
+        },
+        {
+          "testTitle": "Scenario: Project name is required",
+          "caseKey": "TD-19",
+          "caseTitle": "Project management — Project name is required"
+        },
+        {
+          "testTitle": "Scenario: Create a test case, then edit it to create a new version",
+          "caseKey": "TD-20",
+          "caseTitle": "Test case creation and immutable versioning — Create a test case, then edit it to create a new version"
+        },
+        {
+          "testTitle": "Scenario: Add cases to a suite; removing one does not delete the case",
+          "caseKey": "TD-21",
+          "caseTitle": "Test suite grouping — Add cases to a suite; removing one does not delete the case"
+        },
+        {
+          "testTitle": "Scenario: New project has a root folder; case defaults into it",
+          "caseKey": "TD-22",
+          "caseTitle": "Project-level case folders — New project has a root folder; case defaults into it"
+        },
+        {
+          "testTitle": "Scenario: Create a nested folder and place a case in it",
+          "caseKey": "TD-23",
+          "caseTitle": "Project-level case folders — Create a nested folder and place a case in it"
+        }
+      ]
+    },
+    "test-execution.spec.ts": {
+      "sectionId": "a4c3d10e-0ad7-467e-ad9d-f399a47f6952",
+      "sectionLabel": "Test execution",
+      "cases": [
+        {
+          "testTitle": "Scenario: Run pins versions at creation; board shows pinned content",
+          "caseKey": "TD-24",
+          "caseTitle": "Run creation pins case versions — Run pins versions at creation; board shows pinned content"
+        },
+        {
+          "testTitle": "Scenario: Execute a case from the board (pass with comment)",
+          "caseKey": "TD-25",
+          "caseTitle": "Run execution board — Execute a case from the board (pass with comment)"
+        },
+        {
+          "testTitle": "Scenario: Marking retest after a failed verdict",
+          "caseKey": "TD-26",
+          "caseTitle": "Run item status lifecycle — Marking retest after a failed verdict"
+        },
+        {
+          "testTitle": "Scenario: Closing a run blocks recording; reopening allows it again",
+          "caseKey": "TD-27",
+          "caseTitle": "Run open/closed lifecycle — Closing a run blocks recording; reopening allows it again"
+        },
+        {
+          "testTitle": "Scenario: Summary counts by status",
+          "caseKey": "TD-28",
+          "caseTitle": "Run summary — Summary counts by status"
+        }
+      ]
+    },
+    "ui-navigation.spec.ts": {
+      "sectionId": "0e35fc24-c0ab-46b6-af51-69019119364d",
+      "sectionLabel": "UI navigation",
+      "cases": [
+        {
+          "testTitle": "Scenario: Breadcrumb on a project's landing page",
+          "caseKey": "TD-29",
+          "caseTitle": "Breadcrumb trail — Breadcrumb on a project's landing page"
+        },
+        {
+          "testTitle": "Scenario: Breadcrumb reflects folder depth",
+          "caseKey": "TD-30",
+          "caseTitle": "Breadcrumb trail — Breadcrumb reflects folder depth"
+        },
+        {
+          "testTitle": "Scenario: Deep section nesting collapses the middle of the trail",
+          "caseKey": "TD-31",
+          "caseTitle": "Breadcrumb trail — Deep section nesting collapses the middle of the trail"
+        },
+        {
+          "testTitle": "Scenario: Breadcrumb on a run page",
+          "caseKey": "TD-32",
+          "caseTitle": "Breadcrumb trail — Breadcrumb on a run page"
+        },
+        {
+          "testTitle": "Scenario: Navigating to the active project via the header",
+          "caseKey": "TD-33",
+          "caseTitle": "Project switcher — Navigating to the active project via the header"
+        },
+        {
+          "testTitle": "Scenario: Switching project via the header icon",
+          "caseKey": "TD-34",
+          "caseTitle": "Project switcher — Switching project via the header icon"
+        },
+        {
+          "testTitle": "Scenario: Switching project via keyboard",
+          "caseKey": "TD-35",
+          "caseTitle": "Project switcher — Switching project via keyboard"
+        },
+        {
+          "testTitle": "Scenario: Wordmark links home",
+          "caseKey": "TD-36",
+          "caseTitle": "Brand wordmark — Wordmark links home"
+        },
+        {
+          "testTitle": "Scenario: Empty project shows per-panel empty states",
+          "caseKey": "TD-37",
+          "caseTitle": "Project landing shows top-level structure only — Empty project shows per-panel empty states"
+        },
+        {
+          "testTitle": "Scenario: Entirely empty project shows a getting-started checklist instead of three empty panels",
+          "caseKey": "TD-38",
+          "caseTitle": "Project landing shows top-level structure only — Entirely empty project shows a getting-started checklist instead of three empty panels"
+        },
+        {
+          "testTitle": "Scenario: Dense project stays legible",
+          "caseKey": "TD-39",
+          "caseTitle": "Project landing shows top-level structure only — Dense project stays legible"
+        },
+        {
+          "testTitle": "Scenario: Navigating into a nested folder",
+          "caseKey": "TD-40",
+          "caseTitle": "Library with two-pane navigation — Navigating into a nested folder"
+        },
+        {
+          "testTitle": "Scenario: A folder can contain both subfolders and cases",
+          "caseKey": "TD-41",
+          "caseTitle": "Library with two-pane navigation — A folder can contain both subfolders and cases"
+        },
+        {
+          "testTitle": "Scenario: Section tree is hidden below 768px",
+          "caseKey": "TD-42",
+          "caseTitle": "Library with two-pane navigation — Section tree is hidden below 768px"
+        },
+        {
+          "testTitle": "Scenario: Breadcrumbs cover upward navigation on mobile",
+          "caseKey": "TD-43",
+          "caseTitle": "Library with two-pane navigation — Breadcrumbs cover upward navigation on mobile"
+        },
+        {
+          "testTitle": "Scenario: Browse sections covers sideways navigation on mobile",
+          "caseKey": "TD-44",
+          "caseTitle": "Library with two-pane navigation — Browse sections covers sideways navigation on mobile"
+        },
+        {
+          "testTitle": "Scenario: Creating a folder in the currently open folder",
+          "caseKey": "TD-45",
+          "caseTitle": "Creating a folder — Creating a folder in the currently open folder"
+        },
+        {
+          "testTitle": "Scenario: Creating a subfolder from the tree without navigating",
+          "caseKey": "TD-46",
+          "caseTitle": "Creating a folder — Creating a subfolder from the tree without navigating"
+        },
+        {
+          "testTitle": "Scenario: Creating a case with steps",
+          "caseKey": "TD-47",
+          "caseTitle": "Creating a test case — Creating a case with steps"
+        },
+        {
+          "testTitle": "Scenario: Expected result per step is optional",
+          "caseKey": "TD-48",
+          "caseTitle": "Creating a test case — Expected result per step is optional"
+        },
+        {
+          "testTitle": "Scenario: Viewing steps and suite membership",
+          "caseKey": "TD-49",
+          "caseTitle": "Viewing an existing test case — Viewing steps and suite membership"
+        },
+        {
+          "testTitle": "Scenario: Version history is visible",
+          "caseKey": "TD-50",
+          "caseTitle": "Viewing an existing test case — Version history is visible"
+        },
+        {
+          "testTitle": "Scenario: Opening a version's detail dialog",
+          "caseKey": "TD-51",
+          "caseTitle": "Viewing an existing test case — Opening a version's detail dialog"
+        },
+        {
+          "testTitle": "Scenario: Diff shows only changed fields",
+          "caseKey": "TD-52",
+          "caseTitle": "Viewing an existing test case — Diff shows only changed fields"
+        },
+        {
+          "testTitle": "Scenario: Oldest version has nothing to diff against",
+          "caseKey": "TD-53",
+          "caseTitle": "Viewing an existing test case — Oldest version has nothing to diff against"
+        },
+        {
+          "testTitle": "Scenario: Executions list and Flaky flag reflect mixed results for the same version",
+          "caseKey": "TD-54",
+          "caseTitle": "Viewing an existing test case — Executions list and Flaky flag reflect mixed results for the same version"
+        },
+        {
+          "testTitle": "Scenario: Opening a case navigates to its own route",
+          "caseKey": "TD-55",
+          "caseTitle": "Viewing an existing test case — Opening a case navigates to its own route"
+        },
+        {
+          "testTitle": "Scenario: Properties render as labeled pairs",
+          "caseKey": "TD-56",
+          "caseTitle": "Viewing an existing test case — Properties render as labeled pairs"
+        },
+        {
+          "testTitle": "Scenario: Results section shows a designed empty state",
+          "caseKey": "TD-57",
+          "caseTitle": "Viewing an existing test case — Results section shows a designed empty state"
+        },
+        {
+          "testTitle": "Scenario: Sidebar collapses to stacked sections on narrow viewports",
+          "caseKey": "TD-58",
+          "caseTitle": "Viewing an existing test case — Sidebar collapses to stacked sections on narrow viewports"
+        },
+        {
+          "testTitle": "Scenario: Saving an edit creates a new version",
+          "caseKey": "TD-59",
+          "caseTitle": "Editing a test case creates a new version — Saving an edit creates a new version"
+        },
+        {
+          "testTitle": "Scenario: Listing projects",
+          "caseKey": "TD-60",
+          "caseTitle": "Project list with permission-ready create action — Listing projects"
+        },
+        {
+          "testTitle": "Scenario: Manual view choice persists across reloads",
+          "caseKey": "TD-61",
+          "caseTitle": "Project list with permission-ready create action — Manual view choice persists across reloads"
+        },
+        {
+          "testTitle": "Scenario: Searching filters by name",
+          "caseKey": "TD-62",
+          "caseTitle": "Project list with permission-ready create action — Searching filters by name"
+        }
+      ]
+    }
+  }
+}
