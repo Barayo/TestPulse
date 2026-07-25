@@ -16,6 +16,7 @@ import RunsPage from '@/pages/RunsPage'
 import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import CaseDetailPage from '@/pages/CaseDetailPage'
 import RunPage from '@/pages/RunPage'
+import RunItemDetailPage from '@/pages/RunItemDetailPage'
 import LoginPage from '@/pages/LoginPage'
 import PeoplePage from '@/pages/PeoplePage'
 import RolesPage from '@/pages/RolesPage'
@@ -221,6 +222,14 @@ function App() {
               element={
                 <RequireAuth>
                   <RunPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/runs/:runKey/items/:caseKey"
+              element={
+                <RequireAuth>
+                  <RunItemDetailPage />
                 </RequireAuth>
               }
             />

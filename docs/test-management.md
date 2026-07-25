@@ -117,9 +117,10 @@ Nothing about the run silently changes when the case is edited later — what a 
 
 Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for heavy daily use.
 
-- **Left**: the run's items, each with a status chip (`pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`) and a "(newer version available)" hint when applicable.
-- **Right** (after clicking an item): the pinned case's steps and expected result, a **Your name** / **Comment** form, and verdict buttons — **Pass**, **Failed**, **Blocked**, **Skipped**.
-- Recording a verdict appends to that item's result log (visible as **History**) and updates its status immediately — the board reflects the change without needing to reselect the item.
+- A **status breakdown** across all six possible statuses (`pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`) plus the overall pass rate, above the item list.
+- The item list: each row shows a status chip, the test name/platform/tags captured from JUnit imports when present, and a "(newer version available)" hint when applicable.
+- Selecting an item navigates to its own page (`/runs/{runKey}/items/{caseKey}`) — the same single-window, content+sidebar pattern as a case's own detail page, not an inline panel — showing the pinned case's steps and expected result, a **Your name** / **Comment** form, verdict buttons (**Pass**, **Failed**, **Blocked**, **Skipped**), item properties, and result **History** in the sidebar.
+- Recording a verdict updates the item's status immediately, without leaving the item's page.
 - A **Retest** button appears on failed items; marking retest sets the item back to an executable state (`retest` status) without erasing the prior failure from history.
 
 ## Closing and reopening a run
@@ -130,4 +131,4 @@ Reopening is more privileged than closing — it requires **Manage Project** (th
 
 ## Run summary
 
-Each run page shows a live item count by status (e.g. "4 items — 2 pass, 1 failed, 1 pending"), backed by `GET /api/v1/runs/{key}/summary`. Deeper analytics (trends, flaky-test detection) arrive in `add-reporting` (v0.3) — see [ROADMAP.md](../ROADMAP.md).
+The status breakdown at the top of the run page — pass rate plus a segmented count per status — is backed by `GET /api/v1/runs/{key}/summary`. Deeper analytics (trends, flaky-test detection) arrive in `add-reporting` (v0.3) — see [ROADMAP.md](../ROADMAP.md).

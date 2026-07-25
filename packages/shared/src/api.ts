@@ -987,6 +987,8 @@ export interface components {
             id: string;
             runId: string;
             caseId: string;
+            /** @description The pinned case's own key — lets a client route to the case's detail page or a per-item page without a second lookup. */
+            caseKey: string;
             caseVersion: number;
             assignee: string;
             currentStatus: components["schemas"]["Status"];

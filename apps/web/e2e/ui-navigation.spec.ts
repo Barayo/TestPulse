@@ -434,7 +434,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
-    await expect(page.getByTestId('item-detail').getByText('ana: pass')).toBeVisible()
+    await expect(page.getByText('ana: pass')).toBeVisible()
 
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByLabel(/^name$/i).fill('Run fail')
@@ -444,7 +444,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^failed$/i }).click()
-    await expect(page.getByTestId('item-detail').getByText('ana: failed')).toBeVisible()
+    await expect(page.getByText('ana: failed')).toBeVisible()
 
     await page.goto(`/projects/${projectId}/library`)
     await page.getByText('Login works').click()

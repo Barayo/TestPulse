@@ -1228,11 +1228,14 @@ components:
           description: Explicit cases to include
     RunItem:
       type: object
-      required: [id, runId, caseId, caseVersion, assignee, currentStatus, content, newerVersion, createdAt]
+      required: [id, runId, caseId, caseKey, caseVersion, assignee, currentStatus, content, newerVersion, createdAt]
       properties:
         id: { type: string }
         runId: { type: string }
         caseId: { type: string }
+        caseKey:
+          type: string
+          description: The pinned case's own key — lets a client route to the case's detail page or a per-item page without a second lookup.
         caseVersion: { type: integer }
         assignee: { type: string }
         currentStatus: { $ref: "#/components/schemas/Status" }

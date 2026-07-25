@@ -302,6 +302,7 @@ type RunItem struct {
 	ID            string      `json:"id"`
 	RunID         string      `json:"runId"`
 	CaseID        string      `json:"caseId"`
+	CaseKey       string      `json:"caseKey"`
 	CaseVersion   int         `json:"caseVersion"`
 	Assignee      string      `json:"assignee"`
 	CurrentStatus Status      `json:"currentStatus"`

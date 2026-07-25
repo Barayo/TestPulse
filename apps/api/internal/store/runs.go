@@ -310,7 +310,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 // optionally filtered by assignee.
 func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.RunItem, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT i.id, i.run_id, i.case_id, i.case_version, i.assignee, i.current_status, i.test_name, i.created_at,
+		`SELECT i.id, i.run_id, i.case_id, c.key, i.case_version, i.assignee, i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
 		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
 		 FROM test_run_items i
@@ -334,7 +334,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 			platform, testType           string
 			automated                    bool
 		)
-		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseVersion,
+		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
 			&it.Assignee, &it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
 			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err

@@ -54,7 +54,7 @@ test.describe('Requirement: Run creation pins case versions', () => {
     await page.getByRole('link', { name: 'Sprint 1' }).click()
     await page.getByText('Login works').first().click()
     await expect(page.getByText(/newer version of this case exists/i)).toBeVisible()
-    await expect(page.getByTestId('item-detail').getByText('Login works')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
   })
 })
 
@@ -67,13 +67,29 @@ test.describe('Requirement: Run execution board', () => {
     await page.getByRole('button', { name: 'Create run' }).click()
     await page.getByRole('link', { name: 'Run 1' }).click()
 
+    // Selecting an item navigates to its own page (redesign-run-execution-view)
+    // rather than opening an inline detail pane.
     await page.getByText('Login works').first().click()
+    await expect(page).toHaveURL(/\/runs\/.+\/items\/.+/)
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByLabel(/comment/i).fill('works great')
     await page.getByRole('button', { name: /^pass$/i }).click()
 
     await expect(page.getByText('ana: pass — works great')).toBeVisible()
+  })
+
+  test('Scenario: Item page breadcrumb ends at the run, not the item\'s own title', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Item Breadcrumb Project')
+    await page.goto(`/projects/${projectId}/runs`)
+    await page.getByLabel(/^name$/i).fill('Run 1')
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.getByRole('link', { name: 'Run 1' }).click()
+    await page.getByText('Login works').first().click()
+
+    const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
+    await expect(nav.getByText('Run 1')).toBeVisible()
+    await expect(nav.getByText('Login works')).toHaveCount(0)
   })
 })
 
@@ -92,11 +108,10 @@ test.describe('Requirement: Run item status lifecycle', () => {
     await page.getByRole('button', { name: /^failed$/i }).click()
     // Scoped to the history line, not just "failed" — the "Failed" verdict
     // button's own label also matches that substring once it's present.
-    await expect(page.getByTestId('item-detail').getByText('ana: failed')).toBeVisible()
+    await expect(page.getByText('ana: failed')).toBeVisible()
 
-    await page.getByText('Login works').first().click()
-    await page.getByTestId('item-detail').getByRole('button', { name: /retest/i }).click()
-    await page.getByText('Login works').first().click()
+    // Still on the item's own page — recording never navigates away.
+    await page.getByRole('button', { name: /retest/i }).click()
     await page.getByRole('button', { name: /^pass$/i }).click()
 
     await expect(page.getByText('ana: failed')).toBeVisible()
@@ -119,8 +134,10 @@ test.describe('Requirement: Run open/closed lifecycle', () => {
 
     await page.getByText('Login works').first().click()
     await expect(page.getByText(/this run is closed/i)).toBeVisible()
-    await expect(page.getByRole('button', { name: /^pass$/i })).toBeDisabled()
+    await expect(page.getByRole('button', { name: /^pass$/i })).toHaveCount(0)
 
+    // Close/Reopen live on the run page, not the item's own page.
+    await page.getByRole('link', { name: /back to run 1/i }).click()
     await page.getByRole('button', { name: /reopen/i }).click()
     await expect(page.getByText(/^open$/i)).toBeVisible()
 
@@ -151,8 +168,10 @@ test.describe('Requirement: Run summary', () => {
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
 
-    await expect(page.getByText(/2 items/)).toBeVisible()
-    await expect(page.getByText(/1 pass/)).toBeVisible()
-    await expect(page.getByText(/1 pending/)).toBeVisible()
+    await page.getByRole('link', { name: /back to run 1/i }).click()
+    await expect(page.getByText(/pass · 2 items/i)).toBeVisible()
+    const breakdown = page.getByRole('list', { name: /status breakdown/i })
+    await expect(breakdown).toContainText('Pass1')
+    await expect(breakdown).toContainText('Pending1')
   })
 })

@@ -412,6 +412,9 @@ func TestRunPinsVersionAtCreation(t *testing.T) {
 	if item.Content.Title != "Login works" {
 		t.Errorf("pinned content = %q, want original", item.Content.Title)
 	}
+	if item.CaseKey != c.Key {
+		t.Errorf("item.CaseKey = %q, want %q", item.CaseKey, c.Key)
+	}
 	if !item.NewerVersion {
 		t.Error("NewerVersion = false, want true after edit")
 	}

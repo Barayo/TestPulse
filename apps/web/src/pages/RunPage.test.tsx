@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
 import RunPage from './RunPage'
 import { api } from '@/lib/api'
 import { useBumpDataRevision } from '@/lib/DataRevision'
@@ -10,7 +10,6 @@ vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() }
 vi.mock('@/lib/DataRevision', () => ({ useBumpDataRevision: vi.fn() }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
-const mockPUT = vi.mocked(api.PUT)
 const mockBump = vi.fn()
 
 const run = {
@@ -26,10 +25,12 @@ const pendingItem = {
   id: 'i1',
   runId: 'r1',
   caseId: 'c1',
+  caseKey: 'c1',
   caseVersion: 1,
   assignee: '',
   currentStatus: 'pending',
   newerVersion: false,
+  testName: 'login_spec.ts::works',
   createdAt: '',
   content: {
     title: 'Login works',
@@ -37,7 +38,9 @@ const pendingItem = {
     steps: [{ action: 'open login page', expected: 'form visible' }],
     expectedResult: 'user is logged in',
     priority: 'medium',
-    tags: [],
+    tags: ['smoke'],
+    platform: 'web',
+    testType: 'e2e',
   },
 }
 
@@ -52,8 +55,6 @@ function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown) 
         data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
         response: { ok: true },
       })
-    if (path === '/api/v1/items/{itemId}/results')
-      return Promise.resolve({ data: [], response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
         data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
@@ -63,11 +64,17 @@ function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown) 
   })
 }
 
+function ItemPageProbe() {
+  const { runKey, caseKey } = useParams<{ runKey?: string; caseKey?: string }>()
+  return <p data-testid="item-page-probe">item {runKey} {caseKey}</p>
+}
+
 function renderRun() {
   return render(
     <MemoryRouter initialEntries={['/runs/r1']}>
       <Routes>
         <Route path="/runs/:runKey" element={<RunPage />} />
+        <Route path="/runs/:runKey/items/:caseKey" element={<ItemPageProbe />} />
       </Routes>
     </MemoryRouter>,
   )
@@ -88,10 +95,13 @@ describe('Run execution board', () => {
     expect(within(nav).getByText('Sprint 1')).toBeInTheDocument()
   })
 
-  it('shows run items with status chips and summary', async () => {
+  it('shows run items with status chips and identifying metadata', async () => {
     mockRunAPI([pendingItem])
     renderRun()
     expect(await screen.findByText('Login works')).toBeInTheDocument()
+    expect(screen.getByText('login_spec.ts::works')).toBeInTheDocument()
+    expect(screen.getByText('web')).toBeInTheDocument()
+    expect(screen.getByText('smoke')).toBeInTheDocument()
     expect(screen.getAllByText(/pending/i).length).toBeGreaterThan(0)
   })
 
@@ -102,137 +112,24 @@ describe('Run execution board', () => {
     expect(container.querySelector('[data-dot]')).not.toBeNull()
   })
 
-  it('opens the pinned case detail with steps and expected result', async () => {
-    mockRunAPI([pendingItem])
-    renderRun()
-    await userEvent.click(await screen.findByText('Login works'))
-    expect(await screen.findByText('open login page')).toBeInTheDocument()
-    expect(screen.getByText('user is logged in')).toBeInTheDocument()
-  })
-
-  it('records a verdict with comment from the board, without specifying an actor', async () => {
-    // link-result-actor-to-identity: actor is no longer a required field —
-    // the server defaults it to the authenticated caller.
-    mockRunAPI([pendingItem])
-    mockPOST.mockResolvedValue({
-      data: { id: 'res1', runItemId: 'i1', actor: 'ana', actorKind: 'user', verdict: 'pass', comment: '', createdAt: '' },
-      response: { ok: true },
-    })
-    renderRun()
-
-    await userEvent.click(await screen.findByText('Login works'))
-    await userEvent.type(screen.getByLabelText(/comment/i), 'all good')
-    await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
-
-    await waitFor(() => {
-      expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/items/{itemId}/results',
-        expect.objectContaining({
-          params: { path: { itemId: 'i1' } },
-          body: { verdict: 'pass', comment: 'all good' },
-        }),
-      )
-    })
-  })
-
-  it('supports recording on behalf of someone else via an optional override', async () => {
-    mockRunAPI([pendingItem])
-    mockPOST.mockResolvedValue({
-      data: { id: 'res1', runItemId: 'i1', actor: 'Manual Tester', actorKind: 'user', verdict: 'pass', comment: '', createdAt: '' },
-      response: { ok: true },
-    })
-    renderRun()
-
-    await userEvent.click(await screen.findByText('Login works'))
-    await userEvent.click(screen.getByRole('button', { name: /record on behalf of someone else/i }))
-    await userEvent.type(screen.getByLabelText(/record on behalf of/i), 'Manual Tester')
-    await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
-
-    await waitFor(() => {
-      expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/items/{itemId}/results',
-        expect.objectContaining({
-          params: { path: { itemId: 'i1' } },
-          body: { verdict: 'pass', comment: '', actor: 'Manual Tester' },
-        }),
-      )
-    })
-  })
-
-  it('renders steps without an expected-result line when none is set', async () => {
-    const bare = {
-      ...pendingItem,
-      content: { ...pendingItem.content, expectedResult: '', steps: [{ action: 'just do it' }] },
-    }
-    mockRunAPI([bare])
-    renderRun()
-    await userEvent.click((await screen.findAllByText('Login works'))[0])
-    expect(screen.getByText('just do it')).toBeInTheDocument()
-    expect(screen.queryByText(/expected result/i)).not.toBeInTheDocument()
-  })
-
   it('shows the newer-version hint on outdated pins', async () => {
     mockRunAPI([{ ...pendingItem, newerVersion: true }])
     renderRun()
     expect(await screen.findByText(/newer version/i)).toBeInTheDocument()
   })
 
-  it('shows the pinned version as a labeled property, not an unlabeled sentence', async () => {
-    mockRunAPI([pendingItem])
+  it('shows the status breakdown for the run', async () => {
+    mockRunAPI([pendingItem], { runId: 'r1', total: 1, counts: { pending: 1 } })
     renderRun()
-    await userEvent.click((await screen.findAllByText('Login works'))[0])
-    const detail = await screen.findByTestId('item-detail')
-    expect(within(detail).getByText('Pinned version')).toBeInTheDocument()
-    expect(within(detail).getByText('v1')).toBeInTheDocument()
+    await screen.findByText('Login works')
+    expect(screen.getByLabelText(/status breakdown/i)).toBeInTheDocument()
   })
 
-  it('shows the result in history immediately after recording it, without re-selecting', async () => {
+  it('navigates to the item\'s own page when selected, instead of showing detail inline', async () => {
     mockRunAPI([pendingItem])
-    // Server state changes only once the POST actually happens — mirroring
-    // a real backend, unlike a mock that returns the post-verdict state from
-    // the very first (pre-verdict) fetch.
-    let recorded = false
-    mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
-      if (path === '/api/v1/runs/{runKey}/items')
-        return Promise.resolve({
-          data: [{ ...pendingItem, currentStatus: recorded ? 'failed' : 'pending' }],
-          response: { ok: true },
-        })
-      if (path === '/api/v1/runs/{runKey}/summary')
-        return Promise.resolve({
-          data: { runId: 'r1', total: 1, counts: recorded ? { failed: 1 } : { pending: 1 } },
-          response: { ok: true },
-        })
-      if (path === '/api/v1/items/{itemId}/results')
-        return Promise.resolve({
-          data: recorded
-            ? [{ id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' }]
-            : [],
-          response: { ok: true },
-        })
-      return Promise.resolve({ data: [], response: { ok: true } })
-    })
-    mockPOST.mockImplementation(() => {
-      recorded = true
-      return Promise.resolve({
-        data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' },
-        response: { ok: true },
-      })
-    })
     renderRun()
-
     await userEvent.click(await screen.findByText('Login works'))
-    expect(screen.queryByText(/ana: failed/i)).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /^failed$/i }))
-
-    // No re-selection here — the board must refresh on its own.
-    expect(await screen.findByText(/ana: failed/i)).toBeInTheDocument()
-
-    // Blocked and skipped verdicts use the same POST path.
-    await userEvent.click(screen.getByRole('button', { name: /^blocked$/i }))
-    await userEvent.click(screen.getByRole('button', { name: /^skipped$/i }))
-    await waitFor(() => expect(mockPOST).toHaveBeenCalledTimes(3))
+    expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c1')
   })
 
   it('recovers gracefully when the API is unreachable', async () => {
@@ -250,26 +147,6 @@ describe('Run execution board', () => {
     })
     renderRun()
     expect(await screen.findByText(/run not found/i)).toBeInTheDocument()
-  })
-
-  it('offers retest on failed items', async () => {
-    mockRunAPI([{ ...pendingItem, currentStatus: 'failed' }])
-    mockPUT.mockResolvedValue({ response: { ok: true } })
-    renderRun()
-
-    await userEvent.click(await screen.findByText('Login works'))
-    const detail = await screen.findByTestId('item-detail')
-    await userEvent.click(within(detail).getByRole('button', { name: /retest/i }))
-
-    await waitFor(() => {
-      expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/items/{itemId}/status',
-        expect.objectContaining({
-          params: { path: { itemId: 'i1' } },
-          body: { status: 'retest' },
-        }),
-      )
-    })
   })
 })
 
@@ -346,15 +223,6 @@ describe('Run lifecycle (open/closed)', () => {
     renderRun()
     expect(await screen.findByText(/^closed$/i)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /reopen/i })).toBeInTheDocument()
-  })
-
-  it('disables verdict recording and explains why when the run is closed', async () => {
-    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
-    renderRun()
-    await userEvent.click(await screen.findByText('Login works'))
-    expect(await screen.findByText(/this run is closed/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^pass$/i })).toBeDisabled()
-    expect(mockPOST).not.toHaveBeenCalled()
   })
 
   it('reopens the run', async () => {

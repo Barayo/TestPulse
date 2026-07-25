@@ -120,11 +120,18 @@ rather than branching the JSX by viewport size at the call site.
 
 ## Chart colors
 
-`--chart-1` through `--chart-5` (`apps/web/src/index.css`) are the only chart colors. Pass =
-primary teal (`--chart-1`), fail = destructive red (`--chart-3`), skip/pending = secondary
-yellow (`--chart-2`) — matching the semantic mapping the CSS already documents. Never introduce
-a new hue for a chart; if the existing five don't cover a new series, that's a design
-conversation, not a one-off color pick.
+`--chart-1` through `--chart-5` (`apps/web/src/index.css`) are the only chart colors. Never
+introduce a new hue for a chart; if the existing five don't cover a new series, that's a design
+conversation, not a one-off color pick — for a series beyond the fifth, reach for a texture
+fill over an existing color rather than a sixth hue (see `RunStatusBreakdown.tsx`'s `retest`).
+
+The full status mapping (`pending`/`pass`/`failed`/`skipped`/`blocked`/`retest`, six values —
+`packages/shared/openapi.yaml`'s `Status` enum): pass = primary teal (`--chart-1`), skipped =
+secondary yellow (`--chart-2`), failed = destructive red (`--chart-3`), blocked = `--chart-4`,
+pending = `--chart-5`, retest = a diagonal texture over `--chart-5`. This is a chart-specific
+mapping — `StatusBadge.tsx`'s small dot indicator is a separate, already-settled system on the
+semantic UI tokens (`--destructive`/`--secondary`/`--muted-foreground`), not this palette; the
+two aren't meant to match swatch-for-swatch.
 
 ## Empty states
 
