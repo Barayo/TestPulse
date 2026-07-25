@@ -122,6 +122,20 @@ test.describe('Requirement: Breadcrumb trail', () => {
     await expect(nav.getByRole('link', { name: name.split(' ')[0] })).toBeVisible()
     await expect(nav.getByText('Sprint 1')).toBeVisible()
   })
+
+  test('Scenario: Case detail breadcrumb does not repeat the case title', async ({ page }) => {
+    await createProject(page, 'Case Detail Breadcrumb Project')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Transfers')
+    await content(page).getByText('Transfers').click()
+    await createCase(page, 'Daily limit check')
+    await content(page).getByText('Daily limit check').click()
+
+    await expect(page.getByRole('heading', { name: 'Daily limit check' })).toBeVisible()
+    const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
+    await expect(nav.getByText('Transfers')).toBeVisible()
+    await expect(nav.getByText('Daily limit check')).toHaveCount(0)
+  })
 })
 
 test.describe('Requirement: Project switcher', () => {

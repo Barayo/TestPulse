@@ -123,6 +123,9 @@ export default function CaseDetailPage() {
     await load()
   }
 
+  // Ends at the parent folder, not the case itself — the case's own <h1>
+  // right below already shows its title, and (unlike a breadcrumb crumb)
+  // can wrap instead of truncating a long one mid-word.
   const breadcrumbSegments: Crumb[] = [
     { label: 'Projects', href: '/' },
     { label: project.name, href: `/projects/${projectKey}` },
@@ -130,7 +133,6 @@ export default function CaseDetailPage() {
     ...(folder && root && folder.id !== root.id
       ? [{ label: folder.name, href: `/projects/${projectKey}/library/${folder.id}` }]
       : []),
-    { label: testCase.content.title },
   ]
 
   return (

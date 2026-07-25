@@ -135,6 +135,15 @@ describe('CaseDetailPage', () => {
     expect(screen.queryByText(/^in transferencias$/i)).not.toBeInTheDocument()
   })
 
+  it('does not repeat the case title as the trailing breadcrumb crumb — it already appears as the heading', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    const nav = screen.getByRole('navigation', { name: /breadcrumb/i })
+    expect(within(nav).queryByText('Daily transfer limit')).not.toBeInTheDocument()
+    expect(within(nav).getByText('Transferencias')).toBeInTheDocument()
+  })
+
   it('does not render a Close button competing with Edit — the back link handles leaving the page', async () => {
     mockDetailAPI()
     renderDetail()

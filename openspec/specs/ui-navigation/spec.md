@@ -16,7 +16,9 @@ name on those pages — with each ancestor segment a link back to that level. On
 exceeds five segments, the middle SHALL collapse behind a single control that reveals the
 hidden segments on demand; the first two segments (entry point and project) and the last
 two (immediate parent and current location) SHALL always remain visible and never require
-horizontal scrolling to see.
+horizontal scrolling to see. On a page that has its own heading for the current item (e.g.
+a case's title), the trail SHALL end at that item's parent rather than repeating the
+heading as a trailing crumb.
 
 #### Scenario: Breadcrumb on a project's landing page
 - **WHEN** a user opens a project's landing page
@@ -37,6 +39,10 @@ horizontal scrolling to see.
 #### Scenario: Collapsed segments remain reachable
 - **WHEN** a user activates the collapsed-segments control
 - **THEN** the hidden segments are listed in order, each navigating to that segment when selected
+
+#### Scenario: Case detail breadcrumb does not repeat the case title
+- **WHEN** a user opens a test case's detail page
+- **THEN** the breadcrumb ends at the case's parent folder, and the case's title appears only in the page's own heading, not as a trailing breadcrumb segment
 
 ### Requirement: Project switcher
 The web UI SHALL show the active project's name in a persistent header
