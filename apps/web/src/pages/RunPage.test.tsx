@@ -4,11 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import RunPage from './RunPage'
 import { api } from '@/lib/api'
+import { useBumpDataRevision } from '@/lib/DataRevision'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() } }))
+vi.mock('@/lib/DataRevision', () => ({ useBumpDataRevision: vi.fn() }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 const mockPUT = vi.mocked(api.PUT)
+const mockBump = vi.fn()
 
 const run = {
   id: 'r1',
@@ -72,6 +75,7 @@ function renderRun() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  vi.mocked(useBumpDataRevision).mockReturnValue(mockBump)
 })
 
 describe('Run execution board', () => {
@@ -290,6 +294,53 @@ describe('Run lifecycle (open/closed)', () => {
     })
   })
 
+  it('updates the status badge immediately on close, without re-fetching items or summary', async () => {
+    mockRunAPI([pendingItem])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await screen.findByText(/^open$/i)
+    const getCallsBeforeClose = mockGET.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: /close run/i }))
+
+    expect(await screen.findByText(/^closed$/i)).toBeInTheDocument()
+    expect(mockGET.mock.calls.length).toBe(getCallsBeforeClose)
+  })
+
+  it('shows a disabled "Closing…" state while the close request is in flight', async () => {
+    mockRunAPI([pendingItem])
+    let resolveClose!: (v: { response: { ok: true } }) => void
+    mockPOST.mockReturnValue(new Promise((resolve) => (resolveClose = resolve)))
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /close run/i }))
+
+    const closingButton = await screen.findByRole('button', { name: /closing…/i })
+    expect(closingButton).toBeDisabled()
+
+    resolveClose({ response: { ok: true } })
+    expect(await screen.findByText(/^closed$/i)).toBeInTheDocument()
+  })
+
+  it('re-enables the close control and shows an error on a generic failure', async () => {
+    mockRunAPI([pendingItem])
+    mockPOST.mockResolvedValue({ error: { error: 'boom' }, response: { ok: false } })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /close run/i }))
+
+    expect(await screen.findByText(/could not close this run/i)).toBeInTheDocument()
+    const button = screen.getByRole('button', { name: /^close run$/i })
+    expect(button).not.toBeDisabled()
+    expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
+  })
+
+  it('invalidates other pages\' cached data after closing', async () => {
+    mockRunAPI([pendingItem])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /close run/i }))
+    await waitFor(() => expect(mockBump).toHaveBeenCalled())
+  })
+
   it('shows a closed badge and a Reopen control for a closed run', async () => {
     mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
     renderRun()
@@ -325,5 +376,50 @@ describe('Run lifecycle (open/closed)', () => {
     renderRun()
     await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
     expect(await screen.findByText(/project admin/i)).toBeInTheDocument()
+  })
+
+  it('re-enables the reopen control after a forbidden reopen', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    mockPOST.mockResolvedValue({ error: { error: 'forbidden' }, response: { ok: false } })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
+    await screen.findByText(/project admin/i)
+    expect(screen.getByRole('button', { name: /^reopen$/i })).not.toBeDisabled()
+    expect(await screen.findByText(/^closed$/i)).toBeInTheDocument()
+  })
+
+  it('updates the status badge immediately on reopen, without re-fetching items or summary', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await screen.findByText(/^closed$/i)
+    const getCallsBeforeReopen = mockGET.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: /reopen/i }))
+
+    expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
+    expect(mockGET.mock.calls.length).toBe(getCallsBeforeReopen)
+  })
+
+  it('shows a disabled "Reopening…" state while the reopen request is in flight', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    let resolveReopen!: (v: { response: { ok: true } }) => void
+    mockPOST.mockReturnValue(new Promise((resolve) => (resolveReopen = resolve)))
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
+
+    const reopeningButton = await screen.findByRole('button', { name: /reopening…/i })
+    expect(reopeningButton).toBeDisabled()
+
+    resolveReopen({ response: { ok: true } })
+    expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
+  })
+
+  it('invalidates other pages\' cached data after reopening', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
+    await waitFor(() => expect(mockBump).toHaveBeenCalled())
   })
 })

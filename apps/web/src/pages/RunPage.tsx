@@ -9,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { StatusBadge } from '@/components/StatusBadge'
 import { PropertyRow } from '@/components/PropertyRow'
+import { useBumpDataRevision } from '@/lib/DataRevision'
 import {
   Card,
   CardContent,
@@ -37,6 +38,9 @@ export default function RunPage() {
   const [showActorOverride, setShowActorOverride] = useState(false)
   const [comment, setComment] = useState('')
   const [lifecycleError, setLifecycleError] = useState<string>()
+  const [isClosing, setIsClosing] = useState(false)
+  const [isReopening, setIsReopening] = useState(false)
+  const bumpDataRevision = useBumpDataRevision()
 
   const load = useCallback(async () => {
     if (!runKey) return
@@ -59,13 +63,14 @@ export default function RunPage() {
     }
   }, [runKey])
 
+  const projectKey = run?.projectKey
   useEffect(() => {
-    if (!run) return
+    if (!projectKey) return
     api
-      .GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey: run.projectKey } } })
+      .GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
       .then(({ data }) => setProject(data))
       .catch(() => setProject(undefined))
-  }, [run])
+  }, [projectKey])
 
   useEffect(() => {
     void load()
@@ -118,23 +123,31 @@ export default function RunPage() {
   async function closeRun() {
     if (!runKey) return
     setLifecycleError(undefined)
+    setIsClosing(true)
     const { error } = await api.POST('/api/v1/runs/{runKey}/close', { params: { path: { runKey } } })
+    setIsClosing(false)
     if (error) {
       setLifecycleError('Could not close this run.')
       return
     }
-    await load()
+    // The write only flips the run's own status — items/summary are
+    // unaffected by closing, so there's nothing else to re-fetch here.
+    setRun((r) => (r ? { ...r, status: 'closed' } : r))
+    bumpDataRevision()
   }
 
   async function reopenRun() {
     if (!runKey) return
     setLifecycleError(undefined)
+    setIsReopening(true)
     const { error } = await api.POST('/api/v1/runs/{runKey}/reopen', { params: { path: { runKey } } })
+    setIsReopening(false)
     if (error) {
       setLifecycleError("You don't have permission to reopen this run — ask a project admin.")
       return
     }
-    await load()
+    setRun((r) => (r ? { ...r, status: 'open' } : r))
+    bumpDataRevision()
   }
 
   if (notFound) {
@@ -163,12 +176,12 @@ export default function RunPage() {
               <div className="flex items-center gap-2">
                 <Badge variant={run.status === 'open' ? 'secondary' : 'outline'}>{run.status}</Badge>
                 {run.status === 'open' ? (
-                  <Button size="sm" variant="outline" onClick={() => void closeRun()}>
-                    Close run
+                  <Button size="sm" variant="outline" disabled={isClosing} onClick={() => void closeRun()}>
+                    {isClosing ? 'Closing…' : 'Close run'}
                   </Button>
                 ) : (
-                  <Button size="sm" variant="outline" onClick={() => void reopenRun()}>
-                    Reopen
+                  <Button size="sm" variant="outline" disabled={isReopening} onClick={() => void reopenRun()}>
+                    {isReopening ? 'Reopening…' : 'Reopen'}
                   </Button>
                 )}
               </div>
