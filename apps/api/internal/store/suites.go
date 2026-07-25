@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -138,4 +139,53 @@ func (r *SuiteRepo) RemoveCase(ctx context.Context, suiteID, caseID string) erro
 	_, err := r.pool.Exec(ctx,
 		`DELETE FROM suite_cases WHERE suite_id = $1 AND case_id = $2`, suiteID, caseID)
 	return err
+}
+
+// Trend returns a suite's pass-rate trend: its closed runs, oldest first,
+// each with its full status-count breakdown (add-suite-pass-rate-trend).
+// Open runs are excluded — their counts are still mid-flight, not a
+// completed outcome.
+func (r *SuiteRepo) Trend(ctx context.Context, suiteID string) (domain.SuiteTrend, error) {
+	var suiteKey string
+	if err := r.pool.QueryRow(ctx, `SELECT key FROM test_suites WHERE id = $1`, suiteID).Scan(&suiteKey); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return domain.SuiteTrend{}, ErrNotFound
+		}
+		return domain.SuiteTrend{}, err
+	}
+
+	rows, err := r.pool.Query(ctx,
+		`SELECT tr.id, tr.key, tr.name, tr.created_at, tri.current_status, count(*)
+		 FROM test_runs tr
+		 JOIN test_run_items tri ON tri.run_id = tr.id
+		 WHERE tr.suite_id = $1 AND tr.status = 'closed'
+		 GROUP BY tr.id, tr.key, tr.name, tr.created_at, tri.current_status
+		 ORDER BY tr.created_at ASC`, suiteID)
+	if err != nil {
+		return domain.SuiteTrend{}, err
+	}
+	defer rows.Close()
+
+	trend := domain.SuiteTrend{SuiteID: suiteID, SuiteKey: suiteKey, Points: []domain.SuiteTrendPoint{}}
+	index := map[string]int{}
+	for rows.Next() {
+		var runID, runKey, runName string
+		var createdAt time.Time
+		var status domain.Status
+		var count int
+		if err := rows.Scan(&runID, &runKey, &runName, &createdAt, &status, &count); err != nil {
+			return domain.SuiteTrend{}, err
+		}
+		i, ok := index[runID]
+		if !ok {
+			i = len(trend.Points)
+			index[runID] = i
+			trend.Points = append(trend.Points, domain.SuiteTrendPoint{
+				RunKey: runKey, RunName: runName, CreatedAt: createdAt, Counts: map[domain.Status]int{},
+			})
+		}
+		trend.Points[i].Counts[status] = count
+		trend.Points[i].Total += count
+	}
+	return trend, rows.Err()
 }

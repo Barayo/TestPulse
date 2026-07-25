@@ -355,6 +355,24 @@ type RunSummary struct {
 	Counts map[Status]int `json:"counts"`
 }
 
+// SuiteTrendPoint is one closed run's status breakdown within a suite's
+// pass-rate trend (add-suite-pass-rate-trend).
+type SuiteTrendPoint struct {
+	RunKey    string         `json:"runKey"`
+	RunName   string         `json:"runName"`
+	CreatedAt time.Time      `json:"createdAt"`
+	Total     int            `json:"total"`
+	Counts    map[Status]int `json:"counts"`
+}
+
+// SuiteTrend is a suite's closed runs, oldest first, each as a
+// SuiteTrendPoint (add-suite-pass-rate-trend).
+type SuiteTrend struct {
+	SuiteID  string            `json:"suiteId"`
+	SuiteKey string            `json:"suiteKey"`
+	Points   []SuiteTrendPoint `json:"points"`
+}
+
 // ProjectSummary is the per-project aggregate used by the project list and
 // switcher — suite/case counts and the most recent run's pass rate, computed
 // server-side in a small fixed number of queries regardless of how many

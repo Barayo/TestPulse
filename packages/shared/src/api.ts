@@ -509,6 +509,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/suites/{suiteKey}/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        /** Pass-rate trend across a suite's closed runs */
+        get: operations["getSuiteTrend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1070,6 +1089,21 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+        };
+        SuiteTrendPoint: {
+            runKey: string;
+            runName: string;
+            /** Format: date-time */
+            createdAt: string;
+            total: number;
+            counts: {
+                [key: string]: number;
+            };
+        };
+        SuiteTrend: {
+            suiteId: string;
+            suiteKey: string;
+            points: components["schemas"]["SuiteTrendPoint"][];
         };
         ProjectSummary: {
             projectId: string;
@@ -2205,6 +2239,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["RunSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSuiteTrend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trend */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteTrend"];
                 };
             };
             404: components["responses"]["NotFound"];

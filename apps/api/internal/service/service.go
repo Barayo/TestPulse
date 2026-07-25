@@ -342,6 +342,12 @@ func (s *Service) ListSuites(ctx context.Context, projectID string) ([]domain.Su
 	return s.store.Suites.List(ctx, projectID)
 }
 
+// SuiteTrend returns a suite's pass-rate trend across its closed runs
+// (add-suite-pass-rate-trend).
+func (s *Service) SuiteTrend(ctx context.Context, suiteID string) (domain.SuiteTrend, error) {
+	return s.store.Suites.Trend(ctx, suiteID)
+}
+
 func (s *Service) AddCaseToSuite(ctx context.Context, suiteID, caseID string) error {
 	if err := s.store.Suites.AddCase(ctx, suiteID, caseID); err != nil {
 		return err

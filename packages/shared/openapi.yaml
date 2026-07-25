@@ -583,6 +583,20 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RunSummary" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/suites/{suiteKey}/trend:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSuiteTrend
+      summary: Pass-rate trend across a suite's closed runs
+      tags: [suites]
+      responses:
+        "200":
+          description: Trend
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuiteTrend" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/auth/login:
     post:
       operationId: login
@@ -1352,6 +1366,26 @@ components:
         counts:
           type: object
           additionalProperties: { type: integer }
+    SuiteTrendPoint:
+      type: object
+      required: [runKey, runName, createdAt, total, counts]
+      properties:
+        runKey: { type: string }
+        runName: { type: string }
+        createdAt: { type: string, format: date-time }
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+    SuiteTrend:
+      type: object
+      required: [suiteId, suiteKey, points]
+      properties:
+        suiteId: { type: string }
+        suiteKey: { type: string }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/SuiteTrendPoint" }
     ProjectSummary:
       type: object
       required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite]

@@ -264,6 +264,39 @@ func TestScenario_RunFromSuite(t *testing.T) {
 	}
 }
 
+func TestScenario_SuiteTrendOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c, suite, run struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key), jmap{"name": "smoke"}, 201, &suite)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
+		jmap{"name": "sprint 1", "suiteKey": suite.Key, "caseKeys": []string{c.Key}}, 201, &run)
+
+	var items []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run.Key), nil, 204, nil)
+
+	var trend struct {
+		SuiteKey string `json:"suiteKey"`
+		Points   []struct {
+			RunKey string         `json:"runKey"`
+			Total  int            `json:"total"`
+			Counts map[string]int `json:"counts"`
+		} `json:"points"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/suites/%s/trend", suite.Key), nil, 200, &trend)
+	if trend.SuiteKey != suite.Key {
+		t.Errorf("SuiteKey = %q, want %q", trend.SuiteKey, suite.Key)
+	}
+	if len(trend.Points) != 1 || trend.Points[0].RunKey != run.Key || trend.Points[0].Counts["pass"] != 1 {
+		t.Errorf("Points = %+v", trend.Points)
+	}
+
+	call(t, h, "GET", "/api/v1/suites/NOPE/trend", nil, 404, nil)
+}
+
 func TestScenario_NotFoundMapsTo404(t *testing.T) {
 	h := apiServer(t)
 	missing := "NOPE"

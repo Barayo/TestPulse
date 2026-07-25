@@ -66,6 +66,10 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Put("/", h.addCaseToSuite)
 		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Delete("/", h.removeCaseFromSuite)
 	})
+	r.Route("/suites/{suiteKey}", func(r chi.Router) {
+		r.Use(h.resolveKey("suiteKey", h.svc.SuiteIDByKey))
+		r.With(h.requirePermission(domain.PermRead, projectIDFromSuite)).Get("/trend", h.suiteTrend)
+	})
 	r.Route("/runs/{runKey}", func(r chi.Router) {
 		r.Use(h.resolveKey("runKey", h.svc.RunIDByKey))
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.getRun)
@@ -487,6 +491,11 @@ func (h *api) addRunItem(w http.ResponseWriter, r *http.Request) {
 func (h *api) runSummary(w http.ResponseWriter, r *http.Request) {
 	sum, err := h.svc.RunSummary(r.Context(), resolvedID(r, "runKey"))
 	h.respond(w, http.StatusOK, sum, err)
+}
+
+func (h *api) suiteTrend(w http.ResponseWriter, r *http.Request) {
+	trend, err := h.svc.SuiteTrend(r.Context(), resolvedID(r, "suiteKey"))
+	h.respond(w, http.StatusOK, trend, err)
 }
 
 // --- Items ---

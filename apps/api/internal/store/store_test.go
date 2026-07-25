@@ -852,6 +852,112 @@ func TestRunSummaryCounts(t *testing.T) {
 	}
 }
 
+// TestSuiteTrendListsClosedRunsOldestFirst covers add-suite-pass-rate-trend's
+// "A suite's closed runs appear in the trend, oldest first" scenario.
+func TestSuiteTrendListsClosedRunsOldestFirst(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	run1, err := s.Runs.CreateWithSuite(ctx, p.ID, "run 1", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run1: %v", err)
+	}
+	items1, _ := s.Runs.Items(ctx, run1.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, items1[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("append result run1: %v", err)
+	}
+	if err := s.Runs.Close(ctx, run1.ID); err != nil {
+		t.Fatalf("close run1: %v", err)
+	}
+
+	run2, err := s.Runs.CreateWithSuite(ctx, p.ID, "run 2", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run2: %v", err)
+	}
+	items2, _ := s.Runs.Items(ctx, run2.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, items2[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("append result run2: %v", err)
+	}
+	if err := s.Runs.Close(ctx, run2.ID); err != nil {
+		t.Fatalf("close run2: %v", err)
+	}
+
+	trend, err := s.Suites.Trend(ctx, suite.ID)
+	if err != nil {
+		t.Fatalf("Trend: %v", err)
+	}
+	if trend.SuiteKey != suite.Key {
+		t.Errorf("SuiteKey = %q, want %q", trend.SuiteKey, suite.Key)
+	}
+	if len(trend.Points) != 2 {
+		t.Fatalf("Points = %d, want 2", len(trend.Points))
+	}
+	if trend.Points[0].RunKey != run1.Key || trend.Points[0].Counts[domain.StatusPass] != 1 {
+		t.Errorf("Points[0] = %+v, want run1 with 1 pass", trend.Points[0])
+	}
+	if trend.Points[1].RunKey != run2.Key || trend.Points[1].Counts[domain.StatusFailed] != 1 {
+		t.Errorf("Points[1] = %+v, want run2 with 1 failed", trend.Points[1])
+	}
+}
+
+// TestSuiteTrendExcludesOpenRuns covers add-suite-pass-rate-trend's "An open
+// run is excluded from the trend" scenario.
+func TestSuiteTrendExcludesOpenRuns(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	closedRun, err := s.Runs.CreateWithSuite(ctx, p.ID, "closed run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create closed run: %v", err)
+	}
+	if err := s.Runs.Close(ctx, closedRun.ID); err != nil {
+		t.Fatalf("close: %v", err)
+	}
+	if _, err := s.Runs.CreateWithSuite(ctx, p.ID, "open run", suite.ID, []string{c.ID}); err != nil {
+		t.Fatalf("create open run: %v", err)
+	}
+
+	trend, err := s.Suites.Trend(ctx, suite.ID)
+	if err != nil {
+		t.Fatalf("Trend: %v", err)
+	}
+	if len(trend.Points) != 1 || trend.Points[0].RunKey != closedRun.Key {
+		t.Errorf("Points = %+v, want only the closed run", trend.Points)
+	}
+}
+
+// TestSuiteTrendEmptyForNoClosedRuns covers add-suite-pass-rate-trend's "A
+// suite with no closed runs has an empty trend" scenario.
+func TestSuiteTrendEmptyForNoClosedRuns(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	trend, err := s.Suites.Trend(ctx, suite.ID)
+	if err != nil {
+		t.Fatalf("Trend: %v", err)
+	}
+	if len(trend.Points) != 0 {
+		t.Errorf("Points = %+v, want empty", trend.Points)
+	}
+}
+
 func TestExecutionsByCaseGroupedByVersion(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

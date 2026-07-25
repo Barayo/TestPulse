@@ -106,3 +106,43 @@ func TestClosedRunMutationsReturnConflictError(t *testing.T) {
 	err = s.UpdateItem(ctx, item.ID, service.ItemUpdate{Assignee: &assignee})
 	wantConflict(t, "UpdateItem(assignee)", err)
 }
+
+// TestSuiteTrendResolvesFromSuiteID covers add-suite-pass-rate-trend's
+// service-layer resolution: Service.SuiteTrend surfaces a suite's closed
+// runs via the store's aggregation query.
+func TestSuiteTrendResolvesFromSuiteID(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+	suite, err := s.CreateSuite(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "sprint 1", SuiteID: suite.ID, CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	items, err := s.RunItems(ctx, run.ID, "")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("RunItems: %d, %v", len(items), err)
+	}
+	if _, err := s.RecordResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+		t.Fatalf("RecordResult: %v", err)
+	}
+	if err := s.CloseRun(ctx, run.ID); err != nil {
+		t.Fatalf("CloseRun: %v", err)
+	}
+
+	trend, err := s.SuiteTrend(ctx, suite.ID)
+	if err != nil {
+		t.Fatalf("SuiteTrend: %v", err)
+	}
+	if trend.SuiteKey != suite.Key {
+		t.Errorf("SuiteKey = %q, want %q", trend.SuiteKey, suite.Key)
+	}
+	if len(trend.Points) != 1 || trend.Points[0].Counts[domain.StatusPass] != 1 {
+		t.Errorf("Points = %+v, want one point with 1 pass", trend.Points)
+	}
+}
