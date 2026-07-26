@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import RunPage from './RunPage'
 import { api } from '@/lib/api'
 import { useBumpDataRevision } from '@/lib/DataRevision'

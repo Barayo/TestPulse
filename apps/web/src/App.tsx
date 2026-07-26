@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router'
 import { ProjectSwitcher } from '@/components/ProjectSwitcher'
 import { AdminMenu } from '@/components/AdminMenu'
 import { UserMenu } from '@/components/UserMenu'

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useMatch } from 'react-router-dom'
+import { useMatch } from 'react-router'
 import { api } from '@/lib/api'
 
 // A project is "active" on /projects/:projectKey directly, or indirectly on

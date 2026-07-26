@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router'
 import { ShieldIcon } from 'lucide-react'
 
 // A top-level nav item, at the same level as the project switcher — not

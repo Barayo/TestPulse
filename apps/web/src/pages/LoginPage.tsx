@@ -1,4 +1,4 @@
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router'
 import { LoginForm } from '@/components/LoginForm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { HealthBadge } from '@/components/HealthBadge'

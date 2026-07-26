@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router'
 import SuiteDetailPage from './SuiteDetailPage'
 import { api } from '@/lib/api'
 
@@ -13,8 +13,8 @@ const mockPOST = vi.mocked(api.POST)
 
 let navigatedTo: string | undefined
 let navigatedState: unknown
-vi.mock('react-router-dom', async () => {
-  const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
+vi.mock('react-router', async () => {
+  const actual = await vi.importActual<typeof import('react-router')>('react-router')
   return {
     ...actual,
     useNavigate: () => (to: string, opts?: { state?: unknown }) => {
