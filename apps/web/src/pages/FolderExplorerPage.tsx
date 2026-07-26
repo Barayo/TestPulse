@@ -7,12 +7,14 @@ import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
+import { AutomationPill, ClassificationPills, distinctValues, StalePill } from '@/components/Pills'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { useProjectPermissions } from '@/lib/useProjectPermissions'
+import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
 
 type Folder = components['schemas']['Folder']
@@ -36,12 +38,25 @@ function ancestorChain(folders: Folder[], folderId: string): Folder[] {
   return chain
 }
 
+function folderPathLabel(folders: Folder[], folderId: string): string {
+  return ancestorChain(folders, folderId)
+    .map((f) => f.name)
+    .join(' / ')
+}
+
 // The project's auto-created root folder is surfaced to users as "Library" —
 // a UI label only, not a rename of the underlying entity (still literally
 // named "Root" in the database).
 function displayFolderName(folder: Folder | undefined, rootId: string): string {
   if (!folder) return ''
   return folder.id === rootId ? 'Library' : folder.name
+}
+
+const STALE_DAYS = 90
+
+function isStale(updatedAt: string): boolean {
+  const days = (Date.now() - new Date(updatedAt).getTime()) / (24 * 60 * 60 * 1000)
+  return days >= STALE_DAYS
 }
 
 // Each row owns its own RowActionMenu ref so a right-click on the row can
@@ -51,6 +66,7 @@ function displayFolderName(folder: Folder | undefined, rootId: string): string {
 // precedent FolderTree.tsx's own TreeNode already sets.
 function FolderRow({
   folder,
+  stats,
   isDragOver,
   onDragOver,
   onDragLeave,
@@ -60,6 +76,7 @@ function FolderRow({
   onRequestDelete,
 }: {
   folder: Folder
+  stats: { count: number; hasCritical: boolean; criticalCount: number; automatedCount: number }
   isDragOver: boolean
   onDragOver: () => void
   onDragLeave: () => void
@@ -97,6 +114,29 @@ function FolderRow({
         <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
         <span>{folder.name}</span>
       </button>
+      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+        {stats.hasCritical && (
+          <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-medium text-destructive">
+            {stats.criticalCount} critical
+          </span>
+        )}
+        {stats.count > 0 ? (
+          <span className="flex items-center gap-1.5">
+            <span className="h-1 w-10 overflow-hidden rounded-full bg-muted">
+              <span
+                className="block h-full bg-primary"
+                style={{ width: `${Math.round((stats.automatedCount / stats.count) * 100)}%` }}
+              />
+            </span>
+            {stats.automatedCount}/{stats.count} automated
+          </span>
+        ) : (
+          <span>empty</span>
+        )}
+        <span>
+          {stats.count} {stats.count === 1 ? 'case' : 'cases'}
+        </span>
+      </div>
       {canDelete && <RowActionMenu ref={menuRef} label={`Actions for ${folder.name}`} items={items} />}
     </li>
   )
@@ -105,6 +145,7 @@ function FolderRow({
 function CaseRow({
   testCase,
   suiteNames,
+  folderPath,
   onOpen,
   onDragStart,
   onMoveTo,
@@ -113,6 +154,9 @@ function CaseRow({
 }: {
   testCase: TestCase
   suiteNames: string[]
+  // Shown only in "Search entire Library" mode, where cases from many
+  // folders are flattened into one list (design.md).
+  folderPath?: string
   onOpen: () => void
   onDragStart: (e: DragEvent) => void
   onMoveTo: () => void
@@ -149,14 +193,26 @@ function CaseRow({
         <FileTextIcon className="size-4 text-muted-foreground" aria-hidden="true" />
         <span>{testCase.content.title}</span>
       </button>
+      {folderPath && <span className="shrink-0 text-xs text-muted-foreground">{folderPath}</span>}
       <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
         v{testCase.currentVersion}
       </span>
-      {suiteNames.map((name) => (
-        <span key={name} className="rounded-full bg-accent px-2 py-0.5 text-xs">
-          {name}
-        </span>
-      ))}
+      <span className="flex flex-wrap items-center gap-1.5 text-xs">
+        <ClassificationPills
+          priority={testCase.content.priority}
+          platform={testCase.content.platform}
+          testType={testCase.content.testType}
+        />
+        <AutomationPill automated={Boolean(testCase.content.automated)} />
+        {suiteNames.map((name) => (
+          <span key={name} className="rounded-full bg-accent px-2 py-0.5">
+            {name}
+          </span>
+        ))}
+      </span>
+      <span className="shrink-0 text-xs text-muted-foreground">
+        {isStale(testCase.updatedAt) ? <StalePill /> : timeAgo(testCase.updatedAt)}
+      </span>
       <RowActionMenu ref={menuRef} label={`Actions for ${testCase.content.title}`} items={items} />
     </li>
   )
@@ -184,6 +240,9 @@ export default function FolderExplorerPage() {
   const [newFolderName, setNewFolderName] = useState('')
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [search, setSearch] = useState('')
+  const [filters, setFilters] = useState({ tag: '', priority: '', platform: '', testType: '', automated: '' })
+  const [searchEntireLibrary, setSearchEntireLibrary] = useState(false)
 
   const permissions = useProjectPermissions(projectKey)
 
@@ -232,6 +291,46 @@ export default function FolderExplorerPage() {
 
   const subfolders = folders.filter((f) => f.parentFolderId === selectedFolderId)
   const casesHere = cases.filter((c) => c.folderId === selectedFolderId)
+
+  // Direct-children counts only, no recursive rollup (design.md) — computed
+  // once from data already fetched, shared by the tree and content-pane rows.
+  const folderStats: Record<string, { count: number; hasCritical: boolean; criticalCount: number; automatedCount: number }> = {}
+  for (const f of folders) {
+    const direct = cases.filter((c) => c.folderId === f.id)
+    const criticalCount = direct.filter((c) => c.content.priority === 'critical').length
+    folderStats[f.id] = {
+      count: direct.length,
+      hasCritical: criticalCount > 0,
+      criticalCount,
+      automatedCount: direct.filter((c) => c.content.automated).length,
+    }
+  }
+
+  const normalizedSearch = search.trim().toLowerCase()
+  const anyFilterActive = Boolean(normalizedSearch || filters.tag || filters.priority || filters.platform || filters.testType || filters.automated)
+
+  function caseMatches(c: TestCase): boolean {
+    if (normalizedSearch && !c.content.title.toLowerCase().includes(normalizedSearch)) return false
+    if (filters.tag && !c.content.tags?.includes(filters.tag)) return false
+    if (filters.priority && c.content.priority !== filters.priority) return false
+    if (filters.platform && c.content.platform !== filters.platform) return false
+    if (filters.testType && c.content.testType !== filters.testType) return false
+    if (filters.automated === 'yes' && !c.content.automated) return false
+    if (filters.automated === 'no' && c.content.automated) return false
+    return true
+  }
+
+  const tagOptions = distinctValues(cases.flatMap((c) => c.content.tags ?? []).map((t) => ({ t })), (x) => x.t)
+  const platformOptions = distinctValues(cases, (c) => c.content.platform ?? '')
+  const testTypeOptions = distinctValues(cases, (c) => c.content.testType ?? '')
+
+  const visibleHere = casesHere.filter(caseMatches)
+  const entireLibraryMatches = cases.filter(caseMatches)
+
+  function clearFilters() {
+    setSearch('')
+    setFilters({ tag: '', priority: '', platform: '', testType: '', automated: '' })
+  }
 
   function suiteNamesFor(caseId: string): string[] {
     return suites.filter((s) => s.caseIds.includes(caseId)).map((s) => s.name)
@@ -331,6 +430,7 @@ export default function FolderExplorerPage() {
             rootId={root.id}
             selectedId={selectedFolderId}
             expanded={expanded}
+            folderStats={folderStats}
             onSelect={(id) => navigate(`/projects/${projectKey}/library/${id}`)}
             onToggle={(id) =>
               setExpanded((prev) => {
@@ -387,6 +487,94 @@ export default function FolderExplorerPage() {
             </Button>
           </div>
 
+          <div className="flex flex-wrap items-center gap-2">
+            <input
+              type="text"
+              aria-label="Search test cases"
+              placeholder="Search test case titles…"
+              className="h-8 min-w-[180px] flex-1 rounded-md border border-input bg-background px-2 text-sm"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+            <select
+              aria-label="Tag"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              value={filters.tag}
+              onChange={(e) => setFilters((f) => ({ ...f, tag: e.target.value }))}
+            >
+              <option value="">All tags</option>
+              {tagOptions.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Priority"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              value={filters.priority}
+              onChange={(e) => setFilters((f) => ({ ...f, priority: e.target.value }))}
+            >
+              <option value="">All priorities</option>
+              <option value="critical">Critical</option>
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            <select
+              aria-label="Platform"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              value={filters.platform}
+              onChange={(e) => setFilters((f) => ({ ...f, platform: e.target.value }))}
+            >
+              <option value="">All platforms</option>
+              {platformOptions.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Test type"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              value={filters.testType}
+              onChange={(e) => setFilters((f) => ({ ...f, testType: e.target.value }))}
+            >
+              <option value="">All test types</option>
+              {testTypeOptions.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+            <select
+              aria-label="Automated"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              value={filters.automated}
+              onChange={(e) => setFilters((f) => ({ ...f, automated: e.target.value }))}
+            >
+              <option value="">All cases</option>
+              <option value="yes">Automated</option>
+              <option value="no">Manual</option>
+            </select>
+            <button
+              type="button"
+              className="text-sm font-medium text-primary underline underline-offset-2 disabled:text-muted-foreground disabled:no-underline"
+              disabled={!anyFilterActive}
+              onClick={clearFilters}
+            >
+              Clear filters
+            </button>
+            <label className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                checked={searchEntireLibrary}
+                onChange={(e) => setSearchEntireLibrary(e.target.checked)}
+              />
+              Search entire Library
+            </label>
+          </div>
+
           <Card>
             <CardContent className="p-0">
               {contentCreatingFolder && (
@@ -407,9 +595,39 @@ export default function FolderExplorerPage() {
                   />
                 </div>
               )}
-              {subfolders.length === 0 && casesHere.length === 0 && !contentCreatingFolder ? (
+              {searchEntireLibrary ? (
+                entireLibraryMatches.length === 0 ? (
+                  <p className="p-4 text-center text-sm text-muted-foreground">
+                    No cases match your search. Try a different term, or clear filters to see everything.
+                  </p>
+                ) : (
+                  <ul aria-label="Section contents">
+                    {entireLibraryMatches.map((c) => (
+                      <CaseRow
+                        key={c.id}
+                        testCase={c}
+                        suiteNames={suiteNamesFor(c.id)}
+                        folderPath={folderPathLabel(folders, c.folderId)}
+                        onOpen={() => openCase(c.key)}
+                        onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.key)}
+                        onMoveTo={() => {
+                          setMoveQuery('')
+                          setMovingCaseKey(c.key)
+                        }}
+                        canDelete={Boolean(permissions?.caseDelete)}
+                        onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
+                      />
+                    ))}
+                  </ul>
+                )
+              ) : subfolders.length === 0 && casesHere.length === 0 && !contentCreatingFolder ? (
                 <p className="p-4 text-center text-sm text-muted-foreground">
                   Nothing here yet in {displayFolderName(selectedFolder, root.id)}.
+                </p>
+              ) : subfolders.length === 0 && visibleHere.length === 0 && anyFilterActive ? (
+                <p className="p-4 text-center text-sm text-muted-foreground">
+                  No cases match your filters. Try a different combination, or use "Clear filters" above to see all
+                  cases in {displayFolderName(selectedFolder, root.id)}.
                 </p>
               ) : (
                 <ul aria-label="Section contents">
@@ -417,6 +635,7 @@ export default function FolderExplorerPage() {
                     <FolderRow
                       key={f.id}
                       folder={f}
+                      stats={folderStats[f.id]}
                       isDragOver={dragOverFolderId === f.id}
                       onDragOver={() => setDragOverFolderId(f.id)}
                       onDragLeave={() => setDragOverFolderId(null)}
@@ -426,7 +645,7 @@ export default function FolderExplorerPage() {
                       onRequestDelete={() => void requestDeleteFolder(f)}
                     />
                   ))}
-                  {casesHere.map((c) => (
+                  {visibleHere.map((c) => (
                     <CaseRow
                       key={c.id}
                       testCase={c}
@@ -456,6 +675,7 @@ export default function FolderExplorerPage() {
             rootId={root.id}
             query={moveQuery}
             onQueryChange={setMoveQuery}
+            folderStats={folderStats}
             onSelect={(targetFolderId) => {
               if (movingCaseKey) void moveCase(movingCaseKey, targetFolderId)
               setMovingCaseKey(null)
@@ -472,6 +692,7 @@ export default function FolderExplorerPage() {
             rootId={root.id}
             query={browseQuery}
             onQueryChange={setBrowseQuery}
+            folderStats={folderStats}
             onSelect={(targetFolderId) => {
               navigate(`/projects/${projectKey}/library/${targetFolderId}`)
               setBrowsingSections(false)

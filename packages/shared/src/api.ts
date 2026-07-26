@@ -973,6 +973,11 @@ export interface components {
             content: components["schemas"]["CaseContent"];
             /** Format: date-time */
             createdAt: string;
+            /**
+             * Format: date-time
+             * @description The current version's own createdAt — when the case was last edited, not when it was originally created. Equal to createdAt for a never-edited case.
+             */
+            updatedAt: string;
         };
         CaseVersion: {
             caseId: string;

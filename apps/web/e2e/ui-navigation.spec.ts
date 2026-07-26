@@ -288,9 +288,64 @@ test.describe('Requirement: Library with two-pane navigation', () => {
 
     await page.setViewportSize({ width: 375, height: 800 })
     await page.getByRole('button', { name: /browse sections/i }).click()
-    await page.getByRole('dialog').getByText('Library / Cards').click()
+    await page.getByRole('dialog').getByText('Cards').click()
     await expect(content(page).getByText('Cards')).toHaveCount(0)
     await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByText('Cards')).toBeVisible()
+  })
+
+  test('Scenario: A section row shows its case count and a critical-priority indicator', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-67' })
+    await createProject(page, 'Section Richness Project')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Transfers')
+    await content(page).getByText('Transfers').click()
+    await page.getByRole('button', { name: /new test case/i }).click()
+    const drawer = page.getByRole('dialog', { name: /new test case/i })
+    await drawer.getByLabel(/^title$/i).fill('Daily limit')
+    await drawer.getByLabel(/^priority$/i).selectOption('critical')
+    await drawer.getByRole('button', { name: /create test case/i }).click()
+    await expect(content(page).getByText('Daily limit')).toBeVisible()
+
+    // Up one level, where Transfers itself is a row (with its count/critical
+    // indicator) in the parent's content list.
+    await page.getByRole('navigation', { name: 'Breadcrumb' }).getByText('Library').click()
+
+    const transfersRow = content(page).getByText('Transfers').locator('xpath=ancestor::li')
+    await expect(transfersRow.getByText('1 case')).toBeVisible()
+    await expect(transfersRow.getByText(/critical/i)).toBeVisible()
+  })
+
+  test('Scenario: Filtering the toolbar narrows the section, with a distinct filtered-to-zero state', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-68' })
+    await createProject(page, 'Library Filter Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await expect(content(page).getByText('Login works')).toBeVisible()
+
+    await page.getByRole('combobox', { name: /^priority$/i }).selectOption('critical')
+    await expect(page.getByText(/no cases match your filters/i)).toBeVisible()
+    await expect(page.getByText(/nothing here yet/i)).toHaveCount(0)
+
+    await page.getByRole('button', { name: /clear filters/i }).click()
+    await expect(content(page).getByText('Login works')).toBeVisible()
+  })
+
+  test('Scenario: Search entire Library flattens matches across sections with their section path', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-69' })
+    await createProject(page, 'Library Cross-Search Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Root level case')
+    await createFolderInOpenFolder(page, 'Transfers')
+    await content(page).getByText('Transfers').click()
+    await createCase(page, 'Nested case')
+
+    // Still viewing Transfers — the root-level case isn't part of this
+    // section's own contents.
+    await expect(page.getByText('Root level case')).toHaveCount(0)
+    await page.getByLabel(/search entire library/i).check()
+    await expect(page.getByText('Root level case')).toBeVisible()
+    await expect(page.getByText('Nested case')).toBeVisible()
+    await expect(content(page).getByText('Transfers', { exact: true })).toBeVisible()
   })
 })
 

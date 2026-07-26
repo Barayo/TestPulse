@@ -424,3 +424,89 @@ func TestSeedContentShowcasesResultActorLink(t *testing.T) {
 		t.Error("no seeded result carries an override display name with the real actor link still populated")
 	}
 }
+
+// TestSeedContentShowcasesLibraryRichness covers rework-library-ux's showcase
+// task: a section with a double-digit direct case count (so the case-count/
+// automation-coverage-meter rendering has real scale to show), a genuinely
+// empty section (so the Library's "Nothing here yet" empty state isn't
+// purely theoretical), and one section whose direct cases alone span every
+// priority level and both automated/manual — not just true project-wide.
+func TestSeedContentShowcasesLibraryRichness(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	folders, err := svc.ListFolders(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListFolders: %v", err)
+	}
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+
+	directCounts := map[string]int{}
+	for _, c := range cases {
+		directCounts[c.FolderID]++
+	}
+
+	var sawDoubleDigitFolder bool
+	for _, f := range folders {
+		if directCounts[f.ID] >= 10 {
+			sawDoubleDigitFolder = true
+		}
+	}
+	if !sawDoubleDigitFolder {
+		t.Error("no folder has a double-digit direct case count — the case-count/coverage-meter rendering has nothing at scale to show")
+	}
+
+	subfolderCounts := map[string]int{}
+	for _, f := range folders {
+		if f.ParentFolderID != "" {
+			subfolderCounts[f.ParentFolderID]++
+		}
+	}
+	var sawEmptyFolder bool
+	for _, f := range folders {
+		if f.ParentFolderID == "" {
+			continue // root itself is never "a section"
+		}
+		if directCounts[f.ID] == 0 && subfolderCounts[f.ID] == 0 {
+			sawEmptyFolder = true
+		}
+	}
+	if !sawEmptyFolder {
+		t.Error("no genuinely empty section — the Library's \"Nothing here yet\" empty state has nothing real to demonstrate")
+	}
+
+	priorityByFolder := map[string]map[domain.Priority]bool{}
+	automatedByFolder := map[string]bool{}
+	manualByFolder := map[string]bool{}
+	for _, c := range cases {
+		if priorityByFolder[c.FolderID] == nil {
+			priorityByFolder[c.FolderID] = map[domain.Priority]bool{}
+		}
+		priorityByFolder[c.FolderID][c.Content.Priority] = true
+		if c.Content.Automated {
+			automatedByFolder[c.FolderID] = true
+		} else {
+			manualByFolder[c.FolderID] = true
+		}
+	}
+	var sawFullyMixedFolder bool
+	for folderID, priorities := range priorityByFolder {
+		allPriorities := priorities[domain.PriorityLow] && priorities[domain.PriorityMedium] &&
+			priorities[domain.PriorityHigh] && priorities[domain.PriorityCritical]
+		if allPriorities && automatedByFolder[folderID] && manualByFolder[folderID] {
+			sawFullyMixedFolder = true
+		}
+	}
+	if !sawFullyMixedFolder {
+		t.Error("no single section's direct cases alone span every priority level plus both automated and manual")
+	}
+}

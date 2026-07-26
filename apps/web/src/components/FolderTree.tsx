@@ -4,6 +4,8 @@ import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from 
 
 export type TreeFolder = { id: string; name: string; parentFolderId?: string }
 
+export type FolderStats = { count: number; hasCritical: boolean }
+
 type Props = {
   folders: TreeFolder[]
   rootId: string
@@ -18,6 +20,10 @@ type Props = {
   onConfirmNewFolder?: () => void
   onCancelNewFolder?: () => void
   onDropCase?: (caseId: string, folderId: string) => void
+  // Direct-children case counts only, no recursive rollup (rework-library-ux
+  // design.md) — computed client-side by the caller from data already
+  // fetched, keyed by folder id. A folder with no entry renders a 0 count.
+  folderStats?: Record<string, FolderStats>
 }
 
 // Shared with FolderExplorerPage's case rows and its inline subsection
@@ -87,6 +93,7 @@ function TreeNode({
   onConfirmNewFolder,
   onCancelNewFolder,
   onDropCase,
+  folderStats,
 }: {
   folder: TreeFolder
   depth: number
@@ -139,11 +146,19 @@ function TreeNode({
         )}
         <button
           type="button"
-          title={folder.name}
-          className="flex-1 truncate text-left"
+          className="flex flex-1 items-center gap-1.5 truncate text-left"
           onClick={() => onSelect(folder.id)}
         >
-          {folder.name}
+          <span className="truncate" title={folder.name}>
+            {folder.name}
+          </span>
+          {folderStats?.[folder.id]?.hasCritical && (
+            <span
+              aria-label={`${folder.name} contains a critical case`}
+              className="size-1.5 shrink-0 rounded-full bg-destructive"
+            />
+          )}
+          <span className="shrink-0 text-xs text-muted-foreground">{folderStats?.[folder.id]?.count ?? 0}</span>
         </button>
         <RowActionMenu ref={menuRef} label={`New section in ${folder.name}`} items={menuItems} />
       </div>
@@ -165,6 +180,7 @@ function TreeNode({
             onConfirmNewFolder={onConfirmNewFolder}
             onCancelNewFolder={onCancelNewFolder}
             onDropCase={onDropCase}
+            folderStats={folderStats}
           />
         ))}
       {isExpanded && creatingIn === folder.id && (
@@ -194,6 +210,7 @@ export function FolderTree({
   onConfirmNewFolder,
   onCancelNewFolder,
   onDropCase,
+  folderStats,
 }: Props) {
   const topLevel = folders.filter((f) => f.parentFolderId === rootId)
   return (
@@ -215,6 +232,7 @@ export function FolderTree({
           onConfirmNewFolder={onConfirmNewFolder}
           onCancelNewFolder={onCancelNewFolder}
           onDropCase={onDropCase}
+          folderStats={folderStats}
         />
       ))}
     </nav>

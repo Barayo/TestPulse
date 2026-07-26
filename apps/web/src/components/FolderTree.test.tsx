@@ -259,6 +259,71 @@ describe('FolderTree', () => {
     })
   })
 
+  describe('per-folder direct case counts (rework-library-ux)', () => {
+    it('shows a direct case count next to each folder name', () => {
+      render(
+        <FolderTree
+          folders={folders}
+          rootId="root"
+          selectedId="transferencias"
+          expanded={new Set()}
+          onSelect={vi.fn()}
+          onToggle={vi.fn()}
+          onNewSubfolder={vi.fn()}
+          folderStats={{ transferencias: { count: 5, hasCritical: false } }}
+        />,
+      )
+      expect(screen.getByText('5')).toBeInTheDocument()
+    })
+
+    it('shows a critical-priority indicator when the folder has at least one critical case', () => {
+      render(
+        <FolderTree
+          folders={folders}
+          rootId="root"
+          selectedId="transferencias"
+          expanded={new Set()}
+          onSelect={vi.fn()}
+          onToggle={vi.fn()}
+          onNewSubfolder={vi.fn()}
+          folderStats={{ transferencias: { count: 5, hasCritical: true } }}
+        />,
+      )
+      expect(screen.getByLabelText(/contains a critical case/i)).toBeInTheDocument()
+    })
+
+    it('omits the critical indicator when no case in the folder is critical', () => {
+      render(
+        <FolderTree
+          folders={folders}
+          rootId="root"
+          selectedId="transferencias"
+          expanded={new Set()}
+          onSelect={vi.fn()}
+          onToggle={vi.fn()}
+          onNewSubfolder={vi.fn()}
+          folderStats={{ transferencias: { count: 5, hasCritical: false } }}
+        />,
+      )
+      expect(screen.queryByLabelText(/contains a critical case/i)).not.toBeInTheDocument()
+    })
+
+    it('shows a 0 count for a folder with no stats entry, rather than omitting it', () => {
+      render(
+        <FolderTree
+          folders={folders}
+          rootId="root"
+          selectedId="transferencias"
+          expanded={new Set()}
+          onSelect={vi.fn()}
+          onToggle={vi.fn()}
+          onNewSubfolder={vi.fn()}
+        />,
+      )
+      expect(screen.getByText('0')).toBeInTheDocument()
+    })
+  })
+
   it('closes the context menu when clicking outside it', async () => {
     render(
       <div>

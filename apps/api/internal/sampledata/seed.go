@@ -66,6 +66,12 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
+	// Deliberately left with no cases and no subsections (rework-library-ux
+	// showcase task) — the Library's "Nothing here yet" empty state has a
+	// real section to demonstrate, not just a theoretical one.
+	if _, err := Folder(ctx, svc, p.ID, root.ID, "Localization"); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
 
 	// --- Authentication cases ------------------------------------------
 
@@ -164,7 +170,24 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
-	if _, err := Filler(ctx, svc, p.ID, auth.ID, "Authentication", "case", 2); err != nil {
+	// Authentication's own direct cases (not the Two-Factor subsection) span
+	// every priority level plus both automated and manual on their own —
+	// the Library's per-section critical badge/coverage meter has a real
+	// section to render against, not just project-wide variety.
+	if _, err := svc.CreateCase(ctx, p.ID, auth.ID, domain.CaseContent{
+		Title:    "Account lockout after repeated failed logins",
+		Steps:    []domain.Step{{Action: "Fail to log in 5 times in a row", Expected: "The account is temporarily locked and further attempts are rejected"}},
+		Priority: domain.PriorityCritical,
+		Tags:     []string{"auth", "security"},
+		Platform: "web",
+		TestType: "functional",
+	}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	// Padded to a double-digit direct count (rework-library-ux showcase task)
+	// — Authentication's case-count/coverage-meter rendering has real scale
+	// to show, not just a handful of rows.
+	if _, err := Filler(ctx, svc, p.ID, auth.ID, "Authentication", "case", 6); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	// A real nested subsection, so add-delete-mode's cascade-count

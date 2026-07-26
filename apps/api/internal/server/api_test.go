@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/server"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
@@ -131,6 +132,35 @@ func TestScenario_CaseVersioningOverHTTP(t *testing.T) {
 	call(t, h, "GET", "/api/v1/cases/"+c.Key+"/versions", nil, 200, &versions)
 	if len(versions) != 2 || versions[0].Content["title"] != "Login works" {
 		t.Errorf("versions = %+v", versions)
+	}
+}
+
+// "updatedAt reflects the current version, not original creation" scenario
+// (rework-library-ux: the Library's staleness badge needs a case's last-
+// touched time, which for an immutably-versioned case is the current
+// version's own createdAt, not the case row's own createdAt).
+func TestScenario_CaseUpdatedAtOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+
+	var c struct {
+		Key       string
+		CreatedAt time.Time `json:"createdAt"`
+		UpdatedAt time.Time `json:"updatedAt"`
+	}
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "Login works"}, 201, &c)
+	if c.UpdatedAt.IsZero() {
+		t.Fatalf("newly created case has zero updatedAt")
+	}
+	firstCreatedAt, firstUpdatedAt := c.CreatedAt, c.UpdatedAt
+
+	call(t, h, "PUT", "/api/v1/cases/"+c.Key, jmap{"title": "Login works v2"}, 200, &c)
+	if !c.UpdatedAt.After(firstUpdatedAt) {
+		t.Errorf("updatedAt after edit = %v, want strictly after %v", c.UpdatedAt, firstUpdatedAt)
+	}
+	if !c.CreatedAt.Equal(firstCreatedAt) {
+		t.Errorf("createdAt changed after edit: was %v, now %v — should stay the case's original creation time", firstCreatedAt, c.CreatedAt)
 	}
 }
 

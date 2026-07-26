@@ -270,13 +270,14 @@ describe('FolderExplorerPage', () => {
     renderExplorer()
     await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
     await userEvent.click(screen.getByRole('button', { name: /new test case/i }))
-    await userEvent.type(screen.getByLabelText(/title/i), 'New case')
-    await userEvent.selectOptions(screen.getByLabelText(/priority/i), 'critical')
-    await userEvent.type(screen.getByLabelText(/^tags/i), 'smoke, regression')
-    await userEvent.type(screen.getByLabelText(/platform/i), 'iOS')
-    await userEvent.type(screen.getByLabelText(/test type/i), 'unit')
-    await userEvent.click(screen.getByLabelText(/automated/i))
-    await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
+    const drawer = within(screen.getByRole('dialog', { name: /new test case/i }))
+    await userEvent.type(drawer.getByLabelText(/title/i), 'New case')
+    await userEvent.selectOptions(drawer.getByLabelText(/priority/i), 'critical')
+    await userEvent.type(drawer.getByLabelText(/^tags/i), 'smoke, regression')
+    await userEvent.type(drawer.getByLabelText(/platform/i), 'iOS')
+    await userEvent.type(drawer.getByLabelText(/test type/i), 'unit')
+    await userEvent.click(drawer.getByLabelText(/automated/i))
+    await userEvent.click(drawer.getByRole('button', { name: /create test case/i }))
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
@@ -360,7 +361,7 @@ describe('FolderExplorerPage', () => {
       expect(mockPUT).not.toHaveBeenCalled()
     })
 
-    it('moves a case via the "Move to…" item in its row menu, listing every folder with its full path', async () => {
+    it('moves a case via the "Move to…" item in its row menu, listing every folder', async () => {
       mockExplorerAPI()
       mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
       renderExplorer()
@@ -369,10 +370,10 @@ describe('FolderExplorerPage', () => {
       await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
 
       const dialog = await screen.findByRole('dialog')
-      expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
+      expect(within(dialog).getByText('Nacionales')).toBeInTheDocument()
       expect(within(dialog).getByText('Library')).toBeInTheDocument()
 
-      await userEvent.click(within(dialog).getByText('Library / Transferencias / Nacionales'))
+      await userEvent.click(within(dialog).getByText('Nacionales'))
 
       await waitFor(() => {
         expect(mockPUT).toHaveBeenCalledWith(
@@ -391,12 +392,12 @@ describe('FolderExplorerPage', () => {
       await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText('Library')).toBeInTheDocument()
-      expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
+      expect(within(dialog).getByText('Nacionales')).toBeInTheDocument()
 
       await userEvent.type(within(dialog).getByPlaceholderText(/search sections/i), 'Nacionales')
 
       expect(within(dialog).queryByText('Library')).not.toBeInTheDocument()
-      expect(within(dialog).getByText('Library / Transferencias / Nacionales')).toBeInTheDocument()
+      expect(within(dialog).getByText('Nacionales')).toBeInTheDocument()
     })
 
     it('does nothing when the current folder is reselected in the picker', async () => {
@@ -407,7 +408,7 @@ describe('FolderExplorerPage', () => {
       await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
       const dialog = await screen.findByRole('dialog')
 
-      await userEvent.click(within(dialog).getByText('Library / Transferencias'))
+      await userEvent.click(within(dialog).getByText('Transferencias'))
 
       await new Promise((r) => setTimeout(r, 0))
       expect(mockPUT).not.toHaveBeenCalled()
@@ -451,7 +452,7 @@ describe('FolderExplorerPage', () => {
       await userEvent.click(screen.getByRole('button', { name: /browse sections/i }))
 
       const dialog = await screen.findByRole('dialog')
-      await userEvent.click(within(dialog).getByText('Library / Transferencias / Nacionales'))
+      await userEvent.click(within(dialog).getByText('Nacionales'))
 
       await waitFor(() => {
         const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
@@ -594,6 +595,167 @@ describe('FolderExplorerPage', () => {
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
       expect(mockDELETE).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('folder row richness (rework-library-ux)', () => {
+    async function contentFolderRow(name: string) {
+      const content = await screen.findByRole('list', { name: 'Section contents' })
+      return (await within(content).findByText(name)).closest('li') as HTMLElement
+    }
+
+    it('shows the direct case count on a subfolder row', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const row = await contentFolderRow('Nacionales')
+      expect(within(row).getByText('0 cases')).toBeInTheDocument()
+    })
+
+    it('shows a critical badge when the subfolder has at least one critical case', async () => {
+      const critical = { ...limitCase, id: 'c2', key: 'c2', folderId: 'nacionales', content: { ...limitCase.content, priority: 'critical' } }
+      mockExplorerAPI({ cases: [limitCase, critical] })
+      renderExplorer()
+      const row = await contentFolderRow('Nacionales')
+      expect(within(row).getByText(/1 critical/i)).toBeInTheDocument()
+    })
+
+    it('shows an automation-coverage meter with the automated/total count', async () => {
+      const auto = { ...limitCase, id: 'c2', key: 'c2', folderId: 'nacionales', content: { ...limitCase.content, automated: true } }
+      const manual = { ...limitCase, id: 'c3', key: 'c3', folderId: 'nacionales', content: { ...limitCase.content, automated: false } }
+      mockExplorerAPI({ cases: [limitCase, auto, manual] })
+      renderExplorer()
+      const row = await contentFolderRow('Nacionales')
+      expect(within(row).getByText(/1\/2 automated/i)).toBeInTheDocument()
+    })
+
+    it('shows "empty" instead of a coverage meter for a folder with no direct cases', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const row = await contentFolderRow('Nacionales')
+      expect(within(row).getByText(/^empty$/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('case row richness (rework-library-ux)', () => {
+    it('shows priority, platform, and test type pills', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).getByText('high')).toBeInTheDocument()
+      expect(within(row).getByText('web')).toBeInTheDocument()
+      expect(within(row).getByText('e2e')).toBeInTheDocument()
+    })
+
+    it('shows an Auto pill for an automated case', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).getByText('Auto')).toBeInTheDocument()
+    })
+
+    it('shows a Manual pill for a non-automated case', async () => {
+      const manual = { ...limitCase, content: { ...limitCase.content, automated: false } }
+      mockExplorerAPI({ cases: [manual] })
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).getByText('Manual')).toBeInTheDocument()
+    })
+
+    it('shows a Stale pill for a case untouched 90+ days', async () => {
+      const stale = { ...limitCase, updatedAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString() }
+      mockExplorerAPI({ cases: [stale] })
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).getByText('Stale')).toBeInTheDocument()
+    })
+
+    it('shows a relative-time readout, not Stale, for a recently touched case', async () => {
+      const fresh = { ...limitCase, updatedAt: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString() }
+      mockExplorerAPI({ cases: [fresh] })
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).queryByText('Stale')).not.toBeInTheDocument()
+      expect(within(row).getByText(/2 days ago/i)).toBeInTheDocument()
+    })
+  })
+
+  describe('search and filtering (rework-library-ux)', () => {
+    const otherCase = {
+      ...limitCase,
+      id: 'c2',
+      key: 'c2',
+      folderId: 'nacionales',
+      content: {
+        ...limitCase.content,
+        title: 'National transfer succeeds',
+        priority: 'low',
+        platform: 'ios',
+        testType: 'unit',
+        automated: false,
+        tags: [],
+      },
+    }
+
+    it('search narrows the current folder’s cases by title substring', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.type(screen.getByLabelText(/search test cases/i), 'nonexistent')
+      expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
+    })
+
+    it('filtering by priority narrows to matching cases only', async () => {
+      mockExplorerAPI({ cases: [limitCase, { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Low prio case', priority: 'low' } }] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
+      expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
+      expect(screen.getByText('Low prio case')).toBeInTheDocument()
+    })
+
+    it('"Clear filters" resets search and every filter dropdown', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
+      expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: /clear filters/i }))
+      expect(screen.getByText('Daily transfer limit')).toBeInTheDocument()
+    })
+
+    it('shows a filtered-to-zero state distinct from a genuinely empty folder, offering to clear filters', async () => {
+      // A folder with no subfolders, so the filtered-to-zero branch (rather
+      // than "subfolders render regardless of the filter") actually applies.
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
+      expect(screen.getByText(/no cases match your filters/i)).toBeInTheDocument()
+      expect(screen.queryByText(/nothing here yet/i)).not.toBeInTheDocument()
+    })
+
+    it('"Search entire Library" flattens matches across every folder, each labeled with its folder path', async () => {
+      mockExplorerAPI({ cases: [limitCase, otherCase] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      expect(screen.queryByText('National transfer succeeds')).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('checkbox', { name: /search entire library/i }))
+      expect(screen.getByText('Daily transfer limit')).toBeInTheDocument()
+      expect(screen.getByText('National transfer succeeds')).toBeInTheDocument()
+      expect(screen.getByText('Transferencias / Nacionales')).toBeInTheDocument()
+    })
+
+    it('"Search entire Library" composes with the active filters', async () => {
+      mockExplorerAPI({ cases: [limitCase, otherCase] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.click(screen.getByRole('checkbox', { name: /search entire library/i }))
+      await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
+
+      expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
+      expect(screen.getByText('National transfer succeeds')).toBeInTheDocument()
     })
   })
 

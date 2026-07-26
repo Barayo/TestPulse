@@ -246,6 +246,10 @@ type TestCase struct {
 	CurrentVersion int         `json:"currentVersion"`
 	Content        CaseContent `json:"content"` // content of the current version
 	CreatedAt      time.Time   `json:"createdAt"`
+	// UpdatedAt is the current version's own createdAt — when the case was
+	// last edited, not when it was originally created (rework-library-ux,
+	// staleness signal). Equal to CreatedAt for a never-edited case.
+	UpdatedAt time.Time `json:"updatedAt"`
 }
 
 // Folder is a node in a project's case-organization tree (D8). Root

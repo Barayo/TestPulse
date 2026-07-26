@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { PRIORITIES, type Priority } from '@/components/ClassificationEditor'
+import { ClassificationPills, distinctValues, tagPills } from '@/components/Pills'
 
 export type CasePickerFolder = { id: string; name: string; parentFolderId?: string }
 
@@ -43,15 +44,6 @@ export function computeVisibleRange(
   const visibleCount = Math.ceil(viewportHeight / rowHeight) + overscan * 2
   const end = Math.min(totalRows, start + visibleCount)
   return { start, end }
-}
-
-function distinctValues(cases: CasePickerCase[], pick: (c: CasePickerCase) => string) {
-  const values = new Set<string>()
-  for (const c of cases) {
-    const v = pick(c)
-    if (v) values.add(v)
-  }
-  return Array.from(values).sort()
 }
 
 function capitalize(s: string) {
@@ -158,21 +150,6 @@ function TreeNode({
         />
       ))}
     </div>
-  )
-}
-
-function tagPills(tags: string[]) {
-  const shown = tags.slice(0, 2)
-  const overflow = tags.length - shown.length
-  return (
-    <>
-      {shown.map((t) => (
-        <span key={t} className="rounded-full bg-muted px-2 py-0.5">
-          {t}
-        </span>
-      ))}
-      {overflow > 0 && <span className="rounded-full bg-muted px-2 py-0.5">+{overflow}</span>}
-    </>
   )
 }
 
@@ -439,9 +416,7 @@ export function CasePicker({
                         </span>
                       )}
                       <span className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                        {c.priority && <span className="rounded-full bg-muted px-2 py-0.5">{c.priority}</span>}
-                        {c.platform && <span className="rounded-full bg-muted px-2 py-0.5">{c.platform}</span>}
-                        {c.testType && <span className="rounded-full bg-muted px-2 py-0.5">{c.testType}</span>}
+                        <ClassificationPills priority={c.priority} platform={c.platform} testType={c.testType} />
                         {tagPills(c.tags)}
                       </span>
                     </span>
