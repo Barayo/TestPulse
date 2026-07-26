@@ -43,9 +43,10 @@ interactive mockup (approved by the user) is the basis for this change.
 
 - `apps/web/src/pages/ProjectPage.tsx`, `apps/web/src/components/ProjectLandingPanels.tsx`
   — summary strip and all three panels.
-- Suite pass-rate data: same dependency as `rework-suites-landing-ux` — needs
-  `add-suite-pass-rate-trend`'s current-pass-rate read landed first (see that
-  change's design.md for why a second parallel read shouldn't be built).
+- Suite pass-rate data: depends on `rework-suites-landing-ux` landing first —
+  reuses its batched `domain.Suite.PassRate`/`LastRunAt` rather than a second
+  parallel read (see that change's design.md for why the original
+  `add-suite-pass-rate-trend`-based plan was revised).
 - `docs/test-management.md` — update the project landing description.
 - `apps/api/internal/sampledata/seed.go` — verify the Sample Project has a
   section with subsections (to demonstrate the expand), an empty section, a

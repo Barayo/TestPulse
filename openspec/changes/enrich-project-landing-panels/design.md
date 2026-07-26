@@ -24,18 +24,22 @@ exactly one secondary signal per panel row rather than maximal density.
 - No IA change — panel count, capping behavior, "see all" links, and the
   empty-project getting-started checklist are already-settled behavior from
   `enrich-project-landing`; this change is visual only.
-- No new backend aggregate beyond what `add-suite-pass-rate-trend` already
-  provides for suite pass rate — see that change and `rework-suites-landing-ux`
-  for the shared dependency.
+- No new backend aggregate for suite pass rate — `rework-suites-landing-ux`
+  already adds a batched `PassRate`/`LastRunAt` to `domain.Suite`
+  (`SuiteRepo.List`'s existing query, one extra grouped query for every suite
+  in the project); this change reuses that field.
 - No recursive case-count rollups in the Library panel's magnitude bar — same
   direct-count-only precedent as `rework-library-ux`.
 
 ## Decisions
 
-- **Suite pass rate on this page reuses the same source as
-  `rework-suites-landing-ux`** (`add-suite-pass-rate-trend`'s `SuiteTrend`,
-  latest point) rather than a third parallel read of the same underlying data.
-  Both changes share this dependency; landing the trend endpoint unblocks both.
+- **Suite pass rate on this page reuses `rework-suites-landing-ux`'s batched
+  `domain.Suite.PassRate`** (already returned by `GET /projects/{projectKey}/suites`,
+  no separate call needed) rather than a second read of the same data. This
+  change therefore depends on `rework-suites-landing-ux` landing first, not
+  on `add-suite-pass-rate-trend` (corrected — the trend endpoint's per-suite,
+  closed-runs-only shape was never right for a panel of many suites; see
+  `rework-suites-landing-ux/design.md`'s revised Decisions for why).
 - **The Library panel's inline expand is a light preview, not a tree.** Only
   the panel row itself toggles open/closed to show immediate children inline
   (matching the mockup's "Regression" demo) — full navigation still goes
@@ -48,10 +52,9 @@ exactly one secondary signal per panel row rather than maximal density.
 
 ## Risks / Trade-offs
 
-- [Depending on `add-suite-pass-rate-trend` landing first, shared with
-  `rework-suites-landing-ux`] → Both changes should land after (or bundle) that
-  backend work; sequencing captured in the priority ordering, not duplicated
-  here.
+- [Depending on `rework-suites-landing-ux` landing first, for its batched
+  suite pass-rate field] → Sequencing captured in the priority ordering
+  (this change is priority #7, after #3).
 - [Library panel's inline expand adds a small piece of interactive state to a
   page that's meant to stay a lightweight landing] → Scoped to a single
   toggle per row, no persistence, no navigation — low risk of scope growth.

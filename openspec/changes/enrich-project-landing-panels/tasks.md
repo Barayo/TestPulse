@@ -1,8 +1,8 @@
 ## 1. Prerequisite: land suite pass-rate data
 
-- [ ] 1.1 Same dependency as `rework-suites-landing-ux` — commit/merge
-  `add-suite-pass-rate-trend` before or alongside this change; don't build a second
-  parallel current-pass-rate read.
+- [ ] 1.1 Depends on `rework-suites-landing-ux` landing first — it adds a batched
+  `PassRate`/`LastRunAt` to `domain.Suite` (`SuiteRepo.List`'s existing query).
+  Reuse that field for the Suites panel; don't build a second parallel read.
 
 ## 2. Summary strip
 
