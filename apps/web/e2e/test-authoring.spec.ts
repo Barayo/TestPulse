@@ -100,6 +100,20 @@ test.describe('Requirement: Test suite grouping', () => {
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Case A')).toBeVisible()
 
+    // A second case in its own section, to exercise the case grid's section
+    // scoping (rework-suite-case-picker-scale) in the same flow.
+    await page.getByRole('button', { name: /^\+ new section$/i }).click()
+    await page.getByLabel('New section name').fill('Checkout')
+    await page.getByLabel('New section name').press('Enter')
+    await content(page).getByText('Checkout').click()
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Case B')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Case B')).toBeVisible()
+
+    // Two entries back: navigating into "Checkout" pushed one on top of the
+    // library root that "Case A" was created against.
+    await page.goBack()
     await page.goBack()
     await page.getByRole('button', { name: 'Go to Suites' }).click()
     // Creating a suite opens straight into its own detail page
@@ -108,6 +122,13 @@ test.describe('Requirement: Test suite grouping', () => {
     await page.getByLabel(/suite name/i).fill('Smoke')
     await page.getByRole('button', { name: /^create$/i }).click()
     await expect(page.getByRole('heading', { name: 'Smoke' })).toBeVisible()
+
+    // Scoping to "Checkout" narrows the grid to Case B only.
+    await expect(page.getByRole('checkbox', { name: 'Case A' })).toBeVisible()
+    await page.getByRole('treeitem', { name: /^checkout/i }).click()
+    await expect(page.getByRole('checkbox', { name: 'Case B' })).toBeVisible()
+    await expect(page.getByRole('checkbox', { name: 'Case A' })).not.toBeVisible()
+    await page.getByRole('treeitem', { name: /^all sections/i }).click()
 
     await page.getByRole('checkbox', { name: 'Case A' }).check()
     await page.getByRole('button', { name: /save changes/i }).click()

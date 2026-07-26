@@ -1,0 +1,829 @@
+<meta charset="utf-8">
+<title>Suite case picker rework — mockup</title>
+<style>
+  :root {
+    --background:#F7FAFA; --foreground:#0B2E2C; --card:#FFFFFF; --primary:#14B8A6; --secondary:#F5C84A;
+    --destructive:#E8553F; --muted:#F0F3F2; --muted-foreground:#5B6B6A; --accent:#EAFAF7; --border:#E1E8E7;
+    --input:#D8E4E3; --radius:0.5rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background:#0B2A28; --foreground:#E6F5F3; --card:#12403C; --primary:#2DD4BF; --secondary:#FBBF24;
+      --destructive:#FF6B57; --muted:#163A37; --muted-foreground:#8FBDB8; --accent:#163F3B; --border:#1D524C;
+      --input:#1D524C;
+    }
+  }
+  :root[data-theme="light"] {
+    --background:#F7FAFA; --foreground:#0B2E2C; --card:#FFFFFF; --primary:#14B8A6; --secondary:#F5C84A;
+    --destructive:#E8553F; --muted:#F0F3F2; --muted-foreground:#5B6B6A; --accent:#EAFAF7; --border:#E1E8E7;
+    --input:#D8E4E3;
+  }
+  :root[data-theme="dark"] {
+    --background:#0B2A28; --foreground:#E6F5F3; --card:#12403C; --primary:#2DD4BF; --secondary:#FBBF24;
+    --destructive:#FF6B57; --muted:#163A37; --muted-foreground:#8FBDB8; --accent:#163F3B; --border:#1D524C;
+    --input:#1D524C;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    overflow-x: hidden;
+    background: var(--background);
+    color: var(--foreground);
+    font-family: 'Geist', ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.45;
+  }
+  .mono { font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+  .tp-heading { font-family: 'Geist', ui-sans-serif, system-ui, sans-serif; font-weight: 900; letter-spacing: -0.02em; }
+  .tp-label {
+    font-family: 'Geist Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    text-transform: uppercase; letter-spacing: 0.12em; font-size: 11px; color: var(--muted-foreground);
+  }
+
+  /* ---------- mockup chrome (clearly separated from the "product") ---------- */
+  .chrome {
+    position: sticky; top: 0; z-index: 50;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 10px 20px;
+    background: var(--foreground); color: var(--background);
+    border-bottom: 1px solid var(--border);
+  }
+  .chrome-title { font-weight: 700; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; opacity: 0.85; }
+  .chrome-stats { display: flex; gap: 16px; font-size: 12px; opacity: 0.85; }
+  .chrome button {
+    font: inherit; cursor: pointer; border-radius: 999px; border: 1px solid rgba(255,255,255,0.35);
+    background: transparent; color: inherit; padding: 5px 12px; font-size: 12px;
+  }
+  .chrome button:hover { background: rgba(255,255,255,0.12); }
+
+  .page-wrap { max-width: 1180px; margin: 0 auto; padding: 28px 24px 80px; overflow-x: hidden; }
+  .note {
+    background: var(--accent); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 12px 16px; font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 24px;
+  }
+  .note strong { color: var(--foreground); }
+
+  /* ---------- simulated SuiteDetailPage shell ---------- */
+  .crumbs { font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 10px; }
+  .crumbs a { color: var(--muted-foreground); text-decoration: none; }
+  .page-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 16px; margin-bottom: 20px; }
+  .page-header h1 { font-size: 22px; margin: 0; }
+
+  .detail-grid { display: grid; grid-template-columns: 1fr 300px; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .detail-grid { grid-template-columns: 1fr; } }
+
+  .side-card {
+    background: color-mix(in srgb, var(--muted) 60%, transparent);
+    border-radius: 1rem; padding: 18px; position: sticky; top: 70px;
+  }
+  .side-card h3 { margin: 0 0 10px; font-size: 12px; }
+  .side-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; border-bottom: 1px solid var(--border); }
+  .side-row:last-child { border-bottom: none; }
+  .side-row span:first-child { color: var(--muted-foreground); }
+
+  /* ---------- SuiteCaseGrid (redesigned) ---------- */
+  .grid-root { display: flex; flex-direction: column; gap: 10px; }
+
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
+  .search-box { position: relative; flex: 1 1 220px; min-width: 180px; }
+  .search-box input {
+    width: 100%; padding: 7px 30px 7px 10px; border-radius: var(--radius); border: 1px solid var(--input);
+    background: var(--background); color: var(--foreground); font-size: 13px;
+  }
+  .search-box .clear-x {
+    position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+    border: none; background: none; color: var(--muted-foreground); cursor: pointer; font-size: 13px; padding: 2px 4px;
+    display: none;
+  }
+  .search-box.has-value .clear-x { display: block; }
+
+  select {
+    border-radius: var(--radius); border: 1px solid var(--input); background: var(--background); color: var(--foreground);
+    padding: 6px 8px; font-size: 13px;
+  }
+  .link-btn {
+    font-size: 13px; font-weight: 500; color: var(--primary); background: none; border: none; cursor: pointer;
+    text-decoration: underline; text-underline-offset: 2px; padding: 0;
+  }
+  .link-btn:disabled { color: var(--muted-foreground); text-decoration: none; cursor: default; }
+
+  .toggle-chip {
+    display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px;
+    border: 1px solid var(--input); background: var(--background); color: var(--foreground);
+    font-size: 12.5px; cursor: pointer; white-space: nowrap;
+  }
+  .toggle-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--primary); color: var(--primary); font-weight: 600; }
+  .toggle-chip .count-badge {
+    background: var(--primary); color: var(--card); border-radius: 999px; padding: 0 6px; font-size: 11px; font-weight: 700;
+    min-width: 16px; text-align: center;
+  }
+  .toggle-chip[aria-pressed="false"] .count-badge { background: var(--muted-foreground); }
+
+  .scope-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 12.5px; color: var(--muted-foreground); }
+  .scope-row .scope-path { color: var(--foreground); font-weight: 500; }
+  .scope-row .scope-path .sep { margin: 0 4px; color: var(--muted-foreground); font-weight: 400; }
+
+  .picker-body { display: flex; gap: 0; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; background: var(--card); }
+
+  .rail {
+    width: 220px; flex-shrink: 0; border-right: 1px solid var(--border);
+    display: flex; flex-direction: column;
+  }
+  .rail-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px 6px; }
+  .rail-tree { overflow-y: auto; max-height: 440px; padding: 4px 0 10px; }
+  .rail.collapsed { width: 0; border-right: none; }
+  .rail.collapsed .rail-header, .rail.collapsed .rail-tree { display: none; }
+
+  .rail-node-row {
+    display: flex; align-items: center; gap: 6px; padding: 5px 10px; font-size: 12.5px; cursor: pointer;
+    white-space: nowrap; overflow: hidden;
+  }
+  .rail-node-row:hover { background: var(--accent); }
+  .rail-node-row.selected { background: var(--accent); color: var(--primary); font-weight: 600; }
+  .rail-node-row .chev { width: 12px; flex-shrink: 0; font-size: 10px; color: var(--muted-foreground); background: none; border: none; cursor: pointer; padding: 0; }
+  .rail-node-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; }
+  .rail-node-row .cnt { color: var(--muted-foreground); font-size: 11px; flex-shrink: 0; }
+  .rail-node-row.selected .cnt { color: var(--primary); opacity: 0.8; }
+  .rail-root-row { border-bottom: 1px solid var(--border); margin-bottom: 2px; padding-bottom: 6px; font-weight: 600; }
+
+  .list-pane { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .list-meta { padding: 8px 14px; font-size: 12.5px; color: var(--muted-foreground); border-bottom: 1px solid var(--border); }
+  .list-meta b { color: var(--foreground); font-weight: 600; }
+
+  .viewport { position: relative; height: 440px; overflow-y: auto; overflow-x: hidden; }
+  .spacer { position: relative; width: 100%; }
+  .row {
+    position: absolute; left: 0; right: 0; display: flex; align-items: flex-start; gap: 10px;
+    padding: 8px 14px; border-bottom: 1px solid var(--border); cursor: pointer; background: var(--card);
+  }
+  .row:hover { background: var(--accent); }
+  .row input[type=checkbox] { margin-top: 3px; accent-color: var(--primary); width: 14px; height: 14px; flex-shrink: 0; }
+  .row .row-main { min-width: 0; flex: 1; }
+  .row .row-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+  .row .row-path { font-size: 11px; color: var(--muted-foreground); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .row-pills { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  .pill { border-radius: 999px; background: var(--muted); color: var(--muted-foreground); padding: 1px 8px; font-size: 11px; white-space: nowrap; }
+
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--muted-foreground); font-size: 13px; }
+  .empty-state p:first-child { color: var(--foreground); font-weight: 500; margin-bottom: 4px; }
+
+  .footer-bar {
+    display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border);
+    background: var(--accent); border-radius: var(--radius); padding: 10px 16px;
+  }
+  .footer-bar .sel-count { font-size: 13px; font-weight: 500; }
+  .footer-bar button.commit {
+    background: var(--primary); color: var(--card); border: none; border-radius: var(--radius);
+    padding: 8px 16px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .footer-bar button.commit:disabled { background: var(--muted-foreground); cursor: default; opacity: 0.6; }
+
+  .perf-note { font-size: 11px; color: var(--muted-foreground); padding: 6px 14px 0; }
+</style>
+
+<div class="chrome">
+  <div>
+    <div class="chrome-title">Mockup controls — not part of the product</div>
+  </div>
+  <div class="chrome-stats mono" id="chromeStats"></div>
+  <button id="themeToggle" type="button">Toggle theme</button>
+</div>
+
+<div class="page-wrap">
+  <div class="note">
+    <strong>What this is:</strong> an interactive rework of <code>SuiteCaseGrid.tsx</code> seeded with a synthetic
+    dataset of <strong id="noteCaseCount">—</strong> test cases across <strong id="noteFolderCount">—</strong> sections/subsections,
+    to stress-test the design at the scale the user actually complained about ("if we have 500 cases, filters are not enough").
+    Everything below the header is interactive: click sections in the rail, type in search, combine dropdown filters,
+    check boxes, scroll the list.
+  </div>
+
+  <div class="crumbs">Projects &rsaquo; Checkout Revamp &rsaquo; Suites &rsaquo; <span style="color:var(--foreground)">Nightly Regression</span></div>
+  <div class="page-header">
+    <h1 class="tp-heading">Nightly Regression</h1>
+  </div>
+
+  <div class="detail-grid">
+    <div class="grid-root">
+      <div class="toolbar">
+        <div class="search-box" id="searchBox">
+          <input id="searchInput" type="text" placeholder="Search case titles…" aria-label="Search case titles" />
+          <button class="clear-x" id="clearSearch" type="button" aria-label="Clear search">&times;</button>
+        </div>
+        <select id="filterTag" aria-label="Tag"><option value="">All tags</option></select>
+        <select id="filterPriority" aria-label="Priority"><option value="">All priorities</option></select>
+        <select id="filterPlatform" aria-label="Platform"><option value="">All platforms</option></select>
+        <select id="filterTestType" aria-label="Test type"><option value="">All test types</option></select>
+        <button class="link-btn" id="clearFilters" type="button">Clear filters</button>
+        <span style="flex:1"></span>
+        <button class="toggle-chip" id="selectedOnlyToggle" type="button" aria-pressed="false">
+          Selected only <span class="count-badge" id="selectedOnlyCount">0</span>
+        </button>
+      </div>
+
+      <div class="scope-row">
+        <span>
+          Scope: <span class="scope-path" id="scopePath">All sections</span>
+        </span>
+        <button class="link-btn" id="clearScope" type="button" disabled>Clear scope</button>
+      </div>
+
+      <div class="picker-body">
+        <div class="rail" id="rail">
+          <div class="rail-header">
+            <span class="tp-label">Sections</span>
+            <button class="link-btn" id="collapseRail" type="button" style="font-size:11px;">Hide</button>
+          </div>
+          <div class="rail-tree" id="railTree"></div>
+        </div>
+        <button id="showRail" type="button" class="link-btn" style="display:none; writing-mode:vertical-rl; padding:10px 4px; border-right:1px solid var(--border);">Show sections</button>
+        <div class="list-pane">
+          <div class="list-meta" id="listMeta"></div>
+          <div class="viewport" id="viewport">
+            <div class="spacer" id="spacer"></div>
+          </div>
+          <div class="perf-note" id="perfNote"></div>
+        </div>
+      </div>
+
+      <div class="footer-bar">
+        <span class="sel-count" id="footerCount">No cases selected</span>
+        <button class="commit" id="commitBtn" type="button">Save changes</button>
+      </div>
+    </div>
+
+    <div class="side-card">
+      <h3 class="tp-label">Properties</h3>
+      <div class="side-row"><span>Cases</span><span id="sideCaseCount">—</span></div>
+      <div class="side-row"><span>Pass rate</span><span>92%</span></div>
+      <div class="side-row"><span>Last run</span><span>3 hours ago</span></div>
+      <div class="side-row"><span>Created</span><span>Jun 2, 2026</span></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ============ theme toggle (mockup chrome only) ============ */
+  var root = document.documentElement;
+  var themeBtn = document.getElementById('themeToggle');
+  function currentTheme() {
+    return root.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  }
+  themeBtn.addEventListener('click', function () {
+    root.setAttribute('data-theme', currentTheme() === 'dark' ? 'light' : 'dark');
+  });
+
+  /* ============ seeded PRNG (deterministic dataset across loads) ============ */
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  var rand = mulberry32(20260726);
+  function pick(arr) { return arr[Math.floor(rand() * arr.length)]; }
+  function intBetween(min, max) { return min + Math.floor(rand() * (max - min + 1)); }
+
+  /* ============ folder tree (hand-authored, real nesting incl. depth 3) ============ */
+  var FOLDERS = [
+    ['sec-auth', 'Authentication & Access', null],
+    ['sec-auth-login', 'Login & Sessions', 'sec-auth'],
+    ['sec-auth-pwd', 'Password Reset', 'sec-auth'],
+    ['sec-auth-mfa', 'Multi-Factor Auth', 'sec-auth'],
+    ['sec-auth-sso', 'SSO & SAML', 'sec-auth'],
+    ['sec-checkout', 'Checkout', null],
+    ['sec-checkout-cart', 'Cart', 'sec-checkout'],
+    ['sec-checkout-pay', 'Payments', 'sec-checkout'],
+    ['sec-checkout-pay-refund', 'Refunds', 'sec-checkout-pay'],
+    ['sec-checkout-pay-fraud', 'Fraud Checks', 'sec-checkout-pay'],
+    ['sec-checkout-ship', 'Shipping & Fulfillment', 'sec-checkout'],
+    ['sec-checkout-promo', 'Promotions & Discounts', 'sec-checkout'],
+    ['sec-catalog', 'Catalog & Search', null],
+    ['sec-catalog-listing', 'Product Listing', 'sec-catalog'],
+    ['sec-catalog-relevance', 'Search Relevance', 'sec-catalog'],
+    ['sec-catalog-facets', 'Filters & Facets', 'sec-catalog'],
+    ['sec-account', 'Account Settings', null],
+    ['sec-account-profile', 'Profile', 'sec-account'],
+    ['sec-account-notif', 'Notification Preferences', 'sec-account'],
+    ['sec-account-billing', 'Billing & Subscriptions', 'sec-account'],
+    ['sec-notif', 'Notifications', null],
+    ['sec-notif-email', 'Email', 'sec-notif'],
+    ['sec-notif-push', 'Push', 'sec-notif'],
+    ['sec-notif-inapp', 'In-App', 'sec-notif'],
+    ['sec-report', 'Reporting & Analytics', null],
+    ['sec-report-dash', 'Dashboards', 'sec-report'],
+    ['sec-report-export', 'Exports', 'sec-report'],
+    ['sec-admin', 'Admin Console', null],
+    ['sec-admin-users', 'User Management', 'sec-admin'],
+    ['sec-admin-roles', 'Roles & Permissions', 'sec-admin'],
+    ['sec-admin-audit', 'Audit Log', 'sec-admin'],
+    ['sec-mobile', 'Mobile App', null],
+    ['sec-mobile-ios', 'iOS', 'sec-mobile'],
+    ['sec-mobile-android', 'Android', 'sec-mobile'],
+    ['sec-mobile-offline', 'Offline Mode', 'sec-mobile'],
+    ['sec-integ', 'Integrations & API', null],
+    ['sec-integ-webhooks', 'Webhooks', 'sec-integ'],
+    ['sec-integ-publicapi', 'Public API', 'sec-integ'],
+    ['sec-integ-thirdparty', 'Third-Party Connectors', 'sec-integ'],
+    ['sec-perf', 'Performance & Reliability', null],
+    ['sec-perf-load', 'Load Handling', 'sec-perf'],
+    ['sec-perf-error', 'Error Recovery', 'sec-perf']
+  ].map(function (f) { return { id: f[0], name: f[1], parentId: f[2] }; });
+
+  var folderById = {};
+  FOLDERS.forEach(function (f) { folderById[f.id] = f; });
+  var childrenOf = {};
+  FOLDERS.forEach(function (f) {
+    var key = f.parentId || 'root';
+    (childrenOf[key] = childrenOf[key] || []).push(f.id);
+  });
+  function folderDepth(id) {
+    var d = 0, f = folderById[id];
+    while (f && f.parentId) { d++; f = folderById[f.parentId]; }
+    return d;
+  }
+  function folderPath(id) {
+    var parts = [], f = folderById[id];
+    while (f) { parts.unshift(f.name); f = f.parentId ? folderById[f.parentId] : null; }
+    return parts.join(' › ');
+  }
+  function topSectionOf(id) {
+    var f = folderById[id];
+    while (f.parentId) f = folderById[f.parentId];
+    return f.id;
+  }
+  // subtree ids (folder + all descendants), memoized
+  var subtreeCache = {};
+  function subtreeIds(id) {
+    if (subtreeCache[id]) return subtreeCache[id];
+    var out = [id];
+    (childrenOf[id] || []).forEach(function (childId) {
+      out = out.concat(subtreeIds(childId));
+    });
+    subtreeCache[id] = out;
+    return out;
+  }
+
+  /* ============ synthetic case generation ============ */
+  var VERB_PHRASES = [
+    'renders correctly on {platform}',
+    'returns a validation error for {field}',
+    'persists changes after a page reload',
+    'shows a loading state while the request is pending',
+    'handles the empty state gracefully',
+    'rejects an invalid {field}',
+    'logs an audit event on {action}',
+    'sends a confirmation email after {action}',
+    'retries once on a transient network failure',
+    'disables the submit button while saving',
+    'preserves scroll position after navigating back',
+    'redirects unauthenticated users to login',
+    'shows a toast notification on success',
+    'rolls back on partial failure during {action}',
+    'paginates results beyond the first page',
+    'respects the configured rate limit',
+    'falls back to cached data when offline',
+    'trims whitespace from the {field} field',
+    'surfaces a 429 response as a friendly banner',
+    'expires the session after the inactivity timeout',
+    'is keyboard-navigable end to end',
+    'matches the design spec at 320px width'
+  ];
+  var TOP_CONTEXT = {
+    'sec-auth': { subjects: ['login form', 'password field', 'session token', 'MFA code entry', 'SSO redirect', 'remember-me checkbox'], fields: ['email', 'password', 'MFA code', 'SSO domain'], actions: ['login', 'password reset', 'MFA enrollment', 'SSO login'], tag: 'auth' },
+    'sec-checkout': { subjects: ['cart total', 'checkout button', 'payment form', 'shipping address form', 'promo code field', 'order summary'], fields: ['credit card number', 'CVV', 'promo code', 'shipping zip code'], actions: ['checkout', 'payment capture', 'refund', 'coupon redemption'], tag: 'checkout' },
+    'sec-catalog': { subjects: ['product card', 'search result list', 'filter panel', 'sort dropdown', 'facet count'], fields: ['search query', 'price filter', 'category filter'], actions: ['search', 'filter apply', 'sort change'], tag: 'catalog' },
+    'sec-account': { subjects: ['profile form', 'notification toggle', 'billing form', 'subscription plan selector'], fields: ['display name', 'email address', 'phone number', 'plan tier'], actions: ['profile update', 'plan upgrade', 'plan downgrade'], tag: 'account' },
+    'sec-notif': { subjects: ['email digest', 'push notification', 'in-app banner'], fields: ['notification preference', 'device token'], actions: ['notification send', 'digest send', 'opt-out'], tag: 'notifications' },
+    'sec-report': { subjects: ['dashboard widget', 'export file', 'chart tooltip'], fields: ['date range', 'export format'], actions: ['export', 'dashboard load', 'drill-down'], tag: 'reporting' },
+    'sec-admin': { subjects: ['user row', 'role assignment', 'audit log entry'], fields: ['role name', 'permission scope'], actions: ['role change', 'user suspension', 'audit export'], tag: 'admin' },
+    'sec-mobile': { subjects: ['home screen', 'offline banner', 'push permission prompt'], fields: ['device id', 'app version'], actions: ['app launch', 'sync', 'offline write'], tag: 'mobile' },
+    'sec-integ': { subjects: ['webhook payload', 'API token', 'third-party sync job'], fields: ['webhook URL', 'API scope'], actions: ['webhook delivery', 'token refresh', 'sync'], tag: 'integrations' },
+    'sec-perf': { subjects: ['request queue', 'circuit breaker', 'retry policy'], fields: ['timeout value', 'concurrency limit'], actions: ['load spike', 'failover', 'recovery'], tag: 'performance' }
+  };
+  var PLATFORMS = ['web', 'iOS', 'Android', 'API'];
+  var TEST_TYPES = ['unit', 'integration', 'e2e', 'smoke', 'regression', 'performance', 'accessibility'];
+  var GENERIC_TAGS = ['smoke', 'regression', 'negative', 'edge-case', 'security', 'a11y', 'i18n', 'flaky-prone'];
+  var PRIORITIES = ['low', 'medium', 'high', 'critical'];
+
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function fillTemplate(tpl, ctx) {
+    return tpl
+      .replace('{platform}', pick(PLATFORMS))
+      .replace('{field}', pick(ctx.fields))
+      .replace('{action}', pick(ctx.action ? [ctx.action] : ctx.actions));
+  }
+
+  var CASES = [];
+  var caseSeq = 0;
+  FOLDERS.forEach(function (folder) {
+    var n = 4 + Math.floor(rand() * 11); // 4..14, matches design-review count check
+    var ctx = TOP_CONTEXT[topSectionOf(folder.id)];
+    var usedTitles = {};
+    for (var i = 0; i < n; i++) {
+      var subject = cap(pick(ctx.subjects));
+      var verb = fillTemplate(pick(VERB_PHRASES), ctx);
+      var title = subject + ' ' + verb;
+      var guard = 0;
+      while (usedTitles[title] && guard < 8) {
+        verb = fillTemplate(pick(VERB_PHRASES), ctx);
+        title = subject + ' ' + verb;
+        guard++;
+      }
+      usedTitles[title] = true;
+
+      var tags = [ctx.tag];
+      var extraTagCount = intBetween(0, 2);
+      for (var t = 0; t < extraTagCount; t++) {
+        var candidate = pick(GENERIC_TAGS);
+        if (tags.indexOf(candidate) === -1) tags.push(candidate);
+      }
+
+      caseSeq++;
+      CASES.push({
+        id: 'case-' + caseSeq,
+        title: title,
+        tags: tags,
+        priority: pick(PRIORITIES),
+        platform: pick(PLATFORMS),
+        testType: pick(TEST_TYPES),
+        folderId: folder.id,
+        folderPath: folderPath(folder.id)
+      });
+    }
+  });
+
+  // per-folder case counts including descendants, precomputed once
+  var folderCaseCount = {};
+  FOLDERS.forEach(function (f) {
+    var ids = subtreeIds(f.id);
+    var count = 0;
+    for (var i = 0; i < CASES.length; i++) {
+      if (ids.indexOf(CASES[i].folderId) !== -1) count++;
+    }
+    folderCaseCount[f.id] = count;
+  });
+
+  document.getElementById('noteCaseCount').textContent = CASES.length;
+  document.getElementById('noteFolderCount').textContent = FOLDERS.length;
+  document.getElementById('sideCaseCount').textContent = CASES.length;
+  document.getElementById('chromeStats').textContent =
+    CASES.length + ' cases · ' + FOLDERS.length + ' sections';
+
+  /* ============ state ============ */
+  var state = {
+    scope: null, // folder id or null = all sections
+    expanded: {}, // folder id -> bool
+    search: '',
+    filters: { tag: '', priority: '', platform: '', testType: '' },
+    selected: {}, // case id -> true
+    selectedOnly: false,
+    railCollapsed: false
+  };
+  // seed a few pre-checked cases from disparate sections to demonstrate
+  // filter/scope-safe selection the moment the mockup opens
+  [CASES[2], CASES[80], CASES[210], CASES[340]].forEach(function (c) {
+    if (c) state.selected[c.id] = true;
+  });
+  state.expanded['sec-checkout'] = true;
+  state.expanded['sec-checkout-pay'] = true;
+
+  /* ============ filter option population ============ */
+  function distinct(pickFn) {
+    var set = {};
+    CASES.forEach(function (c) { var v = pickFn(c); if (v) set[v] = true; });
+    return Object.keys(set).sort();
+  }
+  function fillSelect(el, values) {
+    values.forEach(function (v) {
+      var opt = document.createElement('option');
+      opt.value = v; opt.textContent = cap(v);
+      el.appendChild(opt);
+    });
+  }
+  var allTags = {};
+  CASES.forEach(function (c) { c.tags.forEach(function (t) { allTags[t] = true; }); });
+  fillSelect(document.getElementById('filterTag'), Object.keys(allTags).sort());
+  fillSelect(document.getElementById('filterPriority'), PRIORITIES);
+  fillSelect(document.getElementById('filterPlatform'), distinct(function (c) { return c.platform; }));
+  fillSelect(document.getElementById('filterTestType'), distinct(function (c) { return c.testType; }));
+
+  /* ============ derived: filtered rows ============ */
+  function computeVisible() {
+    var scopeSet = state.scope ? subtreeIds(state.scope) : null;
+    var f = state.filters;
+    var search = state.search.trim().toLowerCase();
+    var out = [];
+    for (var i = 0; i < CASES.length; i++) {
+      var c = CASES[i];
+      if (scopeSet && scopeSet.indexOf(c.folderId) === -1) continue;
+      if (f.tag && c.tags.indexOf(f.tag) === -1) continue;
+      if (f.priority && c.priority !== f.priority) continue;
+      if (f.platform && c.platform !== f.platform) continue;
+      if (f.testType && c.testType !== f.testType) continue;
+      if (search && c.title.toLowerCase().indexOf(search) === -1) continue;
+      if (state.selectedOnly && !state.selected[c.id]) continue;
+      out.push(c);
+    }
+    return out;
+  }
+  function scopeTotalCount() {
+    return state.scope ? folderCaseCount[state.scope] : CASES.length;
+  }
+
+  /* ============ rail (folder tree) rendering ============ */
+  var railTreeEl = document.getElementById('railTree');
+  function renderRail() {
+    var html = '';
+    html += '<div class="rail-node-row rail-root-row' + (state.scope === null ? ' selected' : '') + '" data-scope="__root__">' +
+      '<span class="chev"></span><span class="name">All sections</span><span class="cnt">' + CASES.length + '</span></div>';
+
+    function renderNode(id, depth) {
+      var f = folderById[id];
+      var kids = childrenOf[id] || [];
+      var isExpanded = !!state.expanded[id];
+      var indent = 10 + Math.min(depth, 5) * 16 + (depth > 5 ? (depth - 5) * 4 : 0);
+      var row = '<div class="rail-node-row' + (state.scope === id ? ' selected' : '') + '" data-scope="' + id + '" style="padding-left:' + indent + 'px">';
+      if (kids.length) {
+        row += '<button class="chev" data-toggle="' + id + '" aria-label="' + (isExpanded ? 'Collapse' : 'Expand') + ' ' + f.name + '">' + (isExpanded ? '▾' : '▸') + '</button>';
+      } else {
+        row += '<span class="chev"></span>';
+      }
+      row += '<span class="name" title="' + f.name + '">' + f.name + '</span>';
+      row += '<span class="cnt">' + folderCaseCount[id] + '</span></div>';
+      html += row;
+      if (isExpanded) {
+        kids.forEach(function (childId) { renderNode(childId, depth + 1); });
+      }
+    }
+    (childrenOf['root'] || []).forEach(function (id) { renderNode(id, 0); });
+    railTreeEl.innerHTML = html;
+  }
+  railTreeEl.addEventListener('click', function (e) {
+    var toggleId = e.target.getAttribute('data-toggle');
+    if (toggleId) {
+      state.expanded[toggleId] = !state.expanded[toggleId];
+      renderRail();
+      return;
+    }
+    var row = e.target.closest('[data-scope]');
+    if (!row) return;
+    var scopeVal = row.getAttribute('data-scope');
+    state.scope = scopeVal === '__root__' ? null : scopeVal;
+    onStateChanged();
+  });
+
+  document.getElementById('collapseRail').addEventListener('click', function () {
+    state.railCollapsed = true;
+    document.getElementById('rail').classList.add('collapsed');
+    document.getElementById('showRail').style.display = 'block';
+  });
+  document.getElementById('showRail').addEventListener('click', function () {
+    state.railCollapsed = false;
+    document.getElementById('rail').classList.remove('collapsed');
+    document.getElementById('showRail').style.display = 'none';
+  });
+
+  /* ============ scope breadcrumb ============ */
+  function renderScopeRow() {
+    var pathEl = document.getElementById('scopePath');
+    var clearBtn = document.getElementById('clearScope');
+    if (state.scope === null) {
+      pathEl.textContent = 'All sections';
+      clearBtn.disabled = true;
+    } else {
+      pathEl.textContent = folderPath(state.scope);
+      clearBtn.disabled = false;
+    }
+  }
+  document.getElementById('clearScope').addEventListener('click', function () {
+    state.scope = null;
+    onStateChanged();
+  });
+
+  /* ============ virtualized list ============ */
+  var ROW_HEIGHT = 60;
+  var OVERSCAN = 6;
+  var viewport = document.getElementById('viewport');
+  var spacer = document.getElementById('spacer');
+  var pool = []; // reusable row DOM nodes
+  var visibleRows = [];
+
+  function ensurePool(size) {
+    while (pool.length < size) {
+      var row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML =
+        '<input type="checkbox" />' +
+        '<div class="row-main">' +
+        '<span class="row-title"></span>' +
+        '<span class="row-path"></span>' +
+        '<div class="row-pills"></div>' +
+        '</div>';
+      viewport.appendChild(row);
+      pool.push(row);
+    }
+  }
+
+  function updateViewport() {
+    var total = visibleRows.length;
+    spacer.style.height = (total * ROW_HEIGHT) + 'px';
+
+    if (total === 0) {
+      pool.forEach(function (r) { r.style.display = 'none'; });
+      renderEmptyState(true);
+      return;
+    }
+    renderEmptyState(false);
+
+    var scrollTop = viewport.scrollTop;
+    var viewportH = viewport.clientHeight;
+    var startIndex = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+    var visibleCount = Math.ceil(viewportH / ROW_HEIGHT) + OVERSCAN * 2;
+    var endIndex = Math.min(total, startIndex + visibleCount);
+
+    ensurePool(endIndex - startIndex);
+
+    for (var i = 0; i < pool.length; i++) {
+      var idx = startIndex + i;
+      var rowEl = pool[i];
+      if (idx >= endIndex) { rowEl.style.display = 'none'; continue; }
+      var c = visibleRows[idx];
+      rowEl.style.display = 'flex';
+      rowEl.style.top = (idx * ROW_HEIGHT) + 'px';
+      rowEl.setAttribute('data-case-id', c.id);
+
+      var cb = rowEl.querySelector('input[type=checkbox]');
+      cb.checked = !!state.selected[c.id];
+      cb.setAttribute('aria-label', c.title);
+
+      var titleEl = rowEl.querySelector('.row-title');
+      titleEl.textContent = c.title;
+      titleEl.title = c.title;
+
+      var pathEl = rowEl.querySelector('.row-path');
+      if (state.scope === null) {
+        pathEl.style.display = 'block';
+        pathEl.textContent = c.folderPath;
+      } else {
+        pathEl.style.display = 'none';
+      }
+
+      var pillsEl = rowEl.querySelector('.row-pills');
+      var pillsHtml = '';
+      pillsHtml += '<span class="pill">' + c.priority + '</span>';
+      pillsHtml += '<span class="pill">' + c.platform + '</span>';
+      pillsHtml += '<span class="pill">' + c.testType + '</span>';
+      var shownTags = c.tags.slice(0, 2);
+      shownTags.forEach(function (t) { pillsHtml += '<span class="pill">' + t + '</span>'; });
+      if (c.tags.length > shownTags.length) {
+        pillsHtml += '<span class="pill">+' + (c.tags.length - shownTags.length) + '</span>';
+      }
+      pillsEl.innerHTML = pillsHtml;
+    }
+  }
+
+  function renderEmptyState(show) {
+    var existing = document.getElementById('emptyState');
+    if (show) {
+      if (!existing) {
+        var div = document.createElement('div');
+        div.id = 'emptyState';
+        div.className = 'empty-state';
+        div.innerHTML = '<p>No cases match this scope and filters</p><p>Try clearing the section scope, search, or dropdown filters.</p>';
+        viewport.appendChild(div);
+      }
+    } else if (existing) {
+      existing.remove();
+    }
+  }
+
+  var scrollScheduled = false;
+  viewport.addEventListener('scroll', function () {
+    if (scrollScheduled) return;
+    scrollScheduled = true;
+    requestAnimationFrame(function () {
+      updateViewport();
+      scrollScheduled = false;
+    });
+  });
+
+  viewport.addEventListener('change', function (e) {
+    if (e.target.tagName !== 'INPUT') return;
+    var rowEl = e.target.closest('[data-case-id]');
+    if (!rowEl) return;
+    toggleSelection(rowEl.getAttribute('data-case-id'));
+  });
+  viewport.addEventListener('click', function (e) {
+    var rowEl = e.target.closest('.row');
+    if (!rowEl || e.target.tagName === 'INPUT') return;
+    toggleSelection(rowEl.getAttribute('data-case-id'));
+  });
+
+  function toggleSelection(caseId) {
+    if (state.selected[caseId]) delete state.selected[caseId];
+    else state.selected[caseId] = true;
+    renderSelectionUI();
+    updateViewport(); // reflect checked state on the recycled row immediately
+    if (state.selectedOnly) recomputeAndRender(); // list itself may shrink/grow
+  }
+
+  /* ============ selection UI (footer + selected-only chip) ============ */
+  function selectedCount() { return Object.keys(state.selected).length; }
+  function renderSelectionUI() {
+    var n = selectedCount();
+    document.getElementById('footerCount').textContent = n === 0 ? 'No cases selected' : n + ' selected';
+    document.getElementById('commitBtn').disabled = n === 0;
+    document.getElementById('selectedOnlyCount').textContent = n;
+  }
+
+  document.getElementById('selectedOnlyToggle').addEventListener('click', function () {
+    state.selectedOnly = !state.selectedOnly;
+    this.setAttribute('aria-pressed', state.selectedOnly ? 'true' : 'false');
+    recomputeAndRender();
+  });
+
+  /* ============ meta line + perf note ============ */
+  function renderMeta() {
+    var visibleTotal = visibleRows.length;
+    var scopeTotal = scopeTotalCount();
+    var meta = document.getElementById('listMeta');
+    meta.innerHTML = 'Showing <b>' + visibleTotal + '</b> of <b>' + scopeTotal + '</b> cases' +
+      (state.scope ? ' in scope' : ' project-wide');
+    document.getElementById('perfNote').textContent =
+      '◈ Only ' + Math.min(pool.length, visibleTotal) + ' of ' + visibleTotal + ' matching rows are ever mounted in the DOM at once (windowed rendering) — scrolling stays smooth at the full ' + CASES.length + '-case dataset.';
+  }
+
+  /* ============ filter bar wiring ============ */
+  var searchInput = document.getElementById('searchInput');
+  var searchBox = document.getElementById('searchBox');
+  searchInput.addEventListener('input', function () {
+    state.search = searchInput.value;
+    searchBox.classList.toggle('has-value', state.search.length > 0);
+    recomputeAndRender();
+  });
+  document.getElementById('clearSearch').addEventListener('click', function () {
+    searchInput.value = '';
+    state.search = '';
+    searchBox.classList.remove('has-value');
+    recomputeAndRender();
+    searchInput.focus();
+  });
+
+  ['filterTag', 'filterPriority', 'filterPlatform', 'filterTestType'].forEach(function (id) {
+    var key = id.replace('filter', '');
+    key = key.charAt(0).toLowerCase() + key.slice(1);
+    document.getElementById(id).addEventListener('change', function () {
+      state.filters[key] = this.value;
+      renderClearFiltersState();
+      recomputeAndRender();
+    });
+  });
+  function renderClearFiltersState() {
+    var anyActive = state.filters.tag || state.filters.priority || state.filters.platform || state.filters.testType;
+    document.getElementById('clearFilters').disabled = !anyActive;
+  }
+  document.getElementById('clearFilters').addEventListener('click', function () {
+    state.filters = { tag: '', priority: '', platform: '', testType: '' };
+    ['filterTag', 'filterPriority', 'filterPlatform', 'filterTestType'].forEach(function (id) {
+      document.getElementById(id).value = '';
+    });
+    renderClearFiltersState();
+    recomputeAndRender();
+  });
+
+  document.getElementById('commitBtn').addEventListener('click', function () {
+    var n = selectedCount();
+    var original = this.textContent;
+    this.textContent = 'Saved ' + n + ' ✓';
+    var self = this;
+    setTimeout(function () { self.textContent = original; }, 1200);
+  });
+
+  /* ============ orchestration ============ */
+  function onStateChanged() {
+    renderRail();
+    renderScopeRow();
+    recomputeAndRender();
+  }
+  function recomputeAndRender() {
+    visibleRows = computeVisible();
+    viewport.scrollTop = 0;
+    updateViewport();
+    renderMeta();
+  }
+
+  renderRail();
+  renderScopeRow();
+  renderClearFiltersState();
+  renderSelectionUI();
+  recomputeAndRender();
+})();
+</script>

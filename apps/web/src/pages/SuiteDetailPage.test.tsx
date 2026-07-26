@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import SuiteDetailPage from './SuiteDetailPage'
@@ -26,7 +26,7 @@ const case1 = {
   id: 'c1',
   key: 'p1-1',
   projectId: 'p1',
-  folderId: 'root',
+  folderId: 'auth',
   currentVersion: 3,
   content: { title: 'Login works', description: '', steps: [], expectedResult: '', priority: 'medium', tags: ['auth'] },
   createdAt: '',
@@ -35,11 +35,16 @@ const case2 = {
   id: 'c2',
   key: 'p1-2',
   projectId: 'p1',
-  folderId: 'root',
+  folderId: 'checkout',
   currentVersion: 1,
   content: { title: 'Checkout works', description: '', steps: [], expectedResult: '', priority: 'high', tags: ['checkout'] },
   createdAt: '',
 }
+const folders = [
+  { id: 'root', key: 'p1-F1', projectId: 'p1', name: 'Library', parentFolderId: undefined, createdAt: '' },
+  { id: 'auth', key: 'p1-F2', projectId: 'p1', name: 'Auth', parentFolderId: 'root', createdAt: '' },
+  { id: 'checkout', key: 'p1-F3', projectId: 'p1', name: 'Checkout', parentFolderId: 'root', createdAt: '' },
+]
 const smokeSuite = {
   id: 's1',
   key: 'p1-S1',
@@ -55,6 +60,7 @@ function mockDetailAPI(suite: unknown = smokeSuite, cases: unknown[] = [case1, c
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/projects/{projectKey}') return Promise.resolve({ data: projectQA, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/folders') return Promise.resolve({ data: folders, response: { ok: true } })
     if (path === '/api/v1/suites/{suiteKey}') return Promise.resolve({ data: suite, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
   })
@@ -94,14 +100,25 @@ describe('SuiteDetailPage', () => {
   it('shows sidebar properties: case count, pass rate, last run, created', async () => {
     mockDetailAPI()
     renderDetail()
-    expect(await screen.findByText('1')).toBeInTheDocument() // case count
-    expect(screen.getByText('90%')).toBeInTheDocument()
+    const sidebar = within(await screen.findByTestId('suite-sidebar'))
+    expect(sidebar.getByText('1')).toBeInTheDocument() // case count
+    expect(sidebar.getByText('90%')).toBeInTheDocument()
   })
 
   it('shows "Never run" in the sidebar for a suite with no runs', async () => {
     mockDetailAPI({ ...smokeSuite, passRate: null, lastRunAt: null })
     renderDetail()
     expect(await screen.findAllByText(/never run/i)).not.toHaveLength(0)
+  })
+
+  it('scopes the case grid to a section using the project\'s real folder hierarchy', async () => {
+    mockDetailAPI()
+    renderDetail()
+
+    expect(await screen.findByRole('checkbox', { name: /login works/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('treeitem', { name: /^checkout/i }))
+    expect(screen.queryByRole('checkbox', { name: /login works/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /checkout works/i })).toBeInTheDocument()
   })
 
   it('commits only the net diff on save', async () => {

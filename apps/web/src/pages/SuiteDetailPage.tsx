@@ -17,6 +17,7 @@ import type { components } from '@testpulse/shared/api'
 type TestCase = components['schemas']['TestCase']
 type Suite = components['schemas']['Suite']
 type Project = components['schemas']['Project']
+type Folder = components['schemas']['Folder']
 
 function toGridCase(c: TestCase): SuiteCaseGridCase {
   return {
@@ -26,6 +27,7 @@ function toGridCase(c: TestCase): SuiteCaseGridCase {
     priority: c.content.priority ?? '',
     platform: c.content.platform ?? '',
     testType: c.content.testType ?? '',
+    folderId: c.folderId,
   }
 }
 
@@ -37,6 +39,7 @@ export default function SuiteDetailPage() {
   const [project, setProject] = useState<Project>()
   const [suite, setSuite] = useState<Suite>()
   const [cases, setCases] = useState<TestCase[]>([])
+  const [folders, setFolders] = useState<Folder[]>([])
   const [notFound, setNotFound] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [baseline, setBaseline] = useState<Set<string>>(new Set())
@@ -47,9 +50,10 @@ export default function SuiteDetailPage() {
   const load = useCallback(async () => {
     if (!projectKey || !suiteKey) return
     setNotFound(false)
-    const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
+    const [{ data: p }, { data: c }, { data: f }, { data: s }] = await Promise.all([
       api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
       api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
       api.GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } }),
     ])
     if (!p || !s) {
@@ -58,6 +62,7 @@ export default function SuiteDetailPage() {
     }
     setProject(p)
     setCases(c ?? [])
+    setFolders(f ?? [])
     setSuite(s)
   }, [projectKey, suiteKey])
 
@@ -148,6 +153,7 @@ export default function SuiteDetailPage() {
       <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
         <SuiteCaseGrid
           cases={gridCases}
+          folders={folders}
           selected={selected}
           onToggle={toggle}
           commitLabel="Save changes"
