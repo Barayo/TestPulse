@@ -218,7 +218,7 @@ export default function RunPage() {
               {run.suiteKey ? (
                 <Link
                   to={`/projects/${projectKey}/suites/${run.suiteKey}`}
-                  className="inline-flex items-center gap-1 hover:underline"
+                  className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                 >
                   <FolderIcon className="size-3.5" aria-hidden="true" />
                   From suite: {suite?.name ?? run.suiteKey}
