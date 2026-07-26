@@ -301,7 +301,7 @@ time. Selecting a suite SHALL navigate to a dedicated route
 (`/projects/{projectKey}/suites/{suiteKey}`) rather than opening an inline dialog,
 matching the full-entity-page pattern already used for cases and run items:
 breadcrumbs, a filterable case list as the primary content, and a properties sidebar
-(case count, pass rate, last run, created date, and rename/delete actions).
+(case count, pass rate, last run, created date, and rename/delete/run actions).
 Creating a suite SHALL navigate directly into its new (empty) detail page rather than
 opening a combined name-and-case-selection form on the index. The case list SHALL be
 scopable to a section (and its descendants) using the project's own section
@@ -354,6 +354,46 @@ state.
 #### Scenario: Deleting a suite preserves its cases
 - **WHEN** a user deletes a suite from its detail page
 - **THEN** the suite no longer appears on the index, and its former member cases are untouched in the Library
+
+#### Scenario: Run suite fires immediately on confirm
+- **WHEN** a user clicks "Run suite" and confirms the dialog without customizing the selection
+- **THEN** a run is created from the suite's current member cases, and the suite's "Last run" property updates
+
+#### Scenario: Customize selection hands off to the New run form
+- **WHEN** a user clicks "Customize selection" in the Run suite dialog
+- **THEN** the app navigates to the project's "New run" form with the suite selected and its cases pre-selected, editable before creating the run
+
+### Requirement: Run creation
+The "New run" form SHALL let a user select cases via a section-tree-scoped,
+searchable, filterable, virtualized case picker (the same mechanics as the
+suite case picker) instead of implicitly including every case in the project.
+The form SHALL offer an optional suite selector; choosing a suite SHALL seed
+the picker's selection with that suite's current member case keys (leaving
+the section-tree scope at "All sections," since a suite's cases may span
+multiple sections) and SHALL record the created run's `suiteKey`. Leaving the
+selector on "No suite" SHALL create a run with no suite reference (an ad hoc
+run) using only the picker's selection, with no separate ad hoc-specific UI.
+The "Create run" action SHALL be disabled while zero cases are selected.
+
+#### Scenario: New run defaults to an empty, explicit selection
+- **WHEN** a user opens the "New run" form with no suite selected
+- **THEN** no cases are pre-selected and "Create run" is disabled until at least one case is checked
+
+#### Scenario: Selecting a suite seeds the picker with its cases
+- **WHEN** a user selects a suite in the "New run" form's suite selector
+- **THEN** the picker's selection is set to that suite's current member cases, editable afterward, and the section-tree scope remains "All sections"
+
+#### Scenario: A run created with a suite selected records that suite
+- **WHEN** a user creates a run with a suite selected in the form
+- **THEN** the created run's `suiteKey` matches that suite
+
+#### Scenario: A run created with no suite selected is ad hoc
+- **WHEN** a user creates a run with the suite selector left on "No suite"
+- **THEN** the created run has no `suiteKey`, using only the hand-picked case selection
+
+#### Scenario: The case picker scopes, searches, and stays bounded at scale
+- **WHEN** a project has hundreds of cases
+- **THEN** the "New run" form's case picker supports section-tree scoping and title search, composable together, and renders only a bounded number of DOM rows regardless of case volume
 
 ### Requirement: Project list with permission-ready create action
 Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section. A project marked as the sample project SHALL show a "Sample" badge next to its name, in both view modes.

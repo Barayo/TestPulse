@@ -5,18 +5,21 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import SuiteDetailPage from './SuiteDetailPage'
 import { api } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn(), POST: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
 const mockPUT = vi.mocked(api.PUT)
 const mockDELETE = vi.mocked(api.DELETE)
+const mockPOST = vi.mocked(api.POST)
 
 let navigatedTo: string | undefined
+let navigatedState: unknown
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual<typeof import('react-router-dom')>('react-router-dom')
   return {
     ...actual,
-    useNavigate: () => (to: string) => {
+    useNavigate: () => (to: string, opts?: { state?: unknown }) => {
       navigatedTo = to
+      navigatedState = opts?.state
     },
   }
 })
@@ -199,6 +202,59 @@ describe('SuiteDetailPage', () => {
       )
     })
     expect(mockDELETE).not.toHaveBeenCalled()
+  })
+
+  it('Run suite opens a confirm dialog showing the case count and an editable name', async () => {
+    mockDetailAPI()
+    renderDetail()
+
+    await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
+    expect(screen.getByText(/1 case from smoke/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument()
+  })
+
+  it('confirming Run suite creates a run from the suite and refreshes its properties', async () => {
+    mockDetailAPI()
+    mockPOST.mockResolvedValue({
+      data: { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Smoke run', createdAt: '' },
+      response: { ok: true },
+    })
+    renderDetail()
+
+    await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
+    const nameInput = screen.getByLabelText(/^name$/i)
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Smoke run')
+    await userEvent.click(screen.getByRole('button', { name: /^create run$/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/runs',
+        expect.objectContaining({
+          params: { path: { projectKey: 'p1' } },
+          body: { name: 'Smoke run', suiteKey: 'p1-S1' },
+        }),
+      )
+    })
+    // Dialog closes and the suite reloads (Properties reflect the fresh run).
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^create run$/i })).not.toBeInTheDocument())
+    const suiteGetCalls = mockGET.mock.calls.filter((call) => call[0] === '/api/v1/suites/{suiteKey}')
+    expect(suiteGetCalls.length).toBeGreaterThan(1)
+  })
+
+  it('Customize selection hands off to the Runs page pre-seeded with this suite', async () => {
+    mockDetailAPI()
+    renderDetail()
+
+    await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
+    const nameInput = screen.getByLabelText(/^name$/i)
+    await userEvent.clear(nameInput)
+    await userEvent.type(nameInput, 'Custom name')
+    await userEvent.click(screen.getByRole('button', { name: /customize selection/i }))
+
+    expect(navigatedTo).toBe('/projects/p1/runs')
+    expect(navigatedState).toEqual({ seedFromSuiteKey: 'p1-S1', seedName: 'Custom name' })
+    expect(mockPOST).not.toHaveBeenCalled()
   })
 
   it('shows a not-found message for an unknown suite key', async () => {

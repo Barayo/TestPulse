@@ -111,10 +111,14 @@ test.describe('Requirement: Breadcrumb trail', () => {
     const name = await createProject(page, 'Run Breadcrumb Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
+    await expect(content(page).getByText('Login works')).toBeVisible()
     await page.goBack()
 
     await page.getByRole('button', { name: 'Go to Runs' }).click()
     await page.getByLabel(/^name$/i).fill('Sprint 1')
+    // rework-run-creation-ux: "Create run" is gated behind an explicit case
+    // selection — no longer implicitly includes every project case.
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: 'Create run' }).click()
     await page.getByRole('link', { name: 'Sprint 1' }).click()
 
@@ -431,6 +435,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
 
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByLabel(/^name$/i).fill('Run pass')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: 'Create run' }).click()
     await page.getByRole('link', { name: 'Run pass' }).click()
     await page.getByText('Login works').first().click()
@@ -441,6 +446,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
 
     await page.goto(`/projects/${projectId}/runs`)
     await page.getByLabel(/^name$/i).fill('Run fail')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: 'Create run' }).click()
     await page.getByRole('link', { name: 'Run fail' }).click()
     await page.getByText('Login works').first().click()
@@ -562,5 +568,87 @@ test.describe('Requirement: Project list with permission-ready create action', (
     await page.getByRole('button', { name: /compact view/i }).click()
     await page.getByLabel(/search projects/i).fill('Findable Alpha')
     await expect(page.getByText(findable)).toBeVisible()
+  })
+})
+
+// rework-run-creation-ux: the "New run" form gained a real case picker (no
+// longer silently includes every project case) and suites gained a "Run
+// suite" quick action. Both share one seeding mechanism — see design.md.
+
+async function createSuiteWithOneCase(page: Page, projectLabel: string, suiteName: string, caseTitle: string): Promise<string> {
+  await createProject(page, projectLabel)
+  await openFolderExplorer(page)
+  await createCase(page, caseTitle)
+  await expect(page.getByText(caseTitle)).toBeVisible()
+  const projectId = new URL(page.url()).pathname.split('/')[2]
+
+  await page.goBack()
+  await page.getByRole('button', { name: 'Go to Suites' }).click()
+  await page.getByRole('button', { name: /new suite/i }).click()
+  await page.getByLabel(/suite name/i).fill(suiteName)
+  await page.getByRole('button', { name: /^create$/i }).click()
+  await expect(page.getByRole('heading', { name: suiteName })).toBeVisible()
+  await page.getByRole('checkbox', { name: caseTitle }).check()
+  await page.getByRole('button', { name: /save changes/i }).click()
+  // The checkbox being checked is true immediately (it's local state, set
+  // before the click) — it does not prove the PUT actually completed. Wait
+  // for the round trip: after a successful save, the button re-disables
+  // itself once the reloaded suite's baseline matches the selection again.
+  await expect(page.getByRole('button', { name: /save changes/i })).toBeDisabled()
+  return projectId
+}
+
+test.describe('Requirement: Run creation', () => {
+  test('Scenario: Selecting a suite in the New run form seeds the case selection', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-63' })
+    const projectId = await createSuiteWithOneCase(page, 'Run Creation Project', 'Smoke', 'Login works')
+
+    await page.goto(`/projects/${projectId}/runs`)
+    await expect(page.getByRole('button', { name: /create run/i })).toBeDisabled()
+
+    await page.getByLabel(/suite/i).selectOption({ label: 'Smoke (1 case)' })
+    await expect(page.getByRole('checkbox', { name: 'Login works' })).toBeChecked()
+
+    await page.getByLabel(/^name$/i).fill('Smoke run')
+    await page.getByRole('button', { name: /create run/i }).click()
+    await expect(page.getByRole('link', { name: 'Smoke run' })).toBeVisible()
+  })
+})
+
+test.describe('Requirement: Suites index and detail page', () => {
+  test('Scenario: Running a suite from its detail page', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-64' })
+    await createSuiteWithOneCase(page, 'Suite Quick Run Project', 'Regression', 'Checkout works')
+
+    const sidebar = page.getByTestId('suite-sidebar')
+    await expect(sidebar.getByText(/never run/i).first()).toBeVisible()
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await expect(page.getByText(/1 case from regression/i)).toBeVisible()
+    await page.getByRole('button', { name: /^create run$/i }).click()
+
+    // Dialog closes before the properties refresh finishes (same ordering as
+    // Rename/Delete elsewhere on this page) — both "Never run" rows (pass
+    // rate, last run) go to 0 once the reload lands; toHaveCount tolerates
+    // the multi-match locator without a strict-mode violation while it
+    // settles, unlike a bare not.toBeVisible() on an ambiguous locator.
+    await expect(page.getByRole('button', { name: /^create run$/i })).not.toBeVisible()
+    await expect(sidebar.getByText(/never run/i)).toHaveCount(0, { timeout: 10000 })
+  })
+
+  test('Scenario: Customize selection hands off to the New run form pre-seeded', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-65' })
+    await createSuiteWithOneCase(page, 'Suite Customize Run Project', 'Nightly', 'Deploy works')
+
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    const dialogName = page.getByLabel(/^name$/i)
+    await dialogName.fill('Nightly custom run')
+    await page.getByRole('button', { name: /customize selection/i }).click()
+
+    await expect(page).toHaveURL(/\/runs$/)
+    await expect(page.getByLabel(/^name$/i)).toHaveValue('Nightly custom run')
+    await expect(page.getByRole('checkbox', { name: 'Deploy works' })).toBeChecked()
+
+    await page.getByRole('button', { name: /create run/i }).click()
+    await expect(page.getByRole('link', { name: 'Nightly custom run' })).toBeVisible()
   })
 })

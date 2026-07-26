@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -7,30 +7,56 @@ import { Label } from '@/components/ui/label'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { CasePicker, type CasePickerCase } from '@/components/CasePicker'
 import type { components } from '@testpulse/shared/api'
 
 type TestCase = components['schemas']['TestCase']
 type Run = components['schemas']['Run']
 type Project = components['schemas']['Project']
+type Suite = components['schemas']['Suite']
+type Folder = components['schemas']['Folder']
+
+type RunsPageLocationState = { seedFromSuiteKey?: string; seedName?: string } | null
+
+function toGridCase(c: TestCase): CasePickerCase {
+  return {
+    id: c.key,
+    title: c.content.title,
+    tags: c.content.tags ?? [],
+    priority: c.content.priority ?? '',
+    platform: c.content.platform ?? '',
+    testType: c.content.testType ?? '',
+    folderId: c.folderId,
+  }
+}
 
 export default function RunsPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
+  const navigate = useNavigate()
+  const location = useLocation()
   const bumpLanding = useBumpDataRevision()
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const [cases, setCases] = useState<TestCase[]>([])
+  const [folders, setFolders] = useState<Folder[]>([])
+  const [suites, setSuites] = useState<Suite[]>([])
   const [runs, setRuns] = useState<Run[]>([])
   const [runName, setRunName] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [selectedSuiteKey, setSelectedSuiteKey] = useState('')
+  const [seededFromSuiteName, setSeededFromSuiteName] = useState('')
   const [loaded, setLoaded] = useState(false)
 
   const load = useCallback(async () => {
     if (!projectKey) return
     setNotFound(false)
     try {
-      const [{ data: p }, { data: c }, { data: r }] = await Promise.all([
+      const [{ data: p }, { data: c }, { data: r }, { data: f }, { data: s }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
       ])
       if (!p) {
         setNotFound(true)
@@ -39,9 +65,13 @@ export default function RunsPage() {
       setProject(p)
       setCases(c ?? [])
       setRuns(r ?? [])
+      setFolders(f ?? [])
+      setSuites(s ?? [])
     } catch {
       setCases([])
       setRuns([])
+      setFolders([])
+      setSuites([])
     } finally {
       setLoaded(true)
     }
@@ -51,14 +81,62 @@ export default function RunsPage() {
     void load()
   }, [load])
 
+  // Deep-link handoff from a suite's "Run suite" → "Customize selection"
+  // (rework-run-creation-ux) — one-shot route-state seeding, not a durable
+  // binding: a hard refresh simply shows the form in its normal empty state.
+  useEffect(() => {
+    if (!loaded) return
+    const state = location.state as RunsPageLocationState
+    if (!state?.seedFromSuiteKey) return
+    seedSelectionFromSuite(state.seedFromSuiteKey)
+    if (state.seedName) setRunName(state.seedName)
+    navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loaded])
+
+  function seedSelectionFromSuite(suiteKey: string) {
+    const suite = suites.find((s) => s.key === suiteKey)
+    if (!suite) return
+    const keys = new Set(suite.caseIds.map((id) => cases.find((c) => c.id === id)?.key ?? id))
+    setSelected(keys)
+    setSelectedSuiteKey(suiteKey)
+    setSeededFromSuiteName(suite.name)
+  }
+
+  function handleSuiteChange(suiteKey: string) {
+    if (!suiteKey) {
+      setSelectedSuiteKey('')
+      setSeededFromSuiteName('')
+      setSelected(new Set())
+      return
+    }
+    seedSelectionFromSuite(suiteKey)
+  }
+
+  function toggleCase(caseKey: string) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(caseKey)) next.delete(caseKey)
+      else next.add(caseKey)
+      return next
+    })
+  }
+
   async function handleCreateRun(e: FormEvent) {
     e.preventDefault()
-    if (!projectKey || !runName.trim() || !loaded) return
+    if (!projectKey || !runName.trim() || !loaded || selected.size === 0) return
     await api.POST('/api/v1/projects/{projectKey}/runs', {
       params: { path: { projectKey } },
-      body: { name: runName, caseKeys: cases.map((c) => c.key) },
+      body: {
+        name: runName,
+        caseKeys: Array.from(selected),
+        ...(selectedSuiteKey ? { suiteKey: selectedSuiteKey } : {}),
+      },
     })
     setRunName('')
+    setSelected(new Set())
+    setSelectedSuiteKey('')
+    setSeededFromSuiteName('')
     await load()
     bumpLanding()
   }
@@ -72,6 +150,9 @@ export default function RunsPage() {
     )
   }
 
+  const gridCases = cases.map(toGridCase)
+  const canCreate = loaded && runName.trim().length > 0 && selected.size > 0
+
   return (
     <div className="space-y-6">
       <Breadcrumbs
@@ -84,22 +165,55 @@ export default function RunsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">New run (includes all current cases)</CardTitle>
+          <CardTitle className="tp-heading">New run</CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleCreateRun} className="flex items-end gap-3">
-            <div className="flex-1 space-y-1">
-              <Label htmlFor="run-name">Name</Label>
-              <Input
-                id="run-name"
-                value={runName}
-                onChange={(e) => setRunName(e.target.value)}
-                placeholder="Sprint 1"
-              />
+          <form onSubmit={handleCreateRun} className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-[1fr_260px]">
+              <div className="space-y-1">
+                <Label htmlFor="run-name">Name</Label>
+                <Input
+                  id="run-name"
+                  value={runName}
+                  onChange={(e) => setRunName(e.target.value)}
+                  placeholder="Sprint 1"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="run-suite">Suite (optional)</Label>
+                <select
+                  id="run-suite"
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                  value={selectedSuiteKey}
+                  onChange={(e) => handleSuiteChange(e.target.value)}
+                >
+                  <option value="">No suite — ad hoc run</option>
+                  {suites.map((s) => (
+                    <option key={s.key} value={s.key}>
+                      {s.name} ({s.caseIds.length} {s.caseIds.length === 1 ? 'case' : 'cases'})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
-            <Button type="submit" disabled={!loaded}>
-              Create run
-            </Button>
+
+            {selectedSuiteKey && (
+              <p className="text-sm text-muted-foreground">
+                Pre-filled from <span className="font-medium text-foreground">{seededFromSuiteName}</span> — adjust the
+                selection below as needed.
+              </p>
+            )}
+
+            <CasePicker cases={gridCases} folders={folders} selected={selected} onToggle={toggleCase} />
+
+            <div className="flex items-center justify-between rounded-md border bg-accent px-4 py-2.5">
+              <span className="text-sm font-medium">
+                {selected.size === 0 ? 'No cases selected' : `${selected.size} selected`}
+              </span>
+              <Button type="submit" disabled={!canCreate}>
+                Create run
+              </Button>
+            </div>
           </form>
         </CardContent>
       </Card>

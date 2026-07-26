@@ -80,4 +80,5 @@
   index and detail page" with section-scoping, search, selection-persistence,
   and bounded-rendering scenarios.
 - [x] 8.2 Archived, keeping `mockup.html` as the durable design reference.
-- [ ] 8.3 Commit + push per the "1 change = 1 commit = 1 push" cadence; wait for CI green.
+- [x] 8.3 Commit + push per the "1 change = 1 commit = 1 push" cadence; wait for CI green.
+  Pushed as `ccbc427`; CI and Release image both green.

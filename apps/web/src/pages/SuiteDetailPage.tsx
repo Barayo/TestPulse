@@ -46,6 +46,8 @@ export default function SuiteDetailPage() {
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState('')
   const [deleting, setDeleting] = useState(false)
+  const [runningQuick, setRunningQuick] = useState(false)
+  const [quickRunName, setQuickRunName] = useState('')
 
   const load = useCallback(async () => {
     if (!projectKey || !suiteKey) return
@@ -123,6 +125,31 @@ export default function SuiteDetailPage() {
     navigate(`/projects/${projectKey}/suites`)
   }
 
+  function openRunSuite() {
+    if (!suite) return
+    setQuickRunName(`${suite.name} run`)
+    setRunningQuick(true)
+  }
+
+  async function handleQuickRun() {
+    if (!suite || !projectKey || !quickRunName.trim()) return
+    await api.POST('/api/v1/projects/{projectKey}/runs', {
+      params: { path: { projectKey } },
+      body: { name: quickRunName.trim(), suiteKey: suite.key },
+    })
+    setRunningQuick(false)
+    await load()
+    bumpLanding()
+  }
+
+  function handleCustomizeSelection() {
+    if (!suite || !projectKey) return
+    setRunningQuick(false)
+    navigate(`/projects/${projectKey}/runs`, {
+      state: { seedFromSuiteKey: suite.key, seedName: quickRunName.trim() },
+    })
+  }
+
   if (!projectKey || !suiteKey) return null
   if (notFound) {
     return (
@@ -177,6 +204,9 @@ export default function SuiteDetailPage() {
 
           <CaseSidebarSection title="Actions">
             <div className="flex flex-col gap-2">
+              <Button type="button" onClick={openRunSuite}>
+                Run suite
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -194,6 +224,37 @@ export default function SuiteDetailPage() {
           </CaseSidebarSection>
         </div>
       </div>
+
+      <Dialog open={runningQuick} onOpenChange={setRunningQuick}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Run {suite.name}</DialogTitle>
+          <DialogDescription>
+            {suite.caseIds.length} {suite.caseIds.length === 1 ? 'case' : 'cases'} from {suite.name}
+          </DialogDescription>
+          <div className="space-y-1">
+            <Label htmlFor="quick-run-name">Name</Label>
+            <Input
+              id="quick-run-name"
+              autoFocus
+              value={quickRunName}
+              onChange={(e) => setQuickRunName(e.target.value)}
+            />
+          </div>
+          <DialogFooter className="sm:justify-between">
+            <Button type="button" variant="ghost" onClick={handleCustomizeSelection}>
+              Customize selection
+            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setRunningQuick(false)}>
+                Cancel
+              </Button>
+              <Button disabled={!quickRunName.trim()} onClick={() => void handleQuickRun()}>
+                Create run
+              </Button>
+            </div>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent className="sm:max-w-md">

@@ -1,0 +1,806 @@
+<meta charset="utf-8">
+<title>TestPulse — Run creation rework (suite quick-run + real picker)</title>
+<style>
+  :root {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --popover: #FFFFFF; --popover-foreground: #0B2E2C; --primary: #14B8A6; --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A; --secondary-foreground: #0B2E2C; --muted: #F0F3F2; --muted-foreground: #5B6B6A;
+    --accent: #EAFAF7; --accent-foreground: #0B2E2C; --destructive: #E8553F; --border: #E1E8E7;
+    --input: #D8E4E3; --ring: #14B8A6; --radius: 0.5rem;
+    --status-healthy-bg: oklch(0.93 0.03 175); --status-healthy-fg: oklch(0.4 0.1 175);
+    --status-progress-bg: oklch(0.94 0.04 85); --status-progress-fg: oklch(0.45 0.1 85);
+    --status-risk-bg: oklch(0.94 0.04 25); --status-risk-fg: oklch(0.45 0.14 25);
+    --status-neutral-bg: oklch(0.92 0.005 240); --status-neutral-fg: oklch(0.45 0.01 240);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+      --popover: #12403C; --popover-foreground: #E6F5F3; --primary: #2DD4BF; --primary-foreground: #0B2A28;
+      --secondary: #FBBF24; --secondary-foreground: #0B2A28; --muted: #163A37; --muted-foreground: #8FBDB8;
+      --accent: #163F3B; --accent-foreground: #E6F5F3; --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+      --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+      --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+      --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+      --status-neutral-bg: oklch(0.32 0.005 240); --status-neutral-fg: oklch(0.75 0.01 240);
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+    --popover: #12403C; --popover-foreground: #E6F5F3; --primary: #2DD4BF; --primary-foreground: #0B2A28;
+    --secondary: #FBBF24; --secondary-foreground: #0B2A28; --muted: #163A37; --muted-foreground: #8FBDB8;
+    --accent: #163F3B; --accent-foreground: #E6F5F3; --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+    --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+    --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+    --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+    --status-neutral-bg: oklch(0.32 0.005 240); --status-neutral-fg: oklch(0.75 0.01 240);
+  }
+  :root[data-theme="light"] {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --popover: #FFFFFF; --popover-foreground: #0B2E2C; --primary: #14B8A6; --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A; --secondary-foreground: #0B2E2C; --muted: #F0F3F2; --muted-foreground: #5B6B6A;
+    --accent: #EAFAF7; --accent-foreground: #0B2E2C; --destructive: #E8553F; --border: #E1E8E7;
+    --input: #D8E4E3; --ring: #14B8A6;
+    --status-healthy-bg: oklch(0.93 0.03 175); --status-healthy-fg: oklch(0.4 0.1 175);
+    --status-progress-bg: oklch(0.94 0.04 85); --status-progress-fg: oklch(0.45 0.1 85);
+    --status-risk-bg: oklch(0.94 0.04 25); --status-risk-fg: oklch(0.45 0.14 25);
+    --status-neutral-bg: oklch(0.92 0.005 240); --status-neutral-fg: oklch(0.45 0.01 240);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; overflow-x: hidden; }
+  body {
+    background: var(--background); color: var(--foreground);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+    font-size: 14px; line-height: 1.45;
+  }
+  .mono { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; }
+  .tp-heading { font-weight: 900; letter-spacing: -0.02em; }
+  .tp-label { font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted-foreground); }
+  a { color: inherit; }
+
+  .shell { max-width: 1180px; margin: 0 auto; padding: 20px 24px 64px; }
+  .topbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 16px; margin-bottom: 20px; border-bottom: 1px solid var(--border); }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-mark { width: 26px; height: 26px; border-radius: 8px; background: linear-gradient(135deg, #14B8A6, #0D6E6A); flex-shrink: 0; }
+  .brand-name { font-weight: 800; letter-spacing: -0.01em; font-size: 15px; }
+  .mockup-badge { font-size: 10px; padding: 2px 8px; border-radius: 999px; background: var(--secondary); color: var(--secondary-foreground); font-weight: 700; letter-spacing: 0.03em; text-transform: uppercase; }
+
+  .topbar-controls { display: flex; align-items: center; gap: 10px; }
+  .icon-btn { border: 1px solid var(--border); background: var(--card); color: var(--foreground); border-radius: 8px; padding: 6px 10px; font-size: 12px; cursor: pointer; font-weight: 600; }
+  .icon-btn:hover { background: var(--accent); }
+
+  .tabs { display: flex; gap: 6px; background: var(--muted); padding: 4px; border-radius: 10px; }
+  .tab-btn { border: none; background: transparent; padding: 7px 14px; border-radius: 7px; font-size: 12.5px; font-weight: 700; cursor: pointer; color: var(--muted-foreground); }
+  .tab-btn.active { background: var(--card); color: var(--foreground); box-shadow: 0 1px 2px rgba(0,0,0,0.06); }
+
+  .crumbs { font-size: 12.5px; color: var(--muted-foreground); margin-bottom: 10px; }
+  .crumbs a { text-decoration: none; }
+  .crumbs a:hover { text-decoration: underline; }
+
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .page-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 18px; }
+  .page-head h1 { font-size: 22px; margin: 0; }
+
+  .grid-2col { display: grid; grid-template-columns: 1fr 300px; gap: 26px; align-items: start; }
+  @media (max-width: 860px) { .grid-2col { grid-template-columns: 1fr; } }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 18px; }
+  .sidebar { border-radius: 16px; background: color-mix(in oklab, var(--muted) 60%, transparent); padding: 18px; }
+  .sidebar-section { padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
+  .sidebar-section:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  .sidebar-title { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted-foreground); margin: 0 0 10px; }
+
+  .prop-row { display: flex; align-items: center; justify-content: space-between; padding: 5px 0; font-size: 13px; }
+  .prop-row .label { color: var(--muted-foreground); }
+  .prop-row .value { font-weight: 600; }
+
+  .healthbar { display: inline-flex; align-items: center; gap: 6px; }
+  .healthbar .track { display: inline-block; width: 36px; height: 4px; border-radius: 999px; background: var(--muted); overflow: hidden; }
+  .healthbar .fill { display: block; height: 100%; background: var(--primary); }
+
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border-radius: 9px; font-size: 13px; font-weight: 700; padding: 8px 14px; cursor: pointer; border: 1px solid transparent; transition: filter .1s; }
+  .btn:hover { filter: brightness(0.96); }
+  .btn:active { filter: brightness(0.9); }
+  .btn:disabled { opacity: .45; cursor: not-allowed; filter: none; }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-outline { background: transparent; color: var(--foreground); border-color: var(--input); }
+  .btn-outline:hover { background: var(--accent); }
+  .btn-destructive { background: var(--destructive); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--primary); border: none; font-weight: 700; padding: 6px 4px; }
+  .btn-block { width: 100%; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+  .field { display: flex; flex-direction: column; gap: 4px; }
+  .field label { font-size: 12.5px; font-weight: 600; }
+  input[type=text], input[type=search], select {
+    border: 1px solid var(--input); background: var(--background); color: var(--foreground);
+    border-radius: 8px; padding: 7px 10px; font-size: 13px; font-family: inherit;
+  }
+  input[type=text]:focus, select:focus, input[type=search]:focus { outline: 2px solid var(--ring); outline-offset: 1px; }
+
+  .pill { display: inline-block; border-radius: 999px; padding: 2px 9px; font-size: 11px; background: var(--muted); color: var(--foreground); }
+  .status-pill { display: inline-block; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 800; }
+  .status-healthy { background: var(--status-healthy-bg); color: var(--status-healthy-fg); }
+  .status-progress { background: var(--status-progress-bg); color: var(--status-progress-fg); }
+
+  .new-badge { display: inline-flex; align-items: center; gap: 3px; font-size: 9.5px; font-weight: 800; letter-spacing: 0.04em; background: var(--primary); color: var(--primary-foreground); border-radius: 5px; padding: 1px 6px; vertical-align: middle; margin-left: 6px; text-transform: uppercase; }
+
+  /* --- annotation pins (design-review only, not real UI) --- */
+  .pin-wrap { position: relative; display: inline-block; }
+  .pin { position: absolute; top: -8px; right: -8px; width: 18px; height: 18px; border-radius: 50%; background: #7C4DFF; color: #fff; font-size: 10px; font-weight: 800; display: flex; align-items: center; justify-content: center; cursor: pointer; border: 2px solid var(--background); z-index: 5; }
+  .pin-note { display: none; position: absolute; z-index: 20; top: 16px; right: -8px; width: 250px; background: #2A2140; color: #F1EBFF; border-radius: 10px; padding: 10px 12px; font-size: 12px; line-height: 1.4; box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  .pin-note.open { display: block; }
+  .pin-note b { color: #C9B6FF; }
+  body.annotations-off .pin { display: none; }
+  body.annotations-off .pin-note { display: none !important; }
+
+  /* --- picker (SuiteCaseGrid-style) --- */
+  .picker-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 10px; }
+  .picker-toolbar input[type=search] { flex: 1; min-width: 160px; }
+  .toggle-chip { border-radius: 999px; border: 1px solid var(--input); padding: 4px 11px; font-size: 11.5px; font-weight: 700; cursor: pointer; background: transparent; color: var(--muted-foreground); }
+  .toggle-chip.on { border-color: var(--primary); background: var(--accent); color: var(--primary); }
+  .link-btn { background: none; border: none; color: var(--primary); text-decoration: underline; text-underline-offset: 2px; font-size: 12.5px; font-weight: 600; cursor: pointer; padding: 0; }
+  .link-btn:disabled { color: var(--muted-foreground); text-decoration: none; cursor: default; }
+
+  .scope-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted-foreground); margin-bottom: 8px; }
+  .scope-row b { color: var(--foreground); }
+  .count-row { font-size: 13px; color: var(--muted-foreground); margin-bottom: 8px; }
+  .count-row b { color: var(--foreground); }
+
+  .picker-body { display: flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .rail { width: 210px; flex-shrink: 0; border-right: 1px solid var(--border); }
+  .rail-head { display: flex; align-items: center; justify-content: space-between; padding: 7px 8px; }
+  .rail-tree { max-height: 384px; overflow-y: auto; padding: 0 4px 8px; }
+  .tree-item { display: flex; align-items: center; justify-content: space-between; gap: 6px; border-radius: 6px; padding: 5px 8px; font-size: 12.5px; cursor: pointer; }
+  .tree-item:hover { background: var(--accent); }
+  .tree-item.selected { background: var(--accent); color: var(--primary); font-weight: 700; }
+  .tree-item .cnt { font-size: 11px; color: var(--muted-foreground); }
+  .tree-item.selected .cnt { color: var(--primary); }
+  .rail-collapsed-btn { flex-shrink: 0; border-right: 1px solid var(--border); background: none; border-top: none; border-bottom: none; border-left: none; padding: 6px 3px; font-size: 11px; color: var(--primary); cursor: pointer; writing-mode: vertical-rl; }
+
+  .viewport { position: relative; overflow-y: auto; height: 340px; flex: 1; min-width: 0; }
+  .row { position: absolute; left: 0; right: 0; display: flex; align-items: flex-start; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .row:hover { background: var(--accent); }
+  .row input[type=checkbox] { margin-top: 3px; width: 15px; height: 15px; accent-color: var(--primary); flex-shrink: 0; }
+  .row .rt { min-width: 0; }
+  .row .rtitle { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .rfolder { font-size: 11px; color: var(--muted-foreground); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row .rmeta { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 3px; }
+  .row .rmeta .pill { font-size: 10.5px; padding: 1px 7px; }
+
+  .empty-state { padding: 40px 16px; text-align: center; color: var(--muted-foreground); font-size: 13px; }
+  .empty-state b { color: var(--foreground); display: block; margin-bottom: 4px; }
+
+  .commit-bar { display: flex; align-items: center; justify-content: space-between; border-radius: 10px; background: var(--accent); padding: 10px 14px; margin-top: 10px; }
+  .commit-bar span { font-size: 13px; font-weight: 600; }
+
+  .banner-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; border: 1px dashed var(--primary); background: var(--accent); border-radius: 10px; padding: 9px 13px; margin-bottom: 14px; font-size: 12.5px; }
+
+  /* modal */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: none; align-items: center; justify-content: center; z-index: 50; padding: 20px; }
+  .overlay.open { display: flex; }
+  .modal { background: var(--popover); color: var(--popover-foreground); border-radius: 16px; padding: 22px; width: 420px; max-width: 100%; border: 1px solid var(--border); box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+  .modal h2 { margin: 0 0 4px; font-size: 17px; }
+  .modal .sub { font-size: 13px; color: var(--muted-foreground); margin-bottom: 16px; }
+  .modal .summary-line { display: flex; align-items: center; gap: 8px; background: var(--muted); border-radius: 10px; padding: 10px 12px; margin-bottom: 14px; font-size: 13px; }
+  .modal .summary-line b { font-size: 15px; }
+  .modal-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 18px; }
+  .modal-actions .right { display: flex; gap: 8px; }
+
+  /* toast */
+  .toast-stack { position: fixed; top: 18px; right: 18px; z-index: 90; display: flex; flex-direction: column; gap: 8px; }
+  .toast { background: var(--card); border: 1px solid var(--primary); border-left: 4px solid var(--primary); border-radius: 10px; padding: 12px 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.18); font-size: 13px; max-width: 320px; animation: slidein .18s ease-out; }
+  .toast b { display: block; margin-bottom: 2px; }
+  @keyframes slidein { from { transform: translateX(12px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  .runs-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+  .runs-list li { display: flex; align-items: center; justify-content: between; gap: 8px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .runs-list li:last-child { border-bottom: none; }
+  .runs-list .rn { flex: 1; font-weight: 600; }
+  .runs-list .just-now { font-size: 10px; font-weight: 800; text-transform: uppercase; color: var(--primary); }
+
+  .footnote { font-size: 11.5px; color: var(--muted-foreground); margin-top: 22px; padding-top: 14px; border-top: 1px dashed var(--border); }
+</style>
+
+<div class="shell">
+  <div class="topbar">
+    <div class="brand">
+      <div class="brand-mark"></div>
+      <span class="brand-name">TestPulse</span>
+      <span class="mockup-badge">Design mockup</span>
+    </div>
+    <div class="topbar-controls">
+      <button class="icon-btn" id="annotations-toggle" onclick="toggleAnnotations()">Annotations: On</button>
+      <button class="icon-btn" onclick="toggleTheme()">Toggle theme</button>
+      <div class="tabs">
+        <button class="tab-btn active" data-tab="suite" onclick="showTab('suite')">Suite detail</button>
+        <button class="tab-btn" data-tab="runs" onclick="showTab('runs')">Runs page</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============================= SUITE DETAIL VIEW ============================= -->
+  <div class="view active" id="view-suite">
+    <div class="crumbs">
+      <a href="#">Projects</a> / <a href="#">Sample Project</a> / <a href="#">Suites</a> / Regression
+    </div>
+    <div class="page-head">
+      <h1 class="tp-heading">Regression</h1>
+    </div>
+
+    <div class="grid-2col">
+      <div class="card">
+        <p class="tp-label" style="margin-bottom:10px;">Suite membership editor &mdash; unchanged by this proposal</p>
+        <p style="font-size:12.5px; color:var(--muted-foreground); margin:0 0 14px;">
+          This is the existing section-tree + search + virtualized case picker (<span class="mono">SuiteCaseGrid</span>),
+          shipped this session for editing which cases belong to a suite. Shown collapsed here since it isn't what's changing &mdash;
+          see the <b>Actions</b> panel on the right for the new capability.
+        </p>
+        <div style="border:1px solid var(--border); border-radius:10px; padding:14px;">
+          <div id="suite-preview-rows"></div>
+          <p style="font-size:12px; color:var(--muted-foreground); margin:10px 0 0;">+ 12 more cases in this suite, across Authentication, Checkout, Settings, Notifications, Reporting API&hellip;</p>
+        </div>
+      </div>
+
+      <div class="sidebar">
+        <div class="sidebar-section">
+          <p class="sidebar-title">Properties</p>
+          <div class="prop-row"><span class="label">Cases</span><span class="value">18</span></div>
+          <div class="prop-row"><span class="label">Pass rate</span><span class="value"><span class="healthbar"><span class="track"><span class="fill" style="width:83%"></span></span>83%</span></span></div>
+          <div class="prop-row"><span class="label">Last run</span><span class="value" id="suite-last-run">2 days ago</span></div>
+          <div class="prop-row"><span class="label">Created</span><span class="value">Jun 3, 2026</span></div>
+        </div>
+
+        <div class="sidebar-section">
+          <p class="sidebar-title">Actions</p>
+          <div style="display:flex; flex-direction:column; gap:8px;">
+            <div class="pin-wrap" style="width:100%;">
+              <button class="btn btn-primary btn-block" onclick="openRunConfirm()">
+                Run suite <span class="new-badge">New</span>
+              </button>
+              <div class="pin" onclick="togglePin(this)">1</div>
+              <div class="pin-note">
+                <b>Q1 &mdash; one click = one confirm step.</b> Not truly zero-screen (no tool in the research set does blind creation of a
+                <i>new</i> run) and not a full navigate-away either. The suite's current case set is already a defined scope &mdash; reuse it,
+                show the count, one confirm.
+              </div>
+            </div>
+            <button class="btn btn-outline btn-block">Rename</button>
+            <button class="btn btn-destructive btn-block">Delete</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="footnote">Rename / Delete dialogs and the membership editor above are the shipped behavior of <span class="mono">SuiteDetailPage.tsx</span> &mdash; included for context only. Try the new <b>Run suite</b> button.</p>
+  </div>
+
+  <!-- ============================= RUNS PAGE VIEW ============================= -->
+  <div class="view" id="view-runs">
+    <div class="crumbs">
+      <a href="#">Projects</a> / <a href="#">Sample Project</a> / Runs
+    </div>
+    <div class="page-head">
+      <h1 class="tp-heading">Runs</h1>
+    </div>
+
+    <div id="deep-link-banner" class="banner-note" style="display:none;">
+      <span>Arrived from the <b id="deep-link-suite-name">Regression</b> suite's <span class="mono">Run suite</span> action &mdash; selection pre-filled, fully editable below.</span>
+      <button class="link-btn" onclick="backToSuite()">&larr; Back to suite</button>
+    </div>
+
+    <div class="card" style="margin-bottom:20px;">
+      <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+        <p class="tp-heading" style="margin:0; font-size:16px;">New run</p>
+      </div>
+
+      <div style="display:grid; grid-template-columns: 1fr 240px; gap:12px; margin-bottom:16px;">
+        <div class="field">
+          <label for="run-name-input">Name</label>
+          <input type="text" id="run-name-input" placeholder="Sprint 14 regression">
+        </div>
+        <div class="field pin-wrap">
+          <label for="run-suite-select">Suite (optional)</label>
+          <select id="run-suite-select" onchange="onSuiteSelectChange(this.value)">
+            <option value="">No suite &mdash; ad hoc run</option>
+            <option value="Smoke">Smoke (4 cases)</option>
+            <option value="Regression">Regression (18 cases)</option>
+            <option value="Nightly">Nightly (6 cases)</option>
+            <option value="API Contract">API Contract (2 cases)</option>
+          </select>
+          <div class="pin" style="top:14px;" onclick="togglePin(this)">4</div>
+          <div class="pin-note" style="top:38px;">
+            <b>Q4 &mdash; ad hoc needs no special casing.</b> "No suite" is just the default value here, and the picker's default
+            state (no scope, empty selection) already <i>is</i> an ad hoc run. Nothing new to build for it &mdash; it falls out of
+            this form for free, matching <span class="mono">Run.suiteKey</span> already being nullable.
+          </div>
+        </div>
+      </div>
+
+      <div id="suite-prefill-note" class="banner-note" style="display:none;">
+        <span id="suite-prefill-text"></span>
+        <button class="link-btn" onclick="resetSelectionToBlank()">Reset to blank</button>
+      </div>
+
+      <div class="pin-wrap" style="display:block;">
+        <div class="picker-toolbar">
+          <input type="search" id="picker-search" placeholder="Search case titles&hellip;" oninput="onSearch(this.value)">
+          <select id="f-priority" onchange="onFilterChange()"><option value="">All priorities</option></select>
+          <select id="f-platform" onchange="onFilterChange()"><option value="">All platforms</option></select>
+          <select id="f-testtype" onchange="onFilterChange()"><option value="">All test types</option></select>
+          <button class="link-btn" id="clear-filters-btn" onclick="clearFilters()" disabled>Clear filters</button>
+          <button class="toggle-chip" id="selected-only-chip" onclick="toggleSelectedOnly()">Selected only (0)</button>
+        </div>
+        <div class="pin" onclick="togglePin(this)">2</div>
+        <div class="pin-note">
+          <b>Q2 &mdash; reuse, don't rebuild.</b> This toolbar, the section rail, and the virtualized rows below are the exact
+          <span class="mono">SuiteCaseGrid</span> pattern shipped for suite-membership editing, generalized. It already solves the
+          scale problem (200+ cases, bounded DOM rows) this form needs too.
+        </div>
+
+        <div class="scope-row">
+          <span>Scope: <b id="scope-label">All sections</b></span>
+          <button class="link-btn" id="clear-scope-btn" style="display:none;" onclick="clearScope()">Clear scope</button>
+        </div>
+        <div class="count-row">Showing <b id="visible-count">48</b> of 48 cases</div>
+
+        <div class="picker-body">
+          <div class="rail" id="rail">
+            <div class="rail-head">
+              <span class="tp-label">Sections</span>
+              <button class="link-btn" style="font-size:11px;" onclick="collapseRail(true)">Hide</button>
+            </div>
+            <div class="rail-tree" id="rail-tree"></div>
+          </div>
+          <button class="rail-collapsed-btn" id="rail-collapsed-btn" style="display:none;" onclick="collapseRail(false)">Show sections</button>
+          <div class="viewport" id="viewport" onscroll="onScroll(this.scrollTop)">
+            <div id="spacer" style="position:relative;"></div>
+          </div>
+        </div>
+
+        <div class="commit-bar">
+          <span id="selection-count-label">No cases selected</span>
+          <div class="pin-wrap">
+            <button class="btn btn-primary" id="create-run-btn" onclick="createRun()" disabled>Create run</button>
+            <div class="pin" style="top:-10px; right:-10px;" onclick="togglePin(this)">3</div>
+            <div class="pin-note" style="top:-6px; right:110%; left:auto;">
+              <b>Q3 &mdash; one shared flow, two entry points.</b> This exact form is what "Run suite" on the suite page deep-links
+              into (pre-scoped). Neither entry point is a separate implementation, so the "quick" path never hides what
+              it's about to do.
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <p class="tp-heading" style="margin:0 0 10px; font-size:16px;">Runs</p>
+      <ul class="runs-list" id="runs-list">
+        <li><span class="rn"><a href="#">Regression &mdash; main</a></span><span class="status-pill status-healthy">83%</span></li>
+        <li><span class="rn"><a href="#">Nightly &mdash; main</a></span><span class="status-pill status-healthy">83%</span></li>
+        <li><span class="rn"><a href="#">CI pipeline (JUnit import)</a></span><span class="status-pill status-progress">67%</span></li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<!-- confirm dialog -->
+<div class="overlay" id="confirm-overlay">
+  <div class="modal">
+    <h2>Run Regression</h2>
+    <p class="sub">Fires immediately with the suite's current cases &mdash; adjust the name or hand off to the full picker first.</p>
+    <div class="summary-line"><b>18 cases</b>&nbsp;from Regression</div>
+    <div class="field">
+      <label for="confirm-run-name">Name</label>
+      <input type="text" id="confirm-run-name" value="Regression — Jul 26">
+    </div>
+    <div class="modal-actions">
+      <button class="link-btn" onclick="customizeSelection()">Customize selection &rarr;</button>
+      <div class="right">
+        <button class="btn btn-outline btn-sm" onclick="closeConfirm()">Cancel</button>
+        <button class="btn btn-primary btn-sm" onclick="fireQuickRun()">Create run</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-stack" id="toast-stack"></div>
+
+<script>
+(function () {
+  "use strict";
+
+  // ---------- data (Sample Project shape, mirrors apps/api/internal/sampledata/seed.go) ----------
+  var folders = [
+    { id: 'root', name: 'Root', parentFolderId: null },
+    { id: 'auth', name: 'Authentication', parentFolderId: 'root' },
+    { id: 'auth-2fa', name: 'Two-Factor', parentFolderId: 'auth' },
+    { id: 'checkout', name: 'Checkout', parentFolderId: 'root' },
+    { id: 'settings', name: 'Settings', parentFolderId: 'root' },
+    { id: 'notifications', name: 'Notifications', parentFolderId: 'root' },
+    { id: 'reporting', name: 'Reporting API', parentFolderId: 'root' }
+  ];
+
+  function c(id, title, folderId, priority, platform, testType, tags) {
+    return { id: id, title: title, folderId: folderId, priority: priority, platform: platform, testType: testType, tags: tags };
+  }
+
+  var cases = [
+    c('c1','User can log in with valid credentials','auth','critical','web','e2e',['smoke','auth']),
+    c('c2','Login is rejected for the wrong password','auth','high','web','e2e',['auth']),
+    c('c3','Login is rejected for an unknown email','auth','medium','web','e2e',['auth']),
+    c('c4','Login form shows inline validation for empty fields','auth','low','web','unit',['auth']),
+    c('c5','Password reset email is sent','auth','high','web','integration',['auth']),
+    c('c6','Password reset link expires after 24 hours','auth','medium','web','integration',['auth']),
+    c('c7','Password reset rejects a reused old password','auth','medium','web','integration',['auth']),
+    c('c8','Session expires after inactivity','auth','high','web','e2e',['auth','session']),
+    c('c9','Session persists across a page refresh','auth','medium','web','e2e',['auth','session']),
+    c('c10','Logout clears the session on all tabs','auth','medium','web','e2e',['auth','session']),
+    c('c11','Account lockout after 5 failed attempts','auth','high','web','integration',['auth','security']),
+    c('c12','"Remember me" keeps the session for 30 days','auth','low','web','e2e',['auth','session']),
+    c('c13','Two-factor prompt is required for a new device','auth-2fa','critical','web','e2e',['auth','2fa']),
+    c('c14','Two-factor code expires after 5 minutes','auth-2fa','medium','web','integration',['auth','2fa']),
+    c('c15','Backup codes can be used when the authenticator is unavailable','auth-2fa','medium','web','e2e',['auth','2fa']),
+    c('c16','Two-factor can be disabled from account settings','auth-2fa','low','web','e2e',['auth','2fa']),
+    c('c17','Checkout completes with a valid card','checkout','critical','web','e2e',['smoke','payments']),
+    c('c18','Checkout blocks an expired card','checkout','high','web','e2e',['payments']),
+    c('c19','Checkout blocks an invalid CVV','checkout','high','web','e2e',['payments']),
+    c('c20','Coupon code applies the correct discount','checkout','medium','web','integration',['payments']),
+    c('c21','Coupon code rejects an expired promo','checkout','medium','web','integration',['payments']),
+    c('c22','Guest checkout completes without an account','checkout','high','web','e2e',['payments']),
+    c('c23','Shipping address validation rejects a PO box for freight items','checkout','low','web','unit',['payments']),
+    c('c24','Tax is calculated correctly for a multi-region cart','checkout','high','web','integration',['payments']),
+    c('c25','Checkout retries payment after a transient gateway error','checkout','high','web','integration',['payments','resilience']),
+    c('c26','Cart total updates when a line item quantity changes','checkout','medium','web','unit',['payments']),
+    c('c27','Out-of-stock item is blocked at checkout','checkout','medium','web','e2e',['payments']),
+    c('c28','Order confirmation email is sent after checkout','checkout','medium','web','integration',['payments']),
+    c('c29','Update profile display name','settings','low','web','e2e',['profile']),
+    c('c30','Change timezone preference','settings','low','web','e2e',['profile']),
+    c('c31','Change language preference','settings','low','web','e2e',['profile']),
+    c('c32','Update email address requires re-verification','settings','medium','web','integration',['profile','security']),
+    c('c33','Change password requires the current password','settings','high','web','integration',['profile','security']),
+    c('c34','Delete account requires a confirmation step','settings','high','web','e2e',['profile']),
+    c('c35','Profile photo upload accepts JPG and PNG','settings','low','web','unit',['profile']),
+    c('c36','Connected apps list can revoke an OAuth grant','settings','medium','web','integration',['profile','security']),
+    c('c37','Email notification opt-out is respected','notifications','medium','web','integration',['notifications']),
+    c('c38','Push notification arrives within 30 seconds','notifications','high','iOS','e2e',['smoke','notifications']),
+    c('c39','SMS notification is sent for critical alerts only','notifications','medium','android','integration',['notifications']),
+    c('c40','Digest email batches notifications from the last 24 hours','notifications','low','web','integration',['notifications']),
+    c('c41','Notification preferences persist across devices','notifications','medium','android','e2e',['notifications']),
+    c('c42','Muted notification types stay muted after re-login','notifications','low','web','e2e',['notifications']),
+    c('c43','GET /api/v1/reports returns paginated results','reporting','high','api','contract',['smoke','reporting']),
+    c('c44','Report export respects the date range filter','reporting','medium','api','contract',['reporting']),
+    c('c45','Report export handles an empty result set','reporting','low','api','contract',['reporting']),
+    c('c46','GET /api/v1/reports rejects an invalid date range with 400','reporting','medium','api','contract',['reporting']),
+    c('c47','Report API enforces the project-scoped API token','reporting','critical','api','contract',['reporting','security']),
+    c('c48','Report export CSV escapes fields containing commas','reporting','low','api','unit',['reporting'])
+  ];
+
+  var suites = {
+    'Smoke': ['c1','c17','c38','c43'],
+    'Regression': ['c1','c2','c5','c8','c13','c17','c18','c20','c22','c26','c29','c32','c34','c37','c40','c43','c45','c47'],
+    'Nightly': ['c3','c9','c19','c30','c39','c46'],
+    'API Contract': ['c43','c45']
+  };
+
+  // ---------- shared windowing math (matches SuiteCaseGrid.computeVisibleRange) ----------
+  var ROW_HEIGHT = 60, VIEWPORT_HEIGHT = 340, OVERSCAN = 6;
+  function computeVisibleRange(scrollTop, viewportHeight, rowHeight, totalRows, overscan) {
+    if (totalRows === 0) return { start: 0, end: 0 };
+    var start = Math.min(Math.max(0, Math.floor(scrollTop / rowHeight) - overscan), totalRows);
+    var visibleCount = Math.ceil(viewportHeight / rowHeight) + overscan * 2;
+    var end = Math.min(totalRows, start + visibleCount);
+    return { start: start, end: end };
+  }
+
+  function byId(arr) { var m = {}; arr.forEach(function (x) { m[x.id] = x; }); return m; }
+  var foldersById = byId(folders);
+  var childrenOf = {};
+  folders.forEach(function (f) {
+    var key = f.parentFolderId || '__root__';
+    (childrenOf[key] = childrenOf[key] || []).push(f.id);
+  });
+  var subtreeCache = {};
+  function subtreeIds(id) {
+    if (subtreeCache[id]) return subtreeCache[id];
+    var out = {}; out[id] = true;
+    (childrenOf[id] || []).forEach(function (childId) {
+      var sub = subtreeIds(childId);
+      Object.keys(sub).forEach(function (k) { out[k] = true; });
+    });
+    subtreeCache[id] = out;
+    return out;
+  }
+  var topLevelIds = childrenOf['root'] || [];
+
+  function folderCaseCount(folderId) {
+    var ids = subtreeIds(folderId), n = 0;
+    cases.forEach(function (cc) { if (ids[cc.folderId]) n++; });
+    return n;
+  }
+
+  // ---------- picker state ----------
+  var state = {
+    search: '', priority: '', platform: '', testType: '',
+    scope: null, selectedOnly: false, railCollapsed: false, scrollTop: 0,
+    selected: {} // caseId -> true
+  };
+
+  function selectedCount() { return Object.keys(state.selected).filter(function (k) { return state.selected[k]; }).length; }
+  function toggleCase(id) {
+    state.selected[id] = !state.selected[id];
+    if (!state.selected[id]) delete state.selected[id];
+    renderPicker();
+  }
+
+  function matches(cc) {
+    if (state.scope && !subtreeIds(state.scope)[cc.folderId]) return false;
+    if (state.search && cc.title.toLowerCase().indexOf(state.search) === -1) return false;
+    if (state.priority && cc.priority !== state.priority) return false;
+    if (state.platform && cc.platform !== state.platform) return false;
+    if (state.testType && cc.testType !== state.testType) return false;
+    return true;
+  }
+
+  function visibleCases() {
+    var m = cases.filter(matches);
+    if (state.selectedOnly) m = m.filter(function (cc) { return !!state.selected[cc.id]; });
+    return m;
+  }
+
+  function pillsFor(cc) {
+    var out = '';
+    if (cc.priority) out += '<span class="pill">' + cc.priority + '</span>';
+    if (cc.platform) out += '<span class="pill">' + cc.platform + '</span>';
+    if (cc.testType) out += '<span class="pill">' + cc.testType + '</span>';
+    return out;
+  }
+
+  function resetScroll() {
+    state.scrollTop = 0;
+    var vp = document.getElementById('viewport');
+    if (vp) vp.scrollTop = 0;
+  }
+
+  function renderTree() {
+    var html = '';
+    html += '<div class="tree-item' + (state.scope === null ? ' selected' : '') + '" onclick="clearScope()">' +
+      '<span>All sections</span><span class="cnt">' + cases.length + '</span></div>';
+    function renderNode(id, depth) {
+      var f = foldersById[id];
+      var kids = childrenOf[id] || [];
+      var count = folderCaseCount(id);
+      var sel = state.scope === id;
+      var out = '<div class="tree-item' + (sel ? ' selected' : '') + '" style="padding-left:' + (8 + depth * 14) + 'px" onclick="selectScope(\'' + id + '\')">' +
+        '<span>' + f.name + '</span><span class="cnt">' + count + '</span></div>';
+      kids.forEach(function (kid) { out += renderNode(kid, depth + 1); });
+      return out;
+    }
+    topLevelIds.forEach(function (id) { html += renderNode(id, 0); });
+    document.getElementById('rail-tree').innerHTML = html;
+  }
+
+  function renderPicker() {
+    var visible = visibleCases();
+    document.getElementById('visible-count').textContent = visible.length;
+    document.getElementById('scope-label').textContent = state.scope ? foldersById[state.scope].name : 'All sections';
+    document.getElementById('clear-scope-btn').style.display = state.scope ? 'inline' : 'none';
+    var anyFilter = state.priority || state.platform || state.testType;
+    document.getElementById('clear-filters-btn').disabled = !anyFilter;
+
+    var selChip = document.getElementById('selected-only-chip');
+    var n = selectedCount();
+    selChip.textContent = 'Selected only (' + n + ')';
+    selChip.className = 'toggle-chip' + (state.selectedOnly ? ' on' : '');
+
+    var spacer = document.getElementById('spacer');
+    var viewport = document.getElementById('viewport');
+
+    if (visible.length === 0) {
+      spacer.style.height = '0px';
+      spacer.innerHTML = '<div class="empty-state"><b>No cases match these filters</b>Try a different combination, or clear the filters/scope to see all cases.</div>';
+    } else {
+      var range = computeVisibleRange(state.scrollTop, VIEWPORT_HEIGHT, ROW_HEIGHT, visible.length, OVERSCAN);
+      spacer.style.height = (visible.length * ROW_HEIGHT) + 'px';
+      var html = '';
+      for (var i = range.start; i < range.end; i++) {
+        var cc = visible[i];
+        var checked = !!state.selected[cc.id];
+        html += '<div class="row" style="top:' + (i * ROW_HEIGHT) + 'px; height:' + ROW_HEIGHT + 'px" onclick="toggleCase(\'' + cc.id + '\')">' +
+          '<input type="checkbox" ' + (checked ? 'checked' : '') + ' onclick="event.stopPropagation(); toggleCase(\'' + cc.id + '\')">' +
+          '<div class="rt">' +
+            '<div class="rtitle">' + cc.title + '</div>' +
+            (state.scope === null ? '<div class="rfolder">' + foldersById[cc.folderId].name + '</div>' : '') +
+            '<div class="rmeta">' + pillsFor(cc) + '</div>' +
+          '</div></div>';
+      }
+      spacer.innerHTML = html;
+    }
+
+    document.getElementById('selection-count-label').textContent = n === 0 ? 'No cases selected' : (n + ' selected');
+    document.getElementById('create-run-btn').disabled = n === 0;
+
+    renderTree();
+  }
+
+  window.onSearch = function (v) { state.search = v.trim().toLowerCase(); resetScroll(); renderPicker(); };
+  window.onFilterChange = function () {
+    state.priority = document.getElementById('f-priority').value;
+    state.platform = document.getElementById('f-platform').value;
+    state.testType = document.getElementById('f-testtype').value;
+    resetScroll(); renderPicker();
+  };
+  window.clearFilters = function () {
+    state.priority = state.platform = state.testType = '';
+    document.getElementById('f-priority').value = '';
+    document.getElementById('f-platform').value = '';
+    document.getElementById('f-testtype').value = '';
+    resetScroll(); renderPicker();
+  };
+  window.toggleSelectedOnly = function () { state.selectedOnly = !state.selectedOnly; resetScroll(); renderPicker(); };
+  window.selectScope = function (id) { state.scope = id; resetScroll(); renderPicker(); };
+  window.clearScope = function () { state.scope = null; resetScroll(); renderPicker(); };
+  window.collapseRail = function (collapsed) {
+    state.railCollapsed = collapsed;
+    document.getElementById('rail').style.display = collapsed ? 'none' : 'block';
+    document.getElementById('rail-collapsed-btn').style.display = collapsed ? 'block' : 'none';
+  };
+  window.onScroll = function (top) { state.scrollTop = top; renderPicker(); };
+  window.toggleCase = toggleCase;
+
+  function populateFilterOptions() {
+    function opts(selectId, values, placeholder) {
+      var el = document.getElementById(selectId);
+      el.innerHTML = '<option value="">' + placeholder + '</option>' +
+        values.map(function (v) { return '<option value="' + v + '">' + v.charAt(0).toUpperCase() + v.slice(1) + '</option>'; }).join('');
+    }
+    var priorities = ['low', 'medium', 'high', 'critical'];
+    var platforms = Array.from(new Set(cases.map(function (cc) { return cc.platform; }))).sort();
+    var testTypes = Array.from(new Set(cases.map(function (cc) { return cc.testType; }))).sort();
+    opts('f-priority', priorities, 'All priorities');
+    opts('f-platform', platforms, 'All platforms');
+    opts('f-testtype', testTypes, 'All test types');
+  }
+
+  // ---------- suite quick-run confirm dialog ----------
+  window.openRunConfirm = function () {
+    document.getElementById('confirm-overlay').classList.add('open');
+  };
+  window.closeConfirm = function () {
+    document.getElementById('confirm-overlay').classList.remove('open');
+  };
+  window.fireQuickRun = function () {
+    var name = document.getElementById('confirm-run-name').value.trim() || 'Regression — Jul 26';
+    closeConfirm();
+    document.getElementById('suite-last-run').textContent = 'just now';
+    showToast('Run created', '“' + name + '” — 18 cases from Regression queued for execution.');
+  };
+  window.customizeSelection = function () {
+    closeConfirm();
+    // seed the shared run-creation form from the suite's current membership,
+    // then deep-link into it — same component, pre-scoped, not a second implementation.
+    document.getElementById('run-name-input').value = document.getElementById('confirm-run-name').value.trim() || 'Regression — Jul 26';
+    document.getElementById('run-suite-select').value = 'Regression';
+    seedSelectionFromSuite('Regression', /*fromDeepLink*/ true);
+    showTab('runs');
+  };
+  window.backToSuite = function () {
+    document.getElementById('deep-link-banner').style.display = 'none';
+    showTab('suite');
+  };
+
+  // ---------- run-creation suite prefill ----------
+  window.onSuiteSelectChange = function (suiteName) {
+    if (!suiteName) { resetSelectionToBlank(); return; }
+    seedSelectionFromSuite(suiteName, false);
+  };
+  function seedSelectionFromSuite(suiteName, fromDeepLink) {
+    var ids = suites[suiteName] || [];
+    state.selected = {};
+    ids.forEach(function (id) { state.selected[id] = true; });
+    state.scope = null; // a suite scatters across folders — seed selection, not scope
+    resetScroll();
+    var note = document.getElementById('suite-prefill-note');
+    note.style.display = 'flex';
+    document.getElementById('suite-prefill-text').innerHTML =
+      'Pre-filled from <b>' + suiteName + '</b> — ' + ids.length + ' cases. Adjust below as needed.';
+    document.getElementById('run-name-input').value = document.getElementById('run-name-input').value || (suiteName + ' — Jul 26');
+    if (fromDeepLink) {
+      document.getElementById('deep-link-suite-name').textContent = suiteName;
+      document.getElementById('deep-link-banner').style.display = 'flex';
+    }
+    renderPicker();
+  }
+  window.resetSelectionToBlank = function () {
+    state.selected = {};
+    document.getElementById('run-suite-select').value = '';
+    document.getElementById('suite-prefill-note').style.display = 'none';
+    renderPicker();
+  };
+
+  window.createRun = function () {
+    var name = document.getElementById('run-name-input').value.trim();
+    var n = selectedCount();
+    if (n === 0) return;
+    if (!name) name = 'Untitled run';
+    var suiteVal = document.getElementById('run-suite-select').value;
+    var li = document.createElement('li');
+    li.innerHTML = '<span class="rn"><a href="#">' + name + '</a></span><span class="just-now">Just now</span>';
+    var list = document.getElementById('runs-list');
+    list.insertBefore(li, list.firstChild);
+    showToast('Run created', '“' + name + '” — ' + n + ' case' + (n === 1 ? '' : 's') + (suiteVal ? ' (from ' + suiteVal + ')' : ' (ad hoc)') + '.');
+
+    // reset form
+    document.getElementById('run-name-input').value = '';
+    document.getElementById('run-suite-select').value = '';
+    document.getElementById('suite-prefill-note').style.display = 'none';
+    document.getElementById('deep-link-banner').style.display = 'none';
+    state.selected = {}; state.scope = null; state.search = '';
+    document.getElementById('picker-search').value = '';
+    renderPicker();
+  };
+
+  function showToast(title, body) {
+    var stack = document.getElementById('toast-stack');
+    var t = document.createElement('div');
+    t.className = 'toast';
+    t.innerHTML = '<b>' + title + '</b>' + body;
+    stack.appendChild(t);
+    setTimeout(function () {
+      t.style.transition = 'opacity .3s'; t.style.opacity = '0';
+      setTimeout(function () { t.remove(); }, 300);
+    }, 4200);
+  }
+
+  // ---------- tabs / theme / annotations ----------
+  window.showTab = function (name) {
+    document.querySelectorAll('.view').forEach(function (v) { v.classList.remove('active'); });
+    document.getElementById('view-' + name).classList.add('active');
+    document.querySelectorAll('.tab-btn').forEach(function (b) { b.classList.toggle('active', b.dataset.tab === name); });
+  };
+  window.toggleTheme = function () {
+    var root = document.documentElement;
+    var cur = root.getAttribute('data-theme');
+    var isDark = cur ? cur === 'dark' : window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  };
+  window.toggleAnnotations = function () {
+    var on = !document.body.classList.contains('annotations-off');
+    document.body.classList.toggle('annotations-off', on);
+    document.getElementById('annotations-toggle').textContent = 'Annotations: ' + (on ? 'Off' : 'On');
+    document.querySelectorAll('.pin-note.open').forEach(function (n) { n.classList.remove('open'); });
+  };
+  window.togglePin = function (el) {
+    var note = el.nextElementSibling;
+    var wasOpen = note.classList.contains('open');
+    document.querySelectorAll('.pin-note.open').forEach(function (n) { n.classList.remove('open'); });
+    if (!wasOpen) note.classList.add('open');
+  };
+  document.addEventListener('click', function (e) {
+    if (!e.target.classList.contains('pin')) {
+      document.querySelectorAll('.pin-note.open').forEach(function (n) { n.classList.remove('open'); });
+    }
+  });
+
+  // ---------- suite-detail static preview (first 6 of Regression's 18) ----------
+  function renderSuitePreview() {
+    var ids = suites['Regression'].slice(0, 6);
+    var html = '';
+    ids.forEach(function (id) {
+      var cc = cases.filter(function (x) { return x.id === id; })[0];
+      html += '<div style="display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--border); font-size:12.5px;">' +
+        '<input type="checkbox" checked disabled style="accent-color: var(--primary);">' +
+        '<span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">' + cc.title + '</span>' +
+        '<span class="pill">' + foldersById[cc.folderId].name + '</span></div>';
+    });
+    document.getElementById('suite-preview-rows').innerHTML = html;
+  }
+
+  // ---------- init ----------
+  populateFilterOptions();
+  renderPicker();
+  renderSuitePreview();
+})();
+</script>
