@@ -345,14 +345,17 @@ test.describe('Requirement: Viewing an existing test case', () => {
 
     await page.goBack()
     await page.getByRole('button', { name: 'Go to Suites' }).click()
+    await page.getByRole('button', { name: /new suite/i }).click()
     await page.getByLabel(/suite name/i).fill('Smoke')
+    await page.getByRole('button', { name: /^create$/i }).click()
+    await expect(page.getByRole('heading', { name: 'Smoke' })).toBeVisible()
     await page.getByRole('checkbox', { name: 'Login works' }).check()
-    await page.getByRole('button', { name: /create suite \(1\)/i }).click()
-    await page.getByText('Smoke').click()
-    const suiteDialog = page.getByRole('dialog', { name: 'Smoke' })
-    await expect(suiteDialog.getByRole('checkbox', { name: 'Login works' })).toBeChecked()
-    await suiteDialog.getByRole('button', { name: /dismiss/i }).click()
+    await page.getByRole('button', { name: /save changes/i }).click()
+    await expect(page.getByRole('checkbox', { name: 'Login works' })).toBeChecked()
 
+    // Two entries back: the suite detail page (pushed on create), then the
+    // Suites index, landing back on the project page.
+    await page.goBack()
     await page.goBack()
     await openFolderExplorer(page)
     await page.getByText('Login works').click()

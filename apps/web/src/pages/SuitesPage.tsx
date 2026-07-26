@@ -1,52 +1,34 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link, useLocation, useParams } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
-import { SuiteCaseGrid, type SuiteCaseGridCase } from '@/components/SuiteCaseGrid'
-import { useBumpDataRevision } from '@/lib/DataRevision'
+import { HealthBar } from '@/components/HealthBar'
+import { timeAgo } from '@/lib/timeAgo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import type { components } from '@testpulse/shared/api'
 
-type TestCase = components['schemas']['TestCase']
 type Suite = components['schemas']['Suite']
 type Project = components['schemas']['Project']
 
-function toGridCase(c: TestCase): SuiteCaseGridCase {
-  return {
-    id: c.key,
-    title: c.content.title,
-    tags: c.content.tags ?? [],
-    priority: c.content.priority ?? '',
-    platform: c.content.platform ?? '',
-    testType: c.content.testType ?? '',
-  }
-}
-
 export default function SuitesPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
-  const location = useLocation()
-  const bumpLanding = useBumpDataRevision()
+  const navigate = useNavigate()
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
-  const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
+  const [creating, setCreating] = useState(false)
   const [suiteName, setSuiteName] = useState('')
-  const [createSelected, setCreateSelected] = useState<Set<string>>(new Set())
-  const [openSuiteKey, setOpenSuiteKey] = useState<string | undefined>(
-    location.hash.startsWith('#suite-') ? location.hash.slice('#suite-'.length) : undefined,
-  )
-  const [editSelected, setEditSelected] = useState<Set<string>>(new Set())
-  const [editBaseline, setEditBaseline] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     if (!projectKey) return
     setNotFound(false)
     try {
-      const [{ data: p }, { data: c }, { data: s }] = await Promise.all([
+      const [{ data: p }, { data: s }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
       ])
       if (!p) {
@@ -54,10 +36,8 @@ export default function SuitesPage() {
         return
       }
       setProject(p)
-      setCases(c ?? [])
       setSuites(s ?? [])
     } catch {
-      setCases([])
       setSuites([])
     }
   }, [projectKey])
@@ -66,74 +46,15 @@ export default function SuitesPage() {
     void load()
   }, [load])
 
-  const gridCases = useMemo(() => cases.map(toGridCase), [cases])
-  const openSuite = suites.find((s) => s.key === openSuiteKey)
-
-  // A suite's caseIds are the case's db id; the grid keys everything by case
-  // key. An id with no matching case (soft-deleted) has no key to key it by
-  // and no row to render — kept as the raw db id so it stays in the set,
-  // untouched, and never generates a spurious remove call (design.md).
-  useEffect(() => {
-    if (!openSuite) return
-    const asKeys = new Set(
-      openSuite.caseIds.map((id) => cases.find((c) => c.id === id)?.key ?? id),
-    )
-    setEditSelected(asKeys)
-    setEditBaseline(asKeys)
-  }, [openSuite, cases])
-
-  function toggleCreate(caseKey: string) {
-    setCreateSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(caseKey)) next.delete(caseKey)
-      else next.add(caseKey)
-      return next
-    })
-  }
-
-  function toggleEdit(caseKey: string) {
-    setEditSelected((prev) => {
-      const next = new Set(prev)
-      if (next.has(caseKey)) next.delete(caseKey)
-      else next.add(caseKey)
-      return next
-    })
-  }
-
   async function handleCreateSuite() {
     if (!projectKey || !suiteName.trim()) return
     const { data: created } = await api.POST('/api/v1/projects/{projectKey}/suites', {
       params: { path: { projectKey } },
-      body: { name: suiteName },
+      body: { name: suiteName.trim() },
     })
-    if (created) {
-      await Promise.all(
-        Array.from(createSelected).map((caseKey) =>
-          api.PUT('/api/v1/suites/{suiteKey}/cases/{caseKey}', { params: { path: { suiteKey: created.key, caseKey } } }),
-        ),
-      )
-    }
+    setCreating(false)
     setSuiteName('')
-    setCreateSelected(new Set())
-    await load()
-    bumpLanding()
-  }
-
-  async function handleSaveEdit() {
-    if (!openSuite) return
-    const added = Array.from(editSelected).filter((id) => !editBaseline.has(id))
-    const removed = Array.from(editBaseline).filter((id) => !editSelected.has(id))
-    await Promise.all([
-      ...added.map((caseKey) =>
-        api.PUT('/api/v1/suites/{suiteKey}/cases/{caseKey}', { params: { path: { suiteKey: openSuite.key, caseKey } } }),
-      ),
-      ...removed.map((caseKey) =>
-        api.DELETE('/api/v1/suites/{suiteKey}/cases/{caseKey}', { params: { path: { suiteKey: openSuite.key, caseKey } } }),
-      ),
-    ])
-    setOpenSuiteKey(undefined)
-    await load()
-    bumpLanding()
+    if (created) navigate(`/projects/${projectKey}/suites/${created.key}`)
   }
 
   if (!projectKey) return null
@@ -156,49 +77,39 @@ export default function SuitesPage() {
       />
 
       <Card>
-        <CardHeader>
-          <CardTitle className="tp-heading">New suite</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="max-w-md space-y-1">
-            <Label htmlFor="suite-name">Suite name</Label>
-            <Input
-              id="suite-name"
-              value={suiteName}
-              onChange={(e) => setSuiteName(e.target.value)}
-              placeholder="Smoke"
-            />
-          </div>
-          <SuiteCaseGrid
-            cases={gridCases}
-            selected={createSelected}
-            onToggle={toggleCreate}
-            commitLabel={`Create suite (${createSelected.size})`}
-            commitDisabled={!suiteName.trim()}
-            onCommit={() => void handleCreateSuite()}
-          />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="tp-heading">Suites</CardTitle>
+          <Button
+            type="button"
+            onClick={() => {
+              setSuiteName('')
+              setCreating(true)
+            }}
+          >
+            + New suite
+          </Button>
         </CardHeader>
         <CardContent>
           {suites.length === 0 ? (
             <p className="text-sm text-muted-foreground">No suites yet.</p>
           ) : (
-            <ul aria-label="Suites" className="divide-y rounded-md border text-sm">
+            <ul aria-label="Suites" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {suites.map((s) => (
                 <li key={s.id}>
                   <button
                     type="button"
-                    className="flex w-full items-center justify-between px-3 py-2 text-left hover:bg-accent"
-                    onClick={() => setOpenSuiteKey(s.key)}
+                    className="flex w-full flex-col gap-2 rounded-lg border p-4 text-left hover:border-primary"
+                    onClick={() => navigate(`/projects/${projectKey}/suites/${s.key}`)}
                   >
-                    <span className="truncate">{s.name}</span>
-                    <span className="text-muted-foreground">
+                    <span className="truncate font-medium">{s.name}</span>
+                    {s.passRate === null ? (
+                      <span className="text-xs text-muted-foreground">Never run</span>
+                    ) : (
+                      <HealthBar rate={s.passRate} />
+                    )}
+                    <span className="text-xs text-muted-foreground">
                       {s.caseIds.length} {s.caseIds.length === 1 ? 'case' : 'cases'}
+                      {s.lastRunAt && ` · ${timeAgo(s.lastRunAt)}`}
                     </span>
                   </button>
                 </li>
@@ -208,32 +119,32 @@ export default function SuitesPage() {
         </CardContent>
       </Card>
 
-      {openSuite && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/20" onClick={() => setOpenSuiteKey(undefined)}>
-          <div
-            role="dialog"
-            aria-label={openSuite.name}
-            className="flex h-full w-[520px] flex-col gap-4 overflow-y-auto bg-background p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start justify-between">
-              <h2 className="tp-heading text-lg">{openSuite.name}</h2>
-              <button type="button" aria-label="Dismiss" onClick={() => setOpenSuiteKey(undefined)}>
-                ✕
-              </button>
-            </div>
-
-            <SuiteCaseGrid
-              cases={gridCases}
-              selected={editSelected}
-              onToggle={toggleEdit}
-              commitLabel="Save changes"
-              commitDisabled={editSelected.size === editBaseline.size && Array.from(editSelected).every((id) => editBaseline.has(id))}
-              onCommit={() => void handleSaveEdit()}
+      <Dialog open={creating} onOpenChange={setCreating}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>New suite</DialogTitle>
+          <div className="space-y-1">
+            <Label htmlFor="suite-name">Suite name</Label>
+            <Input
+              id="suite-name"
+              autoFocus
+              value={suiteName}
+              onChange={(e) => setSuiteName(e.target.value)}
+              placeholder="Smoke"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && suiteName.trim()) void handleCreateSuite()
+              }}
             />
           </div>
-        </div>
-      )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreating(false)}>
+              Cancel
+            </Button>
+            <Button disabled={!suiteName.trim()} onClick={() => void handleCreateSuite()}>
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -272,6 +272,12 @@ type Suite struct {
 	Name      string    `json:"name"`
 	CaseIDs   []string  `json:"caseIds"`
 	CreatedAt time.Time `json:"createdAt"`
+	// PassRate and LastRunAt reflect the suite's most recently created run,
+	// regardless of open/closed status — the same "latest run" semantic
+	// ProjectSummary already uses (rework-suites-landing-ux), computed via
+	// one batched query per List/Get call, not one query per suite.
+	PassRate  *int       `json:"passRate"`
+	LastRunAt *time.Time `json:"lastRunAt"`
 }
 
 type Run struct {

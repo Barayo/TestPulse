@@ -124,6 +124,23 @@ func TestSeedContentCoversClassificationFieldsAndVersioning(t *testing.T) {
 	if len(suites) < 4 {
 		t.Errorf("suites = %d, want at least 4", len(suites))
 	}
+	// The Suites index/detail pages (rework-suites-landing-ux) show a
+	// pass-rate health bar per suite, or "Never run" for one with none — the
+	// Sample Project should demonstrate both states, not just never-run.
+	var sawSuiteWithPassRate, sawNeverRunSuite bool
+	for _, s := range suites {
+		if s.PassRate != nil {
+			sawSuiteWithPassRate = true
+		} else {
+			sawNeverRunSuite = true
+		}
+	}
+	if !sawSuiteWithPassRate {
+		t.Error("no suite has a pass rate — the health bar has nothing real to render")
+	}
+	if !sawNeverRunSuite {
+		t.Error("no suite is never-run — the \"Never run\" empty state has nothing to demonstrate")
+	}
 
 	folders, err := svc.ListFolders(actorCtx, p.ID)
 	if err != nil {

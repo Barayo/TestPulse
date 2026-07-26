@@ -68,6 +68,9 @@ func mountAPI(r chi.Router, h *api) {
 	})
 	r.Route("/suites/{suiteKey}", func(r chi.Router) {
 		r.Use(h.resolveKey("suiteKey", h.svc.SuiteIDByKey))
+		r.With(h.requirePermission(domain.PermRead, projectIDFromSuite)).Get("/", h.getSuite)
+		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Put("/", h.renameSuite)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromSuite)).Delete("/", h.deleteSuite)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromSuite)).Get("/trend", h.suiteTrend)
 	})
 	r.Route("/runs/{runKey}", func(r chi.Router) {
@@ -352,6 +355,28 @@ func (h *api) createSuite(w http.ResponseWriter, r *http.Request) {
 	}
 	s, err := h.svc.CreateSuite(r.Context(), resolvedID(r, "projectKey"), body.Name)
 	h.respond(w, http.StatusCreated, s, err)
+}
+
+func (h *api) getSuite(w http.ResponseWriter, r *http.Request) {
+	s, err := h.svc.GetSuite(r.Context(), resolvedID(r, "suiteKey"))
+	h.respond(w, http.StatusOK, s, err)
+}
+
+func (h *api) renameSuite(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Name string `json:"name"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	s, err := h.svc.RenameSuite(r.Context(), resolvedID(r, "suiteKey"), body.Name)
+	h.respond(w, http.StatusOK, s, err)
+}
+
+func (h *api) deleteSuite(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.DeleteSuite(r.Context(), resolvedID(r, "suiteKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) addCaseToSuite(w http.ResponseWriter, r *http.Request) {

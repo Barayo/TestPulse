@@ -163,7 +163,7 @@ export default function ProjectPage() {
             suites={landing.suites}
             totalCount={landing.totalSuites}
             onSeeAll={() => navigate(`/projects/${projectKey}/suites`)}
-            onSelectSuite={(suiteId) => navigate(`/projects/${projectKey}/suites#suite-${suiteId}`)}
+            onSelectSuite={(suiteId) => navigate(`/projects/${projectKey}/suites/${suiteId}`)}
           />
           <RunsPanel
             runs={landing.runs}

@@ -12,7 +12,7 @@ the basis for this change.
 
 ## What Changes
 
-- The Suites index becomes a rich card list: each suite shows its name, tags, a
+- The Suites index becomes a rich card list: each suite shows its name, a
   pass-rate health bar (teal/amber/coral bands, matching `HealthBar`/`ProgressBar`),
   case count, and last-run time — "Never run" for a suite with no runs yet, not a
   fake 0%. Matches the richness `ProjectsPage.tsx` already has.
@@ -24,7 +24,7 @@ the basis for this change.
   - Main content: the same filter-safe checkbox case list as today's inline grid
     (tag/priority/platform/test-type filters, "Showing X of Y cases"), plus a
     sticky selection-count/Save-changes bar.
-  - Sidebar: case count, pass rate, last run, created date, tags, and
+  - Sidebar: case count, pass rate, last run, created date, and
     Rename/Delete actions.
 - The slide-over edit dialog and the combined create-form-with-grid on the index
   page are removed — creation opens straight into the new empty suite's detail

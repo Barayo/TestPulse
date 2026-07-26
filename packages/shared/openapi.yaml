@@ -583,6 +583,44 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RunSummary" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/suites/{suiteKey}:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSuite
+      summary: Get a single suite with its case membership
+      tags: [suites]
+      responses:
+        "200":
+          description: Suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: renameSuite
+      summary: Rename a suite
+      tags: [suites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SuiteInput" }
+      responses:
+        "200":
+          description: Renamed suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteSuite
+      summary: Delete a suite (member cases and past runs are untouched)
+      tags: [suites]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/suites/{suiteKey}/trend:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
@@ -1197,7 +1235,7 @@ components:
         createdAt: { type: string, format: date-time }
     Suite:
       type: object
-      required: [id, key, projectId, name, caseIds, createdAt]
+      required: [id, key, projectId, name, caseIds, createdAt, passRate, lastRunAt]
       properties:
         id: { type: string }
         key:
@@ -1209,6 +1247,15 @@ components:
           type: array
           items: { type: string }
         createdAt: { type: string, format: date-time }
+        passRate:
+          type: integer
+          nullable: true
+          description: From the suite's most recently created run only (open or closed); null if it has no runs yet.
+        lastRunAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the suite's most recently created run was started; null if it has no runs yet.
     SuiteInput:
       type: object
       required: [name]

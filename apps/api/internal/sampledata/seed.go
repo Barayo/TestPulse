@@ -296,6 +296,9 @@ func Seed(ctx context.Context, svc *service.Service) error {
 
 	// --- Suites ---------------------------------------------------------
 
+	// Smoke and API Contract are deliberately never used as a run's source
+	// below — the Suites index/detail pages show a "Never run" state for a
+	// suite with no runs, distinct from a fake 0% (rework-suites-landing-ux).
 	if _, err := Suite(ctx, svc, p.ID, "Smoke", []string{login.ID, checkoutValid.ID, notifPush.ID, reportingList.ID}); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
@@ -303,11 +306,13 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		login.ID, badPassword.ID, passwordReset.ID, checkoutValid.ID, checkoutExpired.ID,
 		displayName.ID, notifOptOut.ID, reportingExport.ID,
 	}
-	if _, err := Suite(ctx, svc, p.ID, "Regression", regressionCaseIDs); err != nil {
+	regressionSuite, err := Suite(ctx, svc, p.ID, "Regression", regressionCaseIDs)
+	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	nightlyCaseIDs := []string{login.ID, checkoutValid.ID, timezone.ID, notifPush.ID, reportingList.ID, twoFactor.ID}
-	if _, err := Suite(ctx, svc, p.ID, "Nightly", nightlyCaseIDs); err != nil {
+	nightlySuite, err := Suite(ctx, svc, p.ID, "Nightly", nightlyCaseIDs)
+	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	if _, err := Suite(ctx, svc, p.ID, "API Contract", []string{reportingList.ID, reportingExport.ID}); err != nil {
@@ -341,9 +346,11 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: closing run: %w", err)
 	}
 
-	// 3. Closed run: a broader regression pass, mostly green.
+	// 3. Closed run: a broader regression pass, mostly green. Created from
+	// the Regression suite, so its card/sidebar show a real pass rate
+	// (6/8 = 75%, the "in progress" amber band) instead of "Never run".
 	regressionRunName := "Release 1.1 regression"
-	if err := RunWithVerdicts(ctx, svc, p.ID, regressionRunName, regressionCaseIDs,
+	if err := RunFromSuiteWithVerdicts(ctx, svc, p.ID, regressionSuite.ID, regressionRunName, regressionCaseIDs,
 		[]domain.Verdict{
 			domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,
 			domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,
@@ -361,7 +368,11 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// 4. Open nightly run — automated cases. checkoutValid fails here,
 	// deliberately, having passed in runs 1 and 2 above: same pinned
 	// version, mixed verdicts, no edit in between — a genuinely flaky case.
-	if err := RunWithVerdicts(ctx, svc, p.ID, "Nightly — main",
+	// Created from the Nightly suite (5/6 = 83%, "healthy" teal band) — the
+	// suites index/detail pages read the latest run's pass rate regardless
+	// of open/closed status, so this demonstrates that an open run still
+	// gives its suite a real health signal, not just closed ones.
+	if err := RunFromSuiteWithVerdicts(ctx, svc, p.ID, nightlySuite.ID, "Nightly — main",
 		nightlyCaseIDs,
 		[]domain.Verdict{
 			domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,

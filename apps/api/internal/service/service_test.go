@@ -61,6 +61,11 @@ func TestCreateSuiteRequiresName(t *testing.T) {
 	wantValidation(t, err, "name")
 }
 
+func TestRenameSuiteRequiresName(t *testing.T) {
+	_, err := nilService().RenameSuite(context.Background(), "s1", "")
+	wantValidation(t, err, "name")
+}
+
 func TestCreateRunRequiresName(t *testing.T) {
 	_, err := nilService().CreateRun(context.Background(), "p1", RunInput{})
 	wantValidation(t, err, "name")

@@ -146,3 +146,56 @@ func TestSuiteTrendResolvesFromSuiteID(t *testing.T) {
 		t.Errorf("Points = %+v, want one point with 1 pass", trend.Points)
 	}
 }
+
+func TestGetSuiteResolvesByID(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	created, err := s.CreateSuite(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+
+	got, err := s.GetSuite(ctx, created.ID)
+	if err != nil {
+		t.Fatalf("GetSuite: %v", err)
+	}
+	if got.Name != "smoke" {
+		t.Errorf("GetSuite name = %q, want %q", got.Name, "smoke")
+	}
+}
+
+func TestRenameSuiteUpdatesName(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	created, err := s.CreateSuite(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+
+	renamed, err := s.RenameSuite(ctx, created.ID, "smoke v2")
+	if err != nil {
+		t.Fatalf("RenameSuite: %v", err)
+	}
+	if renamed.Name != "smoke v2" {
+		t.Errorf("RenameSuite name = %q, want %q", renamed.Name, "smoke v2")
+	}
+}
+
+func TestDeleteSuiteRemovesIt(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	created, err := s.CreateSuite(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+
+	if err := s.DeleteSuite(ctx, created.ID); err != nil {
+		t.Fatalf("DeleteSuite: %v", err)
+	}
+	if _, err := s.GetSuite(ctx, created.ID); err == nil {
+		t.Error("GetSuite after delete: want error, got nil")
+	}
+}

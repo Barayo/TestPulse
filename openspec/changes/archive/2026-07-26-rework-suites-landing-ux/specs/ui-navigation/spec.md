@@ -1,13 +1,13 @@
 ## MODIFIED Requirements
 
 ### Requirement: Suites list stays clean; membership managed in its own drawer
-The suites index SHALL show each suite as a card with its name, tags, a pass-rate health
+The suites index SHALL show each suite as a card with its name, a pass-rate health
 bar (or a "Never run" state when it has no runs yet), its case count, and its last-run
 time. Selecting a suite SHALL navigate to a dedicated route
 (`/projects/{projectKey}/suites/{suiteKey}`) rather than opening an inline dialog,
 matching the full-entity-page pattern already used for cases and run items:
 breadcrumbs, a filterable case list as the primary content, and a properties sidebar
-(case count, pass rate, last run, created date, tags, and rename/delete actions).
+(case count, pass rate, last run, created date, and rename/delete actions).
 Creating a suite SHALL navigate directly into its new (empty) detail page rather than
 opening a combined name-and-case-selection form on the index.
 

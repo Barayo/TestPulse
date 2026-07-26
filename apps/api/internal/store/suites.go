@@ -85,17 +85,56 @@ func (r *SuiteRepo) Get(ctx context.Context, suiteID string) (domain.Suite, erro
 	if err != nil {
 		return domain.Suite{}, err
 	}
-	defer rows.Close()
-
 	s.CaseIDs = []string{}
 	for rows.Next() {
 		var id string
 		if err := rows.Scan(&id); err != nil {
+			rows.Close()
 			return domain.Suite{}, err
 		}
 		s.CaseIDs = append(s.CaseIDs, id)
 	}
-	return s, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return domain.Suite{}, err
+	}
+
+	rate, lastRunAt, err := r.latestRunStats(ctx, suiteID)
+	if err != nil {
+		return domain.Suite{}, err
+	}
+	s.PassRate = rate
+	s.LastRunAt = lastRunAt
+	return s, nil
+}
+
+// latestRunStats returns the pass rate and created-at of a single suite's
+// most recently created run (open or closed — same "latest run" semantic
+// ProjectSummary already uses), or nil/nil if it has never had a run.
+func (r *SuiteRepo) latestRunStats(ctx context.Context, suiteID string) (*int, *time.Time, error) {
+	var lastRunAt time.Time
+	var total, passCount int
+	err := r.pool.QueryRow(ctx,
+		`SELECT r.created_at, count(i.id), count(i.id) FILTER (WHERE i.current_status = 'pass')
+		 FROM (
+		     SELECT id, created_at FROM test_runs
+		     WHERE suite_id = $1 ORDER BY created_at DESC LIMIT 1
+		 ) r
+		 LEFT JOIN test_run_items i ON i.run_id = r.id
+		 GROUP BY r.created_at`, suiteID,
+	).Scan(&lastRunAt, &total, &passCount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+	var rate *int
+	if total > 0 {
+		r := int(float64(passCount) / float64(total) * 100)
+		rate = &r
+	}
+	return rate, &lastRunAt, nil
 }
 
 func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite, error) {
@@ -105,19 +144,27 @@ func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite,
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
-
 	suites := []domain.Suite{}
+	order := []string{}
+	byID := map[string]int{}
 	for rows.Next() {
 		var s domain.Suite
 		if err := rows.Scan(&s.ID, &s.Key, &s.ProjectID, &s.Name, &s.CreatedAt); err != nil {
+			rows.Close()
 			return nil, err
 		}
+		byID[s.ID] = len(suites)
+		order = append(order, s.ID)
 		suites = append(suites, s)
 	}
+	rows.Close()
 	if err := rows.Err(); err != nil {
 		return nil, err
 	}
+	if len(suites) == 0 {
+		return suites, nil
+	}
+
 	for i := range suites {
 		full, err := r.Get(ctx, suites[i].ID)
 		if err != nil {
@@ -125,7 +172,71 @@ func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite,
 		}
 		suites[i].CaseIDs = full.CaseIDs
 	}
-	return suites, nil
+
+	// Batched "latest run per suite" — one grouped query for every suite in
+	// the project, not one query per suite (mirrors ProjectRepo.Summaries;
+	// see rework-suites-landing-ux/design.md's revised Decisions).
+	statsRows, err := r.pool.Query(ctx,
+		`SELECT r.suite_id, r.created_at, count(i.id), count(i.id) FILTER (WHERE i.current_status = 'pass')
+		 FROM (
+		     SELECT DISTINCT ON (suite_id) id, suite_id, created_at
+		     FROM test_runs
+		     WHERE suite_id = ANY($1)
+		     ORDER BY suite_id, created_at DESC
+		 ) r
+		 LEFT JOIN test_run_items i ON i.run_id = r.id
+		 GROUP BY r.suite_id, r.created_at`, order)
+	if err != nil {
+		return nil, err
+	}
+	defer statsRows.Close()
+	for statsRows.Next() {
+		var suiteID string
+		var lastRunAt time.Time
+		var total, passCount int
+		if err := statsRows.Scan(&suiteID, &lastRunAt, &total, &passCount); err != nil {
+			return nil, err
+		}
+		i, ok := byID[suiteID]
+		if !ok {
+			continue
+		}
+		suites[i].LastRunAt = &lastRunAt
+		if total > 0 {
+			rate := int(float64(passCount) / float64(total) * 100)
+			suites[i].PassRate = &rate
+		}
+	}
+	return suites, statsRows.Err()
+}
+
+// Rename updates a suite's name and returns the suite as it now stands
+// (without its case IDs — callers needing those should follow with Get).
+func (r *SuiteRepo) Rename(ctx context.Context, suiteID, name string) (domain.Suite, error) {
+	var s domain.Suite
+	err := r.pool.QueryRow(ctx,
+		`UPDATE test_suites SET name = $2 WHERE id = $1
+		 RETURNING id, key, project_id, name, created_at`, suiteID, name,
+	).Scan(&s.ID, &s.Key, &s.ProjectID, &s.Name, &s.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Suite{}, ErrNotFound
+	}
+	return s, err
+}
+
+// Delete removes a suite. suite_cases rows cascade automatically
+// (ON DELETE CASCADE); any run that named this suite as its source keeps
+// its own history but has its suite_id cleared (ON DELETE SET NULL,
+// link-runs-to-suite) — member cases and past runs are never touched.
+func (r *SuiteRepo) Delete(ctx context.Context, suiteID string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM test_suites WHERE id = $1`, suiteID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
 }
 
 func (r *SuiteRepo) AddCase(ctx context.Context, suiteID, caseID string) error {

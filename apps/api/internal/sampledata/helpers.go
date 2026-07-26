@@ -88,7 +88,24 @@ func RunWithVerdicts(ctx context.Context, svc *service.Service, projectID, name 
 	if err != nil {
 		return err
 	}
-	items, err := svc.RunItems(ctx, r.ID, "")
+	return recordVerdicts(ctx, svc, r.ID, caseIDs, verdicts)
+}
+
+// RunFromSuiteWithVerdicts is RunWithVerdicts, but the run is created from a
+// suite (RunInput.SuiteID) instead of an explicit case list — so the suite
+// itself picks up a pass rate and last-run time (rework-suites-landing-ux),
+// the same "most recently created run, open or closed" semantic the suites
+// index and detail page read.
+func RunFromSuiteWithVerdicts(ctx context.Context, svc *service.Service, projectID, suiteID, name string, caseIDs []string, verdicts []domain.Verdict) error {
+	r, err := svc.CreateRun(ctx, projectID, service.RunInput{Name: name, SuiteID: suiteID, CaseIDs: caseIDs})
+	if err != nil {
+		return err
+	}
+	return recordVerdicts(ctx, svc, r.ID, caseIDs, verdicts)
+}
+
+func recordVerdicts(ctx context.Context, svc *service.Service, runID string, caseIDs []string, verdicts []domain.Verdict) error {
+	items, err := svc.RunItems(ctx, runID, "")
 	if err != nil {
 		return err
 	}

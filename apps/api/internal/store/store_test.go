@@ -381,6 +381,204 @@ func TestSuiteMembership(t *testing.T) {
 	}
 }
 
+func TestSuitePassRateNullWithNoRuns(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	got, err := s.Suites.Get(ctx, suite.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.PassRate != nil {
+		t.Errorf("PassRate = %v, want nil with no runs", got.PassRate)
+	}
+	if got.LastRunAt != nil {
+		t.Errorf("LastRunAt = %v, want nil with no runs", got.LastRunAt)
+	}
+
+	list, err := s.Suites.List(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if list[0].PassRate != nil {
+		t.Errorf("List PassRate = %v, want nil", list[0].PassRate)
+	}
+}
+
+func TestSuitePassRateReflectsLatestRunOnly(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "one")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	oldRun, err := s.Runs.CreateWithSuite(ctx, p.ID, "old run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create old run: %v", err)
+	}
+	oldItems, _ := s.Runs.Items(ctx, oldRun.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, oldItems[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	newRun, err := s.Runs.CreateWithSuite(ctx, p.ID, "new run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create new run: %v", err)
+	}
+	newItems, _ := s.Runs.Items(ctx, newRun.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, newItems[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Suites.Get(ctx, suite.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.PassRate == nil || *got.PassRate != 100 {
+		t.Errorf("Get PassRate = %v, want 100 (from the newer run only)", got.PassRate)
+	}
+
+	newRunFull, err := s.Runs.Get(ctx, newRun.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.LastRunAt == nil || !got.LastRunAt.Equal(newRunFull.CreatedAt) {
+		t.Errorf("Get LastRunAt = %v, want %v", got.LastRunAt, newRunFull.CreatedAt)
+	}
+
+	list, err := s.Suites.List(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if list[0].PassRate == nil || *list[0].PassRate != 100 {
+		t.Errorf("List PassRate = %v, want 100", list[0].PassRate)
+	}
+}
+
+func TestSuitePassRateIndependentAcrossSuites(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "one")
+	suiteA, err := s.Suites.Create(ctx, p.ID, "suite a")
+	if err != nil {
+		t.Fatalf("create suite a: %v", err)
+	}
+	suiteB, err := s.Suites.Create(ctx, p.ID, "suite b")
+	if err != nil {
+		t.Fatalf("create suite b: %v", err)
+	}
+
+	runA, err := s.Runs.CreateWithSuite(ctx, p.ID, "run a", suiteA.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run a: %v", err)
+	}
+	itemsA, _ := s.Runs.Items(ctx, runA.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, itemsA[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	// suiteB has no runs — must stay nil, not pick up suiteA's rate.
+	list, err := s.Suites.List(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	byID := map[string]domain.Suite{}
+	for _, sui := range list {
+		byID[sui.ID] = sui
+	}
+	if byID[suiteA.ID].PassRate == nil || *byID[suiteA.ID].PassRate != 100 {
+		t.Errorf("suiteA PassRate = %v, want 100", byID[suiteA.ID].PassRate)
+	}
+	if byID[suiteB.ID].PassRate != nil {
+		t.Errorf("suiteB PassRate = %v, want nil (no runs of its own)", byID[suiteB.ID].PassRate)
+	}
+}
+
+func TestRenameSuite(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	renamed, err := s.Suites.Rename(ctx, suite.ID, "smoke v2")
+	if err != nil {
+		t.Fatalf("Rename: %v", err)
+	}
+	if renamed.Name != "smoke v2" {
+		t.Errorf("Rename returned name %q, want %q", renamed.Name, "smoke v2")
+	}
+
+	got, _ := s.Suites.Get(ctx, suite.ID)
+	if got.Name != "smoke v2" {
+		t.Errorf("suite name after rename: %q, want %q", got.Name, "smoke v2")
+	}
+}
+
+func TestDeleteSuitePreservesCases(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+	if err := s.Suites.AddCase(ctx, suite.ID, c.ID); err != nil {
+		t.Fatalf("AddCase: %v", err)
+	}
+
+	if err := s.Suites.Delete(ctx, suite.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if _, err := s.Suites.Get(ctx, suite.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Get after delete: err=%v, want ErrNotFound", err)
+	}
+	cases, _ := s.Cases.List(ctx, p.ID)
+	if len(cases) != 1 {
+		t.Errorf("case deleted by suite deletion: %d cases", len(cases))
+	}
+}
+
+func TestDeleteSuiteClearsRunReference(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+	run, err := s.Runs.CreateWithSuite(ctx, p.ID, "a run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	if err := s.Suites.Delete(ctx, suite.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	got, err := s.Runs.Get(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("Runs.Get: %v", err)
+	}
+	if got.SuiteKey != nil {
+		t.Errorf("run.SuiteKey after suite delete: %v, want nil", *got.SuiteKey)
+	}
+}
+
 // --- Runs (task 2.4) ---
 
 func TestRunPinsVersionAtCreation(t *testing.T) {

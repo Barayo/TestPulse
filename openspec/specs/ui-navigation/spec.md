@@ -294,23 +294,44 @@ A user SHALL be able to edit an existing case's title and steps from its view, a
 - **WHEN** a user edits a case's steps and saves
 - **THEN** the case's current version increases, the new content is shown, and the previous version remains available in the version history
 
-### Requirement: Suites list stays clean; membership managed in its own drawer
-The suites list SHALL show only each suite's name and case count — not its member cases
-inline. Selecting a suite SHALL open a drawer with that suite's full membership: each
-member case listed with a way to remove it, and a searchable picker to add cases not yet
-in the suite.
+### Requirement: Suites index and detail page
+The suites index SHALL show each suite as a card with its name, a pass-rate health
+bar (or a "Never run" state when it has no runs yet), its case count, and its last-run
+time. Selecting a suite SHALL navigate to a dedicated route
+(`/projects/{projectKey}/suites/{suiteKey}`) rather than opening an inline dialog,
+matching the full-entity-page pattern already used for cases and run items:
+breadcrumbs, a filterable case list as the primary content, and a properties sidebar
+(case count, pass rate, last run, created date, and rename/delete actions).
+Creating a suite SHALL navigate directly into its new (empty) detail page rather than
+opening a combined name-and-case-selection form on the index.
 
-#### Scenario: Suite list shows summary only
-- **WHEN** a user views the suites list
-- **THEN** each row shows only the suite's name and case count, with no member cases or per-case controls visible
+#### Scenario: Suite index card shows health at a glance
+- **WHEN** a user views the suites index and a suite has at least one run
+- **THEN** its card shows a pass-rate health bar in the healthy/in-progress/at-risk band matching its rate
 
-#### Scenario: Adding a case via search
-- **WHEN** a user opens a suite's drawer and searches for a case by (partial) title
-- **THEN** only matching cases not already in the suite are offered, and selecting one adds it immediately
+#### Scenario: Never-run suite shows a distinct state
+- **WHEN** a suite has never had a run created from it
+- **THEN** its card shows "Never run" rather than a 0% pass rate
 
-#### Scenario: Removing a case from a suite
-- **WHEN** a user removes a case from a suite's drawer
-- **THEN** the case is no longer a member of that suite, but the case itself still exists
+#### Scenario: Selecting a suite navigates to its own page
+- **WHEN** a user selects a suite from the index
+- **THEN** the browser URL changes to that suite's detail route, and the browser back button returns to the index
+
+#### Scenario: Suite detail page shows filterable case membership
+- **WHEN** a user opens a suite's detail page
+- **THEN** its member cases are shown in a checkbox list filterable by tag, priority, platform, and test type, with selection preserved across filter changes
+
+#### Scenario: Creating a suite opens straight into its detail page
+- **WHEN** a user creates a new suite from the index
+- **THEN** the app navigates to that suite's (empty) detail page instead of showing a case-selection form on the index
+
+#### Scenario: Renaming a suite
+- **WHEN** a user renames a suite from its detail page
+- **THEN** the suite's name updates everywhere it is shown, including the index
+
+#### Scenario: Deleting a suite preserves its cases
+- **WHEN** a user deletes a suite from its detail page
+- **THEN** the suite no longer appears on the index, and its former member cases are untouched in the Library
 
 ### Requirement: Project list with permission-ready create action
 Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section. A project marked as the sample project SHALL show a "Sample" badge next to its name, in both view modes.

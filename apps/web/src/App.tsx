@@ -12,6 +12,7 @@ import { SessionExpiredModal } from '@/components/SessionExpiredModal'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectPage from '@/pages/ProjectPage'
 import SuitesPage from '@/pages/SuitesPage'
+import SuiteDetailPage from '@/pages/SuiteDetailPage'
 import RunsPage from '@/pages/RunsPage'
 import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import CaseDetailPage from '@/pages/CaseDetailPage'
@@ -174,6 +175,14 @@ function App() {
               element={
                 <RequireAuth>
                   <SuitesPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/projects/:projectKey/suites/:suiteKey"
+              element={
+                <RequireAuth>
+                  <SuiteDetailPage />
                 </RequireAuth>
               }
             />

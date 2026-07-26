@@ -297,6 +297,37 @@ func TestScenario_SuiteTrendOverHTTP(t *testing.T) {
 	call(t, h, "GET", "/api/v1/suites/NOPE/trend", nil, 404, nil)
 }
 
+func TestScenario_SuiteDetailOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c, suite struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key), jmap{"name": "smoke"}, 201, &suite)
+	call(t, h, "PUT", fmt.Sprintf("/api/v1/suites/%s/cases/%s", suite.Key, c.Key), nil, 204, nil)
+
+	var got struct {
+		Name    string   `json:"name"`
+		CaseIDs []string `json:"caseIds"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/suites/%s", suite.Key), nil, 200, &got)
+	if got.Name != "smoke" || len(got.CaseIDs) != 1 {
+		t.Errorf("GET suite = %+v", got)
+	}
+
+	var renamed struct{ Name string }
+	call(t, h, "PUT", fmt.Sprintf("/api/v1/suites/%s", suite.Key), jmap{"name": "smoke v2"}, 200, &renamed)
+	if renamed.Name != "smoke v2" {
+		t.Errorf("rename response name = %q, want %q", renamed.Name, "smoke v2")
+	}
+
+	call(t, h, "DELETE", fmt.Sprintf("/api/v1/suites/%s", suite.Key), nil, 204, nil)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/suites/%s", suite.Key), nil, 404, nil)
+
+	call(t, h, "GET", "/api/v1/suites/NOPE", nil, 404, nil)
+	call(t, h, "PUT", "/api/v1/suites/NOPE", jmap{"name": "x"}, 404, nil)
+	call(t, h, "DELETE", "/api/v1/suites/NOPE", nil, 404, nil)
+}
+
 func TestScenario_NotFoundMapsTo404(t *testing.T) {
 	h := apiServer(t)
 	missing := "NOPE"

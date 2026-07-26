@@ -102,28 +102,32 @@ test.describe('Requirement: Test suite grouping', () => {
 
     await page.goBack()
     await page.getByRole('button', { name: 'Go to Suites' }).click()
-    // Naming and selecting cases happen in one screen (rework-suite-membership-ux)
-    // — no separate "create empty, then add cases" step.
+    // Creating a suite opens straight into its own detail page
+    // (rework-suites-landing-ux) — no inline form on the index.
+    await page.getByRole('button', { name: /new suite/i }).click()
     await page.getByLabel(/suite name/i).fill('Smoke')
+    await page.getByRole('button', { name: /^create$/i }).click()
+    await expect(page.getByRole('heading', { name: 'Smoke' })).toBeVisible()
+
     await page.getByRole('checkbox', { name: 'Case A' }).check()
-    await page.getByRole('button', { name: /create suite \(1\)/i }).click()
+    await page.getByRole('button', { name: /save changes/i }).click()
+    await expect(page.getByRole('checkbox', { name: 'Case A' })).toBeChecked()
+
+    await page.getByRole('link', { name: 'Suites', exact: true }).click()
     await expect(page.getByRole('list', { name: 'Suites' }).getByText('Smoke')).toBeVisible()
     await expect(page.getByRole('list', { name: 'Suites' }).getByText(/^1 case$/)).toBeVisible()
 
-    // Membership lives in the suite's edit view, not inline on the list
-    // (redesign-ui follow-up: the list stays a clean name+count row).
+    // Membership lives on the suite's own detail page, not a list-level dialog.
     await page.getByText('Smoke').click()
-    const dialog = page.getByRole('dialog', { name: 'Smoke' })
-    await expect(dialog.getByRole('checkbox', { name: 'Case A' })).toBeChecked()
-
-    await dialog.getByRole('checkbox', { name: 'Case A' }).uncheck()
-    await dialog.getByRole('button', { name: /save changes/i }).click()
-    await expect(page.getByRole('list', { name: 'Suites' }).getByText(/^0 cases$/)).toBeVisible()
+    await expect(page.getByRole('checkbox', { name: 'Case A' })).toBeChecked()
+    await page.getByRole('checkbox', { name: 'Case A' }).uncheck()
+    await page.getByRole('button', { name: /save changes/i }).click()
 
     // Case A still exists in the project — it's still a selectable (just
     // unchecked) row, not gone from the grid entirely.
-    await page.getByText('Smoke').click()
-    await expect(page.getByRole('dialog', { name: 'Smoke' }).getByRole('checkbox', { name: 'Case A' })).not.toBeChecked()
+    await expect(page.getByRole('checkbox', { name: 'Case A' })).not.toBeChecked()
+    await page.getByRole('link', { name: 'Suites', exact: true }).click()
+    await expect(page.getByRole('list', { name: 'Suites' }).getByText(/^0 cases$/)).toBeVisible()
   })
 })
 

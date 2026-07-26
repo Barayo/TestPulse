@@ -15,14 +15,14 @@ interaction source of truth — read it alongside this doc.
 ## Goals / Non-Goals
 
 **Goals:**
-- Suite index cards show name, tags, pass-rate health bar, case count, and last-run
+- Suite index cards show name, pass-rate health bar, case count, and last-run
   time, matching `ProjectsPage.tsx`'s card richness and `HealthBar.tsx`'s existing
   healthy/in-progress/at-risk bands.
 - A dedicated `/projects/{projectKey}/suites/{suiteKey}` page, structurally matching
   `CaseDetailPage`/`RunItemDetailPage`'s established pattern.
 - Case filtering/selection inside the detail page reuses the existing `SuiteCaseGrid`
   filter-safe-selection logic — no reimplementation.
-- Sidebar surfaces case count, pass rate, last run, created date, tags, and
+- Sidebar surfaces case count, pass rate, last run, created date, and
   rename/delete actions (rename is new; delete already existed as a destructive action
   elsewhere and gets a home here).
 
@@ -30,26 +30,29 @@ interaction source of truth — read it alongside this doc.
 - No change to the suite/case membership API (`PUT`/`DELETE .../cases/{caseKey}`) —
   purely navigation/visual.
 - No bulk suite actions (multi-select delete, etc.) — out of scope, not requested.
-- No new pass-rate *trend* chart on this page — that's `add-suite-pass-rate-trend`'s
-  own scope (a sparkline/points-over-time view); this change only needs a single
-  current-pass-rate number for the health bar, not the trend itself.
+- No new pass-rate *trend* chart on this page — `add-suite-pass-rate-trend`'s
+  `SuitePassRateTrend` component (a sparkline/points-over-time view) stays
+  unused here; this change only needs a single current-pass-rate number per
+  suite, computed by its own batched query (see Decisions), not the trend.
 
 ## Decisions
 
-- **Suite pass rate is read from `add-suite-pass-rate-trend`'s `SuiteTrend` endpoint
-  rather than building a second, parallel "current pass rate" read.** That backend
-  work (`GET /api/v1/suites/{suiteKey}/trend`) already exists in this repo's working
-  tree (uncommitted, from earlier this session) and returns per-run points ordered
-  oldest-first; "current pass rate" is simply the last point's pass count / total.
-  Building a separate lightweight endpoint would duplicate a query that already
-  exists. **This change therefore depends on `add-suite-pass-rate-trend` landing
-  first** (or in the same PR) — call this out explicitly in tasks.md and in whatever
-  priority ordering is set for the backlog.
-  - Alternative considered: compute pass rate client-side from `/suites/{key}` plus a
-    naive "last run" lookup. Rejected — would need its own aggregate query anyway
-    (per the standing "design aggregates for DB scale, not client loops" guidance),
-    so reusing the already-designed, already-tested trend endpoint is strictly less
-    work and avoids a second source of truth for the same number.
+- **Revised during implementation:** originally planned to reuse
+  `add-suite-pass-rate-trend`'s `SuiteTrend` endpoint for "current pass rate."
+  Caught before writing frontend code: `SuiteTrend` is per-suite and
+  closed-runs-only — right for a future trend chart, wrong shape for an
+  **index of many suites**, where calling it once per card is exactly the
+  N+1-requests-on-page-load anti-pattern `useProjectSummaries` already caused
+  a real incident over. Instead: **`SuiteRepo.List` and `SuiteRepo.Get` both
+  gain `PassRate *int`/`LastRunAt *time.Time`, computed via one additional
+  batched "latest run per suite" query**, byte-for-byte mirroring
+  `ProjectRepo.Summaries`'s existing pattern (`DISTINCT ON (suite_id) ...
+  ORDER BY suite_id, created_at DESC`, latest run regardless of open/closed
+  status — same semantic `ProjectSummary` already uses, for consistency with
+  the project list's own card). `List` costs one extra grouped query total
+  for every suite in the project, not one per suite. `add-suite-pass-rate-trend`'s
+  `SuiteTrend` endpoint is unused by this change — it remains available for
+  a future dedicated trend-chart page, but this rework does not depend on it.
 - **The route is a new top-level suite key route, not nested under a suite-list
   index route's client state.** `/projects/{projectKey}/suites/{suiteKey}` mirrors
   `/projects/{projectKey}/cases/{caseKey}` exactly — a real navigable, bookmarkable,
@@ -68,21 +71,35 @@ interaction source of truth — read it alongside this doc.
   are small, mechanical additions following the exact pattern `GET/PUT/DELETE
   /cases/{caseKey}` already establishes — not a new capability worth its own
   proposal.
+- **No new permission flag.** The RBAC model deliberately fixes ten
+  per-resource permission flags (`domain.go`'s "ten concrete flags" design
+  note) — adding an eleventh (e.g. `suiteDelete`) would touch the
+  `Role`/`Permissions` structs, a migration, `RolesPage.tsx`, and seed roles,
+  for a capability used in exactly one place. Instead: `GET /suites/{suiteKey}`
+  requires `read` (matches every other single-entity GET); `PUT
+  /suites/{suiteKey}` (rename) requires `suiteEditMembership`, broadened in
+  meaning from "case membership" to "suite management" generally, since the
+  same actor tier should reasonably hold both; `DELETE /suites/{suiteKey}`
+  requires `manageProject`, matching the existing precedent for a destructive,
+  infrequent, admin-gated action (the same permission already gates reopening
+  a closed run).
 
 ## Risks / Trade-offs
 
-- [Depending on uncommitted `add-suite-pass-rate-trend` work introduces a sequencing
-  constraint] → Acceptable: that work is backend-only, already tests-green when last
-  run individually, and finishing it here closes out session debt rather than
-  creating new debt.
 - [Removing the `#suite-{key}` hash-deep-link changes a URL pattern the
   `run-detail-rework-mockup.html`'s suite link already points at] → Update that
   link (in the `rework-run-detail-ux` change, not yet implemented) to the new
   `/projects/{projectKey}/suites/{suiteKey}` route instead of the hash form —
   flag as a cross-change follow-up in that change's tasks.md.
+- [`enrich-project-landing-panels`'s Suites panel also needs a suite pass rate,
+  and its design.md still says it depends on `add-suite-pass-rate-trend`] →
+  That dependency is now stale too — it should read `domain.Suite.PassRate`
+  (this change's batched field) once this change ships, not the trend
+  endpoint. Flagged as a cross-change correction for that change's design.md.
 
 ## Migration Plan
 
-Frontend + one small backend addition (rename endpoint, if it doesn't already
-exist — verify during implementation) plus landing the existing uncommitted
-pass-rate-trend backend work. No destructive migration; ships as a regular deploy.
+Backend: `domain.Suite` gains `PassRate`/`LastRunAt`, `SuiteRepo.List`/`Get`
+gain one additional batched query each, plus the three new suite endpoints
+(GET/rename/delete). Frontend: index + new detail page. No destructive
+migration; ships as a regular deploy.

@@ -276,9 +276,9 @@ describe('ProjectPage landing', () => {
 
   it('navigates directly to a suite when its row is clicked', async () => {
     mockProjectAPI()
-    renderWithRoutes(<Route path="/projects/:projectKey/suites" element={<div>suites page stub</div>} />)
+    renderWithRoutes(<Route path="/projects/:projectKey/suites/:suiteKey" element={<div>suite detail page stub</div>} />)
     await userEvent.click(await screen.findByText('Smoke'))
-    expect(await screen.findByText('suites page stub')).toBeInTheDocument()
+    expect(await screen.findByText('suite detail page stub')).toBeInTheDocument()
   })
 
   it('navigates directly to a run when its row is clicked', async () => {

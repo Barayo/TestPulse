@@ -342,6 +342,30 @@ func (s *Service) ListSuites(ctx context.Context, projectID string) ([]domain.Su
 	return s.store.Suites.List(ctx, projectID)
 }
 
+func (s *Service) GetSuite(ctx context.Context, suiteID string) (domain.Suite, error) {
+	return s.store.Suites.Get(ctx, suiteID)
+}
+
+func (s *Service) RenameSuite(ctx context.Context, suiteID, name string) (domain.Suite, error) {
+	if name == "" {
+		return domain.Suite{}, invalid("name is required")
+	}
+	suite, err := s.store.Suites.Rename(ctx, suiteID, name)
+	if err != nil {
+		return domain.Suite{}, err
+	}
+	s.audit(ctx, "rename", "suite", suiteID)
+	return suite, nil
+}
+
+func (s *Service) DeleteSuite(ctx context.Context, suiteID string) error {
+	if err := s.store.Suites.Delete(ctx, suiteID); err != nil {
+		return err
+	}
+	s.audit(ctx, "delete", "suite", suiteID)
+	return nil
+}
+
 // SuiteTrend returns a suite's pass-rate trend across its closed runs
 // (add-suite-pass-rate-trend).
 func (s *Service) SuiteTrend(ctx context.Context, suiteID string) (domain.SuiteTrend, error) {

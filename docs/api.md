@@ -87,8 +87,10 @@ exactly one folder, defaulting to the project's root; see
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectKey}/suites` | List / create |
+| GET / POST | `/api/v1/projects/{projectKey}/suites` | List / create — list entries include a batched `passRate`/`lastRunAt` from each suite's most recently created run |
+| GET / PUT / DELETE | `/api/v1/suites/{suiteKey}` | Get / rename / delete a single suite |
 | PUT / DELETE | `/api/v1/suites/{suiteKey}/cases/{caseKey}` | Add / remove a case (n:m; removing does not delete the case) |
+| GET | `/api/v1/suites/{suiteKey}/trend` | Pass-rate trend across the suite's closed runs, oldest first |
 
 **Runs and execution**
 

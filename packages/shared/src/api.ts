@@ -509,6 +509,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/suites/{suiteKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a single suite with its case membership */
+        get: operations["getSuite"];
+        /** Rename a suite */
+        put: operations["renameSuite"];
+        post?: never;
+        /** Delete a suite (member cases and past runs are untouched) */
+        delete: operations["deleteSuite"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/suites/{suiteKey}/trend": {
         parameters: {
             query?: never;
@@ -980,6 +1001,13 @@ export interface components {
             caseIds: string[];
             /** Format: date-time */
             createdAt: string;
+            /** @description From the suite's most recently created run only (open or closed); null if it has no runs yet. */
+            passRate: number | null;
+            /**
+             * Format: date-time
+             * @description When the suite's most recently created run was started; null if it has no runs yet.
+             */
+            lastRunAt: string | null;
         };
         SuiteInput: {
             name: string;
@@ -2240,6 +2268,78 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["RunSummary"];
                 };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    renameSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SuiteInput"];
+            };
+        };
+        responses: {
+            /** @description Renamed suite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             404: components["responses"]["NotFound"];
         };
