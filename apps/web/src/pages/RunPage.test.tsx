@@ -44,7 +44,7 @@ const pendingItem = {
   },
 }
 
-function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown) {
+function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown, suiteOverride?: unknown) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/runs/{runKey}')
       return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
@@ -58,6 +58,11 @@ function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown) 
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
         data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+        response: { ok: true },
+      })
+    if (path === '/api/v1/suites/{suiteKey}')
+      return Promise.resolve({
+        data: suiteOverride ?? { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Regression', caseIds: [], createdAt: '', passRate: null, lastRunAt: null },
         response: { ok: true },
       })
     return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -184,6 +189,99 @@ describe('Run execution board', () => {
     })
     renderRun()
     expect(await screen.findByText(/run not found/i)).toBeInTheDocument()
+  })
+})
+
+describe('Suite linkage and metadata (rework-run-detail-ux)', () => {
+  it('links to the source suite when the run has one, showing its name', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, suiteKey: 'p1-S1' }, { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Regression', caseIds: [], createdAt: '', passRate: null, lastRunAt: null })
+    renderRun()
+    const link = await screen.findByRole('link', { name: /from suite: regression/i })
+    expect(link).toHaveAttribute('href', '/projects/p1/suites/p1-S1')
+  })
+
+  it('shows an explicit ad hoc state when the run has no suite', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, suiteKey: null })
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.getByText(/ad hoc run/i)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /from suite/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the created date', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, suiteKey: null, createdAt: '2026-07-24T00:00:00Z' })
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.getByText(new RegExp(new Date('2026-07-24T00:00:00Z').toLocaleDateString()))).toBeInTheDocument()
+  })
+})
+
+describe('Status filter (rework-run-detail-ux)', () => {
+  const passItem = { ...pendingItem, id: 'i2', caseKey: 'c2', currentStatus: 'pass', content: { ...pendingItem.content, title: 'Checkout works' } }
+  const failedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', currentStatus: 'failed', content: { ...pendingItem.content, title: 'Logout works' } }
+  const summary = { runId: 'r1', total: 3, counts: { pending: 1, pass: 1, failed: 1 } }
+
+  it('renders one chip per status present, with counts, plus "All"', async () => {
+    mockRunAPI([pendingItem, passItem, failedItem], summary)
+    renderRun()
+    await screen.findByText('Login works')
+    const group = screen.getByRole('group', { name: /filter items by status/i })
+    expect(within(group).getByRole('button', { name: /all/i })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /pass/i })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /failed/i })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /pending/i })).toBeInTheDocument()
+    expect(within(group).queryByRole('button', { name: /blocked/i })).not.toBeInTheDocument()
+  })
+
+  it('selecting a chip narrows the list to that status and updates the count line', async () => {
+    mockRunAPI([pendingItem, passItem, failedItem], summary)
+    renderRun()
+    await screen.findByText('Login works')
+    await userEvent.click(screen.getByRole('button', { name: /^failed/i }))
+
+    expect(screen.queryByText('Login works')).not.toBeInTheDocument()
+    expect(screen.getByText('Logout works')).toBeInTheDocument()
+    expect(screen.getByText(/showing.*1.*of 3 items/i)).toBeInTheDocument()
+  })
+
+  it('"All" resets the filter back to every item', async () => {
+    mockRunAPI([pendingItem, passItem, failedItem], summary)
+    renderRun()
+    await screen.findByText('Login works')
+    await userEvent.click(screen.getByRole('button', { name: /^failed/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^all/i }))
+
+    expect(screen.getByText('Login works')).toBeInTheDocument()
+    expect(screen.getByText('Checkout works')).toBeInTheDocument()
+    expect(screen.getByText('Logout works')).toBeInTheDocument()
+  })
+})
+
+describe('Group by status (rework-run-detail-ux)', () => {
+  const passItem = { ...pendingItem, id: 'i2', caseKey: 'c2', currentStatus: 'pass', content: { ...pendingItem.content, title: 'Checkout works' } }
+  const failedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', currentStatus: 'failed', content: { ...pendingItem.content, title: 'Logout works' } }
+  const summary = { runId: 'r1', total: 3, counts: { pending: 1, pass: 1, failed: 1 } }
+
+  it('reorders the list into status sections, bad-outcomes-first, when toggled on', async () => {
+    mockRunAPI([pendingItem, passItem, failedItem], summary)
+    renderRun()
+    await screen.findByText('Login works')
+    await userEvent.click(screen.getByRole('switch', { name: /group by status/i }))
+
+    const headings = screen.getAllByText(/pass · 1|failed · 1|pending · 1/i).map((el) => el.textContent)
+    expect(headings).toEqual(['Pass · 1', 'Failed · 1', 'Pending · 1'])
+  })
+
+  it('composes with an active filter, collapsing to a single section', async () => {
+    mockRunAPI([pendingItem, passItem, failedItem], summary)
+    renderRun()
+    await screen.findByText('Login works')
+    await userEvent.click(screen.getByRole('switch', { name: /group by status/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^failed/i }))
+
+    expect(screen.getByText('Failed · 1')).toBeInTheDocument()
+    expect(screen.queryByText(/pass · 1/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/pending · 1/i)).not.toBeInTheDocument()
   })
 })
 

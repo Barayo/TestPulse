@@ -125,7 +125,10 @@ Nothing about the run silently changes when the case is edited later — what a 
 
 Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for heavy daily use.
 
+- Below the run name, a compact meta row shows either **From suite: {name}** (linking to that suite's own detail page) or **Ad hoc run — not created from a suite** — the absence of a suite reads as a deliberate state, not a bug — alongside a **Created {date}** line.
 - A **status breakdown** across all six possible statuses (`pending`, `pass`, `failed`, `skipped`, `blocked`, `retest`) plus the overall pass rate, above the item list.
+- Single-select **status filter chips** (one per status present, with counts, plus an **All**) narrow the item list to one status at a time for triage; a "Showing N of M items" line reflects the active filter.
+- An optional **Group by status** toggle reorders the (possibly filtered) list into status-labeled sections in the same pass/failed/blocked/skipped/retest/pending order as the breakdown above, without hiding anything the filter hasn't already excluded.
 - The item list: each row shows a status chip, the test name/platform/tags captured from JUnit imports when present, and a "(newer version available)" hint when applicable.
 - Selecting an item navigates to its own page (`/runs/{runKey}/items/{caseKey}`) — the same single-window, content+sidebar pattern as a case's own detail page, not an inline panel — showing the pinned case's steps and expected result, a **Your name** / **Comment** form, verdict buttons (**Pass**, **Failed**, **Blocked**, **Skipped**), item properties, and result **History** in the sidebar.
 - Recording a verdict updates the item's status immediately, without leaving the item's page.

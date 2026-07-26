@@ -8,7 +8,7 @@ type Status = components['schemas']['Status']
 // status gets its own resolved color from the existing --chart-1..5
 // palette; retest (the 6th) gets a texture over an existing color rather
 // than a new hue.
-const STATUS_COLOR: Record<Status, string> = {
+export const STATUS_COLOR: Record<Status, string> = {
   pass: 'var(--chart-1)',
   skipped: 'var(--chart-2)',
   failed: 'var(--chart-3)',
@@ -19,7 +19,7 @@ const STATUS_COLOR: Record<Status, string> = {
 const RETEST_TEXTURE =
   'repeating-linear-gradient(135deg, transparent, transparent 3px, color-mix(in srgb, var(--background) 45%, transparent) 3px, color-mix(in srgb, var(--background) 45%, transparent) 6px)'
 
-const STATUS_LABEL: Record<Status, string> = {
+export const STATUS_LABEL: Record<Status, string> = {
   pending: 'Pending',
   pass: 'Pass',
   failed: 'Failed',
@@ -30,7 +30,7 @@ const STATUS_LABEL: Record<Status, string> = {
 
 // Bad-outcome-first reading order: pass anchors the bar, then the two
 // terminal problem states, then the softer in-between ones.
-const STATUS_ORDER: Status[] = ['pass', 'failed', 'blocked', 'skipped', 'retest', 'pending']
+export const STATUS_ORDER: Status[] = ['pass', 'failed', 'blocked', 'skipped', 'retest', 'pending']
 
 export function RunStatusBreakdown({
   total,

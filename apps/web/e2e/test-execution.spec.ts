@@ -50,6 +50,9 @@ test.describe('Requirement: Run creation pins case versions', () => {
     await createRun(page, 'Sprint 1', ['Login works'])
     await page.getByRole('link', { name: 'Sprint 1' }).click()
     await expect(page.getByText('Login works')).toBeVisible()
+    // rework-run-detail-ux: a run created from an explicit case list (no
+    // suite) reads as a deliberate ad hoc state, not a missing link.
+    await expect(page.getByText(/ad hoc run/i)).toBeVisible()
 
     // Edit the case after the run exists — the run must keep showing v1.
     await page.goto(`/projects/${projectId}/library`)
@@ -85,6 +88,33 @@ test.describe('Requirement: Run execution board', () => {
     await page.getByRole('button', { name: /^pass$/i }).click()
 
     await expect(page.getByText('ana — works great')).toBeVisible()
+  })
+
+  test('Scenario: Run header links to its source suite', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-66' })
+    const projectId = await createProjectWithCase(page, 'Suite Link Project')
+
+    await page.goto(`/projects/${projectId}/suites`)
+    await page.getByRole('button', { name: /new suite/i }).click()
+    await page.getByLabel(/suite name/i).fill('Regression')
+    await page.getByRole('button', { name: /^create$/i }).click()
+    await expect(page.getByRole('heading', { name: 'Regression' })).toBeVisible()
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
+    await page.getByRole('button', { name: /save changes/i }).click()
+    await expect(page.getByRole('button', { name: /save changes/i })).toBeDisabled()
+
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByRole('button', { name: /^create run$/i }).click()
+    await expect(page.getByRole('button', { name: /^create run$/i })).not.toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs`)
+    await page.getByRole('link', { name: /regression run/i }).click()
+
+    const suiteLink = page.getByRole('link', { name: /from suite: regression/i })
+    await expect(suiteLink).toBeVisible()
+    await suiteLink.click()
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/suites/`))
+    await expect(page.getByRole('heading', { name: 'Regression' })).toBeVisible()
   })
 
   test('Scenario: Right-click a run item, jump straight to its case in the Library', async ({ page }) => {
@@ -193,5 +223,19 @@ test.describe('Requirement: Run summary', () => {
     const breakdown = page.getByRole('list', { name: /status breakdown/i })
     await expect(breakdown).toContainText('Pass1')
     await expect(breakdown).toContainText('Pending1')
+
+    // rework-run-detail-ux: status filter chips and the grouping toggle.
+    const filters = page.getByRole('group', { name: /filter items by status/i })
+    await filters.getByRole('button', { name: /^pass/i }).click()
+    await expect(page.getByText('Login works')).toBeVisible()
+    await expect(page.getByText('Second case')).not.toBeVisible()
+    await expect(page.getByText(/showing 1 of 2 items/i)).toBeVisible()
+
+    await filters.getByRole('button', { name: /^all/i }).click()
+    await expect(page.getByText('Second case')).toBeVisible()
+
+    await page.getByRole('switch', { name: /group by status/i }).click()
+    await expect(page.getByText('Pass · 1')).toBeVisible()
+    await expect(page.getByText('Pending · 1')).toBeVisible()
   })
 })

@@ -1,12 +1,12 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRightIcon, ExternalLinkIcon } from 'lucide-react'
+import { ArrowRightIcon, ExternalLinkIcon, FolderIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { StatusBadge } from '@/components/StatusBadge'
-import { RunStatusBreakdown } from '@/components/RunStatusBreakdown'
+import { RunStatusBreakdown, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '@/components/RunStatusBreakdown'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import {
@@ -21,6 +21,8 @@ type Run = components['schemas']['Run']
 type RunItem = components['schemas']['RunItem']
 type RunSummary = components['schemas']['RunSummary']
 type Project = components['schemas']['Project']
+type Suite = components['schemas']['Suite']
+type Status = components['schemas']['Status']
 
 function RunItemRow({
   item,
@@ -80,11 +82,14 @@ export default function RunPage() {
   const [run, setRun] = useState<Run>()
   const [notFound, setNotFound] = useState(false)
   const [project, setProject] = useState<Project>()
+  const [suite, setSuite] = useState<Suite>()
   const [items, setItems] = useState<RunItem[]>([])
   const [summary, setSummary] = useState<RunSummary>()
   const [lifecycleError, setLifecycleError] = useState<string>()
   const [isClosing, setIsClosing] = useState(false)
   const [isReopening, setIsReopening] = useState(false)
+  const [activeFilter, setActiveFilter] = useState<Status | null>(null)
+  const [groupEnabled, setGroupEnabled] = useState(false)
   const bumpDataRevision = useBumpDataRevision()
 
   const load = useCallback(async () => {
@@ -117,6 +122,18 @@ export default function RunPage() {
       .catch(() => setProject(undefined))
   }, [projectKey])
 
+  const suiteKey = run?.suiteKey
+  useEffect(() => {
+    if (!suiteKey) {
+      setSuite(undefined)
+      return
+    }
+    api
+      .GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } })
+      .then(({ data }) => setSuite(data))
+      .catch(() => setSuite(undefined))
+  }, [suiteKey])
+
   useEffect(() => {
     void load()
   }, [load])
@@ -148,6 +165,16 @@ export default function RunPage() {
     setRun((r) => (r ? { ...r, status: 'open' } : r))
     bumpDataRevision()
   }
+
+  const visibleItems = useMemo(
+    () => (activeFilter === null ? items : items.filter((item) => item.currentStatus === activeFilter)),
+    [items, activeFilter],
+  )
+
+  const presentStatuses = useMemo(
+    () => STATUS_ORDER.filter((status) => (summary?.counts?.[status] ?? 0) > 0),
+    [summary],
+  )
 
   if (notFound) {
     return (
@@ -186,20 +213,111 @@ export default function RunPage() {
             )}
           </div>
           {lifecycleError && <p className="text-sm text-destructive">{lifecycleError}</p>}
+          {run && (
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+              {run.suiteKey ? (
+                <Link
+                  to={`/projects/${projectKey}/suites/${run.suiteKey}`}
+                  className="inline-flex items-center gap-1 hover:underline"
+                >
+                  <FolderIcon className="size-3.5" aria-hidden="true" />
+                  From suite: {suite?.name ?? run.suiteKey}
+                </Link>
+              ) : (
+                <span>Ad hoc run — not created from a suite</span>
+              )}
+              <span aria-hidden="true">&middot;</span>
+              <span>Created {new Date(run.createdAt).toLocaleDateString()}</span>
+            </div>
+          )}
           {summary && <RunStatusBreakdown total={summary.total} counts={summary.counts} />}
+          {summary && summary.total > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div role="group" aria-label="Filter items by status" className="flex flex-wrap gap-1.5">
+                <button
+                  type="button"
+                  aria-pressed={activeFilter === null}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${activeFilter === null ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
+                  onClick={() => setActiveFilter(null)}
+                >
+                  All <span className="ml-1 text-[0.7rem]">{summary.total}</span>
+                </button>
+                {presentStatuses.map((status) => (
+                  <button
+                    key={status}
+                    type="button"
+                    aria-pressed={activeFilter === status}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${activeFilter === status ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
+                    onClick={() => setActiveFilter(status)}
+                  >
+                    <span aria-hidden="true" className="size-2 rounded-sm" style={{ background: STATUS_COLOR[status] }} />
+                    {STATUS_LABEL[status]} <span className="text-[0.7rem]">{summary.counts?.[status] ?? 0}</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={groupEnabled}
+                aria-label="Group by status"
+                className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium ${groupEnabled ? 'border-primary text-primary' : 'border-input text-muted-foreground'}`}
+                onClick={() => setGroupEnabled((v) => !v)}
+              >
+                Group by status
+              </button>
+            </div>
+          )}
         </CardHeader>
-        <CardContent>
-          <ul className="space-y-2">
-            {items.map((item) => (
-              <RunItemRow
-                key={item.id}
-                item={item}
-                projectKey={project?.key}
-                onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
-                onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
-              />
-            ))}
-          </ul>
+        <CardContent className="space-y-3">
+          {summary && summary.total > 0 && (
+            <p className="text-sm text-muted-foreground">
+              {`Showing ${visibleItems.length} of ${summary.total} items`}
+              {activeFilter && ` — filtered to ${STATUS_LABEL[activeFilter].toLowerCase()}`}
+            </p>
+          )}
+          {visibleItems.length === 0 && summary && summary.total > 0 ? (
+            <p className="text-sm text-muted-foreground">No items match this filter.</p>
+          ) : groupEnabled ? (
+            <div className="space-y-4">
+              {STATUS_ORDER.map((status) => {
+                const group = visibleItems.filter((item) => item.currentStatus === status)
+                if (group.length === 0) return null
+                return (
+                  <div key={status} className="space-y-2">
+                    <p className="tp-label flex items-center gap-2">
+                      <span>
+                        {STATUS_LABEL[status]} &middot; {group.length}
+                      </span>
+                      <span className="h-px flex-1 bg-border" aria-hidden="true" />
+                    </p>
+                    <ul className="space-y-2">
+                      {group.map((item) => (
+                        <RunItemRow
+                          key={item.id}
+                          item={item}
+                          projectKey={project?.key}
+                          onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
+                          onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <ul className="space-y-2">
+              {visibleItems.map((item) => (
+                <RunItemRow
+                  key={item.id}
+                  item={item}
+                  projectKey={project?.key}
+                  onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
+                  onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
+                />
+              ))}
+            </ul>
+          )}
         </CardContent>
       </Card>
     </div>
