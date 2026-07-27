@@ -115,7 +115,10 @@ test.describe('Requirement: Breadcrumb trail', () => {
     await page.goBack()
 
     await page.getByRole('button', { name: 'Go to Runs' }).click()
-    await page.getByRole('link', { name: /\+ new run/i }).click()
+    // A brand-new project has zero runs, so the page shows both the header
+    // "+ New run" and the empty-state CTA of the same name — the header one
+    // (DOM order) is what a user reaches for first.
+    await page.getByRole('link', { name: /\+ new run/i }).first().click()
     await page.getByLabel(/^name$/i).fill('Sprint 1')
     // rework-run-creation-ux: "Create run" is gated behind an explicit case
     // selection — no longer implicitly includes every project case.
@@ -711,13 +714,30 @@ test.describe('Requirement: Run creation', () => {
     const projectId = await createSuiteWithOneCase(page, 'Runs List Project', 'Smoke', 'Login works')
 
     await page.goto(`/projects/${projectId}/runs`)
-    const newRunLink = page.getByRole('link', { name: /\+ new run/i })
+    const newRunLink = page.getByRole('link', { name: /\+ new run/i }).first()
     await expect(newRunLink).toBeVisible()
     await expect(page.getByLabel(/^name$/i)).not.toBeVisible()
 
     await newRunLink.click()
     await expect(page).toHaveURL(/\/runs\/new$/)
     await expect(page.getByLabel(/^name$/i)).toBeVisible()
+  })
+
+  test('Scenario: Runs are grouped into Open and Closed sections', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-74' })
+    const projectId = await createSuiteWithOneCase(page, 'Runs Grouping Project', 'Smoke', 'Login works')
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await page.getByLabel(/^name$/i).fill('Open run')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByRole('button', { name: /^close run$/i }).click()
+    await expect(page.getByText('closed', { exact: true })).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs`)
+    await expect(page.getByText(/no open runs/i)).toBeVisible()
+    await expect(page.getByRole('link', { name: /open run/i })).toBeVisible()
   })
 
   test('Scenario: Creating a run navigates to it with a confirmation', async ({ page }) => {

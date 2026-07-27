@@ -310,12 +310,20 @@ func (r *RunRepo) IDByKey(ctx context.Context, key string) (string, error) {
 }
 
 func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, error) {
+	// Pass rate is aggregated in the same query (one query for the whole
+	// list, not a round trip per run) — same LEFT JOIN + FILTER shape as
+	// SuiteRepo.latestRunStats and ProjectRepo's summaries query.
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.created_at
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.created_at,
+		        count(i.id) AS total,
+		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
 		 FROM test_runs tr
 		 JOIN projects p ON p.id = tr.project_id
 		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
-		 WHERE tr.project_id = $1 ORDER BY tr.created_at DESC`, projectID)
+		 LEFT JOIN test_run_items i ON i.run_id = tr.id
+		 WHERE tr.project_id = $1
+		 GROUP BY tr.id, p.key, ts.key
+		 ORDER BY tr.created_at DESC`, projectID)
 	if err != nil {
 		return nil, err
 	}
@@ -324,8 +332,13 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	runs := []domain.Run{}
 	for rows.Next() {
 		var run domain.Run
-		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.CreatedAt); err != nil {
+		var total, passCount int
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.CreatedAt, &total, &passCount); err != nil {
 			return nil, err
+		}
+		if total > 0 {
+			rate := int(float64(passCount) / float64(total) * 100)
+			run.PassRate = &rate
 		}
 		runs = append(runs, run)
 	}

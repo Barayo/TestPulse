@@ -1,0 +1,340 @@
+<meta charset="utf-8">
+<title>Runs list — Open/Closed grouping — Pepe design pass</title>
+<style>
+  :root, .light {
+    --background: #F7FAFA; --foreground: #0B2E2C;
+    --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --popover: #FFFFFF; --popover-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A;
+    --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --destructive-foreground:#FFFFFF;
+    --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --status-healthy-bg: oklch(0.93 0.03 175); --status-healthy-fg: oklch(0.4 0.1 175);
+    --status-progress-bg: oklch(0.94 0.04 85); --status-progress-fg: oklch(0.45 0.1 85);
+    --status-risk-bg: oklch(0.94 0.04 25); --status-risk-fg: oklch(0.45 0.14 25);
+    --status-neutral-bg: oklch(0.92 0.005 240); --status-neutral-fg: oklch(0.45 0.01 240);
+    --mock-stripe: #fff8e1;
+  }
+  :root[data-theme="dark"], .dark {
+    --background: #0B2A28; --foreground: #E6F5F3;
+    --card: #12403C; --card-foreground: #E6F5F3;
+    --popover: #12403C; --popover-foreground: #E6F5F3;
+    --primary: #2DD4BF; --primary-foreground: #0B2A28;
+    --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+    --muted: #163A37; --muted-foreground: #8FBDB8;
+    --accent: #163F3B; --accent-foreground: #E6F5F3;
+    --destructive: #FF6B57; --destructive-foreground:#0B2A28;
+    --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+    --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+    --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+    --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+    --status-neutral-bg: oklch(0.32 0.005 240); --status-neutral-fg: oklch(0.75 0.01 240);
+    --mock-stripe: #2a2410;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: #0B2A28; --foreground: #E6F5F3;
+      --card: #12403C; --card-foreground: #E6F5F3;
+      --popover: #12403C; --popover-foreground: #E6F5F3;
+      --primary: #2DD4BF; --primary-foreground: #0B2A28;
+      --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+      --muted: #163A37; --muted-foreground: #8FBDB8;
+      --accent: #163F3B; --accent-foreground: #E6F5F3;
+      --destructive: #FF6B57; --destructive-foreground:#0B2A28;
+      --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+      --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+      --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+      --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+      --status-neutral-bg: oklch(0.32 0.005 240); --status-neutral-fg: oklch(0.75 0.01 240);
+      --mock-stripe: #2a2410;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; overflow-x: hidden;
+    background: var(--background); color: var(--foreground);
+    font-family: 'Geist Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+  .tp-heading { font-weight: 900; letter-spacing: -0.02em; }
+  .tp-label { font-family: ui-monospace, 'Geist Mono Variable', monospace; font-size: 0.68rem;
+    text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted-foreground); }
+  a { color: inherit; }
+
+  /* ---- mockup chrome (deliberately NOT app styling) ---- */
+  .mock-toolbar {
+    position: sticky; top: 0; z-index: 50;
+    background: repeating-linear-gradient(135deg, var(--mock-stripe), var(--mock-stripe) 10px, var(--card) 10px, var(--card) 20px);
+    border-bottom: 2px dashed var(--muted-foreground);
+    padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .mock-toolbar .tag { font-family: ui-monospace, monospace; font-size: 0.65rem; font-weight: 700;
+    letter-spacing: 0.08em; background: var(--foreground); color: var(--background);
+    padding: 3px 7px; border-radius: 4px; }
+  .mock-btn {
+    font-size: 0.75rem; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--muted-foreground);
+    background: var(--popover); color: var(--foreground); cursor: pointer;
+  }
+  .mock-btn:hover { border-color: var(--foreground); }
+  .mock-btn.on { background: var(--primary); color: var(--primary-foreground); border-color: var(--primary); }
+  .mock-spacer { flex: 1; }
+  .design-note {
+    border: 1px dashed var(--muted-foreground); border-radius: 8px; padding: 8px 10px;
+    font-size: 0.76rem; font-style: italic; color: var(--muted-foreground); margin: 10px 0;
+    background: color-mix(in srgb, var(--muted) 60%, transparent);
+  }
+  .design-note b { color: var(--foreground); font-style: normal; }
+
+  .app-shell { max-width: 900px; margin: 0 auto; padding: 20px 24px 80px; overflow-x: hidden; }
+
+  .crumbs { font-size: 0.8rem; color: var(--muted-foreground); margin-bottom: 14px; }
+  .crumbs a { text-decoration: none; }
+  .crumbs a:hover { text-decoration: underline; }
+  .crumbs .sep { margin: 0 6px; }
+  .crumbs .current { color: var(--foreground); font-weight: 600; }
+
+  .card { background: var(--card); color: var(--card-foreground); border: 1px solid var(--border);
+    border-radius: 1rem; margin-bottom: 20px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 20px; }
+  .card-header h2 { margin: 0; font-size: 1.05rem; }
+  .card-content { padding: 0 20px 20px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; border: 1px solid transparent;
+    padding: 7px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-outline { background: var(--popover); border-color: var(--input); color: var(--foreground); }
+  .btn-sm { padding: 5px 10px; font-size: 0.76rem; }
+
+  /* ---- badges (exact RunPage.tsx variant mapping: secondary=open, outline=closed) ---- */
+  .badge { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 700;
+    padding: 3px 10px; border-radius: 999px; white-space: nowrap; }
+  .badge-secondary { background: var(--secondary); color: var(--secondary-foreground); }
+  .badge-outline { background: transparent; border: 1px solid var(--input); color: var(--muted-foreground); }
+  .badge-count { opacity: 0.8; font-weight: 600; }
+
+  /* ---- section structure ---- */
+  .runs-section { margin-bottom: 22px; }
+  .runs-section:last-child { margin-bottom: 0; }
+  .runs-section-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .runs-section-header .tp-label { font-size: 0.72rem; }
+
+  /* Closed section: recessed filled panel, not a hairline — matches
+     design-system.md's "prefer filled panels over hairline dividers"
+     structural-boundary rule, so Open (primary, at page level) and
+     Closed (secondary/archival) read as two independent groups. */
+  .closed-panel { border-radius: 0.85rem; background: color-mix(in srgb, var(--muted) 55%, transparent);
+    padding: 14px 14px 6px; }
+  .closed-panel .runs-section-header { padding: 0 2px; }
+
+  /* ---- run row (from the approved rework-runs-list-ux mockup; per-row
+     open/closed badge removed now that rows are grouped under a section
+     badge instead — see design note) ---- */
+  .run-row { display: flex; align-items: center; gap: 14px; padding: 11px 12px; border-radius: 10px;
+    border-left: 3px solid var(--status-neutral-fg); text-decoration: none; color: inherit; }
+  .run-row:hover { background: var(--accent); }
+  .run-row.healthy { border-left-color: var(--status-healthy-fg); }
+  .run-row.progress { border-left-color: var(--status-progress-fg); }
+  .run-row.risk { border-left-color: var(--status-risk-fg); }
+  .run-row + .run-row { margin-top: 3px; }
+  .run-row .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .run-row .meta { font-size: 0.75rem; color: var(--muted-foreground); white-space: nowrap; flex-shrink: 0; }
+  .health-bar { width: 90px; height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; flex-shrink: 0; }
+  .health-bar > span { display: block; height: 100%; border-radius: 999px; }
+  .health-bar.healthy > span { background: var(--status-healthy-fg); }
+  .health-bar.progress > span { background: var(--status-progress-fg); }
+  .health-bar.risk > span { background: var(--status-risk-fg); }
+  .not-run-text { font-size: 0.75rem; color: var(--muted-foreground); width: 90px; flex-shrink: 0; }
+
+  .show-more-row { display: flex; justify-content: center; padding: 10px 2px 8px; }
+
+  /* ---- empty states ---- */
+  .empty-line { font-size: 0.82rem; color: var(--muted-foreground); padding: 4px 2px 2px; }
+  .empty-primary { text-align: center; padding: 46px 20px; border: 1.5px dashed var(--border); border-radius: 1rem; }
+  .empty-primary .icon { font-size: 1.6rem; margin-bottom: 10px; opacity: 0.6; }
+  .empty-primary h3 { margin: 0 0 6px; font-size: 1rem; }
+  .empty-primary p { margin: 0 0 16px; color: var(--muted-foreground); font-size: 0.84rem; }
+</style>
+
+<div class="mock-toolbar">
+  <span class="tag">MOCKUP · not real app chrome</span>
+  <span class="tp-label" style="letter-spacing:0.05em;">Scenario:</span>
+  <button class="mock-btn" id="btn-normal" onclick="setScenario('normal')">Normal (5 open / 23 closed)</button>
+  <button class="mock-btn" id="btn-no-open" onclick="setScenario('no-open')">Zero open runs</button>
+  <button class="mock-btn" id="btn-no-closed" onclick="setScenario('no-closed')">Zero closed runs (new project)</button>
+  <button class="mock-btn" id="btn-empty" onclick="setScenario('empty')">Zero runs (brand new project)</button>
+  <span class="mock-spacer"></span>
+  <button class="mock-btn" onclick="toggleTheme()">🌗 Toggle theme</button>
+</div>
+
+<div class="app-shell">
+  <div class="crumbs">
+    <a href="#">Projects</a><span class="sep">/</span><a href="#">TD</a><span class="sep">/</span><span class="current">Runs</span>
+  </div>
+
+  <div class="design-note">
+    <b>What changed vs. the flat list:</b> runs are grouped into <b>Open</b> and <b>Closed</b> sections,
+    newest-first within each. The per-row open/closed badge from the approved rework-runs-list-ux mockup
+    didn't disappear — it <b>moved</b>: it's now stated once per section (as the exact same
+    <code>secondary</code>/<code>outline</code> badge <code>RunPage.tsx</code> already uses for a single run),
+    instead of repeated on every row where it added nothing once rows are already grouped by status.
+    Closed sits in a recessed panel (design-system.md's "filled panel over hairline divider" rule) and caps
+    at 10 rows with a "Show N more" expander — CI dogfooding imports dozens of automated runs
+    (<code>delete-mode.spec.ts</code> et al.), so Closed needs to hold up at real scale, not just a 5-row demo.
+    Try the scenario buttons above for the empty states.
+  </div>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="tp-heading">Runs</h2>
+      <button class="btn btn-primary">+ New run</button>
+    </div>
+    <div class="card-content" id="runs-content"></div>
+  </div>
+</div>
+
+<script>
+  // ---------------- sample data ----------------
+  // Open: naturally few — active work in flight.
+  const OPEN_RUNS = [
+    { key: 'hotfix-lockout', name: 'Hotfix verification — account lockout', passRate: 20, created: '30 minutes ago' },
+    { key: 'release-13', name: 'Release 1.3 — go/no-go', passRate: 92, created: '2 hours ago' },
+    { key: 'ci-delete-mode-1', name: 'delete-mode.spec.ts', passRate: 100, created: '3 hours ago' },
+    { key: 'nightly-main', name: 'Nightly — main', passRate: 78, created: '6 hours ago' },
+    { key: 'sprint-14', name: 'Sprint 14 execution', passRate: 45, created: '1 day ago' },
+  ];
+
+  // Closed: 23 total — the dogfood-scale case. Deliberately noisy: repeated
+  // CI-imported spec names (real apps/web/e2e file names) at varied pass
+  // rates/recency, mixed with a few human-named release/sprint runs.
+  const CLOSED_RUNS = [
+    { key: 'ci-delete-mode-2', name: 'delete-mode.spec.ts', passRate: 100, created: '5 hours ago' },
+    { key: 'ci-test-exec-1', name: 'test-execution.spec.ts', passRate: 96, created: '7 hours ago' },
+    { key: 'ci-delete-mode-3', name: 'delete-mode.spec.ts', passRate: 88, created: '9 hours ago' },
+    { key: 'release-12', name: 'Release 1.2 regression', passRate: 75, created: '1 day ago' },
+    { key: 'ci-ui-nav-1', name: 'ui-navigation.spec.ts', passRate: 100, created: '1 day ago' },
+    { key: 'ci-delete-mode-4', name: 'delete-mode.spec.ts', passRate: 92, created: '1 day ago' },
+    { key: 'ci-rbac-1', name: 'project-rbac.spec.ts', passRate: 65, created: '2 days ago' },
+    { key: 'ci-session-1', name: 'session-expiry.spec.ts', passRate: 100, created: '2 days ago' },
+    { key: 'ci-delete-mode-5', name: 'delete-mode.spec.ts', passRate: 55, created: '2 days ago' },
+    { key: 'ci-test-exec-2', name: 'test-execution.spec.ts', passRate: 100, created: '3 days ago' },
+    { key: 'ci-deploy-1', name: 'platform-deployment.spec.ts', passRate: 90, created: '3 days ago' },
+    { key: 'ci-delete-mode-6', name: 'delete-mode.spec.ts', passRate: 100, created: '3 days ago' },
+    { key: 'sprint-13', name: 'Sprint 13 execution', passRate: 67, created: '4 days ago' },
+    { key: 'ci-authoring-1', name: 'test-authoring.spec.ts', passRate: 83, created: '4 days ago' },
+    { key: 'ci-ui-nav-2', name: 'ui-navigation.spec.ts', passRate: 100, created: '5 days ago' },
+    { key: 'release-11', name: 'Release 1.1 sign-off', passRate: 70, created: '5 days ago' },
+    { key: 'ci-rbac-2', name: 'project-rbac.spec.ts', passRate: 100, created: '6 days ago' },
+    { key: 'ci-session-2', name: 'session-expiry.spec.ts', passRate: 40, created: '6 days ago' },
+    { key: 'ci-test-exec-3', name: 'test-execution.spec.ts', passRate: 92, created: '1 week ago' },
+    { key: 'ci-deploy-2', name: 'platform-deployment.spec.ts', passRate: 100, created: '1 week ago' },
+    { key: 'ci-authoring-2', name: 'test-authoring.spec.ts', passRate: 78, created: '2 weeks ago' },
+    { key: 'sprint-12', name: 'Sprint 12 execution', passRate: 67, created: '3 weeks ago' },
+    { key: 'release-10', name: 'Release 1.0 sign-off', passRate: 60, created: '1 month ago' },
+  ];
+
+  const CAP = 10;
+  const state = { scenario: 'normal', closedExpanded: false };
+
+  function healthClass(rate) {
+    if (rate === null || rate === undefined) return 'neutral';
+    if (rate >= 80) return 'healthy';
+    if (rate >= 50) return 'progress';
+    return 'risk';
+  }
+
+  function runRow(r) {
+    const cls = healthClass(r.passRate);
+    const bar = r.passRate === null
+      ? '<span class="not-run-text">not run yet</span>'
+      : `<span class="health-bar ${cls}"><span style="width:${r.passRate === 0 ? 8 : r.passRate}%"></span></span>`;
+    return `<a class="run-row ${cls}" href="#" onclick="return false;">
+      <span class="name">${r.name}</span>
+      ${bar}
+      <span class="meta">${r.created}</span>
+    </a>`;
+  }
+
+  function activeOpen() { return state.scenario === 'no-open' || state.scenario === 'empty' ? [] : OPEN_RUNS; }
+  function activeClosed() { return state.scenario === 'no-closed' || state.scenario === 'empty' ? [] : CLOSED_RUNS; }
+
+  function renderRuns() {
+    const el = document.getElementById('runs-content');
+    const open = activeOpen();
+    const closed = activeClosed();
+
+    // Zero runs total is the page's primary empty state — one unified
+    // dashed-border card (ProjectsPage's "No projects yet" pattern), not
+    // two stacked empty sub-sections that would read as broken.
+    if (open.length === 0 && closed.length === 0) {
+      el.innerHTML = `
+        <div class="empty-primary">
+          <div class="icon">▷</div>
+          <h3 class="tp-heading">No runs yet</h3>
+          <p>Runs track execution of your cases. Start one from a suite, or build one from scratch.</p>
+          <button class="btn btn-primary">+ New run</button>
+        </div>`;
+      return;
+    }
+
+    let html = '';
+
+    // Open section — primary, sits directly in the card, no recessed panel.
+    html += `<div class="runs-section">
+      <div class="runs-section-header">
+        <span class="badge badge-secondary">Open <span class="badge-count">${open.length}</span></span>
+      </div>`;
+    html += open.length === 0
+      ? `<p class="empty-line">No open runs — everything's closed out. Start one with the "+ New run" button above.</p>`
+      : open.map(runRow).join('');
+    html += `</div>`;
+
+    // Closed section — secondary/archival, recessed filled panel, capped.
+    const showAll = state.closedExpanded;
+    const visible = showAll ? closed : closed.slice(0, CAP);
+    const remaining = closed.length - visible.length;
+
+    html += `<div class="runs-section closed-panel">
+      <div class="runs-section-header">
+        <span class="badge badge-outline">Closed <span class="badge-count">${closed.length}</span></span>
+      </div>`;
+    html += closed.length === 0
+      ? `<p class="empty-line">No closed runs yet — runs land here once they're closed.</p>`
+      : visible.map(runRow).join('');
+    if (remaining > 0) {
+      html += `<div class="show-more-row">
+        <button class="btn btn-outline btn-sm" onclick="expandClosed()">Show ${remaining} more closed run${remaining === 1 ? '' : 's'}</button>
+      </div>`;
+    } else if (showAll && closed.length > CAP) {
+      html += `<div class="show-more-row">
+        <button class="btn btn-outline btn-sm" onclick="collapseClosed()">Show fewer</button>
+      </div>`;
+    }
+    html += `</div>`;
+
+    el.innerHTML = html;
+  }
+
+  function expandClosed() { state.closedExpanded = true; renderRuns(); }
+  function collapseClosed() { state.closedExpanded = false; renderRuns(); }
+
+  function setScenario(name) {
+    state.scenario = name;
+    state.closedExpanded = false;
+    document.querySelectorAll('.mock-btn[id^="btn-"]').forEach(b => b.classList.remove('on'));
+    document.getElementById('btn-' + name).classList.add('on');
+    renderRuns();
+  }
+
+  function toggleTheme() {
+    const root = document.documentElement;
+    const current = root.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    root.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+  }
+
+  setScenario('normal');
+</script>

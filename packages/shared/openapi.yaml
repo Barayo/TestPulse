@@ -1286,6 +1286,10 @@ components:
           nullable: true
           description: The key of the suite this run was created from, if any. Absent (null) for a run created from an explicit case list, or via execution import. Set once at creation and never changes; unaffected by later deletion of the suite itself.
         createdAt: { type: string, format: date-time }
+        passRate:
+          type: integer
+          nullable: true
+          description: This run's own items' pass rate; null if it has no items yet. Computed alongside the list query — cheap, not a per-run round trip.
     RunInput:
       type: object
       required: [name]

@@ -1031,6 +1031,8 @@ export interface components {
             suiteKey?: string | null;
             /** Format: date-time */
             createdAt: string;
+            /** @description This run's own items' pass rate; null if it has no items yet. Computed alongside the list query — cheap, not a per-run round trip. */
+            passRate?: number | null;
         };
         RunInput: {
             name: string;

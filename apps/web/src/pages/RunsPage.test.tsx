@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import RunsPage from './RunsPage'
 import { api } from '@/lib/api'
@@ -7,7 +8,29 @@ import { api } from '@/lib/api'
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
 
-function mockRunsAPI(runs: unknown[] = []) {
+type RunFixture = {
+  id: string
+  key: string
+  projectId: string
+  name: string
+  status: 'open' | 'closed'
+  passRate?: number | null
+  createdAt: string
+}
+
+function run(overrides: Partial<RunFixture> & { name: string }): RunFixture {
+  return {
+    id: overrides.name,
+    key: `p1-${overrides.name}`,
+    projectId: 'p1',
+    status: 'open',
+    passRate: null,
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  }
+}
+
+function mockRunsAPI(runs: RunFixture[] = []) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
@@ -43,31 +66,77 @@ describe('RunsPage', () => {
   })
 
   it('shows the runs list as the primary content, not a run-creation form', async () => {
-    mockRunsAPI([{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '' }])
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })])
     renderRuns()
-    await screen.findByRole('link', { name: 'Sprint 1' })
+    await screen.findByRole('link', { name: /sprint 1/i })
     expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /create run/i })).not.toBeInTheDocument()
   })
 
   it('lists runs as links to their execution board', async () => {
-    mockRunsAPI([{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '' }])
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })])
     renderRuns()
-    const runLink = await screen.findByRole('link', { name: 'Sprint 1' })
-    expect(runLink).toHaveAttribute('href', '/runs/p1-R1')
+    const runLink = await screen.findByRole('link', { name: /sprint 1/i })
+    expect(runLink).toHaveAttribute('href', '/runs/p1-Sprint 1')
   })
 
   it('offers a "+ New run" button linking to the dedicated creation route', async () => {
-    mockRunsAPI()
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })])
     renderRuns()
     const link = await screen.findByRole('link', { name: /\+ new run/i })
     expect(link).toHaveAttribute('href', '/projects/p1/runs/new')
   })
 
-  it('shows empty-state copy when there are no runs yet', async () => {
+  it('groups runs into Open and Closed sections, each labeled with a count', async () => {
+    mockRunsAPI([
+      run({ name: 'Nightly', status: 'open' }),
+      run({ name: 'Release 1.0', status: 'closed' }),
+      run({ name: 'Release 1.1', status: 'closed' }),
+    ])
+    renderRuns()
+    await screen.findByRole('link', { name: /nightly/i })
+    expect(screen.getByText(/open/i)).toBeInTheDocument()
+    expect(screen.getByText('1')).toBeInTheDocument()
+    expect(screen.getByText(/closed/i)).toBeInTheDocument()
+    expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('shows a pass-rate health bar and relative date per row', async () => {
+    mockRunsAPI([
+      run({ name: 'Nightly', status: 'open', passRate: 75, createdAt: new Date(Date.now() - 3600_000).toISOString() }),
+      run({ name: 'Never run', status: 'open', passRate: null }),
+    ])
+    renderRuns()
+    await screen.findByRole('link', { name: /nightly/i })
+    expect(screen.getByText('75%')).toBeInTheDocument()
+    expect(screen.getByText(/1 hour ago/i)).toBeInTheDocument()
+    expect(screen.getByText(/not run yet/i)).toBeInTheDocument()
+  })
+
+  it('caps the Closed section at 10 rows, with a control to reveal the rest', async () => {
+    const closedRuns = Array.from({ length: 13 }, (_, i) => run({ name: `Closed ${i + 1}`, status: 'closed' }))
+    mockRunsAPI(closedRuns)
+    renderRuns()
+    await screen.findByRole('link', { name: /closed 1$/i })
+    expect(screen.queryByRole('link', { name: /closed 11$/i })).not.toBeInTheDocument()
+    const showMore = screen.getByRole('button', { name: /show 3 more closed runs/i })
+
+    await userEvent.click(showMore)
+    expect(await screen.findByRole('link', { name: /closed 11$/i })).toBeInTheDocument()
+  })
+
+  it('shows an inline empty message for a section with no runs, when the other has some', async () => {
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })])
+    renderRuns()
+    await screen.findByRole('link', { name: /sprint 1/i })
+    expect(screen.getByText(/no closed runs yet/i)).toBeInTheDocument()
+  })
+
+  it('shows a single unified empty state when there are no runs at all', async () => {
     mockRunsAPI([])
     renderRuns()
     expect(await screen.findByText(/no runs yet/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no closed runs yet/i)).not.toBeInTheDocument()
   })
 
   it('recovers gracefully when the API is unreachable', async () => {

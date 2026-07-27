@@ -298,7 +298,11 @@ type Run struct {
 	// SuiteKey is the key of the suite this run was created from, if any
 	// (link-runs-to-suite). Nil for a run created from an explicit case
 	// list, or via execution import.
-	SuiteKey  *string   `json:"suiteKey,omitempty"`
+	SuiteKey *string `json:"suiteKey,omitempty"`
+	// PassRate is this run's own items' pass rate (0-100), or nil if the
+	// run has no items yet (group-runs-by-status) — computed alongside the
+	// list query, not a per-run round trip.
+	PassRate  *int      `json:"passRate,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

@@ -683,6 +683,50 @@ func TestRunWithoutSuiteHasNoSuiteKey(t *testing.T) {
 	}
 }
 
+// TestListRunsIncludesPassRate covers group-runs-by-status's requirement
+// that the runs list carries a cheap, server-computed pass rate per run
+// (one aggregate query, not a round trip per run) so the UI can render a
+// health indicator without N+1 calls.
+func TestListRunsIncludesPassRate(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "Login works")
+	c2 := mustCase(t, s, p.ID, "Checkout works")
+
+	mixed, err := s.Runs.Create(ctx, p.ID, "mixed", []string{c1.ID, c2.ID})
+	if err != nil {
+		t.Fatalf("create mixed run: %v", err)
+	}
+	items, _ := s.Runs.Items(ctx, mixed.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("AppendResult pass: %v", err)
+	}
+	if _, err := s.Runs.AppendResult(ctx, items[1].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("AppendResult failed: %v", err)
+	}
+
+	empty, err := s.Runs.Create(ctx, p.ID, "empty", nil)
+	if err != nil {
+		t.Fatalf("create empty run: %v", err)
+	}
+
+	runs, err := s.Runs.List(ctx, p.ID)
+	if err != nil || len(runs) != 2 {
+		t.Fatalf("List = %d, %v; want 2", len(runs), err)
+	}
+	byID := map[string]domain.Run{}
+	for _, r := range runs {
+		byID[r.ID] = r
+	}
+	if byID[mixed.ID].PassRate == nil || *byID[mixed.ID].PassRate != 50 {
+		t.Errorf("mixed run PassRate = %v, want 50", byID[mixed.ID].PassRate)
+	}
+	if byID[empty.ID].PassRate != nil {
+		t.Errorf("empty run PassRate = %v, want nil (no items)", byID[empty.ID].PassRate)
+	}
+}
+
 // TestDeletingSuiteClearsRunReference covers link-runs-to-suite's "Deleting
 // a suite does not affect runs created from it" scenario.
 func TestDeletingSuiteClearsRunReference(t *testing.T) {
