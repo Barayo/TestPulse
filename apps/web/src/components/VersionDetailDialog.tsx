@@ -3,12 +3,12 @@ import { Link } from 'react-router'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
+import { diffContent } from '@/lib/versionDiff'
+import { ContentDiffView } from '@/components/ContentDiffView'
 import type { components } from '@testpulse/shared/api'
 
 type CaseVersion = components['schemas']['CaseVersion']
 type CaseExecution = components['schemas']['CaseExecution']
-type CaseContent = components['schemas']['CaseContent']
-type Step = components['schemas']['Step']
 
 // Reuses CaseResultsPanel's verdict semantics — no new status vocabulary.
 const VERDICT_COLOR: Record<string, string> = {
@@ -18,45 +18,6 @@ const VERDICT_COLOR: Record<string, string> = {
   blocked: 'var(--chart-3)',
   pending: 'var(--muted-foreground)',
   retest: 'var(--muted-foreground)',
-}
-
-type ScalarField = { label: string; get: (c: CaseContent) => string }
-
-const SCALAR_FIELDS: ScalarField[] = [
-  { label: 'Title', get: (c) => c.title },
-  { label: 'Description', get: (c) => c.description ?? '' },
-  { label: 'Expected result', get: (c) => c.expectedResult ?? '' },
-  { label: 'Priority', get: (c) => c.priority ?? '' },
-  { label: 'Tags', get: (c) => (c.tags ?? []).join(', ') },
-  { label: 'Platform', get: (c) => c.platform ?? '' },
-  { label: 'Test type', get: (c) => c.testType ?? '' },
-  { label: 'Automated', get: (c) => (c.automated ? 'Yes' : 'No') },
-]
-
-type FieldDiff = { label: string; before: string; after: string }
-type StepDiff = { index: number; kind: 'added' | 'removed' | 'changed'; before?: Step; after?: Step }
-
-function diffContent(before: CaseContent, after: CaseContent): { fields: FieldDiff[]; steps: StepDiff[] } {
-  const fields = SCALAR_FIELDS.filter((f) => f.get(before) !== f.get(after)).map((f) => ({
-    label: f.label,
-    before: f.get(before),
-    after: f.get(after),
-  }))
-
-  const beforeSteps = before.steps ?? []
-  const afterSteps = after.steps ?? []
-  const steps: StepDiff[] = []
-  const maxLen = Math.max(beforeSteps.length, afterSteps.length)
-  for (let i = 0; i < maxLen; i++) {
-    const b = beforeSteps[i]
-    const a = afterSteps[i]
-    if (b && !a) steps.push({ index: i, kind: 'removed', before: b })
-    else if (!b && a) steps.push({ index: i, kind: 'added', after: a })
-    else if (b && a && (b.action !== a.action || b.expected !== a.expected)) {
-      steps.push({ index: i, kind: 'changed', before: b, after: a })
-    }
-  }
-  return { fields, steps }
 }
 
 type Props = {
@@ -97,46 +58,8 @@ export function VersionDetailDialog({ open, onOpenChange, caseKey, version, vers
               <p className="text-sm text-muted-foreground">
                 This is the first version — there is no previous version to compare against.
               </p>
-            ) : diff && diff.fields.length === 0 && diff.steps.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No changes relative to the previous version.</p>
             ) : (
-              <div className="space-y-2">
-                {diff?.fields.map((f) => (
-                  <div key={f.label} className="text-sm">
-                    <span className="tp-label mr-1.5 text-muted-foreground">{f.label}:</span>
-                    <span className="text-muted-foreground line-through">{f.before || '—'}</span>
-                    <span className="mx-1.5">→</span>
-                    <span>{f.after || '—'}</span>
-                  </div>
-                ))}
-                {diff?.steps.map((s) => (
-                  <div key={s.index} className="text-sm">
-                    <span className="tp-label mr-1.5 text-muted-foreground">Step {s.index + 1}:</span>
-                    {s.kind === 'added' && <span>{s.after!.action}</span>}
-                    {s.kind === 'removed' && (
-                      <span className="text-muted-foreground line-through">{s.before!.action}</span>
-                    )}
-                    {s.kind === 'changed' && (
-                      <div className="space-y-0.5 pl-1">
-                        {s.before!.action !== s.after!.action && (
-                          <div>
-                            <span className="text-muted-foreground line-through">{s.before!.action}</span>
-                            <span className="mx-1.5">→</span>
-                            <span>{s.after!.action}</span>
-                          </div>
-                        )}
-                        {s.before!.expected !== s.after!.expected && (
-                          <div>
-                            <span className="text-muted-foreground line-through">{s.before!.expected || '—'}</span>
-                            <span className="mx-1.5">→</span>
-                            <span>{s.after!.expected || '—'}</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+              diff && <ContentDiffView diff={diff} />
             )}
           </div>
 

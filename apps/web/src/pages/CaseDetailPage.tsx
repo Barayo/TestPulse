@@ -1,17 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
+import { FolderInputIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { PropertyRow } from '@/components/PropertyRow'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel } from '@/components/CaseResultsPanel'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { ClassificationEditor, type Priority } from '@/components/ClassificationEditor'
+import { ClassificationPills, AutomationPill } from '@/components/Pills'
+import { FolderPicker } from '@/components/FolderPicker'
+import { RowActionMenu, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { StepEditor, type Step } from '@/components/StepEditor'
 import { VersionDetailDialog } from '@/components/VersionDetailDialog'
+import { ContentDiffView } from '@/components/ContentDiffView'
+import { diffContent, diffSignal } from '@/lib/versionDiff'
 import type { components } from '@testpulse/shared/api'
 
 type TestCase = components['schemas']['TestCase']
@@ -33,6 +40,7 @@ function textToTags(text: string): string[] {
 
 export default function CaseDetailPage() {
   const { projectKey, caseKey } = useParams<{ projectKey: string; caseKey: string }>()
+  const navigate = useNavigate()
 
   const [project, setProject] = useState<Project>()
   const [folders, setFolders] = useState<Folder[]>([])
@@ -42,6 +50,7 @@ export default function CaseDetailPage() {
   const [notFound, setNotFound] = useState(false)
 
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
+  const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [title, setTitle] = useState('')
   const [steps, setSteps] = useState<Step[]>([])
@@ -50,6 +59,9 @@ export default function CaseDetailPage() {
   const [platform, setPlatform] = useState('')
   const [testType, setTestType] = useState('')
   const [automated, setAutomated] = useState(false)
+  const [moving, setMoving] = useState(false)
+  const [moveQuery, setMoveQuery] = useState('')
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const load = useCallback(async () => {
     if (!projectKey || !caseKey) return
@@ -122,6 +134,37 @@ export default function CaseDetailPage() {
     await load()
   }
 
+  async function moveTo(targetFolderId: string) {
+    if (!caseKey) return
+    await api.PUT('/api/v1/cases/{caseKey}/folder', {
+      params: { path: { caseKey } },
+      body: { folderId: targetFolderId },
+    })
+    setMoving(false)
+    await load()
+  }
+
+  async function confirmDeleteCase() {
+    if (!caseKey || !projectKey) return
+    await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } })
+    navigate(`/projects/${projectKey}/library`)
+  }
+
+  const actionMenuItems: RowActionMenuItem[] = [
+    {
+      label: 'Move to…',
+      icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
+      onSelect: () => setMoving(true),
+    },
+    {
+      label: 'Delete',
+      danger: true,
+      dividerBefore: true,
+      icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+      onSelect: () => setConfirmingDelete(true),
+    },
+  ]
+
   // Ends at the parent folder, not the case itself — the case's own <h1>
   // right below already shows its title, and (unlike a breadcrumb crumb)
   // can wrap instead of truncating a long one mid-word.
@@ -153,99 +196,167 @@ export default function CaseDetailPage() {
             <h1 className="tp-heading text-2xl">{testCase.content.title}</h1>
           </div>
         </div>
-        {!isEditing && <Button onClick={() => setIsEditing(true)}>Edit</Button>}
+        {!isEditing && (
+          <div className="flex items-center gap-1">
+            <Button onClick={() => setIsEditing(true)}>Edit</Button>
+            <RowActionMenu label={`Actions for ${testCase.content.title}`} items={actionMenuItems} />
+          </div>
+        )}
       </div>
 
-      {isEditing ? (
-        <div className="space-y-4">
-          <div className="space-y-1">
-            <label htmlFor="case-title" className="text-sm font-medium">
-              Title
-            </label>
-            <Input id="case-title" value={title} onChange={(e) => setTitle(e.target.value)} />
-          </div>
-          <ClassificationEditor
-            priority={priority}
-            tagsText={tagsText}
-            platform={platform}
-            testType={testType}
-            automated={automated}
-            onPriorityChange={setPriority}
-            onTagsTextChange={setTagsText}
-            onPlatformChange={setPlatform}
-            onTestTypeChange={setTestType}
-            onAutomatedChange={setAutomated}
-          />
-          <StepEditor steps={steps} onChange={setSteps} />
-          <div className="flex justify-end gap-2 border-t pt-4">
-            <Button variant="outline" onClick={() => setIsEditing(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                void saveEdit()
-              }}
-            >
-              Save changes
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
-          <div className="space-y-2">
-            <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">Steps</p>
-            <CaseStepsList
-              steps={testCase.content.steps}
-              emptyStateAction={<Button onClick={() => setIsEditing(true)}>+ Add steps</Button>}
-            />
-          </div>
-
-          <div
-            className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5"
-            data-testid="case-sidebar"
-          >
-            <CaseSidebarSection title="Properties">
-              <PropertyRow label="Priority" value={<Badge>{testCase.content.priority ?? 'medium'}</Badge>} />
-              <PropertyRow label="Test type" value={testCase.content.testType} />
-              <PropertyRow
-                label="Automation"
-                value={testCase.content.automated ? 'Automated' : 'Manual'}
+      <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
+        <div className="space-y-2">
+          {isEditing ? (
+            <div className="space-y-4">
+              <div className="space-y-1">
+                <label htmlFor="case-title" className="text-sm font-medium">
+                  Title
+                </label>
+                <Input id="case-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+              </div>
+              <StepEditor steps={steps} onChange={setSteps} />
+              <div className="flex justify-end gap-2 border-t pt-4">
+                <Button variant="outline" onClick={() => setIsEditing(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    void saveEdit()
+                  }}
+                >
+                  Save changes
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">Steps</p>
+              <CaseStepsList
+                steps={testCase.content.steps}
+                emptyStateAction={<Button onClick={() => setIsEditing(true)}>+ Add steps</Button>}
               />
-              <PropertyRow label="Platform" value={testCase.content.platform} />
-              <PropertyRow label="Tags" value={(testCase.content.tags ?? []).join(', ')} />
-              <PropertyRow label="Version" value={`v${testCase.currentVersion}`} />
-              <PropertyRow label="In suites" value={suiteNames.join(', ')} />
-            </CaseSidebarSection>
+            </>
+          )}
+        </div>
 
-            <CaseSidebarSection title="Results">
-              <CaseResultsPanel />
-            </CaseSidebarSection>
+        <div
+          className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5"
+          data-testid="case-sidebar"
+        >
+          <CaseSidebarSection title="Properties">
+            {isEditing ? (
+              <ClassificationEditor
+                priority={priority}
+                tagsText={tagsText}
+                platform={platform}
+                testType={testType}
+                automated={automated}
+                onPriorityChange={setPriority}
+                onTagsTextChange={setTagsText}
+                onPlatformChange={setPlatform}
+                onTestTypeChange={setTestType}
+                onAutomatedChange={setAutomated}
+              />
+            ) : (
+              <>
+                <PropertyRow
+                  label="Priority"
+                  value={<ClassificationPills priority={testCase.content.priority ?? 'medium'} />}
+                  wrap
+                />
+                <PropertyRow
+                  label="Test type"
+                  value={testCase.content.testType && <ClassificationPills testType={testCase.content.testType} />}
+                  wrap
+                />
+                <PropertyRow
+                  label="Automation"
+                  value={<AutomationPill automated={Boolean(testCase.content.automated)} />}
+                  wrap
+                />
+                <PropertyRow
+                  label="Platform"
+                  value={testCase.content.platform && <ClassificationPills platform={testCase.content.platform} />}
+                  wrap
+                />
+                <PropertyRow
+                  label="Tags"
+                  value={
+                    (testCase.content.tags ?? []).length > 0 &&
+                    (testCase.content.tags ?? []).map((tag) => (
+                      <span key={tag} className="rounded-full bg-muted px-2 py-0.5">
+                        {tag}
+                      </span>
+                    ))
+                  }
+                  wrap
+                />
+                <PropertyRow label="Version" value={`v${testCase.currentVersion}`} />
+                <PropertyRow
+                  label="In suites"
+                  value={
+                    suiteNames.length > 0 &&
+                    suiteNames.map((name) => (
+                      <span key={name} className="rounded-full bg-accent px-2 py-0.5">
+                        {name}
+                      </span>
+                    ))
+                  }
+                  wrap
+                />
+              </>
+            )}
+          </CaseSidebarSection>
 
-            <CaseSidebarSection title="Version history">
+          <CaseSidebarSection title="Results">
+            <CaseResultsPanel />
+          </CaseSidebarSection>
+
+          <CaseSidebarSection title="Version history">
               <ul aria-label="Version history" className="divide-y rounded-md border text-sm">
-                {versions.map((v) => (
-                  <li key={v.version}>
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-accent"
-                      onClick={() => setViewingVersion(v.version)}
-                    >
-                      <span>v{v.version}</span>
-                      {v.version === testCase.currentVersion ? (
-                        <Badge variant="default">current</Badge>
-                      ) : (
+                {versions.map((v) => {
+                  const previous = versions.find((x) => x.version === v.version - 1)
+                  const signal = previous ? diffSignal(diffContent(previous.content, v.content)) : 'Initial version'
+                  const expanded = expandedVersion === v.version
+                  return (
+                    <li key={v.version}>
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-accent"
+                        onClick={() => setExpandedVersion(expanded ? null : v.version)}
+                      >
+                        <span className="flex flex-col gap-0.5">
+                          <span className="flex items-center gap-2">
+                            <span>v{v.version}</span>
+                            {v.version === testCase.currentVersion && <Badge variant="default">current</Badge>}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{signal}</span>
+                        </span>
                         <span className="text-xs text-muted-foreground">
                           {new Date(v.createdAt).toLocaleDateString()}
                         </span>
+                      </button>
+                      {expanded && (
+                        <div className="space-y-2 border-t bg-muted/30 px-3 py-2">
+                          {previous ? (
+                            <ContentDiffView diff={diffContent(previous.content, v.content)} />
+                          ) : (
+                            <p className="text-sm text-muted-foreground">
+                              This is the first version — there is no previous version to compare against.
+                            </p>
+                          )}
+                          <Button type="button" variant="outline" size="sm" onClick={() => setViewingVersion(v.version)}>
+                            View executions
+                          </Button>
+                        </div>
                       )}
-                    </button>
-                  </li>
-                ))}
+                    </li>
+                  )
+                })}
               </ul>
             </CaseSidebarSection>
-          </div>
         </div>
-      )}
+      </div>
 
       {viewingVersion !== null && (
         <VersionDetailDialog
@@ -256,6 +367,36 @@ export default function CaseDetailPage() {
           versions={versions}
         />
       )}
+
+      <Dialog open={moving} onOpenChange={setMoving}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Move to…</DialogTitle>
+          <FolderPicker
+            folders={folders}
+            rootId={root?.id ?? ''}
+            query={moveQuery}
+            onQueryChange={setMoveQuery}
+            onSelect={(targetFolderId) => void moveTo(targetFolderId)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Delete case?</DialogTitle>
+          <DialogDescription>
+            Delete case &ldquo;{testCase.content.title}&rdquo;? This cannot be undone.
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmingDelete(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteCase()}>
+              Delete case
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

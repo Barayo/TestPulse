@@ -6,10 +6,11 @@ import CaseDetailPage from './CaseDetailPage'
 import { api } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({
-  api: { GET: vi.fn(), PUT: vi.fn() },
+  api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() },
 }))
 const mockGET = vi.mocked(api.GET)
 const mockPUT = vi.mocked(api.PUT)
+const mockDELETE = vi.mocked(api.DELETE)
 
 const root = { id: 'root', projectId: 'p1', name: 'Root', createdAt: '' }
 const transferencias = { id: 'transferencias', projectId: 'p1', parentFolderId: 'root', name: 'Transferencias', createdAt: '' }
@@ -33,18 +34,18 @@ const limitCase = {
   createdAt: '',
 }
 
-function mockDetailAPI() {
-  mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
+function mockDetailAPI(options?: { v1Content?: typeof limitCase.content }) {
+  mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/folders')
       return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
-    if (path === '/api/v1/cases/{caseKey}' && options?.params?.path?.caseKey === 'c1')
+    if (path === '/api/v1/cases/{caseKey}' && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({ data: limitCase, response: { ok: true } })
-    if (path === '/api/v1/cases/{caseKey}/versions' && options?.params?.path?.caseKey === 'c1')
+    if (path === '/api/v1/cases/{caseKey}/versions' && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: [
-          { caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' },
+          { caseId: 'c1', version: 1, content: options?.v1Content ?? limitCase.content, createdAt: '2026-01-01T00:00:00Z' },
           { caseId: 'c1', version: 2, content: limitCase.content, createdAt: '2026-02-01T00:00:00Z' },
         ],
         response: { ok: true },
@@ -54,6 +55,7 @@ function mockDetailAPI() {
         data: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
       })
+    if (path === '/api/v1/cases/{caseKey}/executions') return Promise.resolve({ data: [], response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -257,26 +259,64 @@ describe('CaseDetailPage', () => {
     expect(within(history).getByText(/current/i)).toBeInTheDocument()
   })
 
-  it('opens a version detail dialog when a version history row is clicked', async () => {
+  it('shows a change signal for each version row, derived from the previous version', async () => {
+    mockDetailAPI({ v1Content: { ...limitCase.content, title: 'Daily transfer limit (draft)' } })
+    renderDetail()
+    const history = await screen.findByRole('list', { name: /version history/i })
+    expect(within(history).getByText(/initial version/i)).toBeInTheDocument()
+    expect(within(history).getByText(/title changed/i)).toBeInTheDocument()
+  })
+
+  it('clicking a version row expands an inline diff without opening a dialog', async () => {
+    mockDetailAPI({ v1Content: { ...limitCase.content, title: 'Daily transfer limit (draft)' } })
+    renderDetail()
+    const history = await screen.findByRole('list', { name: /version history/i })
+    await userEvent.click(within(history).getByText('v2'))
+    expect(await within(history).findByText('Daily transfer limit (draft)')).toBeInTheDocument()
+    expect(within(history).getByText('Daily transfer limit')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+
+    await userEvent.click(within(history).getByText('v2'))
+    expect(screen.queryByText('Daily transfer limit (draft)')).not.toBeInTheDocument()
+  })
+
+  it('opens the version detail dialog with execution history from the expanded row', async () => {
     mockDetailAPI()
     renderDetail()
     const history = await screen.findByRole('list', { name: /version history/i })
     await userEvent.click(within(history).getByText('v1'))
+    await userEvent.click(await within(history).findByRole('button', { name: /view executions/i }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(within(screen.getByRole('dialog')).getByText('Version 1')).toBeInTheDocument()
   })
 
-  it('renders properties as labeled Label: value pairs, except priority which is a badge', async () => {
+  it('renders priority, platform, test type, and automated status as pills', async () => {
     mockDetailAPI()
     renderDetail()
     await screen.findByRole('heading', { name: 'Daily transfer limit' })
     expect(screen.getByText('Test type')).toBeInTheDocument()
-    expect(screen.getByText('e2e')).toBeInTheDocument()
+    expect(screen.getByText('e2e')).toHaveClass('rounded-full')
     expect(screen.getByText('Automation')).toBeInTheDocument()
-    expect(screen.getByText('Automated')).toBeInTheDocument()
-    // priority is a badge, not a plain PropertyRow value
+    expect(screen.getByText('Auto')).toHaveClass('rounded-full')
     expect(screen.getByText('Priority')).toBeInTheDocument()
-    expect(screen.getByText('high')).toBeInTheDocument()
+    expect(screen.getByText('high')).toHaveClass('rounded-full')
+    expect(screen.getByText('web')).toHaveClass('rounded-full')
+  })
+
+  it('renders tags as individual pill chips, not comma-joined text', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.getByText('smoke')).toHaveClass('rounded-full')
+    expect(screen.getByText('regression')).toHaveClass('rounded-full')
+    expect(screen.queryByText('smoke, regression')).not.toBeInTheDocument()
+  })
+
+  it('renders suite memberships as individual pill chips', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.getByText('Smoke')).toHaveClass('rounded-full')
   })
 
   it('renders the Results section empty state', async () => {
@@ -329,6 +369,69 @@ describe('CaseDetailPage', () => {
         }),
       )
     })
+  })
+
+  it('entering edit mode keeps Results and Version History visible, and turns Properties into an inline form', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+    expect(screen.getByText('Results')).toBeInTheDocument()
+    expect(await screen.findByRole('list', { name: /version history/i })).toBeInTheDocument()
+    expect(screen.getByLabelText(/^priority$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^automated$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^platform$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^test type$/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/^tags$/i)).toBeInTheDocument()
+    expect(screen.queryByText('In suites')).not.toBeInTheDocument()
+  })
+
+  it('opens a header actions menu offering Move to… and Delete', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    await userEvent.click(screen.getByRole('button', { name: /actions for daily transfer limit/i }))
+    expect(screen.getByRole('menuitem', { name: /move to…/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+  })
+
+  it('Move to… opens the folder picker and moving calls the existing move endpoint', async () => {
+    mockDetailAPI()
+    mockPUT.mockResolvedValue({ data: limitCase, response: { ok: true } })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    await userEvent.click(screen.getByRole('button', { name: /actions for daily transfer limit/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /move to…/i }))
+    const moveDialog = await screen.findByRole('dialog', { name: /move to…/i })
+    await userEvent.click(within(moveDialog).getByText('Library'))
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/cases/{caseKey}/folder',
+        expect.objectContaining({
+          params: { path: { caseKey: 'c1' } },
+          body: { folderId: 'root' },
+        }),
+      )
+    })
+  })
+
+  it('Delete opens a confirmation and, on confirm, deletes the case and returns to the Library', async () => {
+    mockDetailAPI()
+    mockDELETE.mockResolvedValue({ data: undefined, response: { ok: true } })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    await userEvent.click(screen.getByRole('button', { name: /actions for daily transfer limit/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
+    expect(await screen.findByRole('heading', { name: /delete case\?/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^delete case$/i }))
+    await waitFor(() => {
+      expect(mockDELETE).toHaveBeenCalledWith('/api/v1/cases/{caseKey}', {
+        params: { path: { caseKey: 'c1' } },
+      })
+    })
+    expect(await screen.findByTestId('library-probe')).toHaveTextContent('library')
   })
 
   it('refreshes the version history after saving an edit', async () => {

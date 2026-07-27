@@ -440,7 +440,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await expect(history.getByText('v2')).toBeVisible()
   })
 
-  test('Scenario: Opening a version\'s detail dialog', async ({ page }) => {
+  test('Scenario: Opening a version\'s execution history dialog', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-51' })
     await createProject(page, 'Version Dialog Project')
     await openFolderExplorer(page)
@@ -450,7 +450,9 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByLabel(/^title$/i).fill('Login works v2')
     await page.getByRole('button', { name: /save changes/i }).click()
 
-    await page.getByRole('list', { name: /version history/i }).getByText('v1').click()
+    const history = page.getByRole('list', { name: /version history/i })
+    await history.getByText('v1').click()
+    await history.getByRole('button', { name: /view executions/i }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Version 1')).toBeVisible()
   })
@@ -465,10 +467,11 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByLabel(/^title$/i).fill('Login works v2')
     await page.getByRole('button', { name: /save changes/i }).click()
 
-    await page.getByRole('list', { name: /version history/i }).getByText('v2').click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog.getByText('Login works', { exact: true })).toBeVisible()
-    await expect(dialog.getByText('Login works v2', { exact: true })).toBeVisible()
+    const history = page.getByRole('list', { name: /version history/i })
+    await history.getByText('v2').click()
+    await expect(history.getByText('Login works', { exact: true })).toBeVisible()
+    await expect(history.getByText('Login works v2', { exact: true })).toBeVisible()
+    await expect(page.getByRole('dialog')).not.toBeVisible()
   })
 
   test('Scenario: Oldest version has nothing to diff against', async ({ page }) => {
@@ -478,8 +481,9 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await createCase(page, 'Login works')
     await page.getByText('Login works').click()
 
-    await page.getByRole('list', { name: /version history/i }).getByText('v1').click()
-    await expect(page.getByRole('dialog').getByText(/no previous version/i)).toBeVisible()
+    const history = page.getByRole('list', { name: /version history/i })
+    await history.getByText('v1').click()
+    await expect(history.getByText(/no previous version/i)).toBeVisible()
   })
 
   test('Scenario: Executions list and Flaky flag reflect mixed results for the same version', async ({ page }) => {
@@ -515,7 +519,9 @@ test.describe('Requirement: Viewing an existing test case', () => {
 
     await page.goto(`/projects/${projectId}/library`)
     await page.getByText('Login works').click()
-    await page.getByRole('list', { name: /version history/i }).getByText('v1').click()
+    const history = page.getByRole('list', { name: /version history/i })
+    await history.getByText('v1').click()
+    await history.getByRole('button', { name: /view executions/i }).click()
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText('Run pass')).toBeVisible()
     await expect(dialog.getByText('Run fail')).toBeVisible()
@@ -581,6 +587,49 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await expect(page.getByText('Test type')).toBeHidden()
     await propertiesToggle.click()
     await expect(page.getByText('Test type')).toBeVisible()
+  })
+
+  test('Scenario: Header actions menu — Move to… and Delete', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-72' })
+    await createProject(page, 'Case Actions Project')
+    await openFolderExplorer(page)
+    await createFolderInOpenFolder(page, 'Archive')
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.waitForURL(/\/cases\//)
+
+    await page.getByRole('button', { name: /actions for login works/i }).click()
+    await page.getByRole('menuitem', { name: /move to…/i }).click()
+    const moveDialog = page.getByRole('dialog', { name: /move to…/i })
+    await moveDialog.getByText('Archive').click()
+    const breadcrumb = page.getByRole('navigation', { name: 'Breadcrumb' })
+    await expect(breadcrumb.getByText('Archive')).toBeVisible()
+
+    await page.getByRole('button', { name: /actions for login works/i }).click()
+    await page.getByRole('menuitem', { name: /^delete$/i }).click()
+    await page.getByRole('button', { name: /^delete case$/i }).click()
+    await page.waitForURL(/\/library/)
+    await expect(page.getByText('Login works')).not.toBeVisible()
+  })
+
+  test('Scenario: Version history shows a change signal, with an inline diff expand', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-73' })
+    await createProject(page, 'Version Signal Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.getByRole('button', { name: /^edit$/i }).click()
+    await page.getByLabel(/^title$/i).fill('Login works v2')
+    await page.getByRole('button', { name: /save changes/i }).click()
+
+    const history = page.getByRole('list', { name: /version history/i })
+    await expect(history.getByText(/initial version/i)).toBeVisible()
+    await expect(history.getByText(/title changed/i)).toBeVisible()
+
+    await history.getByText('v2').click()
+    await expect(history.getByText('Login works', { exact: true })).toBeVisible()
+    await expect(history.getByText('Login works v2', { exact: true })).toBeVisible()
+    await expect(page.getByRole('dialog')).not.toBeVisible()
   })
 })
 
