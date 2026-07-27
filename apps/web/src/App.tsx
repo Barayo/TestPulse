@@ -14,6 +14,7 @@ import ProjectPage from '@/pages/ProjectPage'
 import SuitesPage from '@/pages/SuitesPage'
 import SuiteDetailPage from '@/pages/SuiteDetailPage'
 import RunsPage from '@/pages/RunsPage'
+import NewRunPage from '@/pages/NewRunPage'
 import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import CaseDetailPage from '@/pages/CaseDetailPage'
 import RunPage from '@/pages/RunPage'
@@ -191,6 +192,14 @@ function App() {
               element={
                 <RequireAuth>
                   <RunsPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/projects/:projectKey/runs/new"
+              element={
+                <RequireAuth>
+                  <NewRunPage />
                 </RequireAuth>
               }
             />

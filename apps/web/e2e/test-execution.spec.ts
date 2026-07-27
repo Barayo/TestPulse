@@ -46,9 +46,8 @@ test.describe('Requirement: Run creation pins case versions', () => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-24' })
     const projectId = await createProjectWithCase(page, 'Pinning Project')
 
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Sprint 1', ['Login works'])
-    await page.getByRole('link', { name: 'Sprint 1' }).click()
     await expect(page.getByText('Login works')).toBeVisible()
     // rework-run-detail-ux: a run created from an explicit case list (no
     // suite) reads as a deliberate ad hoc state, not a missing link.
@@ -74,9 +73,8 @@ test.describe('Requirement: Run execution board', () => {
   test('Scenario: Execute a case from the board (pass with comment)', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-25' })
     const projectId = await createProjectWithCase(page, 'Execution Project')
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
-    await page.getByRole('link', { name: 'Run 1' }).click()
 
     // Selecting an item navigates to its own page (redesign-run-execution-view)
     // rather than opening an inline detail pane.
@@ -119,9 +117,8 @@ test.describe('Requirement: Run execution board', () => {
 
   test('Scenario: Right-click a run item, jump straight to its case in the Library', async ({ page }) => {
     const projectId = await createProjectWithCase(page, 'Right-Click Project')
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
-    await page.getByRole('link', { name: 'Run 1' }).click()
 
     const row = page.getByText('Login works').first().locator('xpath=ancestor::li')
     await row.click({ button: 'right' })
@@ -133,9 +130,8 @@ test.describe('Requirement: Run execution board', () => {
 
   test('Scenario: Item page breadcrumb ends at the run, not the item\'s own title', async ({ page }) => {
     const projectId = await createProjectWithCase(page, 'Item Breadcrumb Project')
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
-    await page.getByRole('link', { name: 'Run 1' }).click()
     await page.getByText('Login works').first().click()
 
     const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
@@ -148,9 +144,8 @@ test.describe('Requirement: Run item status lifecycle', () => {
   test('Scenario: Marking retest after a failed verdict', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-26' })
     const projectId = await createProjectWithCase(page, 'Retest Project')
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
-    await page.getByRole('link', { name: 'Run 1' }).click()
 
     await page.getByText('Login works').first().click()
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
@@ -175,9 +170,8 @@ test.describe('Requirement: Run open/closed lifecycle', () => {
   test('Scenario: Closing a run blocks recording; reopening allows it again', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-27' })
     const projectId = await createProjectWithCase(page, 'Lifecycle Project')
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
-    await page.getByRole('link', { name: 'Run 1' }).click()
 
     await expect(page.getByText(/^open$/i)).toBeVisible()
     await page.getByRole('button', { name: /close run/i }).click()
@@ -209,9 +203,8 @@ test.describe('Requirement: Run summary', () => {
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Second case')).toBeVisible()
 
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
-    await page.getByRole('link', { name: 'Run 1' }).click()
 
     await page.getByText('Login works').first().click()
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()

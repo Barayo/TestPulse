@@ -414,23 +414,37 @@ state.
 
 #### Scenario: Run suite fires immediately on confirm
 - **WHEN** a user clicks "Run suite" and confirms the dialog without customizing the selection
-- **THEN** a run is created from the suite's current member cases, and the suite's "Last run" property updates
+- **THEN** a run is created from the suite's current member cases, the suite's "Last run" property updates, and an inline confirmation banner with a "View run" link appears on the page
 
 #### Scenario: Customize selection hands off to the New run form
 - **WHEN** a user clicks "Customize selection" in the Run suite dialog
-- **THEN** the app navigates to the project's "New run" form with the suite selected and its cases pre-selected, editable before creating the run
+- **THEN** the app navigates to the project's dedicated "New run" route with the suite selected and its cases pre-selected, editable before creating the run
 
 ### Requirement: Run creation
-The "New run" form SHALL let a user select cases via a section-tree-scoped,
-searchable, filterable, virtualized case picker (the same mechanics as the
-suite case picker) instead of implicitly including every case in the project.
-The form SHALL offer an optional suite selector; choosing a suite SHALL seed
-the picker's selection with that suite's current member case keys (leaving
-the section-tree scope at "All sections," since a suite's cases may span
-multiple sections) and SHALL record the created run's `suiteKey`. Leaving the
-selector on "No suite" SHALL create a run with no suite reference (an ad hoc
-run) using only the picker's selection, with no separate ad hoc-specific UI.
-The "Create run" action SHALL be disabled while zero cases are selected.
+The Runs page SHALL show the project's runs as the primary content, with a
+"+ New run" button that navigates to a dedicated route
+(`/projects/{projectKey}/runs/new`) rather than rendering the case-picker
+form inline above the list. The "New run" form on that route SHALL let a
+user select cases via a section-tree-scoped, searchable, filterable,
+virtualized case picker (the same mechanics as the suite case picker)
+instead of implicitly including every case in the project. The form SHALL
+offer an optional suite selector; choosing a suite SHALL seed the picker's
+selection with that suite's current member case keys (leaving the
+section-tree scope at "All sections," since a suite's cases may span
+multiple sections) and SHALL record the created run's `suiteKey`. Leaving
+the selector on "No suite" SHALL create a run with no suite reference (an ad
+hoc run) using only the picker's selection, with no separate ad hoc-specific
+UI. The "Create run" action SHALL be disabled while zero cases are selected.
+On successful creation, the app SHALL navigate to the new run's detail page
+and show a one-shot confirmation that the run was created.
+
+#### Scenario: Opening the Runs page shows the runs list first
+- **WHEN** a user navigates to a project's Runs page
+- **THEN** the list of existing runs is the primary visible content, not the "New run" form
+
+#### Scenario: "+ New run" opens the dedicated creation route
+- **WHEN** a user clicks "+ New run" on the Runs page
+- **THEN** the app navigates to `/projects/{projectKey}/runs/new`, showing the case-picker form
 
 #### Scenario: New run defaults to an empty, explicit selection
 - **WHEN** a user opens the "New run" form with no suite selected
@@ -451,6 +465,10 @@ The "Create run" action SHALL be disabled while zero cases are selected.
 #### Scenario: The case picker scopes, searches, and stays bounded at scale
 - **WHEN** a project has hundreds of cases
 - **THEN** the "New run" form's case picker supports section-tree scoping and title search, composable together, and renders only a bounded number of DOM rows regardless of case volume
+
+#### Scenario: Creating a run navigates to it with a confirmation
+- **WHEN** a user creates a run from the dedicated "New run" route
+- **THEN** the app navigates to that run's detail page and shows a one-shot "Run created successfully" confirmation, which does not reappear on a later visit or refresh
 
 ### Requirement: Project list with permission-ready create action
 Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section. A project marked as the sample project SHALL show a "Sample" badge next to its name, in both view modes.

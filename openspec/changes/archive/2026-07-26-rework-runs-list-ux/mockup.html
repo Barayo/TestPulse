@@ -1,0 +1,711 @@
+<meta charset="utf-8">
+<title>Runs page + post-create feedback — Pepe design pass</title>
+<style>
+  :root, .light {
+    --background: #F7FAFA; --foreground: #0B2E2C;
+    --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --popover: #FFFFFF; --popover-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A;
+    --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --destructive-foreground:#FFFFFF;
+    --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --status-healthy-bg: oklch(0.93 0.03 175); --status-healthy-fg: oklch(0.4 0.1 175);
+    --status-progress-bg: oklch(0.94 0.04 85); --status-progress-fg: oklch(0.45 0.1 85);
+    --status-risk-bg: oklch(0.94 0.04 25); --status-risk-fg: oklch(0.45 0.14 25);
+    --status-neutral-bg: oklch(0.92 0.005 240); --status-neutral-fg: oklch(0.45 0.01 240);
+    --mock-stripe: #fff8e1;
+  }
+  :root[data-theme="dark"], .dark {
+    --background: #0B2A28; --foreground: #E6F5F3;
+    --card: #12403C; --card-foreground: #E6F5F3;
+    --popover: #12403C; --popover-foreground: #E6F5F3;
+    --primary: #2DD4BF; --primary-foreground: #0B2A28;
+    --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+    --muted: #163A37; --muted-foreground: #8FBDB8;
+    --accent: #163F3B; --accent-foreground: #E6F5F3;
+    --destructive: #FF6B57; --destructive-foreground:#0B2A28;
+    --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+    --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+    --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+    --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+    --status-neutral-bg: oklch(0.32 0.005 240); --status-neutral-fg: oklch(0.75 0.01 240);
+    --mock-stripe: #2a2410;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: #0B2A28; --foreground: #E6F5F3;
+      --card: #12403C; --card-foreground: #E6F5F3;
+      --popover: #12403C; --popover-foreground: #E6F5F3;
+      --primary: #2DD4BF; --primary-foreground: #0B2A28;
+      --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+      --muted: #163A37; --muted-foreground: #8FBDB8;
+      --accent: #163F3B; --accent-foreground: #E6F5F3;
+      --destructive: #FF6B57; --destructive-foreground:#0B2A28;
+      --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+      --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+      --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+      --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+      --status-neutral-bg: oklch(0.32 0.005 240); --status-neutral-fg: oklch(0.75 0.01 240);
+      --mock-stripe: #2a2410;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; overflow-x: hidden;
+    background: var(--background); color: var(--foreground);
+    font-family: 'Geist Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font-size: 14px; line-height: 1.5;
+  }
+  .tp-heading { font-weight: 900; letter-spacing: -0.02em; }
+  .tp-label { font-family: ui-monospace, 'Geist Mono Variable', monospace; font-size: 0.68rem;
+    text-transform: uppercase; letter-spacing: 0.09em; color: var(--muted-foreground); }
+  a { color: inherit; }
+
+  /* ---- mockup chrome (deliberately NOT app styling) ---- */
+  .mock-toolbar {
+    position: sticky; top: 0; z-index: 50;
+    background: repeating-linear-gradient(135deg, var(--mock-stripe), var(--mock-stripe) 10px, var(--card) 10px, var(--card) 20px);
+    border-bottom: 2px dashed var(--muted-foreground);
+    padding: 10px 16px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .mock-toolbar .tag { font-family: ui-monospace, monospace; font-size: 0.65rem; font-weight: 700;
+    letter-spacing: 0.08em; background: var(--foreground); color: var(--background);
+    padding: 3px 7px; border-radius: 4px; }
+  .mock-btn {
+    font-size: 0.75rem; padding: 6px 10px; border-radius: 6px; border: 1px solid var(--muted-foreground);
+    background: var(--popover); color: var(--foreground); cursor: pointer;
+  }
+  .mock-btn:hover { border-color: var(--foreground); }
+  .mock-spacer { flex: 1; }
+  .design-note {
+    border: 1px dashed var(--muted-foreground); border-radius: 8px; padding: 8px 10px;
+    font-size: 0.76rem; font-style: italic; color: var(--muted-foreground); margin: 10px 0;
+    background: color-mix(in srgb, var(--muted) 60%, transparent);
+  }
+  .design-note b { color: var(--foreground); font-style: normal; }
+
+  .app-shell { max-width: 1100px; margin: 0 auto; padding: 20px 24px 80px; overflow-x: hidden; }
+  .view { display: none; }
+  .view.active { display: block; }
+
+  .crumbs { font-size: 0.8rem; color: var(--muted-foreground); margin-bottom: 14px; }
+  .crumbs a { text-decoration: none; }
+  .crumbs a:hover { text-decoration: underline; }
+  .crumbs .sep { margin: 0 6px; }
+  .crumbs .current { color: var(--foreground); font-weight: 600; }
+
+  .card { background: var(--card); color: var(--card-foreground); border: 1px solid var(--border);
+    border-radius: 1rem; margin-bottom: 20px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 16px 20px; }
+  .card-header h2 { margin: 0; font-size: 1.05rem; }
+  .card-content { padding: 0 20px 20px; }
+
+  .btn { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; border: 1px solid transparent;
+    padding: 7px 14px; font-size: 0.82rem; font-weight: 600; cursor: pointer; }
+  .btn-primary { background: var(--primary); color: var(--primary-foreground); }
+  .btn-primary:disabled { opacity: 0.45; cursor: not-allowed; }
+  .btn-outline { background: var(--popover); border-color: var(--input); color: var(--foreground); }
+  .btn-ghost { background: transparent; color: var(--foreground); }
+  .btn-destructive { background: var(--destructive); color: var(--destructive-foreground); }
+
+  /* ---- Runs list ---- */
+  .run-row { display: flex; align-items: center; gap: 14px; padding: 12px 14px; border-radius: 10px;
+    border-left: 3px solid var(--status-neutral-fg); text-decoration: none; color: inherit; }
+  .run-row:hover { background: var(--accent); }
+  .run-row.healthy { border-left-color: var(--status-healthy-fg); }
+  .run-row.progress { border-left-color: var(--status-progress-fg); }
+  .run-row.risk { border-left-color: var(--status-risk-fg); }
+  .run-row + .run-row { margin-top: 4px; }
+  .run-row .name { flex: 1; min-width: 0; font-weight: 600; }
+  .run-row .name .badge-mini { font-size: 0.65rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted-foreground); margin-left: 8px; }
+  .run-row .meta { font-size: 0.75rem; color: var(--muted-foreground); white-space: nowrap; }
+  .health-bar { width: 90px; height: 8px; border-radius: 999px; background: var(--muted); overflow: hidden; flex-shrink: 0; }
+  .health-bar > span { display: block; height: 100%; border-radius: 999px; }
+  .health-bar.healthy > span { background: var(--status-healthy-fg); }
+  .health-bar.progress > span { background: var(--status-progress-fg); }
+  .health-bar.risk > span { background: var(--status-risk-fg); }
+  .not-run-text { font-size: 0.75rem; color: var(--muted-foreground); width: 90px; flex-shrink: 0; }
+
+  .new-run-row { animation: highlight-fade 2.5s ease-out; }
+  @keyframes highlight-fade {
+    0% { background: var(--accent); }
+    100% { background: transparent; }
+  }
+
+  /* ---- New run picker page ---- */
+  .picker-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+  .picker-toolbar input[type=text], .picker-toolbar select, select.form-input, input.form-input {
+    font-size: 0.8rem; padding: 6px 10px; border-radius: 7px; border: 1px solid var(--input);
+    background: var(--background); color: var(--foreground);
+  }
+  .picker-toolbar input[type=text] { flex: 1; min-width: 180px; }
+  .picker-grid { display: grid; grid-template-columns: 200px 1fr; gap: 18px; }
+  @media (max-width: 720px) { .picker-grid { grid-template-columns: 1fr; } }
+  .rail { border-right: 1px solid var(--border); padding-right: 14px; }
+  .rail-item { display: flex; justify-content: space-between; gap: 6px; padding: 6px 8px; border-radius: 7px;
+    cursor: pointer; font-size: 0.82rem; }
+  .rail-item:hover { background: var(--accent); }
+  .rail-item.active { background: var(--primary); color: var(--primary-foreground); }
+  .rail-item.child { margin-left: 14px; font-size: 0.78rem; }
+  .rail-item .count { color: var(--muted-foreground); font-size: 0.72rem; }
+  .rail-item.active .count { color: inherit; opacity: 0.85; }
+
+  .case-list { max-height: 360px; overflow-y: auto; overflow-x: auto; border: 1px solid var(--border);
+    border-radius: 10px; }
+  .case-row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-size: 0.82rem; }
+  .case-row:last-child { border-bottom: none; }
+  .case-row:hover { background: var(--accent); }
+  .case-row .title { flex: 1; min-width: 220px; }
+  .case-row .pill { font-size: 0.66rem; padding: 2px 7px; border-radius: 999px; background: var(--muted);
+    color: var(--muted-foreground); white-space: nowrap; }
+  .case-row .priority { font-size: 0.66rem; font-weight: 700; white-space: nowrap; }
+  .priority-Critical { color: var(--status-risk-fg); }
+  .priority-High { color: var(--status-progress-fg); }
+  .priority-Medium, .priority-Low { color: var(--muted-foreground); }
+  .empty-note { padding: 24px; text-align: center; color: var(--muted-foreground); font-size: 0.85rem; }
+
+  .commit-bar { position: sticky; bottom: 14px; margin-top: 14px; display: flex; align-items: center;
+    justify-content: space-between; padding: 12px 16px; border-radius: 10px; background: var(--accent);
+    border: 1px solid var(--border); }
+
+  /* ---- dialog ---- */
+  .dialog-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none;
+    align-items: center; justify-content: center; z-index: 100; padding: 16px; }
+  .dialog-overlay.open { display: flex; }
+  .dialog { background: var(--popover); color: var(--popover-foreground); border-radius: 14px;
+    padding: 20px; width: 100%; max-width: 420px; border: 1px solid var(--border); }
+  .dialog h3 { margin: 0 0 6px; }
+  .dialog p.desc { margin: 0 0 14px; color: var(--muted-foreground); font-size: 0.82rem; }
+  .dialog .field { margin-bottom: 14px; }
+  .dialog label { display: block; font-size: 0.78rem; margin-bottom: 4px; color: var(--muted-foreground); }
+  .dialog input { width: 100%; }
+  .dialog-footer { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; }
+  .dialog-footer .right { display: flex; gap: 8px; }
+
+  /* ---- banners (single reusable pattern for both entry points) ---- */
+  .confirm-banner { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px;
+    background: var(--status-healthy-bg); color: var(--status-healthy-fg); font-size: 0.85rem;
+    margin-bottom: 16px; border: 1px solid transparent; }
+  .confirm-banner a { font-weight: 700; text-decoration: underline; color: inherit; }
+  .confirm-banner .dismiss { margin-left: auto; cursor: pointer; background: none; border: none;
+    color: inherit; font-size: 1rem; opacity: 0.7; }
+  .confirm-banner.fading { animation: fade-out 0.6s ease forwards; }
+  @keyframes fade-out { to { opacity: 0; transform: translateY(-4px); } }
+
+  /* ---- run detail ---- */
+  .badge { display: inline-block; font-size: 0.68rem; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.04em; padding: 3px 9px; border-radius: 999px; }
+  .badge-open { background: var(--status-healthy-bg); color: var(--status-healthy-fg); }
+  .badge-closed { background: var(--status-neutral-bg); color: var(--status-neutral-fg); }
+  .badge-notrun { background: var(--status-neutral-bg); color: var(--status-neutral-fg); }
+  .meta-row { display: flex; gap: 18px; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted-foreground);
+    padding: 0 20px 14px; }
+  .status-chips { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 20px 14px; }
+  .status-chip { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+    border: 1px solid var(--border); font-size: 0.76rem; cursor: pointer; background: var(--popover); }
+  .status-chip.active { border-color: var(--primary); background: var(--accent); color: var(--primary); }
+  .item-row { display: flex; align-items: center; gap: 12px; padding: 9px 4px; border-bottom: 1px solid var(--border);
+    font-size: 0.84rem; }
+  .item-row:last-child { border-bottom: none; }
+  .item-row .title { flex: 1; min-width: 200px; }
+  .item-row .sub { color: var(--muted-foreground); font-size: 0.74rem; }
+
+  .suite-grid { display: grid; grid-template-columns: 1fr 300px; gap: 20px; }
+  @media (max-width: 720px) { .suite-grid { grid-template-columns: 1fr; } }
+  .suite-sidebar { background: color-mix(in srgb, var(--muted) 60%, transparent); border-radius: 1rem; padding: 18px;
+    align-self: start; }
+  .prop-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 0.82rem;
+    border-bottom: 1px solid var(--border); }
+  .prop-row:last-child { border-bottom: none; }
+  .suite-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 14px; }
+  .suite-case-list { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  .suite-case-row { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--border);
+    font-size: 0.82rem; }
+  .suite-case-row:last-child { border-bottom: none; }
+</style>
+
+<div class="mock-toolbar">
+  <span class="tag">MOCKUP · not real app chrome</span>
+  <button class="mock-btn" onclick="resetDemo('runs-list')">▶ Start: RunsPage (Problem 1 &amp; entry point A)</button>
+  <button class="mock-btn" onclick="resetDemo('suite-detail')">▶ Start: Suite quick-run (entry point B)</button>
+  <span class="mock-spacer"></span>
+  <button class="mock-btn" onclick="toggleTheme()">🌗 Toggle theme</button>
+</div>
+
+<div class="app-shell">
+
+  <!-- ============ VIEW: Runs list (Problem 1 — list-primary) ============ -->
+  <section id="view-runs-list" class="view">
+    <div class="crumbs">
+      <a href="#">Projects</a><span class="sep">/</span><a href="#">Sample Project</a><span class="sep">/</span><span class="current">Runs</span>
+    </div>
+
+    <div class="design-note">
+      <b>Problem 1 — firm recommendation:</b> the Runs list is now the primary content on arrival (matches
+      <code>SuitesPage.tsx</code>'s list-first precedent). "New run" is no longer an always-open card at the
+      top — it's a "+ New run" button that navigates to its own dedicated page, not a dialog. See the rationale
+      note on that page once you open it.
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="tp-heading">Runs</h2>
+        <button class="btn btn-primary" onclick="showView('runs-new')">+ New run</button>
+      </div>
+      <div class="card-content" id="runs-list-content"></div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: New run (full-page CasePicker) ============ -->
+  <section id="view-runs-new" class="view">
+    <div class="crumbs">
+      <a href="#" onclick="showView('runs-list');return false;">Projects</a><span class="sep">/</span>
+      <a href="#" onclick="showView('runs-list');return false;">Sample Project</a><span class="sep">/</span>
+      <a href="#" onclick="showView('runs-list');return false;">Runs</a><span class="sep">/</span>
+      <span class="current">New run</span>
+    </div>
+
+    <div class="design-note">
+      <b>Housing decision:</b> a dedicated page, not a dialog and not an inline accordion on the list page.
+      The picker (search + 5 filter facets + a section tree + a virtualized case list + suite selector + commit bar)
+      needs real width and vertical room a modal can't give it without its own nested scroll fighting the dialog's.
+      This mirrors a pattern already shipped in this app: <code>SuiteDetailPage</code>'s "Customize selection"
+      already deep-links here today — this just makes "+ New run" go to the same well-proven place, instead of
+      duplicating the picker inline on the list page.
+    </div>
+
+    <h1 class="tp-heading" style="font-size:1.4rem;margin:0 0 14px;">New run</h1>
+
+    <div style="display:grid;gap:12px;grid-template-columns:1fr 260px;margin-bottom:16px;">
+      <div>
+        <label class="tp-label">Name</label><br>
+        <input class="form-input" style="width:100%;margin-top:4px;" id="new-run-name" placeholder="Sprint 1"
+               oninput="state.runName=this.value; renderCommitBar();">
+      </div>
+      <div>
+        <label class="tp-label">Suite (optional)</label><br>
+        <select class="form-input" style="width:100%;margin-top:4px;" id="new-run-suite" onchange="selectSuiteForPicker(this.value)">
+          <option value="">No suite — ad hoc run</option>
+          <option value="smoke">Smoke (4 cases)</option>
+          <option value="regression">Regression (8 cases)</option>
+          <option value="nightly">Nightly (6 cases)</option>
+          <option value="apiContract">API Contract (2 cases)</option>
+        </select>
+      </div>
+    </div>
+    <p id="seeded-note" style="display:none;font-size:0.82rem;color:var(--muted-foreground);margin:-6px 0 12px;"></p>
+
+    <div class="picker-toolbar">
+      <input type="text" placeholder="Search cases…" oninput="state.pickerSearch=this.value; renderCaseList();">
+      <select class="form-input" onchange="state.filters.priority=this.value; renderCaseList();">
+        <option value="">Priority: any</option>
+        <option>Critical</option><option>High</option><option>Medium</option><option>Low</option>
+      </select>
+      <select class="form-input" onchange="state.filters.platform=this.value; renderCaseList();">
+        <option value="">Platform: any</option>
+        <option>web</option><option>mobile</option><option>api</option>
+      </select>
+      <select class="form-input" onchange="state.filters.testType=this.value; renderCaseList();">
+        <option value="">Test type: any</option>
+        <option>functional</option><option>e2e</option><option>regression</option><option>api</option>
+      </select>
+      <select class="form-input" onchange="state.filters.automated=this.value; renderCaseList();">
+        <option value="">Automated: any</option>
+        <option value="yes">Automated</option><option value="no">Manual</option>
+      </select>
+    </div>
+
+    <div class="picker-grid">
+      <div class="rail" id="picker-rail"></div>
+      <div class="case-list" id="picker-case-list"></div>
+    </div>
+
+    <div class="commit-bar" id="commit-bar"></div>
+  </section>
+
+  <!-- ============ VIEW: Run detail (destination for both entry points) ============ -->
+  <section id="view-run-detail" class="view">
+    <div id="run-detail-banner"></div>
+    <div class="crumbs" id="run-detail-crumbs"></div>
+
+    <div class="card">
+      <div class="card-header">
+        <h2 class="tp-heading" id="run-detail-title"></h2>
+        <span class="badge badge-open">Open</span>
+      </div>
+      <div class="meta-row" id="run-detail-meta"></div>
+      <div class="status-chips" id="run-detail-chips"></div>
+      <div class="card-content">
+        <p style="font-size:0.8rem;color:var(--muted-foreground);margin:0 0 10px;" id="run-detail-summary"></p>
+        <div id="run-detail-items"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ VIEW: Suite detail (entry point B — quick run) ============ -->
+  <section id="view-suite-detail" class="view">
+    <div class="crumbs">
+      <a href="#" onclick="showView('runs-list');return false;">Projects</a><span class="sep">/</span>
+      <a href="#" onclick="showView('runs-list');return false;">Sample Project</a><span class="sep">/</span>
+      <a href="#">Suites</a><span class="sep">/</span><span class="current">Nightly</span>
+    </div>
+
+    <div class="design-note">
+      <b>Problem 2 — this entry point:</b> creating a run here <u>stays on this page</u> and shows an inline
+      confirmation banner with a link to the run, instead of navigating away. You're mid-review of this suite —
+      you might fire another quick run, or want to see "Last run" update in place (it does, below). Compare this
+      to the RunsPage flow, which navigates straight to the run — see the note there for why that's different.
+    </div>
+
+    <div id="suite-detail-banner"></div>
+
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;border-bottom:1px solid var(--border);padding-bottom:14px;margin-bottom:18px;">
+      <h1 class="tp-heading" style="font-size:1.5rem;margin:0;">Nightly</h1>
+    </div>
+
+    <div class="suite-grid">
+      <div>
+        <div class="tp-label" style="margin-bottom:6px;">6 cases</div>
+        <div class="suite-case-list" id="suite-case-list"></div>
+      </div>
+      <div class="suite-sidebar">
+        <div class="tp-label" style="margin-bottom:8px;">Properties</div>
+        <div class="prop-row"><span>Cases</span><span>6</span></div>
+        <div class="prop-row"><span>Pass rate</span><span><span class="health-bar healthy" style="display:inline-block;vertical-align:middle;"><span style="width:83%"></span></span></span></div>
+        <div class="prop-row"><span>Last run</span><span id="suite-last-run">6 hours ago</span></div>
+        <div class="prop-row"><span>Created</span><span>Jun 2, 2026</span></div>
+        <div class="tp-label" style="margin:16px 0 8px;">Actions</div>
+        <div class="suite-actions">
+          <button class="btn btn-primary" onclick="openQuickRunDialog()">Run suite</button>
+          <button class="btn btn-outline">Rename</button>
+          <button class="btn btn-destructive">Delete</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<!-- Quick-run dialog (mirrors SuiteDetailPage's existing dialog) -->
+<div class="dialog-overlay" id="quickrun-overlay">
+  <div class="dialog">
+    <h3 class="tp-heading">Run Nightly</h3>
+    <p class="desc">6 cases from Nightly</p>
+    <div class="field">
+      <label for="quickrun-name">Name</label>
+      <input id="quickrun-name" class="form-input" value="Nightly run">
+    </div>
+    <div class="dialog-footer">
+      <button class="btn btn-ghost" onclick="quickRunCustomize()">Customize selection</button>
+      <div class="right">
+        <button class="btn btn-outline" onclick="closeQuickRunDialog()">Cancel</button>
+        <button class="btn btn-primary" onclick="handleQuickRunCreate()">Create run</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------------- sample data (from apps/api/internal/sampledata/seed.go) ----------------
+  const FOLDERS = [
+    {id:'auth', name:'Authentication', parent:null},
+    {id:'auth-2fa', name:'Two-Factor', parent:'auth'},
+    {id:'checkout', name:'Checkout', parent:null},
+    {id:'settings', name:'Settings', parent:null},
+    {id:'notifications', name:'Notifications', parent:null},
+    {id:'reporting', name:'Reporting API', parent:null},
+    {id:'localization', name:'Localization', parent:null},
+  ];
+  const CASES = [
+    {id:'login', title:'User can log in with valid credentials', folder:'auth', priority:'High', tags:['smoke','auth'], platform:'web', testType:'functional', automated:true},
+    {id:'badPassword', title:'Login is rejected for the wrong password', folder:'auth', priority:'Medium', tags:['auth','negative'], platform:'web', testType:'functional', automated:false},
+    {id:'passwordReset', title:'Password reset email is sent', folder:'auth', priority:'Low', tags:['auth'], platform:'web', testType:'functional', automated:false},
+    {id:'sessionExpiry', title:'Session expires after inactivity', folder:'auth', priority:'Medium', tags:['auth','session'], platform:'web', testType:'functional', automated:false},
+    {id:'lockout', title:'Account lockout after repeated failed logins', folder:'auth', priority:'Critical', tags:['auth','security'], platform:'web', testType:'functional', automated:false},
+    {id:'twoFactor', title:'Two-factor prompt is required for a new device', folder:'auth-2fa', priority:'High', tags:['auth','security'], platform:'web', testType:'functional', automated:true},
+    {id:'checkoutValid', title:'Checkout completes with a valid card', folder:'checkout', priority:'Critical', tags:['smoke','checkout'], platform:'mobile', testType:'e2e', automated:true},
+    {id:'checkoutExpired', title:'Checkout blocks an expired card', folder:'checkout', priority:'High', tags:['checkout','negative'], platform:'mobile', testType:'e2e', automated:false},
+    {id:'checkoutPromo', title:'Checkout applies a valid promo code', folder:'checkout', priority:'Medium', tags:['checkout'], platform:'mobile', testType:'e2e', automated:false},
+    {id:'displayName', title:'Update profile display name', folder:'settings', priority:'Medium', tags:['settings'], platform:'web', testType:'functional', automated:false},
+    {id:'timezone', title:'Change timezone preference', folder:'settings', priority:'Low', tags:['settings'], platform:'web', testType:'functional', automated:true},
+    {id:'notifPrefs', title:'Update notification preferences', folder:'settings', priority:'Low', tags:['settings'], platform:'web', testType:'functional', automated:false},
+    {id:'notifOptOut', title:'Email notification opt-out is respected', folder:'notifications', priority:'High', tags:['notifications','negative'], platform:'mobile', testType:'regression', automated:false},
+    {id:'notifPush', title:'Push notification arrives within 30 seconds', folder:'notifications', priority:'Medium', tags:['notifications','smoke'], platform:'mobile', testType:'regression', automated:true},
+    {id:'reportingList', title:'GET /api/v1/reports returns paginated results', folder:'reporting', priority:'High', tags:['api','reporting'], platform:'api', testType:'api', automated:true},
+    {id:'reportingExport', title:'Report export respects the date range filter', folder:'reporting', priority:'Medium', tags:['api','reporting'], platform:'api', testType:'api', automated:false},
+  ];
+  const SUITES = {
+    smoke: {name:'Smoke', cases:['login','checkoutValid','notifPush','reportingList']},
+    regression: {name:'Regression', cases:['login','badPassword','passwordReset','checkoutValid','checkoutExpired','displayName','notifOptOut','reportingExport']},
+    nightly: {name:'Nightly', cases:['login','checkoutValid','timezone','notifPush','reportingList','twoFactor']},
+    apiContract: {name:'API Contract', cases:['reportingList','reportingExport']},
+  };
+  const EXISTING_RUNS = [
+    {key:'release-12', name:'Release 1.2 — go/no-go', status:'open', passRate:0.92, created:'2 hours ago'},
+    {key:'nightly-main', name:'Nightly — main', status:'open', passRate:0.83, created:'6 hours ago'},
+    {key:'ci-pipeline', name:'CI pipeline (JUnit import)', status:'open', passRate:0.67, created:'yesterday'},
+    {key:'release-11', name:'Release 1.1 regression', status:'closed', passRate:0.75, created:'3 days ago'},
+    {key:'release-10', name:'Release 1.0 sign-off', status:'closed', passRate:0.67, created:'5 days ago'},
+    {key:'sprint-12', name:'Sprint 12 execution', status:'open', passRate:0.67, created:'6 days ago'},
+  ];
+
+  const state = {
+    selected: new Set(),
+    pickerSearch: '',
+    pickerFolder: null,
+    filters: {priority:'', platform:'', testType:'', automated:''},
+    pickerSuiteKey: '',
+    runName: '',
+    runsListRows: EXISTING_RUNS.slice(),
+  };
+
+  function healthClass(rate) {
+    if (rate === null || rate === undefined) return 'neutral';
+    if (rate >= 0.8) return 'healthy';
+    if (rate >= 0.5) return 'progress';
+    return 'risk';
+  }
+
+  function caseById(id) { return CASES.find(c => c.id === id); }
+
+  // ---------------- view routing ----------------
+  function showView(name) {
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById('view-' + name).classList.add('active');
+    if (name === 'runs-list') renderRunsList();
+    if (name === 'runs-new') { renderRail(); renderCaseList(); renderCommitBar(); }
+  }
+
+  function resetDemo(startView) {
+    state.selected = new Set();
+    state.pickerSearch = ''; state.pickerFolder = null;
+    state.filters = {priority:'', platform:'', testType:'', automated:''};
+    state.pickerSuiteKey = ''; state.runName = '';
+    document.getElementById('suite-last-run').textContent = '6 hours ago';
+    showView(startView);
+  }
+
+  // ---------------- Runs list ----------------
+  function renderRunsList() {
+    const el = document.getElementById('runs-list-content');
+    if (state.runsListRows.length === 0) {
+      el.innerHTML = '<p class="empty-note">No runs yet.</p>';
+      return;
+    }
+    el.innerHTML = state.runsListRows.map(r => {
+      const cls = healthClass(r.passRate);
+      const bar = r.passRate === null
+        ? '<span class="not-run-text">not run yet</span>'
+        : `<span class="health-bar ${cls}"><span style="width:${Math.round(r.passRate*100)}%"></span></span>`;
+      return `<a class="run-row ${cls} ${r._new ? 'new-run-row' : ''}" href="#" onclick="return false;">
+        <span class="name">${r.name}<span class="badge-mini">${r.status}</span></span>
+        ${bar}
+        <span class="meta">${r.created}</span>
+      </a>`;
+    }).join('');
+  }
+
+  // ---------------- New run picker ----------------
+  function selectSuiteForPicker(key) {
+    state.pickerSuiteKey = key;
+    const note = document.getElementById('seeded-note');
+    if (!key) {
+      state.selected = new Set();
+      note.style.display = 'none';
+    } else {
+      state.selected = new Set(SUITES[key].cases);
+      note.style.display = 'block';
+      note.textContent = `Pre-filled from ${SUITES[key].name} — adjust the selection below as needed.`;
+    }
+    renderCaseList();
+    renderCommitBar();
+  }
+
+  function renderRail() {
+    const el = document.getElementById('picker-rail');
+    const roots = FOLDERS.filter(f => !f.parent);
+    const countFor = f => CASES.filter(c => c.folder === f.id).length;
+    let html = `<div class="rail-item ${state.pickerFolder === null ? 'active' : ''}" onclick="setFolder(null)">
+      <span>All sections</span><span class="count">${CASES.length}</span></div>`;
+    roots.forEach(f => {
+      html += `<div class="rail-item ${state.pickerFolder === f.id ? 'active' : ''}" onclick="setFolder('${f.id}')">
+        <span>${f.name}</span><span class="count">${countFor(f)}</span></div>`;
+      FOLDERS.filter(c => c.parent === f.id).forEach(child => {
+        html += `<div class="rail-item child ${state.pickerFolder === child.id ? 'active' : ''}" onclick="setFolder('${child.id}')">
+          <span>${child.name}</span><span class="count">${countFor(child)}</span></div>`;
+      });
+    });
+    el.innerHTML = html;
+  }
+
+  function setFolder(id) { state.pickerFolder = id; renderRail(); renderCaseList(); }
+
+  function renderCaseList() {
+    const el = document.getElementById('picker-case-list');
+    let rows = CASES.slice();
+    if (state.pickerFolder) rows = rows.filter(c => c.folder === state.pickerFolder);
+    if (state.pickerSearch.trim()) {
+      const q = state.pickerSearch.trim().toLowerCase();
+      rows = rows.filter(c => c.title.toLowerCase().includes(q));
+    }
+    if (state.filters.priority) rows = rows.filter(c => c.priority === state.filters.priority);
+    if (state.filters.platform) rows = rows.filter(c => c.platform === state.filters.platform);
+    if (state.filters.testType) rows = rows.filter(c => c.testType === state.filters.testType);
+    if (state.filters.automated === 'yes') rows = rows.filter(c => c.automated);
+    if (state.filters.automated === 'no') rows = rows.filter(c => !c.automated);
+
+    if (rows.length === 0) {
+      el.innerHTML = '<div class="empty-note">No cases in this section.</div>';
+      return;
+    }
+    el.innerHTML = rows.map(c => `
+      <label class="case-row">
+        <input type="checkbox" ${state.selected.has(c.id) ? 'checked' : ''} onchange="toggleCase('${c.id}')">
+        <span class="title">${c.title}</span>
+        <span class="priority priority-${c.priority}">${c.priority}</span>
+        <span class="pill">${c.platform}</span>
+        <span class="pill">${c.testType}</span>
+        ${c.automated ? '<span class="pill">automated</span>' : ''}
+      </label>`).join('');
+  }
+
+  function toggleCase(id) {
+    if (state.selected.has(id)) state.selected.delete(id); else state.selected.add(id);
+    renderCommitBar();
+  }
+
+  function renderCommitBar() {
+    const bar = document.getElementById('commit-bar');
+    const n = state.selected.size;
+    const canCreate = state.runName.trim().length > 0 && n > 0;
+    bar.innerHTML = `
+      <span style="font-size:0.85rem;font-weight:600;">${n === 0 ? 'No cases selected' : n + ' selected'}</span>
+      <button class="btn btn-primary" ${canCreate ? '' : 'disabled'} onclick="handleCreateRun()">Create run</button>`;
+  }
+
+  function handleCreateRun() {
+    if (!state.runName.trim() || state.selected.size === 0) return;
+    const items = Array.from(state.selected).map(id => caseById(id));
+    const suiteName = state.pickerSuiteKey ? SUITES[state.pickerSuiteKey].name : null;
+    const runKey = 'new-' + Date.now();
+
+    state.runsListRows = [
+      {key: runKey, name: state.runName.trim(), status: 'open', passRate: null, created: 'just now', _new: true},
+      ...state.runsListRows,
+    ];
+
+    openRunDetail({
+      title: state.runName.trim(),
+      suiteName,
+      items,
+      justCreated: true,
+    });
+  }
+
+  // ---------------- Run detail (shared destination) ----------------
+  function openRunDetail(data) {
+    document.getElementById('run-detail-title').textContent = data.title;
+    document.getElementById('run-detail-crumbs').innerHTML = `
+      <a href="#" onclick="showView('runs-list');return false;">Projects</a><span class="sep">/</span>
+      <a href="#" onclick="showView('runs-list');return false;">Sample Project</a><span class="sep">/</span>
+      <a href="#" onclick="showView('runs-list');return false;">Runs</a><span class="sep">/</span>
+      <span class="current">${data.title}</span>`;
+    document.getElementById('run-detail-meta').innerHTML = data.suiteName
+      ? `<span>📁 From suite: <a href="#" onclick="showView('suite-detail');return false;">${data.suiteName}</a></span><span>Created just now</span>`
+      : `<span>Ad hoc run — not created from a suite</span><span>Created just now</span>`;
+    document.getElementById('run-detail-chips').innerHTML =
+      `<span class="status-chip active">All ${data.items.length}</span>
+       <span class="status-chip">Not run ${data.items.length}</span>`;
+    document.getElementById('run-detail-summary').textContent =
+      `Showing ${data.items.length} of ${data.items.length} items`;
+    document.getElementById('run-detail-items').innerHTML = data.items.map(c => `
+      <div class="item-row">
+        <span class="title">${c.title}<div class="sub">${c.platform} · ${c.tags.join(', ')}</div></span>
+        <span class="badge badge-notrun">Not run</span>
+      </div>`).join('');
+
+    const bannerEl = document.getElementById('run-detail-banner');
+    if (data.justCreated) {
+      bannerEl.innerHTML = `<div class="confirm-banner" id="run-created-banner">
+        ✓ Run created successfully — ${data.items.length} ${data.items.length === 1 ? 'case' : 'cases'} queued.
+        <button class="dismiss" onclick="document.getElementById('run-created-banner').remove()">✕</button>
+      </div>`;
+      setTimeout(() => {
+        const b = document.getElementById('run-created-banner');
+        if (b) { b.classList.add('fading'); setTimeout(() => b.remove(), 650); }
+      }, 4000);
+    } else {
+      bannerEl.innerHTML = '';
+    }
+    showView('run-detail');
+  }
+
+  // ---------------- Suite detail / quick run (entry point B) ----------------
+  function renderSuiteCaseList() {
+    const el = document.getElementById('suite-case-list');
+    el.innerHTML = SUITES.nightly.cases.map(id => {
+      const c = caseById(id);
+      return `<div class="suite-case-row">
+        <input type="checkbox" checked disabled>
+        <span style="flex:1;">${c.title}</span>
+        <span class="pill">${c.platform}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function openQuickRunDialog() {
+    document.getElementById('quickrun-name').value = 'Nightly run';
+    document.getElementById('quickrun-overlay').classList.add('open');
+  }
+  function closeQuickRunDialog() {
+    document.getElementById('quickrun-overlay').classList.remove('open');
+  }
+
+  function quickRunCustomize() {
+    closeQuickRunDialog();
+    const name = document.getElementById('quickrun-name').value.trim();
+    state.runName = name;
+    selectSuiteForPicker('nightly');
+    showView('runs-new');
+    document.getElementById('new-run-name').value = name;
+    document.getElementById('new-run-suite').value = 'nightly';
+  }
+
+  function handleQuickRunCreate() {
+    const name = document.getElementById('quickrun-name').value.trim() || 'Nightly run';
+    closeQuickRunDialog();
+    document.getElementById('suite-last-run').textContent = 'just now';
+
+    const items = SUITES.nightly.cases.map(caseById);
+    window._lastSuiteRun = { title: name, suiteName: 'Nightly', items, justCreated: false };
+
+    const bannerEl = document.getElementById('suite-detail-banner');
+    bannerEl.innerHTML = `<div class="confirm-banner" id="suite-run-banner">
+      ✓ Run "${name}" created — ${items.length} cases queued.
+      <a href="#" onclick="openRunDetail(window._lastSuiteRun);return false;">View run →</a>
+      <button class="dismiss" onclick="document.getElementById('suite-run-banner').remove()">✕</button>
+    </div>`;
+    setTimeout(() => {
+      const b = document.getElementById('suite-run-banner');
+      if (b) { b.classList.add('fading'); setTimeout(() => b.remove(), 650); }
+    }, 7000);
+  }
+
+  // ---------------- theme ----------------
+  function toggleTheme() {
+    const root = document.documentElement;
+    const current = root.getAttribute('data-theme') ||
+      (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    root.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+  }
+
+  // ---------------- init ----------------
+  renderSuiteCaseList();
+  showView('runs-list');
+</script>

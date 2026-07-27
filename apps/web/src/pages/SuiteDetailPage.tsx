@@ -11,6 +11,7 @@ import { PropertyRow } from '@/components/PropertyRow'
 import { HealthBar } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import type { components } from '@testpulse/shared/api'
 
@@ -48,6 +49,7 @@ export default function SuiteDetailPage() {
   const [deleting, setDeleting] = useState(false)
   const [runningQuick, setRunningQuick] = useState(false)
   const [quickRunName, setQuickRunName] = useState('')
+  const [createdRunKey, setCreatedRunKey] = useState<string>()
 
   const load = useCallback(async () => {
     if (!projectKey || !suiteKey) return
@@ -133,11 +135,12 @@ export default function SuiteDetailPage() {
 
   async function handleQuickRun() {
     if (!suite || !projectKey || !quickRunName.trim()) return
-    await api.POST('/api/v1/projects/{projectKey}/runs', {
+    const { data } = await api.POST('/api/v1/projects/{projectKey}/runs', {
       params: { path: { projectKey } },
       body: { name: quickRunName.trim(), suiteKey: suite.key },
     })
     setRunningQuick(false)
+    if (data) setCreatedRunKey(data.key)
     await load()
     bumpLanding()
   }
@@ -145,7 +148,7 @@ export default function SuiteDetailPage() {
   function handleCustomizeSelection() {
     if (!suite || !projectKey) return
     setRunningQuick(false)
-    navigate(`/projects/${projectKey}/runs`, {
+    navigate(`/projects/${projectKey}/runs/new`, {
       state: { seedFromSuiteKey: suite.key, seedName: quickRunName.trim() },
     })
   }
@@ -172,6 +175,15 @@ export default function SuiteDetailPage() {
   return (
     <div className="space-y-4">
       <Breadcrumbs segments={breadcrumbSegments} />
+
+      {createdRunKey && (
+        <ConfirmBanner
+          message="Run created"
+          linkTo={`/runs/${createdRunKey}`}
+          linkLabel="View run →"
+          onDismiss={() => setCreatedRunKey(undefined)}
+        />
+      )}
 
       <div className="flex items-center justify-between gap-4 border-b pb-4">
         <h1 className="tp-heading text-2xl">{suite.name}</h1>

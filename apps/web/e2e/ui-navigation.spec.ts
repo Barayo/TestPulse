@@ -115,12 +115,14 @@ test.describe('Requirement: Breadcrumb trail', () => {
     await page.goBack()
 
     await page.getByRole('button', { name: 'Go to Runs' }).click()
+    await page.getByRole('link', { name: /\+ new run/i }).click()
     await page.getByLabel(/^name$/i).fill('Sprint 1')
     // rework-run-creation-ux: "Create run" is gated behind an explicit case
     // selection — no longer implicitly includes every project case.
     await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: 'Create run' }).click()
-    await page.getByRole('link', { name: 'Sprint 1' }).click()
+    // Creating a run now navigates straight to its own detail page.
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
 
     const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
     await expect(nav.getByRole('link', { name: name.split(' ')[0] })).toBeVisible()
@@ -488,22 +490,23 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await expect(content(page).getByText('Login works')).toBeVisible()
     const projectId = new URL(page.url()).pathname.split('/')[2]
 
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await page.getByLabel(/^name$/i).fill('Run pass')
     await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: 'Create run' }).click()
-    await page.getByRole('link', { name: 'Run pass' }).click()
+    // Creating a run now navigates straight to its own detail page.
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
     await page.getByText('Login works').first().click()
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
     await expect(page.getByRole('list', { name: /result history/i }).getByText('pass')).toBeVisible()
 
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await page.getByLabel(/^name$/i).fill('Run fail')
     await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: 'Create run' }).click()
-    await page.getByRole('link', { name: 'Run fail' }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
     await page.getByText('Login works').first().click()
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
@@ -654,11 +657,42 @@ async function createSuiteWithOneCase(page: Page, projectLabel: string, suiteNam
 }
 
 test.describe('Requirement: Run creation', () => {
+  test('Scenario: Opening the Runs page shows the runs list first', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-70' })
+    const projectId = await createSuiteWithOneCase(page, 'Runs List Project', 'Smoke', 'Login works')
+
+    await page.goto(`/projects/${projectId}/runs`)
+    const newRunLink = page.getByRole('link', { name: /\+ new run/i })
+    await expect(newRunLink).toBeVisible()
+    await expect(page.getByLabel(/^name$/i)).not.toBeVisible()
+
+    await newRunLink.click()
+    await expect(page).toHaveURL(/\/runs\/new$/)
+    await expect(page.getByLabel(/^name$/i)).toBeVisible()
+  })
+
+  test('Scenario: Creating a run navigates to it with a confirmation', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-71' })
+    const projectId = await createSuiteWithOneCase(page, 'Run Created Banner Project', 'Smoke', 'Login works')
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await page.getByLabel(/^name$/i).fill('Smoke run')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
+    await page.getByRole('button', { name: /create run/i }).click()
+
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await expect(page.getByText(/run created successfully/i)).toBeVisible()
+
+    // One-shot: refreshing the same URL does not re-show the banner.
+    await page.reload()
+    await expect(page.getByText(/run created successfully/i)).not.toBeVisible()
+  })
+
   test('Scenario: Selecting a suite in the New run form seeds the case selection', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-63' })
     const projectId = await createSuiteWithOneCase(page, 'Run Creation Project', 'Smoke', 'Login works')
 
-    await page.goto(`/projects/${projectId}/runs`)
+    await page.goto(`/projects/${projectId}/runs/new`)
     await expect(page.getByRole('button', { name: /create run/i })).toBeDisabled()
 
     await page.getByLabel(/suite/i).selectOption({ label: 'Smoke (1 case)' })
@@ -666,7 +700,9 @@ test.describe('Requirement: Run creation', () => {
 
     await page.getByLabel(/^name$/i).fill('Smoke run')
     await page.getByRole('button', { name: /create run/i }).click()
-    await expect(page.getByRole('link', { name: 'Smoke run' })).toBeVisible()
+    // Creating a run now navigates straight to its own detail page.
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await expect(page.getByText('Smoke run').first()).toBeVisible()
   })
 })
 
@@ -688,6 +724,14 @@ test.describe('Requirement: Suites index and detail page', () => {
     // settles, unlike a bare not.toBeVisible() on an ambiguous locator.
     await expect(page.getByRole('button', { name: /^create run$/i })).not.toBeVisible()
     await expect(sidebar.getByText(/never run/i)).toHaveCount(0, { timeout: 10000 })
+
+    // rework-runs-list-ux: the quick-run action now leaves an inline
+    // confirmation banner with a link to the new run instead of just
+    // reloading silently.
+    const viewRunLink = page.getByRole('link', { name: /view run/i })
+    await expect(viewRunLink).toBeVisible()
+    await viewRunLink.click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
   })
 
   test('Scenario: Customize selection hands off to the New run form pre-seeded', async ({ page }) => {
@@ -699,11 +743,13 @@ test.describe('Requirement: Suites index and detail page', () => {
     await dialogName.fill('Nightly custom run')
     await page.getByRole('button', { name: /customize selection/i }).click()
 
-    await expect(page).toHaveURL(/\/runs$/)
+    await expect(page).toHaveURL(/\/runs\/new$/)
     await expect(page.getByLabel(/^name$/i)).toHaveValue('Nightly custom run')
     await expect(page.getByRole('checkbox', { name: 'Deploy works' })).toBeChecked()
 
     await page.getByRole('button', { name: /create run/i }).click()
-    await expect(page.getByRole('link', { name: 'Nightly custom run' })).toBeVisible()
+    // Creating a run now navigates straight to its own detail page.
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await expect(page.getByText('Nightly custom run').first()).toBeVisible()
   })
 })

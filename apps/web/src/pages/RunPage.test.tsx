@@ -79,9 +79,9 @@ function CaseLibraryProbe() {
   return <p data-testid="case-library-probe">case {projectKey} {caseKey}</p>
 }
 
-function renderRun() {
+function renderRun(initialEntries: Parameters<typeof MemoryRouter>[0]['initialEntries'] = ['/runs/r1']) {
   return render(
-    <MemoryRouter initialEntries={['/runs/r1']}>
+    <MemoryRouter initialEntries={initialEntries}>
       <Routes>
         <Route path="/runs/:runKey" element={<RunPage />} />
         <Route path="/runs/:runKey/items/:caseKey" element={<ItemPageProbe />} />
@@ -425,4 +425,18 @@ describe('Run lifecycle (open/closed)', () => {
     await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
     await waitFor(() => expect(mockBump).toHaveBeenCalled())
   })
+
+  it('shows a one-shot "Run created" banner when arriving via the justCreated router state', async () => {
+    mockRunAPI([pendingItem])
+    renderRun([{ pathname: '/runs/r1', state: { justCreated: true } }])
+    expect(await screen.findByText(/run created successfully/i)).toBeInTheDocument()
+  })
+
+  it('does not show the "Run created" banner on a normal visit', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    await screen.findAllByText(run.name)
+    expect(screen.queryByText(/run created successfully/i)).not.toBeInTheDocument()
+  })
+
 })

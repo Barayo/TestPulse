@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { ArrowRightIcon, ExternalLinkIcon, FolderIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -8,6 +8,7 @@ import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunStatusBreakdown, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '@/components/RunStatusBreakdown'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
+import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import {
   Card,
@@ -79,6 +80,7 @@ function RunItemRow({
 export default function RunPage() {
   const { runKey } = useParams<{ runKey: string }>()
   const navigate = useNavigate()
+  const location = useLocation()
   const [run, setRun] = useState<Run>()
   const [notFound, setNotFound] = useState(false)
   const [project, setProject] = useState<Project>()
@@ -91,6 +93,18 @@ export default function RunPage() {
   const [activeFilter, setActiveFilter] = useState<Status | null>(null)
   const [groupEnabled, setGroupEnabled] = useState(false)
   const bumpDataRevision = useBumpDataRevision()
+
+  // One-shot confirmation after navigating here from NewRunPage on creation
+  // (rework-runs-list-ux) — same idiom as RunsPage's old seedFromSuiteKey:
+  // read router state once, then clear it so a refresh doesn't re-show it.
+  const [showCreatedBanner, setShowCreatedBanner] = useState(
+    Boolean((location.state as { justCreated?: boolean } | null)?.justCreated),
+  )
+  useEffect(() => {
+    if (!showCreatedBanner) return
+    navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const load = useCallback(async () => {
     if (!runKey) return
@@ -193,6 +207,9 @@ export default function RunPage() {
           { label: run?.name ?? '' },
         ]}
       />
+      {showCreatedBanner && (
+        <ConfirmBanner message="Run created successfully" onDismiss={() => setShowCreatedBanner(false)} />
+      )}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">

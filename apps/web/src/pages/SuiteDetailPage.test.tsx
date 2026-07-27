@@ -242,7 +242,23 @@ describe('SuiteDetailPage', () => {
     expect(suiteGetCalls.length).toBeGreaterThan(1)
   })
 
-  it('Customize selection hands off to the Runs page pre-seeded with this suite', async () => {
+  it('shows an inline confirmation banner with a link to the new run after Run suite', async () => {
+    mockDetailAPI()
+    mockPOST.mockResolvedValue({
+      data: { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Smoke run', createdAt: '' },
+      response: { ok: true },
+    })
+    renderDetail()
+
+    await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^create run$/i }))
+
+    expect(await screen.findByText(/run created/i)).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /view run/i })
+    expect(link).toHaveAttribute('href', '/runs/p1-R1')
+  })
+
+  it('Customize selection hands off to the dedicated New run route, pre-seeded with this suite', async () => {
     mockDetailAPI()
     renderDetail()
 
@@ -252,7 +268,7 @@ describe('SuiteDetailPage', () => {
     await userEvent.type(nameInput, 'Custom name')
     await userEvent.click(screen.getByRole('button', { name: /customize selection/i }))
 
-    expect(navigatedTo).toBe('/projects/p1/runs')
+    expect(navigatedTo).toBe('/projects/p1/runs/new')
     expect(navigatedState).toEqual({ seedFromSuiteKey: 'p1-S1', seedName: 'Custom name' })
     expect(mockPOST).not.toHaveBeenCalled()
   })
