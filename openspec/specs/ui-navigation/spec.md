@@ -10,19 +10,21 @@ kitchen-sink page with no persistent orientation.
 ## Requirements
 ### Requirement: Breadcrumb trail
 The web UI SHALL show a breadcrumb trail reflecting the user's current location — Projects
-› {Project} for a project's own pages, extended with intermediate section names (and a
-permanent "Library" crumb for the root) when browsing the library, or with the suite/run
-name on those pages — with each ancestor segment a link back to that level. Once the trail
-exceeds five segments, the middle SHALL collapse behind a single control that reveals the
-hidden segments on demand; the first two segments (entry point and project) and the last
-two (immediate parent and current location) SHALL always remain visible and never require
-horizontal scrolling to see. On a page that has its own heading for the current item (e.g.
+› {Project}, extended with intermediate section names (and a permanent "Library" crumb for
+the root) when browsing the library, or with the suite/run name on those pages — with each
+ancestor segment a link back to that level, on every project-scoped page except the
+project's own landing page, which shows no breadcrumb (its persistent header and page
+heading already establish the project). Once the trail exceeds five segments, the middle
+SHALL collapse behind a single control that reveals the hidden segments on demand; the
+first two segments (entry point and project) and the last two (immediate parent and
+current location) SHALL always remain visible and never require horizontal scrolling to
+see. On a page that has its own heading for the current item (e.g.
 a case's title), the trail SHALL end at that item's parent rather than repeating the
 heading as a trailing crumb.
 
-#### Scenario: Breadcrumb on a project's landing page
+#### Scenario: No breadcrumb on a project's own landing page
 - **WHEN** a user opens a project's landing page
-- **THEN** the breadcrumb shows "Projects" and the project's name, with "Projects" linking back to the project list
+- **THEN** no breadcrumb trail is shown — the persistent header and the page's own heading already establish the project without a third repeat
 
 #### Scenario: Breadcrumb reflects section depth
 - **WHEN** a user navigates two levels deep into the library

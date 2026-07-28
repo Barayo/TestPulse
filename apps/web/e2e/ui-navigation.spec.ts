@@ -57,12 +57,11 @@ async function createCase(
 }
 
 test.describe('Requirement: Breadcrumb trail', () => {
-  test("Scenario: Breadcrumb on a project's landing page", async ({ page }) => {
+  test("Scenario: No breadcrumb on a project's own landing page", async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-29' })
     const name = await createProject(page, 'Landing Breadcrumb Project')
-    const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
-    await expect(nav.getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/')
-    await expect(nav.getByText(name)).toBeVisible()
+    await expect(page.getByRole('heading', { name })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0)
   })
 
   test('Scenario: Breadcrumb reflects folder depth', async ({ page }) => {
@@ -167,7 +166,7 @@ test.describe('Requirement: Project switcher', () => {
     const dialog = page.getByRole('dialog')
     await expect(dialog.getByText(first)).toBeVisible()
     await dialog.getByText(first).click()
-    await expect(page.getByRole('navigation', { name: 'Breadcrumb' }).getByText(first)).toBeVisible()
+    await expect(page.getByRole('heading', { name: first })).toBeVisible()
   })
 
   test('Scenario: Switching project via keyboard', async ({ page }) => {
