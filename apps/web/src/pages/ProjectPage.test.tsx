@@ -33,7 +33,7 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
       })
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
-        data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+        data: overrides.project ?? { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, description: '', createdAt: '' },
         response: { ok: true },
       })
     if (path === '/api/v1/projects')
@@ -97,12 +97,11 @@ beforeEach(() => {
 })
 
 describe('ProjectPage landing', () => {
-  it('shows a breadcrumb with a link back to Projects and the project name', async () => {
+  it('does not render a Projects breadcrumb — the top bar already provides a way back, and the page has its own heading', async () => {
     mockProjectAPI()
     renderProject()
-    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
-    expect(within(nav).getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/')
-    expect(await within(nav).findByText('QA Platform')).toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
   })
 
   it('shows the project name as a page heading, with its key as a subtitle', async () => {
@@ -339,8 +338,6 @@ describe('ProjectPage landing', () => {
   it('recovers gracefully when the project fetch fails', async () => {
     mockGET.mockRejectedValue(new Error('network down'))
     renderProject()
-    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
-    expect(within(nav).getByRole('link', { name: 'Projects' })).toBeInTheDocument()
     expect(await screen.findByText(/no sections yet/i)).toBeInTheDocument()
   })
 
@@ -408,6 +405,16 @@ describe('ProjectPage landing', () => {
       const strip = within(screen.getByTestId('summary-strip'))
       expect(strip.getByText(/Sprint 1/)).toBeInTheDocument()
       expect(strip.getByText(/· 100%/)).toBeInTheDocument()
+    })
+
+    it('lays out its cells on a proportional grid, not a packed flex row that leaves a dead gap before the last cell', async () => {
+      mockProjectAPI()
+      renderProject()
+      const strip = await screen.findByTestId('summary-strip')
+      expect(strip).toHaveClass('grid')
+      expect(strip).toHaveClass(
+        'md:grid-cols-[minmax(200px,1.1fr)_auto_minmax(220px,1.3fr)_auto_minmax(160px,0.9fr)]',
+      )
     })
 
     it('reflects the active project, not just the first entry in the summaries list', async () => {

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
-import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
@@ -95,8 +94,13 @@ export default function ProjectPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <Breadcrumbs segments={[{ label: 'Projects', href: '/' }, { label: project?.name ?? '' }]} />
+      <div className="flex items-start justify-between gap-4">
+        {project && (
+          <div>
+            <h1 className="tp-heading text-2xl">{project.name}</h1>
+            <p className="text-sm text-muted-foreground">{project.key} · project overview</p>
+          </div>
+        )}
         {user?.isTenantAdmin && (
           <Link
             to={`/projects/${projectKey}/members`}
@@ -108,17 +112,10 @@ export default function ProjectPage() {
         )}
       </div>
 
-      {project && (
-        <div>
-          <h1 className="tp-heading text-2xl">{project.name}</h1>
-          <p className="text-sm text-muted-foreground">{project.key} · project overview</p>
-        </div>
-      )}
-
       {summary && (
         <div
           data-testid="summary-strip"
-          className="flex flex-col gap-4 rounded-lg border bg-card p-4 md:flex-row md:items-center md:gap-5"
+          className="grid grid-cols-1 gap-4 rounded-lg border bg-card p-4 md:grid-cols-[minmax(200px,1.1fr)_auto_minmax(220px,1.3fr)_auto_minmax(160px,0.9fr)] md:items-center md:gap-5 md:px-5.5"
         >
           <div className="flex items-center gap-3">
             <HealthRing rate={summary.passRate} />
