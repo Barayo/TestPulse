@@ -58,7 +58,10 @@
 ## 6. Verification
 
 - [x] 6.1 Full unit suite green (639 tests), coverage gate maintained
-  (91.6%/82.1%/90.1%/94.6%, all ≥80%), `tsc -b`/`oxlint` clean.
+  (91.6%/82.1%/90.1%/94.6%, all ≥80%), `tsc -b`/`oxlint` clean. Full e2e suite:
+  77/77 (the one failure on first run, "Summary counts by status," was the
+  same pre-existing `fullyParallel` contention flake documented earlier this
+  session — confirmed via an isolated `--workers=1` re-run, passing in 750ms).
 - [x] 6.2 Manual verification against a freshly rebuilt `docker compose` stack with a
   fresh DB (Sample Project, light + dark theme): health ring, count tiles, last-run
   preview, magnitude bars, inline expand (Authentication → Two-Factor), suite health
