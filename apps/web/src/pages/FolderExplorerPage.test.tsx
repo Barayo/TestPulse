@@ -162,21 +162,22 @@ describe('FolderExplorerPage', () => {
     expect(within(list).getByText('Daily transfer limit')).toBeInTheDocument()
   })
 
-  it('reflects folder depth in the breadcrumb, with Library as the root crumb', async () => {
+  it('reflects folder depth in the breadcrumb, with Library as the root crumb — no leading project segment, the header chip covers that', async () => {
     mockExplorerAPI()
     renderExplorer()
     const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
-    expect(within(nav).getByText('Banca Móvil')).toBeInTheDocument()
+    expect(within(nav).queryByText('Banca Móvil')).not.toBeInTheDocument()
     expect(within(nav).getByText('Library')).toBeInTheDocument()
     expect(within(nav).getByText('Transferencias')).toBeInTheDocument()
   })
 
-  it('shows "Library" as the current crumb when browsing the root itself', async () => {
+  it('shows "Library" as a plain, non-interactive crumb when browsing the root itself — the page has no other heading announcing where you are', async () => {
     mockExplorerAPI()
     renderExplorer('/projects/p1/library/root')
-    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
+    await screen.findByRole('list', { name: 'Section contents' })
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
     expect(within(nav).getByText('Library')).toBeInTheDocument()
-    expect(within(nav).queryByText('Transferencias')).not.toBeInTheDocument()
+    expect(within(nav).queryByRole('link')).not.toBeInTheDocument()
   })
 
   it('navigates into a subfolder when clicked', async () => {

@@ -70,11 +70,39 @@ function HiddenSegmentsMenu({ segments }: { segments: Crumb[] }) {
   )
 }
 
-// A single segment can't navigate anywhere — it would just repeat the page's
-// own heading directly below it (e.g. "PROJECTS" over an "H1: Projects").
-// Only render once there's an actual trail to show.
+// An empty segment list has nothing to show — the header chip and the
+// page's own heading already cover it. A single segment, though, always
+// renders: some pages (the Library explorer at its root) have no other
+// heading announcing where you are, so a lone segment is never suppressed.
 export function Breadcrumbs({ segments }: { segments: Crumb[] }) {
-  if (segments.length <= 1) return null
+  if (segments.length === 0) return null
+
+  if (segments.length === 1) {
+    // rework-project-nav-identity: the header's project chip now owns
+    // "which project", and a trailing segment matching the page's own
+    // heading gets trimmed before this component ever sees it. A single
+    // remaining segment is either a genuine, distinct ancestor with an
+    // href (e.g. "Suites" while on one suite's detail page — rendered as a
+    // back-link) or the current root location with none (e.g. "Library"
+    // while browsing its own root — rendered as plain, non-interactive
+    // text, same as any other page's current-location crumb).
+    const [only] = segments
+    if (!only.href) {
+      return (
+        <nav aria-label="Breadcrumb" className="tp-label flex items-center gap-1">
+          <span>{only.label}</span>
+        </nav>
+      )
+    }
+    return (
+      <nav aria-label="Breadcrumb" className="tp-label flex items-center gap-1">
+        <Link to={only.href} className="flex items-center gap-1 hover:text-foreground">
+          <span aria-hidden="true">‹</span>
+          {only.label}
+        </Link>
+      </nav>
+    )
+  }
 
   if (segments.length <= MAX_VISIBLE_SEGMENTS) {
     return (

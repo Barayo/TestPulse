@@ -214,10 +214,10 @@ describe('App shell', () => {
 
   it('separates the wordmark from the active project with a breadcrumb-style ›, matching Breadcrumbs.tsx', async () => {
     mockProjectData()
-    window.history.pushState({}, '', '/projects/p1')
+    window.history.pushState({}, '', '/projects/p1/suites')
     render(<App />)
-    await screen.findByRole('link', { name: 'Banca Móvil' })
-    const header = screen.getByRole('banner')
+    const header = await screen.findByRole('banner')
+    await within(header).findByRole('link', { name: 'Banca Móvil' })
     expect(within(header).getByText('›')).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
@@ -229,20 +229,46 @@ describe('App shell', () => {
     expect(screen.queryByText('Select project')).not.toBeInTheDocument()
   })
 
-  it('shows the active project name on the switcher on a project route', async () => {
+  it('shows the active project name on the switcher on a nested project route', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/projects/p1/suites')
+    render(<App />)
+    const header = await screen.findByRole('banner')
+    expect(await within(header).findByRole('link', { name: 'Banca Móvil' })).toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it("shows no chip in the header on the project's own landing page — just the wordmark, since the page's own heading already establishes the project", async () => {
     mockProjectData()
     window.history.pushState({}, '', '/projects/p1')
     render(<App />)
-    expect(await screen.findByRole('link', { name: 'Banca Móvil' })).toBeInTheDocument()
+    await screen.findByRole('heading', { name: 'Banca Móvil' })
+    const header = screen.getByRole('banner')
+    expect(within(header).queryByText('›')).not.toBeInTheDocument()
+    expect(within(header).queryByRole('link', { name: 'Banca Móvil' })).not.toBeInTheDocument()
+    expect(within(header).queryByRole('button', { name: /switch project/i })).not.toBeInTheDocument()
+    window.history.pushState({}, '', '/')
+  })
+
+  it('still opens the switcher via the keyboard shortcut while on the landing page, even with no header chip', async () => {
+    mockProjectData()
+    window.history.pushState({}, '', '/projects/p1')
+    const user = userEvent.setup()
+    render(<App />)
+    await screen.findByRole('heading', { name: 'Banca Móvil' })
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    await user.keyboard('{Meta>}k{/Meta}')
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 
   it('opens the switcher palette with every project and its stats', async () => {
     mockProjectData()
-    window.history.pushState({}, '', '/projects/p1')
+    window.history.pushState({}, '', '/projects/p1/suites')
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('link', { name: 'Banca Móvil' })
+    const header = await screen.findByRole('banner')
+    await within(header).findByRole('link', { name: 'Banca Móvil' })
     await user.click(screen.getByRole('button', { name: /switch project/i }))
     const dialog = await screen.findByRole('dialog')
     expect(within(dialog).getByText('Banca Móvil')).toBeInTheDocument()
@@ -256,14 +282,18 @@ describe('App shell', () => {
 
   it('navigates to the selected project when chosen from the switcher palette', async () => {
     mockProjectData()
-    window.history.pushState({}, '', '/projects/p1')
+    window.history.pushState({}, '', '/projects/p1/suites')
     const user = userEvent.setup()
     render(<App />)
-    await screen.findByRole('link', { name: 'Banca Móvil' })
+    const header = await screen.findByRole('banner')
+    await within(header).findByRole('link', { name: 'Banca Móvil' })
     await user.click(screen.getByRole('button', { name: /switch project/i }))
     const dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByText('Desktop App'))
-    expect(await screen.findByRole('link', { name: 'Desktop App' })).toBeInTheDocument()
+    // Selecting a project navigates to its own landing page, which shows no
+    // header chip (above) — so navigation is confirmed via the landing
+    // page's own heading, not the (now absent) chip link.
+    expect(await screen.findByRole('heading', { name: 'Desktop App' })).toBeInTheDocument()
     window.history.pushState({}, '', '/')
   })
 

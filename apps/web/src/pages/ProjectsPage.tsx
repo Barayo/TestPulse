@@ -7,7 +7,6 @@ import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
-import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { StatusPill, ProgressBar, healthLabel, statusBorderClass } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
 import { useProjectSummaries, type ProjectSummary } from '@/lib/useProjectSummaries'
@@ -138,7 +137,11 @@ export default function ProjectsPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs segments={[{ label: 'Projects' }]} />
+      {/* No breadcrumb here — a lone "Projects" segment would just repeat
+          the page's own heading below it (Breadcrumbs.tsx now always
+          renders a single segment it's given, so it's on this page to not
+          pass a purely redundant one, unlike e.g. the Library explorer's
+          root, which has no heading of its own to repeat). */}
 
       <div className="flex items-end justify-between gap-4">
         <div>

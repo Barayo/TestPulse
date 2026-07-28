@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { SuiteCaseGrid, type SuiteCaseGridCase } from '@/components/SuiteCaseGrid'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { PropertyRow } from '@/components/PropertyRow'
@@ -165,12 +166,15 @@ export default function SuiteDetailPage() {
 
   const isDirty = selected.size !== baseline.size || Array.from(selected).some((id) => !baseline.has(id))
 
-  const breadcrumbSegments: Crumb[] = [
-    { label: 'Projects', href: '/' },
-    { label: project.name, href: `/projects/${projectKey}` },
-    { label: 'Suites', href: `/projects/${projectKey}/suites` },
-    { label: suite.name },
-  ]
+  const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb(
+    [
+      { label: 'Projects', href: '/' },
+      { label: project.name, href: `/projects/${projectKey}` },
+      { label: 'Suites', href: `/projects/${projectKey}/suites` },
+      { label: suite.name },
+    ],
+    suite.name,
+  )
 
   return (
     <div className="space-y-4">

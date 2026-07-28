@@ -46,12 +46,11 @@ beforeEach(() => {
 })
 
 describe('SuitesPage', () => {
-  it('shows a breadcrumb: Projects > project name > Suites', async () => {
+  it('shows no breadcrumb — the header chip already covers the project, and the page heading already says "Suites"', async () => {
     mockSuitesAPI(projectQA)
     renderSuites()
-    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
-    expect(await screen.findByText('QA Platform')).toBeInTheDocument()
-    expect(nav).toHaveTextContent('Suites')
+    await screen.findByText('Suites', { selector: '[data-slot="card-title"]' })
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
   })
 
   it('shows each suite as a card with name, case count, and a pass-rate health bar', async () => {

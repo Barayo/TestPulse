@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -105,11 +106,11 @@ export default function RunItemDetailPage() {
 
   const isClosed = run.status === 'closed'
 
-  const breadcrumbSegments: Crumb[] = [
+  const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
     { label: 'Projects', href: '/' },
     { label: project?.name ?? '', href: project ? `/projects/${project.key}` : undefined },
     { label: run.name, href: `/runs/${runKey}` },
-  ]
+  ])
 
   return (
     <div className="space-y-4">

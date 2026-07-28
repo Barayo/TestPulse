@@ -1,8 +1,7 @@
-import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowLeftRight } from 'lucide-react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
+import { ChevronDown } from 'lucide-react'
+import { avatarStyle, initialsFor } from '@/lib/avatar'
+import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
 
 export type SwitcherProject = {
   id: string
@@ -15,106 +14,61 @@ export type SwitcherProject = {
 type Props = {
   projects: SwitcherProject[]
   activeProjectId?: string
-  onSelectProject: (projectId: string) => void
 }
 
-export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: Props) {
-  const [open, setOpen] = useState(false)
-  const [query, setQuery] = useState('')
+export function ProjectSwitcher({ projects, activeProjectId }: Props) {
+  const { canSwitch, openSwitcher } = useProjectSwitcher()
   const activeProject = projects.find((p) => p.id === activeProjectId)
-  // Nothing to jump to with 0-1 projects — the icon would just be noise.
-  const canSwitch = projects.length > 1
-
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        setOpen(true)
-      }
-    }
-    document.addEventListener('keydown', onKeyDown)
-    return () => document.removeEventListener('keydown', onKeyDown)
-  }, [])
-
-  useEffect(() => {
-    if (!open) setQuery('')
-  }, [open])
-
-  const filtered = useMemo(
-    () => projects.filter((p) => p.name.toLowerCase().includes(query.toLowerCase())),
-    [projects, query],
-  )
 
   return (
-    <>
-      <div className="flex min-w-0 max-w-[9rem] items-center gap-0.5 sm:max-w-[16rem]">
-        {activeProject ? (
-          <Link
-            to={`/projects/${activeProject.id}`}
-            // text-[20px]: bumped from the base text-sm (14px) so the
-            // project name reads closer to the wordmark's own presence,
-            // rather than looking like an afterthought next to it.
-            // leading-none + relative -top-1: Geist Variable's line-box
-            // sits noticeably lower/taller than Recursive's at a similar
-            // font-size, so items-baseline alone (App.tsx) wasn't enough
-            // once the two were closer in size — calibrated live against
-            // the wordmark next to it.
-            className="relative -top-1 -mx-1 -my-1 min-w-0 truncate rounded-md px-1 py-1 text-[20px] leading-none font-bold text-foreground hover:text-primary hover:underline"
-          >
-            {activeProject.name}
+    <div className="flex min-w-0 max-w-[9rem] items-center sm:max-w-[16rem]">
+      {activeProject && canSwitch ? (
+        // Fused chip (rework-project-nav-identity): avatar + name + chevron
+        // share one visual container — hovering anywhere in it (including
+        // over the link or the button) highlights the whole thing as one
+        // unit, replacing the earlier bare name + separate floating
+        // ArrowLeftRight icon that read as two loose pieces.
+        <div
+          data-testid="project-chip"
+          className="flex min-w-0 items-center gap-1.5 rounded-md py-1 pr-1 pl-1.5 hover:bg-accent"
+        >
+          <Link to={`/projects/${activeProject.id}`} className="flex min-w-0 items-center gap-1.5 rounded-sm">
+            <span
+              aria-hidden="true"
+              style={avatarStyle(activeProject.name)}
+              className="flex size-[22px] shrink-0 items-center justify-center rounded-[6px] text-[9.5px] font-extrabold"
+            >
+              {initialsFor(activeProject.name)}
+            </span>
+            <span className="min-w-0 truncate text-[16.5px] leading-none font-bold text-foreground">
+              {activeProject.name}
+            </span>
           </Link>
-        ) : (
-          <span className="relative -top-1 truncate text-[20px] leading-none font-bold text-muted-foreground">
-            Select project
-          </span>
-        )}
-        {canSwitch && (
-          // relative -top-0.5: sized up alongside the wordmark/project name
-          // bumps above; a plain button's own alignment sat a touch low
-          // next to the now-larger text, calibrated live.
           <button
             type="button"
-            className="relative -top-0.5 flex size-9 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-primary"
-            onClick={() => setOpen(true)}
+            className="flex shrink-0 items-center justify-center text-muted-foreground hover:text-primary"
+            onClick={openSwitcher}
             title="Switch project (⌘K)"
             aria-label="Switch project"
           >
-            <ArrowLeftRight className="size-[22px]" />
+            <ChevronDown className="size-3.5" aria-hidden="true" />
           </button>
-        )}
-      </div>
-
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="sm:max-w-md" showCloseButton={false}>
-          <DialogTitle className="sr-only">Switch project</DialogTitle>
-          <Input
-            autoFocus
-            placeholder="Search projects…"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <ul className="max-h-80 space-y-1 overflow-y-auto">
-            {filtered.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  className="block w-full rounded-md px-2 py-2 text-left hover:bg-accent"
-                  onClick={() => {
-                    onSelectProject(p.id)
-                    setOpen(false)
-                  }}
-                >
-                  <span className="block truncate text-sm font-medium">{p.name}</span>
-                  <span className="block font-mono text-xs text-muted-foreground">
-                    {p.suiteCount} suites · {p.caseCount} cases ·{' '}
-                    {p.passRate === null ? 'no runs' : `${p.passRate}% pass`}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </DialogContent>
-      </Dialog>
-    </>
+        </div>
+      ) : activeProject ? (
+        // Single project: plain link, no chip chrome (avatar/pill/chevron)
+        // — nothing suggesting a switch affordance that has nothing to
+        // switch to, but "go to this project" is still real navigation.
+        <Link
+          to={`/projects/${activeProject.id}`}
+          className="relative -top-1 -mx-1 -my-1 min-w-0 truncate rounded-md px-1 py-1 text-[20px] leading-none font-bold text-foreground hover:text-primary hover:underline"
+        >
+          {activeProject.name}
+        </Link>
+      ) : (
+        <span className="relative -top-1 truncate text-[20px] leading-none font-bold text-muted-foreground">
+          Select project
+        </span>
+      )}
+    </div>
   )
 }

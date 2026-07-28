@@ -41,10 +41,28 @@ describe('Breadcrumbs', () => {
     expect(screen.queryByRole('link', { name: 'QA Platform' })).not.toBeInTheDocument()
   })
 
-  it('renders nothing for a single segment — it would only repeat the page heading below it', () => {
-    renderCrumbs([{ label: 'Projects' }])
-    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
-    expect(screen.queryByText('Projects')).not.toBeInTheDocument()
+  it('renders a single segment with no href as plain, non-interactive text — some pages have no other heading announcing where you are', () => {
+    // e.g. the Library explorer at its own root: nothing else on the page
+    // says "Library", so this crumb must stay visible even though there's
+    // no distinct ancestor to link back to.
+    renderCrumbs([{ label: 'Library' }])
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    expect(within(nav).getByText('Library')).toBeInTheDocument()
+    expect(within(nav).queryByRole('link')).not.toBeInTheDocument()
+  })
+
+  it('renders a single real ancestor segment as a back-link rather than suppressing it (rework-project-nav-identity)', () => {
+    // Once the header chip owns "which project" and a trailing segment that
+    // duplicates the page's own heading is trimmed too, a page can be left
+    // with exactly one segment that is nonetheless a genuine, distinct
+    // ancestor (e.g. "Suites" while viewing one specific suite's detail
+    // page) — that's still useful orientation, unlike the old two-segment
+    // "Projects › {Project}" case this component was originally built for.
+    renderCrumbs([{ label: 'Suites', href: '/projects/p1/suites' }])
+    const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+    const link = within(nav).getByRole('link', { name: /Suites/ })
+    expect(link).toHaveAttribute('href', '/projects/p1/suites')
+    expect(within(nav).getByText('‹')).toBeInTheDocument()
   })
 
   it('renders nothing for an empty segment list', () => {

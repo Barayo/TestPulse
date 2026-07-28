@@ -57,12 +57,11 @@ beforeEach(() => {
 })
 
 describe('RunsPage', () => {
-  it('shows a breadcrumb: Projects > project name > Runs', async () => {
+  it('shows no breadcrumb — the header chip already covers the project, and the page heading already says "Runs"', async () => {
     mockRunsAPI()
     renderRuns()
-    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
-    expect(await screen.findByText('QA Platform')).toBeInTheDocument()
-    expect(nav).toHaveTextContent('Runs')
+    await screen.findByText('Runs', { selector: '[data-slot="card-title"]' })
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
   })
 
   it('shows the runs list as the primary content, not a run-creation form', async () => {

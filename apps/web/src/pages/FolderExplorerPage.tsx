@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { FolderIcon, FileTextIcon, FolderInputIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
@@ -409,15 +410,19 @@ export default function FolderExplorerPage() {
     bumpLanding()
   }
 
-  const breadcrumbSegments: Crumb[] = [
+  const folderAncestors = ancestorChain(folders, selectedFolderId)
+  const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
     { label: 'Projects', href: '/' },
     { label: project?.name ?? '', href: `/projects/${projectKey}` },
-    { label: 'Library', href: `/projects/${projectKey}/library/${root.id}` },
-    ...ancestorChain(folders, selectedFolderId).map((f) => ({
+    // No href when Library would be the sole remaining segment (browsing
+    // the root itself) — that's "current location," not a distinct
+    // ancestor; see the matching comment in CaseDetailPage.tsx.
+    { label: 'Library', href: folderAncestors.length > 0 ? `/projects/${projectKey}/library/${root.id}` : undefined },
+    ...folderAncestors.map((f) => ({
       label: f.name,
       href: `/projects/${projectKey}/library/${f.id}`,
     })),
-  ]
+  ])
 
   return (
     <div className="space-y-4">

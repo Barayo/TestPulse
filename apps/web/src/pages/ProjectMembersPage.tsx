@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { UserPicker, type UserOption } from '@/components/UserPicker'
 
 type Role = { id: string; name: string }
@@ -102,11 +103,14 @@ export default function ProjectMembersPage() {
   return (
     <div className="space-y-6">
       <Breadcrumbs
-        segments={[
-          { label: 'Projects', href: '/' },
-          { label: projectName, href: `/projects/${projectKey}` },
-          { label: 'Members' },
-        ]}
+        segments={trimProjectBreadcrumb(
+          [
+            { label: 'Projects', href: '/' },
+            { label: projectName, href: `/projects/${projectKey}` },
+            { label: 'Members' },
+          ],
+          'Members',
+        )}
       />
 
       <Card>

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { HealthBar } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -70,11 +71,14 @@ export default function SuitesPage() {
   return (
     <div className="space-y-6">
       <Breadcrumbs
-        segments={[
-          { label: 'Projects', href: '/' },
-          { label: project?.name ?? '', href: `/projects/${projectKey}` },
-          { label: 'Suites' },
-        ]}
+        segments={trimProjectBreadcrumb(
+          [
+            { label: 'Projects', href: '/' },
+            { label: project?.name ?? '', href: `/projects/${projectKey}` },
+            { label: 'Suites' },
+          ],
+          'Suites',
+        )}
       />
 
       <Card>

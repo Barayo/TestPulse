@@ -97,13 +97,11 @@ beforeEach(() => {
 })
 
 describe('Run execution board', () => {
-  it('shows a breadcrumb with Projects, the project name, and the run name', async () => {
+  it('shows no breadcrumb — the header chip already covers the project, and the run name is already the page heading', async () => {
     mockRunAPI([pendingItem])
     renderRun()
-    const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
-    expect(within(nav).getByRole('link', { name: 'Projects' })).toHaveAttribute('href', '/')
-    expect(await within(nav).findByText('QA Platform')).toBeInTheDocument()
-    expect(within(nav).getByText('Sprint 1')).toBeInTheDocument()
+    await screen.findByText('Sprint 1', { selector: '[data-slot="card-title"]' })
+    expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
   })
 
   it('shows run items with status chips and identifying metadata', async () => {

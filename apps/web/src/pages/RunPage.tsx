@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunStatusBreakdown, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '@/components/RunStatusBreakdown'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
@@ -201,11 +202,14 @@ export default function RunPage() {
   return (
     <div className="space-y-4">
       <Breadcrumbs
-        segments={[
-          { label: 'Projects', href: '/' },
-          { label: project?.name ?? '', href: project ? `/projects/${project.key}` : undefined },
-          { label: run?.name ?? '' },
-        ]}
+        segments={trimProjectBreadcrumb(
+          [
+            { label: 'Projects', href: '/' },
+            { label: project?.name ?? '', href: project ? `/projects/${project.key}` : undefined },
+            { label: run?.name ?? '' },
+          ],
+          run?.name,
+        )}
       />
       {showCreatedBanner && (
         <ConfirmBanner message="Run created successfully" onDismiss={() => setShowCreatedBanner(false)} />

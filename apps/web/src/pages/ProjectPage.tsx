@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-react'
+import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
+import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
 import { useAuth } from '@/lib/useAuth'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
@@ -47,6 +48,7 @@ export default function ProjectPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { canSwitch, openSwitcher } = useProjectSwitcher()
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const landing = useProjectLanding(projectKey)
@@ -97,7 +99,20 @@ export default function ProjectPage() {
       <div className="flex items-start justify-between gap-4">
         {project && (
           <div>
-            <h1 className="tp-heading text-2xl">{project.name}</h1>
+            <h1 className="tp-heading flex items-center gap-1.5 text-2xl">
+              {project.name}
+              {canSwitch && (
+                <button
+                  type="button"
+                  className="text-muted-foreground hover:text-primary"
+                  onClick={openSwitcher}
+                  title="Switch project (⌘K)"
+                  aria-label="Switch project"
+                >
+                  <ChevronDown className="size-5" aria-hidden="true" />
+                </button>
+              )}
+            </h1>
             <p className="text-sm text-muted-foreground">{project.key} · project overview</p>
           </div>
         )}

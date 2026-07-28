@@ -9,18 +9,7 @@ membership management, and a breadcrumb trail — replacing an earlier flat,
 kitchen-sink page with no persistent orientation.
 ## Requirements
 ### Requirement: Breadcrumb trail
-The web UI SHALL show a breadcrumb trail reflecting the user's current location — Projects
-› {Project}, extended with intermediate section names (and a permanent "Library" crumb for
-the root) when browsing the library, or with the suite/run name on those pages — with each
-ancestor segment a link back to that level, on every project-scoped page except the
-project's own landing page, which shows no breadcrumb (its persistent header and page
-heading already establish the project). Once the trail exceeds five segments, the middle
-SHALL collapse behind a single control that reveals the hidden segments on demand; the
-first two segments (entry point and project) and the last two (immediate parent and
-current location) SHALL always remain visible and never require horizontal scrolling to
-see. On a page that has its own heading for the current item (e.g.
-a case's title), the trail SHALL end at that item's parent rather than repeating the
-heading as a trailing crumb.
+The web UI SHALL show a breadcrumb trail reflecting the user's current location, on every project-scoped page except the project's own landing page (which shows none — see the Project switcher requirement). The trail SHALL NOT include a leading "Projects › {Project}" segment — the header chip already answers "which project" persistently, so repeating it in the trail is redundant. The trail SHALL end before any segment that would repeat the current page's own heading. Once the trail exceeds five segments, the middle SHALL collapse behind a single control that reveals the hidden segments on demand; the last two visible segments (immediate parent and current location) SHALL always remain visible and never require horizontal scrolling to see. When trimming leaves exactly one real ancestor segment, the trail SHALL still render that one segment as a back-link (e.g. "‹ Suites"), rather than being suppressed the way an empty trail is — a single genuine ancestor is still useful orientation, unlike a trail that would otherwise only ever have contained the now-redundant project segment.
 
 #### Scenario: No breadcrumb on a project's own landing page
 - **WHEN** a user opens a project's landing page
@@ -28,11 +17,15 @@ heading as a trailing crumb.
 
 #### Scenario: Breadcrumb reflects section depth
 - **WHEN** a user navigates two levels deep into the library
-- **THEN** the breadcrumb shows the project name, a "Library" crumb for the root, and both ancestor section names, each linking back to that level
+- **THEN** the breadcrumb shows a "Library" crumb for the root and both ancestor section names, each linking back to that level — no leading project segment
 
-#### Scenario: Breadcrumb on a run page
-- **WHEN** a user opens a run's execution board
-- **THEN** the breadcrumb shows "Projects", the run's project name, and the run's name, with the first two segments linking back appropriately
+#### Scenario: No breadcrumb on a page whose only ancestor was the project
+- **WHEN** a user opens the Suites index, the Runs index, or a run's own page
+- **THEN** no breadcrumb trail is shown — trimming the redundant leading project segment and the trailing segment that duplicates the page's own heading ("Suites", "Runs", or the run's name) leaves nothing left to show
+
+#### Scenario: A single real ancestor still renders as a back-link
+- **WHEN** a user opens a suite's detail page directly under the suites index (no deeper nesting)
+- **THEN** the breadcrumb shows a single "‹ Suites" back-link, not an empty trail — it is a real, still-useful ancestor, distinct from the project segment the header chip already covers
 
 #### Scenario: Deep section nesting collapses the middle of the trail
 - **WHEN** a user views a page whose breadcrumb trail exceeds five segments (e.g. several levels of nested sections)
@@ -44,29 +37,22 @@ heading as a trailing crumb.
 
 #### Scenario: Case detail breadcrumb does not repeat the case title
 - **WHEN** a user opens a test case's detail page
-- **THEN** the breadcrumb ends at the case's parent folder, and the case's title appears only in the page's own heading, not as a trailing breadcrumb segment
+- **THEN** the breadcrumb ends at the case's parent folder (or "‹ Library" if the case is unsectioned), and the case's title appears only in the page's own heading, not as a trailing breadcrumb segment
 
 ### Requirement: Project switcher
-The web UI SHALL show the active project's name in a persistent header
-element as a direct link to that project's own page, separate from
-switching. Once the account has more than one project, the header SHALL
-also show an icon that opens a searchable project switcher; the same
-switcher SHALL also be reachable from anywhere in the app via a keyboard
-shortcut. The active project SHALL remain resolved on every route nested
-under a run (e.g. a run item's own page), not only the run's own exact
-URL.
+The web UI SHALL show the active project's identity in a persistent header element as a fused chip — a colored initials avatar, the project name, and (when more than one project is accessible) a chevron — sharing one visual container. The avatar+name portion SHALL be a direct link to that project's own page, separate from switching; the chevron alone SHALL open a searchable project switcher. The same switcher SHALL also be reachable from anywhere in the app via a keyboard shortcut. On the project's own landing page, the chip SHALL NOT render; the switch affordance SHALL instead fuse onto the page's own heading as a chevron. The active project SHALL remain resolved on every route nested under a run (e.g. a run item's own page), not only the run's own exact URL.
 
 #### Scenario: Navigating to the active project via the header
-- **WHEN** a user clicks the project name in the header
+- **WHEN** a user clicks the avatar or name portion of the header chip
 - **THEN** they are taken directly to that project's own page — no switcher opens
 
-#### Scenario: Switching project via the header icon
-- **WHEN** a user clicks the switch-project icon next to the header project name
+#### Scenario: Switching project via the header chevron
+- **WHEN** a user clicks the chevron on the header chip
 - **THEN** a searchable list of all projects opens, each showing its suite count, case count, and latest pass rate
 
-#### Scenario: Switch icon hidden with a single project
+#### Scenario: Chip renders as plain text with a single project
 - **WHEN** the account has no more than one project
-- **THEN** the switch-project icon is not shown, since there is nothing to switch to
+- **THEN** the header shows the project name as plain, non-interactive text — no avatar, no pill background, no chevron, no hover feedback — since there is nothing to switch to
 
 #### Scenario: Switching project via keyboard
 - **WHEN** a user presses the project-switcher keyboard shortcut from any page
@@ -75,6 +61,14 @@ URL.
 #### Scenario: Active project stays resolved on a run item's page
 - **WHEN** a user opens a run item's own page
 - **THEN** the header shows that run's project as the active project, not a "Select project" placeholder
+
+#### Scenario: No header chip on the project's own landing page
+- **WHEN** a user opens a project's landing page
+- **THEN** the header shows only the TestPulse wordmark (no chip), and a chevron fused onto the page's own heading opens the same switcher
+
+#### Scenario: Landing-page heading chevron is plain with a single project
+- **WHEN** a user with only one accessible project opens that project's landing page
+- **THEN** the heading shows no chevron and no switch affordance, matching the header chip's single-project treatment
 
 ### Requirement: Brand wordmark
 The web UI's header SHALL show the TestPulse brand mark — an icon tile

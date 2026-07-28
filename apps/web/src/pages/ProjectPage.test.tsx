@@ -7,6 +7,8 @@ import ProjectPage from './ProjectPage'
 import { api } from '@/lib/api'
 import { DataRevisionProvider } from '@/lib/DataRevision'
 import { AuthProvider } from '@/lib/useAuth'
+import { ProjectSwitcherProvider } from '@/lib/useProjectSwitcher'
+import type { SwitcherProject } from '@/components/ProjectSwitcher'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
@@ -73,15 +75,21 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
   })
 }
 
-function renderWithRoutes(extraRoutes?: ReactNode) {
+const defaultSwitcherProjects: SwitcherProject[] = [
+  { id: 'p1', name: 'QA Platform', suiteCount: 0, caseCount: 0, passRate: null },
+]
+
+function renderWithRoutes(extraRoutes?: ReactNode, switcherProjects: SwitcherProject[] = defaultSwitcherProjects) {
   return render(
     <DataRevisionProvider>
       <MemoryRouter initialEntries={['/projects/p1']}>
         <AuthProvider>
-          <Routes>
-            <Route path="/projects/:projectKey" element={<ProjectPage />} />
-            {extraRoutes}
-          </Routes>
+          <ProjectSwitcherProvider projects={switcherProjects} onSelectProject={() => {}}>
+            <Routes>
+              <Route path="/projects/:projectKey" element={<ProjectPage />} />
+              {extraRoutes}
+            </Routes>
+          </ProjectSwitcherProvider>
         </AuthProvider>
       </MemoryRouter>
     </DataRevisionProvider>,
@@ -109,6 +117,26 @@ describe('ProjectPage landing', () => {
     renderProject()
     expect(await screen.findByRole('heading', { name: 'QA Platform' })).toBeInTheDocument()
     expect(screen.getByText(/p1 · project overview/i)).toBeInTheDocument()
+  })
+
+  describe('switch-project chevron on the heading', () => {
+    it('shows a chevron on the heading that opens the switcher when the account has multiple projects', async () => {
+      mockProjectAPI()
+      renderWithRoutes(undefined, [
+        { id: 'p1', name: 'QA Platform', suiteCount: 0, caseCount: 0, passRate: null },
+        { id: 'p2', name: 'Other Project', suiteCount: 0, caseCount: 0, passRate: null },
+      ])
+      await screen.findByRole('heading', { name: 'QA Platform' })
+      await userEvent.click(screen.getByRole('button', { name: /switch project/i }))
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    })
+
+    it('shows no chevron on the heading with a single accessible project', async () => {
+      mockProjectAPI()
+      renderProject()
+      await screen.findByRole('heading', { name: 'QA Platform' })
+      expect(screen.queryByRole('button', { name: /switch project/i })).not.toBeInTheDocument()
+    })
   })
 
   it('shows a Members link to a Tenant Admin (add-project-rbac — the only way to assign roles on a project)', async () => {

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { FolderInputIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -168,14 +169,19 @@ export default function CaseDetailPage() {
   // Ends at the parent folder, not the case itself — the case's own <h1>
   // right below already shows its title, and (unlike a breadcrumb crumb)
   // can wrap instead of truncating a long one mid-word.
-  const breadcrumbSegments: Crumb[] = [
+  const hasFolderAncestor = Boolean(folder && root && folder.id !== root.id)
+  const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
     { label: 'Projects', href: '/' },
     { label: project.name, href: `/projects/${projectKey}` },
-    { label: 'Library', href: `/projects/${projectKey}/library` },
-    ...(folder && root && folder.id !== root.id
-      ? [{ label: folder.name, href: `/projects/${projectKey}/library/${folder.id}` }]
-      : []),
-  ]
+    // No href when Library would be the sole remaining segment (case lives
+    // directly in root) — that's "current location," not a distinct
+    // ancestor, matching every other page's "last segment never links"
+    // convention (Breadcrumbs.tsx's single-segment case renders nothing
+    // when the lone segment has no href, same as an unsectioned Suites/Runs
+    // page having nothing left to show).
+    { label: 'Library', href: hasFolderAncestor ? `/projects/${projectKey}/library` : undefined },
+    ...(hasFolderAncestor && folder ? [{ label: folder.name, href: `/projects/${projectKey}/library/${folder.id}` }] : []),
+  ])
 
   return (
     <div className="space-y-4">

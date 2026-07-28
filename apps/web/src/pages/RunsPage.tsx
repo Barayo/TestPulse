@@ -4,6 +4,7 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { HealthBar } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -126,11 +127,14 @@ export default function RunsPage() {
   return (
     <div className="space-y-6">
       <Breadcrumbs
-        segments={[
-          { label: 'Projects', href: '/' },
-          { label: project?.name ?? '', href: `/projects/${projectKey}` },
-          { label: 'Runs' },
-        ]}
+        segments={trimProjectBreadcrumb(
+          [
+            { label: 'Projects', href: '/' },
+            { label: project?.name ?? '', href: `/projects/${projectKey}` },
+            { label: 'Runs' },
+          ],
+          'Runs',
+        )}
       />
 
       <Card>

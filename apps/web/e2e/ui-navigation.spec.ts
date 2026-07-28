@@ -82,32 +82,35 @@ test.describe('Requirement: Breadcrumb trail', () => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-31' })
     await createProject(page, 'Deep Nesting Project')
     await openFolderExplorer(page)
-    for (const name of ['Transfers', 'National', 'SEPA', 'Domestic']) {
+    for (const name of ['Transfers', 'National', 'SEPA', 'Domestic', 'Recurring']) {
       await createFolderInOpenFolder(page, name)
       await content(page).getByText(name).click()
     }
 
-    // 7 segments: Projects › {Project} › Library › Transfers › National › SEPA › Domestic
-    // exceeds the 5-segment threshold, so the trail must collapse.
+    // 6 segments after the header chip's now-redundant leading "Projects ›
+    // {Project}" is trimmed: Library › Transfers › National › SEPA ›
+    // Domestic › Recurring — exceeds the 5-segment threshold, so the trail
+    // must collapse (keeping the first two and last two, hiding the middle).
     const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
-    await expect(nav.getByRole('link', { name: 'Projects' })).toBeVisible()
-    await expect(nav.getByText('Domestic')).toBeVisible()
-    await expect(nav.getByRole('link', { name: 'Transfers' })).not.toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Library' })).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'Transfers' })).toBeVisible()
+    await expect(nav.getByText('Recurring')).toBeVisible()
+    await expect(nav.getByRole('link', { name: 'National' })).not.toBeVisible()
 
     const trigger = nav.getByRole('button', { name: /hidden path segments/i })
     await expect(trigger).toBeVisible()
     await trigger.click()
     const menu = page.getByRole('menu', { name: /hidden path segments/i })
-    await expect(menu.getByRole('menuitem', { name: 'Transfers' })).toBeVisible()
     await expect(menu.getByRole('menuitem', { name: 'National' })).toBeVisible()
+    await expect(menu.getByRole('menuitem', { name: 'SEPA' })).toBeVisible()
 
-    await menu.getByRole('menuitem', { name: 'Transfers' }).click()
-    await expect(content(page).getByText('National')).toBeVisible()
+    await menu.getByRole('menuitem', { name: 'National' }).click()
+    await expect(content(page).getByText('SEPA')).toBeVisible()
   })
 
-  test('Scenario: Breadcrumb on a run page', async ({ page }) => {
+  test('Scenario: No breadcrumb on a run page — the header chip covers the project, the run name is already the heading', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-32' })
-    const name = await createProject(page, 'Run Breadcrumb Project')
+    await createProject(page, 'Run Breadcrumb Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
     await expect(content(page).getByText('Login works')).toBeVisible()
@@ -126,9 +129,10 @@ test.describe('Requirement: Breadcrumb trail', () => {
     // Creating a run now navigates straight to its own detail page.
     await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
 
-    const nav = page.getByRole('navigation', { name: 'Breadcrumb' })
-    await expect(nav.getByRole('link', { name: name.split(' ')[0] })).toBeVisible()
-    await expect(nav.getByText('Sprint 1')).toBeVisible()
+    // RunPage's title renders via CardTitle (a styled div, not a semantic
+    // heading role) — same pattern as SuitesPage/RunsPage.
+    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Sprint 1' })).toBeVisible()
+    await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0)
   })
 
   test('Scenario: Case detail breadcrumb does not repeat the case title', async ({ page }) => {

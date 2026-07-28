@@ -85,12 +85,13 @@ beforeEach(() => {
 })
 
 describe('SuiteDetailPage', () => {
-  it('shows a breadcrumb ending at the suite name', async () => {
+  it('shows a single "‹ Suites" back-link breadcrumb — the header chip covers the project, the suite name is already the page heading', async () => {
     mockDetailAPI()
     renderDetail()
     const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
-    expect(nav).toHaveTextContent('Suites')
-    expect(nav).toHaveTextContent('Smoke')
+    const link = within(nav).getByRole('link', { name: /Suites/ })
+    expect(link).toHaveAttribute('href', '/projects/p1/suites')
+    expect(nav).not.toHaveTextContent('Smoke')
   })
 
   it('shows the case grid pre-checked with current members', async () => {
