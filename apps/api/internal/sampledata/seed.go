@@ -62,14 +62,18 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
-	reportingAPI, err := Folder(ctx, svc, p.ID, root.ID, "Reporting API")
-	if err != nil {
-		return fmt.Errorf("sampledata: %w", err)
-	}
 	// Deliberately left with no cases and no subsections (rework-library-ux
 	// showcase task) — the Library's "Nothing here yet" empty state has a
-	// real section to demonstrate, not just a theoretical one.
+	// real section to demonstrate, not just a theoretical one. Created as
+	// the project's 5th top-level section (not 6th) so it lands inside the
+	// project landing panel's own top-N cap and shows there too
+	// (enrich-project-landing-panels showcase task) — Reporting API moves to
+	// 6th, which is fine since it doesn't need panel visibility.
 	if _, err := Folder(ctx, svc, p.ID, root.ID, "Localization"); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	reportingAPI, err := Folder(ctx, svc, p.ID, root.ID, "Reporting API")
+	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 

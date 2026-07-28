@@ -54,7 +54,9 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
       return Promise.resolve({ data: overrides.cases ?? [caseInOnboarding], response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/suites')
       return Promise.resolve({
-        data: overrides.suites ?? [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
+        data: overrides.suites ?? [
+          { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null },
+        ],
         response: { ok: true },
       })
     if (path === '/api/v1/projects/{projectKey}/runs')
@@ -123,7 +125,7 @@ describe('ProjectPage landing', () => {
     const folderName = await screen.findByText('Onboarding')
     const row = folderName.closest('li')
     expect(row).not.toBeNull()
-    expect(within(row as HTMLElement).getByText('1')).toBeInTheDocument()
+    expect(within(row as HTMLElement).getByText('1 case')).toBeInTheDocument()
   })
 
   describe('root-level (unsectioned) cases', () => {
@@ -133,7 +135,7 @@ describe('ProjectPage landing', () => {
       renderProject()
       const row = (await screen.findByText('Unsectioned')).closest('li')
       expect(row).not.toBeNull()
-      expect(within(row as HTMLElement).getByText('1')).toBeInTheDocument()
+      expect(within(row as HTMLElement).getByText('1 case')).toBeInTheDocument()
     })
 
     it('navigates to the root section when the Unsectioned row is clicked', async () => {
@@ -152,17 +154,46 @@ describe('ProjectPage landing', () => {
     })
   })
 
-  it('shows suites with their case count, no pass rate', async () => {
-    mockProjectAPI()
+  it('shows suites with their case count and pass-rate health bar', async () => {
+    mockProjectAPI({
+      suites: [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: 90 }],
+    })
     renderProject()
-    expect(await screen.findByText('Smoke')).toBeInTheDocument()
+    const suiteName = await screen.findByText('Smoke')
+    const row = suiteName.closest('li')
+    expect(row).not.toBeNull()
+    expect(within(row as HTMLElement).getByText('1 case')).toBeInTheDocument()
+    expect(within(row as HTMLElement).getByText('90%')).toBeInTheDocument()
+  })
+
+  it('shows "Never run" for a suite with no pass rate, instead of a fake 0%', async () => {
+    mockProjectAPI({
+      suites: [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null }],
+    })
+    renderProject()
+    const suiteName = await screen.findByText('Smoke')
+    const row = suiteName.closest('li')
+    expect(within(row as HTMLElement).getByText(/never run/i)).toBeInTheDocument()
   })
 
   it('shows recent runs with their pass rate', async () => {
     mockProjectAPI()
     renderProject()
-    expect(await screen.findByText('Sprint 1')).toBeInTheDocument()
-    expect(await screen.findByText(/100%/)).toBeInTheDocument()
+    const runName = await screen.findByText('Sprint 1')
+    const row = runName.closest('li')
+    expect(row).not.toBeNull()
+    expect(within(row as HTMLElement).getByText('100%')).toBeInTheDocument()
+  })
+
+  it('shows the pass/fail fraction on a Recent runs row', async () => {
+    mockProjectAPI({
+      runs: [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z' }],
+      runSummary: { runId: 'r1', total: 10, counts: { pass: 3 } },
+    })
+    renderProject()
+    const runName = await screen.findByText('Sprint 1')
+    const row = runName.closest('li')
+    expect(within(row as HTMLElement).getByText('3/10 passed')).toBeInTheDocument()
   })
 
   it('color-codes a Recent runs row by its pass-rate band, not just the printed percentage', async () => {
@@ -174,7 +205,7 @@ describe('ProjectPage landing', () => {
     const runName = await screen.findByText('Risky run')
     const row = runName.closest('li')
     expect(row).not.toBeNull()
-    expect(within(row as HTMLElement).getByText(/30%/)).toBeInTheDocument()
+    expect(within(row as HTMLElement).getByText('30%')).toBeInTheDocument()
     expect(row).toHaveClass('border-l-destructive')
   })
 
@@ -330,21 +361,24 @@ describe('ProjectPage landing', () => {
     renderProject()
     const folderName = await screen.findByText('Onboarding')
     const row = folderName.closest('li')
-    expect(within(row as HTMLElement).getByText('2')).toBeInTheDocument()
+    expect(within(row as HTMLElement).getByText('2 cases')).toBeInTheDocument()
   })
 
   describe('summary strip', () => {
-    it("shows the project's status pill, pass-rate bar, and suite/case totals", async () => {
+    it("shows the project's health ring, status pill, and suite/case counts", async () => {
       mockProjectAPI({
         summaries: [
           { projectId: 'p1', suiteCount: 7, caseCount: 70, passRate: 84, lastRunAt: '2026-01-01T00:00:00Z', isFavorite: false },
         ],
       })
       renderProject()
-      expect(await screen.findByText('Healthy', { selector: 'span' })).toBeInTheDocument()
-      expect(screen.getByText('7 suites')).toBeInTheDocument()
-      expect(screen.getByText('70 cases')).toBeInTheDocument()
-      expect(document.querySelector('[data-track]')).toBeInTheDocument()
+      await screen.findByText('Healthy', { selector: 'span' })
+      const strip = within(screen.getByTestId('summary-strip'))
+      expect(screen.getByTestId('health-ring')).toHaveTextContent('84%')
+      expect(strip.getByText('7')).toBeInTheDocument()
+      expect(strip.getByText('Suites')).toBeInTheDocument()
+      expect(strip.getByText('70')).toBeInTheDocument()
+      expect(strip.getByText('Cases')).toBeInTheDocument()
     })
 
     it('shows "No runs yet" in the summary strip instead of a pass rate when the project has never run', async () => {
@@ -353,6 +387,20 @@ describe('ProjectPage landing', () => {
       })
       renderProject()
       expect(await screen.findByText('No runs yet', { selector: 'span' })).toBeInTheDocument()
+    })
+
+    it('shows the last run\'s time, name, and pass rate', async () => {
+      mockProjectAPI({
+        summaries: [
+          { projectId: 'p1', suiteCount: 1, caseCount: 1, passRate: 100, lastRunAt: '2026-01-01T00:00:00Z', isFavorite: false },
+        ],
+        runs: [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z' }],
+      })
+      renderProject()
+      await screen.findByText('Last run')
+      const strip = within(screen.getByTestId('summary-strip'))
+      expect(strip.getByText(/Sprint 1/)).toBeInTheDocument()
+      expect(strip.getByText(/· 100%/)).toBeInTheDocument()
     })
 
     it('reflects the active project, not just the first entry in the summaries list', async () => {
@@ -364,9 +412,9 @@ describe('ProjectPage landing', () => {
       })
       renderProject()
       await screen.findByText('Healthy', { selector: 'span' })
-      expect(screen.getByText('3 suites')).toBeInTheDocument()
-      expect(screen.getByText('30 cases')).toBeInTheDocument()
-      expect(screen.queryByText('99 suites')).not.toBeInTheDocument()
+      expect(screen.getByText('3')).toBeInTheDocument()
+      expect(screen.getByText('30')).toBeInTheDocument()
+      expect(screen.queryByText('99')).not.toBeInTheDocument()
     })
   })
 
@@ -380,5 +428,70 @@ describe('ProjectPage landing', () => {
     renderProject()
     const runNames = await screen.findAllByText(/(Older|Newer) run/)
     expect(runNames[0]).toHaveTextContent('Newer run')
+  })
+
+  describe('Library panel enrichment', () => {
+    const big = { id: 'fBig', projectId: 'p1', parentFolderId: 'root', name: 'Big', createdAt: '' }
+    const small = { id: 'fSmall', projectId: 'p1', parentFolderId: 'root', name: 'Small', createdAt: '' }
+    const empty = { id: 'fEmpty', projectId: 'p1', parentFolderId: 'root', name: 'Empty', createdAt: '' }
+    const parent = { id: 'fParent', projectId: 'p1', parentFolderId: 'root', name: 'Parent', createdAt: '' }
+    const childA = { id: 'fChildA', projectId: 'p1', parentFolderId: 'fParent', name: 'Child A', createdAt: '' }
+    const childB = { id: 'fChildB', projectId: 'p1', parentFolderId: 'fParent', name: 'Child B', createdAt: '' }
+
+    function makeCases(folderId: string, count: number) {
+      return Array.from({ length: count }, (_, i) => ({ ...caseInOnboarding, id: `${folderId}-c${i}`, folderId }))
+    }
+
+    it('sizes the magnitude bar relative to the panel\'s largest section', async () => {
+      mockProjectAPI({
+        folders: [rootFolder, big, small],
+        cases: [...makeCases('fBig', 8), ...makeCases('fSmall', 4)],
+      })
+      renderProject()
+      const bigRow = (await screen.findByText('Big')).closest('li') as HTMLElement
+      const smallRow = (await screen.findByText('Small')).closest('li') as HTMLElement
+      const bigFill = bigRow.querySelector('[data-fill]') as HTMLElement
+      const smallFill = smallRow.querySelector('[data-fill]') as HTMLElement
+      expect(bigFill.style.width).toBe('100%')
+      expect(smallFill.style.width).toBe('50%')
+    })
+
+    it('shows an empty section with a dashed/italic treatment and no magnitude bar', async () => {
+      mockProjectAPI({ folders: [rootFolder, empty], cases: [] })
+      renderProject()
+      const row = (await screen.findByText('Empty')).closest('li') as HTMLElement
+      expect(row.querySelector('.italic')).not.toBeNull()
+      expect(row.querySelector('[data-fill]')).toBeNull()
+      expect(within(row).getByText(/no cases yet/i)).toBeInTheDocument()
+    })
+
+    it('expands a section with subsections to preview its immediate children, without navigating away', async () => {
+      mockProjectAPI({
+        folders: [rootFolder, parent, childA, childB],
+        cases: [...makeCases('fChildA', 2), ...makeCases('fChildB', 3)],
+      })
+      renderWithRoutes(<Route path="/projects/:projectKey/library" element={<div>library page stub</div>} />)
+      const parentRow = await screen.findByText('Parent')
+      expect(screen.queryByText('Child A')).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: /expand parent/i }))
+      expect(await screen.findByText('Child A')).toBeInTheDocument()
+      expect(screen.getByText('Child B')).toBeInTheDocument()
+      // Expanding is a preview, not navigation.
+      expect(screen.queryByText('library page stub')).not.toBeInTheDocument()
+
+      // Clicking the row itself (not just the caret) also toggles.
+      await userEvent.click(parentRow)
+      expect(screen.queryByText('Child A')).not.toBeInTheDocument()
+    })
+
+    it('clicking a section with no subsections still navigates to it, unaffected by the expand behavior', async () => {
+      mockProjectAPI({ folders: [rootFolder, small], cases: makeCases('fSmall', 2) })
+      renderWithRoutes(
+        <Route path="/projects/:projectKey/library/:folderId" element={<div>library explorer stub</div>} />,
+      )
+      await userEvent.click(await screen.findByText('Small'))
+      expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
+    })
   })
 })

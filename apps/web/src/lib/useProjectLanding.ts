@@ -2,11 +2,27 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { useDataRevision } from '@/lib/DataRevision'
 
-export type LandingFolder = { id: string; name: string; caseCount: number }
+export type LandingFolderChild = { id: string; name: string; caseCount: number }
+// children holds this section's immediate subsections (enrich-project-landing-panels'
+// inline-expand preview) — empty when it has none.
+export type LandingFolder = {
+  id: string
+  name: string
+  caseCount: number
+  subsectionCount: number
+  children: LandingFolderChild[]
+}
 // LandingSuite/LandingRun.id holds the suite/run's key (add-human-readable-keys),
 // not its internal id — every route/link these feed is key-based.
-export type LandingSuite = { id: string; name: string; caseCount: number }
-export type LandingRun = { id: string; name: string; createdAt: string; passRate: number | null }
+export type LandingSuite = { id: string; name: string; caseCount: number; passRate: number | null }
+export type LandingRun = {
+  id: string
+  name: string
+  createdAt: string
+  passRate: number | null
+  passCount: number
+  total: number
+}
 
 export type ProjectLanding = {
   folders: LandingFolder[]
@@ -84,7 +100,12 @@ export function useProjectLanding(projectKey: string | undefined): ProjectLandin
         const landingFolders: LandingFolder[] = topLevel.map((f) => {
           const ids = descendantIds(f.id)
           const caseCount = cases.filter((c) => ids.has(c.folderId)).length
-          return { id: f.id, name: f.name, caseCount }
+          const subsections = folders.filter((sf) => sf.parentFolderId === f.id)
+          const children: LandingFolderChild[] = subsections.map((sf) => {
+            const childIds = descendantIds(sf.id)
+            return { id: sf.id, name: sf.name, caseCount: cases.filter((c) => childIds.has(c.folderId)).length }
+          })
+          return { id: f.id, name: f.name, caseCount, subsectionCount: subsections.length, children }
         })
 
         // Cases created before any subsection existed default into root,
@@ -94,12 +115,12 @@ export function useProjectLanding(projectKey: string | undefined): ProjectLandin
         // other row rather than being exempted from the cap.
         const rootCaseCount = root ? cases.filter((c) => c.folderId === root.id).length : 0
         if (root && rootCaseCount > 0) {
-          landingFolders.unshift({ id: root.id, name: 'Unsectioned', caseCount: rootCaseCount })
+          landingFolders.unshift({ id: root.id, name: 'Unsectioned', caseCount: rootCaseCount, subsectionCount: 0, children: [] })
         }
 
         const landingSuites: LandingSuite[] = suites
           .slice(0, TOP_N)
-          .map((s) => ({ id: s.key, name: s.name, caseCount: s.caseIds.length }))
+          .map((s) => ({ id: s.key, name: s.name, caseCount: s.caseIds.length, passRate: s.passRate }))
 
         const recentRuns = [...runs]
           .sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
@@ -110,11 +131,10 @@ export function useProjectLanding(projectKey: string | undefined): ProjectLandin
               params: { path: { runKey: r.key } },
               signal,
             })
-            let passRate: number | null = null
-            if (summary && summary.total > 0) {
-              passRate = Math.round(((summary.counts.pass ?? 0) / summary.total) * 100)
-            }
-            return { id: r.key, name: r.name, createdAt: r.createdAt, passRate }
+            const total = summary?.total ?? 0
+            const passCount = summary?.counts.pass ?? 0
+            const passRate = total > 0 ? Math.round((passCount / total) * 100) : null
+            return { id: r.key, name: r.name, createdAt: r.createdAt, passRate, passCount, total }
           }),
         )
 

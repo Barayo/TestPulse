@@ -2,10 +2,20 @@
 // a glance (project landing panels, project list). Bands mirror
 // StatusBadge's pass/warn/fail semantics: teal = healthy, amber = watch,
 // coral = attention needed.
-function healthColor(rate: number): string {
+export function healthColor(rate: number): string {
   if (rate >= 80) return 'bg-primary'
   if (rate >= 50) return 'bg-secondary'
   return 'bg-destructive'
+}
+
+// Same bands, resolved to a CSS custom property rather than a Tailwind class
+// — for the summary strip's conic-gradient ring and the Recent runs panel's
+// segmented pass/fail bar (enrich-project-landing-panels), both of which
+// need a real color value in an inline style, not a class.
+export function healthColorVar(rate: number): string {
+  if (rate >= 80) return 'var(--primary)'
+  if (rate >= 50) return 'var(--secondary)'
+  return 'var(--destructive)'
 }
 
 // Word form of the same bands as healthColor (design D5) — the caller
@@ -116,6 +126,29 @@ export function ProgressBar({ rate }: { rate: number | null }) {
   return (
     <span data-track className="block h-[7px] w-full overflow-hidden rounded-full bg-border">
       <span data-fill className={`block h-full rounded-full ${healthColor(rate)}`} style={{ width }} />
+    </span>
+  )
+}
+
+// Donut ring for the project landing's summary strip (enrich-project-landing-panels)
+// — a conic-gradient needs a real color value, not a Tailwind class, so it's
+// the one health visualization that reaches for healthColorVar directly.
+export function HealthRing({ rate }: { rate: number | null }) {
+  const pct = rate ?? 0
+  return (
+    <span
+      data-testid="health-ring"
+      className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-full"
+      style={{
+        background:
+          rate === null
+            ? 'var(--muted)'
+            : `conic-gradient(${healthColorVar(rate)} ${pct}%, var(--muted) 0)`,
+      }}
+    >
+      <span className="flex size-8.5 items-center justify-center rounded-full bg-card text-[11px] font-bold tabular-nums">
+        {rate === null ? '—' : `${rate}%`}
+      </span>
     </span>
   )
 }

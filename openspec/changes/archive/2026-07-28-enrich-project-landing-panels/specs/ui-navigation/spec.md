@@ -2,10 +2,9 @@
 
 ### Requirement: Project landing shows top-level structure only
 A project's landing page SHALL show three independent panels — Library, Suites, and Recent
-runs — each limited to its top items with a link to the full view, rather than the
-project's entire content at once. Each panel's entire header SHALL be clickable to that
-same full view, and every item row shown SHALL itself link directly to that item, not just
-to the panel's own full-list view. The Library panel SHALL include a visible entry for
+runs — each limited to its top items with a "see all" control linking to the full view,
+rather than the project's entire content at once, and every item row shown SHALL itself
+link directly to that item, not just to the panel's own full-list view. The Library panel SHALL include a visible entry for
 test cases that live directly in the project's root section, not only for named
 subsections, so a case created before any subsection existed is never invisible there.
 Above the panels, the landing SHALL show a summary of the project's own status as three
@@ -31,10 +30,6 @@ highest-frequency scan on this page.
 #### Scenario: Entirely empty project shows a getting-started checklist instead of three empty panels
 - **WHEN** a project has no sections with cases, no suites, and no runs at all
 - **THEN** the landing shows a single getting-started checklist in place of the three panels, rather than three independent empty states
-
-#### Scenario: Panel header is clickable beyond "see all"
-- **WHEN** a user clicks anywhere on a panel's header (its icon or title), not only the "see all" text
-- **THEN** the user navigates to that panel's full view, same as clicking "see all"
 
 #### Scenario: Suite and run rows link directly to their item
 - **WHEN** a user clicks a suite row or a run row shown on the landing

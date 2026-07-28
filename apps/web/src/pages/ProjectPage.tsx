@@ -4,7 +4,7 @@ import { FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-reac
 import { api } from '@/lib/api'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
-import { StatusPill, ProgressBar } from '@/components/HealthBar'
+import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
 import { useAuth } from '@/lib/useAuth'
@@ -109,15 +109,56 @@ export default function ProjectPage() {
       </div>
 
       {summary && (
-        <div className="flex flex-wrap items-center gap-4 rounded-lg border bg-card p-4">
-          <StatusPill rate={summary.passRate} />
-          <div className="min-w-40 flex-1">
-            <ProgressBar rate={summary.passRate} />
+        <div
+          data-testid="summary-strip"
+          className="flex flex-col gap-4 rounded-lg border bg-card p-4 md:flex-row md:items-center md:gap-5"
+        >
+          <div className="flex items-center gap-3">
+            <HealthRing rate={summary.passRate} />
+            <div className="flex flex-col gap-1">
+              <StatusPill rate={summary.passRate} />
+              <span className="text-xs text-muted-foreground">Pass rate across all suites</span>
+            </div>
           </div>
-          <span className="text-sm text-muted-foreground">{summary.suiteCount} suites</span>
-          <span className="text-sm text-muted-foreground">{summary.caseCount} cases</span>
-          {summary.lastRunAt && isValidDate(summary.lastRunAt) && (
-            <span className="text-sm text-muted-foreground">Last run {timeAgo(summary.lastRunAt)}</span>
+
+          <div className="hidden self-stretch border-l border-border md:block" aria-hidden="true" />
+
+          <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
+              <span className="flex size-7.5 items-center justify-center rounded-md bg-accent text-primary">
+                <LayersIcon className="size-4" aria-hidden="true" />
+              </span>
+              <div>
+                <div className="text-base leading-tight font-bold tabular-nums">{summary.suiteCount}</div>
+                <div className="text-[11px] text-muted-foreground">Suites</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="flex size-7.5 items-center justify-center rounded-md bg-accent text-primary">
+                <FileTextIcon className="size-4" aria-hidden="true" />
+              </span>
+              <div>
+                <div className="text-base leading-tight font-bold tabular-nums">{summary.caseCount}</div>
+                <div className="text-[11px] text-muted-foreground">Cases</div>
+              </div>
+            </div>
+          </div>
+
+          <div className="hidden self-stretch border-l border-border md:block" aria-hidden="true" />
+
+          {summary.lastRunAt && isValidDate(summary.lastRunAt) ? (
+            <div>
+              <div className="text-[11px] tracking-wide text-muted-foreground uppercase">Last run</div>
+              <div className="text-sm font-bold tabular-nums">{timeAgo(summary.lastRunAt)}</div>
+              {landing.runs[0] && (
+                <div className="truncate text-xs text-muted-foreground">
+                  {landing.runs[0].name}
+                  {landing.runs[0].passRate !== null && ` · ${landing.runs[0].passRate}%`}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-sm text-muted-foreground">No runs yet</div>
           )}
         </div>
       )}
@@ -152,7 +193,7 @@ export default function ProjectPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[1fr_1fr_1.28fr]">
           <FoldersPanel
             folders={landing.folders}
             totalCount={landing.totalFolders}
