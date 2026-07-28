@@ -105,17 +105,24 @@ describe('ProjectPage landing', () => {
     expect(await within(nav).findByText('QA Platform')).toBeInTheDocument()
   })
 
+  it('shows the project name as a page heading, with its key as a subtitle', async () => {
+    mockProjectAPI()
+    renderProject()
+    expect(await screen.findByRole('heading', { name: 'QA Platform' })).toBeInTheDocument()
+    expect(screen.getByText(/p1 · project overview/i)).toBeInTheDocument()
+  })
+
   it('shows a Members link to a Tenant Admin (add-project-rbac — the only way to assign roles on a project)', async () => {
     mockProjectAPI()
     renderProject()
-    await screen.findByText('QA Platform')
+    await screen.findByRole('heading', { name: 'QA Platform' })
     expect(screen.getByRole('link', { name: /members/i })).toHaveAttribute('href', '/projects/p1/members')
   })
 
   it('hides the Members link from a non-Tenant-Admin', async () => {
     mockProjectAPI({ me: { id: 'u1', email: 'member@example.com', isTenantAdmin: false } })
     renderProject()
-    await screen.findByText('QA Platform')
+    await screen.findByRole('heading', { name: 'QA Platform' })
     expect(screen.queryByRole('link', { name: /members/i })).not.toBeInTheDocument()
   })
 
@@ -234,7 +241,7 @@ describe('ProjectPage landing', () => {
     // during this window — this project will turn out to have real content
     // (a root folder with cases) once landing loads, and flashing the
     // checklist first would be actively misleading, not just cosmetic.
-    await screen.findByText('QA Platform')
+    await screen.findByRole('heading', { name: 'QA Platform' })
     expect(screen.queryByText(/get started/i)).not.toBeInTheDocument()
 
     resolveFolders({ data: [rootFolder, onboarding], response: { ok: true } })

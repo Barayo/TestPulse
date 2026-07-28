@@ -108,6 +108,13 @@ export default function ProjectPage() {
         )}
       </div>
 
+      {project && (
+        <div>
+          <h1 className="tp-heading text-2xl">{project.name}</h1>
+          <p className="text-sm text-muted-foreground">{project.key} · project overview</p>
+        </div>
+      )}
+
       {summary && (
         <div
           data-testid="summary-strip"
@@ -116,7 +123,7 @@ export default function ProjectPage() {
           <div className="flex items-center gap-3">
             <HealthRing rate={summary.passRate} />
             <div className="flex flex-col gap-1">
-              <StatusPill rate={summary.passRate} />
+              <StatusPill rate={summary.passRate} dot />
               <span className="text-xs text-muted-foreground">Pass rate across all suites</span>
             </div>
           </div>

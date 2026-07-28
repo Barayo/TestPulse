@@ -58,10 +58,17 @@ const pillClasses: Record<'Healthy' | 'In progress' | 'At risk' | 'No runs yet',
 // percentage (the number lives in the Favorites mini-card instead, per the
 // approved mockup's split: full cards scan by word, favorite chips scan by
 // number).
-export function StatusPill({ rate }: { rate: number | null }) {
+// dot is opt-in (default off) — ProjectsPage cards' own approved mockup is
+// word-only with no dot; the project landing summary strip's mockup adds
+// one (enrich-project-landing-panels). Same component, two call sites, each
+// matching its own source of truth rather than forcing one look on both.
+export function StatusPill({ rate, dot }: { rate: number | null; dot?: boolean }) {
   const label = rate === null ? 'No runs yet' : healthLabel(rate)
   return (
-    <span className={`inline-block rounded-full px-2.5 py-1 text-[11px] font-bold ${pillClasses[label]}`}>
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${pillClasses[label]}`}
+    >
+      {dot && <span data-dot className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />}
       {label}
     </span>
   )

@@ -85,6 +85,16 @@ describe('StatusPill', () => {
     const pill = screen.getByText('No runs yet')
     expect(pill).toHaveClass('bg-status-neutral-bg', 'text-status-neutral-fg')
   })
+
+  it('omits the leading dot by default, matching ProjectsPage cards\' approved word-only mockup', () => {
+    const { container } = render(<StatusPill rate={84} />)
+    expect(container.querySelector('[data-dot]')).toBeNull()
+  })
+
+  it('shows a leading dot when dot is requested, matching the project landing summary strip\'s mockup', () => {
+    const { container } = render(<StatusPill rate={84} dot />)
+    expect(container.querySelector('[data-dot]')).not.toBeNull()
+  })
 })
 
 describe('ProgressBar', () => {
