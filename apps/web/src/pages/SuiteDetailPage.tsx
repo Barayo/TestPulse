@@ -1,17 +1,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { SuiteCaseGrid, type SuiteCaseGridCase } from '@/components/SuiteCaseGrid'
+import { SuiteActionsMenu } from '@/components/SuiteActionsMenu'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { PropertyRow } from '@/components/PropertyRow'
 import { HealthBar } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import type { components } from '@testpulse/shared/api'
@@ -45,11 +42,6 @@ export default function SuiteDetailPage() {
   const [notFound, setNotFound] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [baseline, setBaseline] = useState<Set<string>>(new Set())
-  const [renaming, setRenaming] = useState(false)
-  const [renameValue, setRenameValue] = useState('')
-  const [deleting, setDeleting] = useState(false)
-  const [runningQuick, setRunningQuick] = useState(false)
-  const [quickRunName, setQuickRunName] = useState('')
   const [createdRunKey, setCreatedRunKey] = useState<string>()
 
   const load = useCallback(async () => {
@@ -111,47 +103,6 @@ export default function SuiteDetailPage() {
     ])
     await load()
     bumpLanding()
-  }
-
-  async function handleRename() {
-    if (!suiteKey || !renameValue.trim()) return
-    await api.PUT('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } }, body: { name: renameValue.trim() } })
-    setRenaming(false)
-    await load()
-    bumpLanding()
-  }
-
-  async function handleDelete() {
-    if (!suiteKey || !projectKey) return
-    await api.DELETE('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } })
-    bumpLanding()
-    navigate(`/projects/${projectKey}/suites`)
-  }
-
-  function openRunSuite() {
-    if (!suite) return
-    setQuickRunName(`${suite.name} run`)
-    setRunningQuick(true)
-  }
-
-  async function handleQuickRun() {
-    if (!suite || !projectKey || !quickRunName.trim()) return
-    const { data } = await api.POST('/api/v1/projects/{projectKey}/runs', {
-      params: { path: { projectKey } },
-      body: { name: quickRunName.trim(), suiteKey: suite.key },
-    })
-    setRunningQuick(false)
-    if (data) setCreatedRunKey(data.key)
-    await load()
-    bumpLanding()
-  }
-
-  function handleCustomizeSelection() {
-    if (!suite || !projectKey) return
-    setRunningQuick(false)
-    navigate(`/projects/${projectKey}/runs/new`, {
-      state: { seedFromSuiteKey: suite.key, seedName: quickRunName.trim() },
-    })
   }
 
   if (!projectKey || !suiteKey) return null
@@ -219,101 +170,17 @@ export default function SuiteDetailPage() {
           </CaseSidebarSection>
 
           <CaseSidebarSection title="Actions">
-            <div className="flex flex-col gap-2">
-              <Button type="button" onClick={openRunSuite}>
-                Run suite
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => {
-                  setRenameValue(suite.name)
-                  setRenaming(true)
-                }}
-              >
-                Rename
-              </Button>
-              <Button type="button" variant="destructive" onClick={() => setDeleting(true)}>
-                Delete
-              </Button>
-            </div>
+            <SuiteActionsMenu
+              suite={suite}
+              projectKey={projectKey}
+              variant="buttons"
+              navigate={navigate}
+              onChanged={load}
+              onRunCreated={setCreatedRunKey}
+            />
           </CaseSidebarSection>
         </div>
       </div>
-
-      <Dialog open={runningQuick} onOpenChange={setRunningQuick}>
-        <DialogContent className="sm:max-w-md">
-          <DialogTitle>Run {suite.name}</DialogTitle>
-          <DialogDescription>
-            {suite.caseIds.length} {suite.caseIds.length === 1 ? 'case' : 'cases'} from {suite.name}
-          </DialogDescription>
-          <div className="space-y-1">
-            <Label htmlFor="quick-run-name">Name</Label>
-            <Input
-              id="quick-run-name"
-              autoFocus
-              value={quickRunName}
-              onChange={(e) => setQuickRunName(e.target.value)}
-            />
-          </div>
-          <DialogFooter className="sm:justify-between">
-            <Button type="button" variant="ghost" onClick={handleCustomizeSelection}>
-              Customize selection
-            </Button>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setRunningQuick(false)}>
-                Cancel
-              </Button>
-              <Button disabled={!quickRunName.trim()} onClick={() => void handleQuickRun()}>
-                Create run
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={renaming} onOpenChange={setRenaming}>
-        <DialogContent className="sm:max-w-md">
-          <DialogTitle>Rename suite</DialogTitle>
-          <div className="space-y-1">
-            <Label htmlFor="rename-suite-name">Suite name</Label>
-            <Input
-              id="rename-suite-name"
-              autoFocus
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && renameValue.trim()) void handleRename()
-              }}
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setRenaming(false)}>
-              Cancel
-            </Button>
-            <Button disabled={!renameValue.trim()} onClick={() => void handleRename()}>
-              Save
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={deleting} onOpenChange={setDeleting}>
-        <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete suite?</DialogTitle>
-          <DialogDescription>
-            Delete &ldquo;{suite.name}&rdquo;? This cannot be undone. Its cases stay in your Library.
-          </DialogDescription>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleting(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={() => void handleDelete()}>
-              Confirm delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

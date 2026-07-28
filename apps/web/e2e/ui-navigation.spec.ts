@@ -824,4 +824,37 @@ test.describe('Requirement: Suites index and detail page', () => {
     await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
     await expect(page.getByText('Nightly custom run').first()).toBeVisible()
   })
+
+  // add-suite-index-context-menu: the same Run suite/Rename/Delete actions
+  // reachable via the detail page's Actions sidebar, now also reachable
+  // directly from each card on the index — via the visible "⋯" trigger or a
+  // right-click — without navigating into the suite first.
+  test('Scenario: Renaming a suite from its index card menu', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-75' })
+    // Deliberately avoids "Name" as a substring anywhere in the project
+    // label — the Star button's aria-label ("Star {project label}") would
+    // otherwise collide with page.getByLabel(/suite name/i)'s fuzzy match.
+    const projectId = await createSuiteWithOneCase(page, 'Suite Card Actions Project', 'Smoke', 'Login works')
+    await page.goto(`/projects/${projectId}/suites`)
+
+    await page.getByRole('button', { name: /actions for smoke/i }).click()
+    await page.getByRole('menuitem', { name: /rename/i }).click()
+    await page.getByLabel(/suite name/i).fill('Smoke v2')
+    await page.getByRole('button', { name: /^save$/i }).click()
+
+    await expect(page.getByRole('menuitem', { name: /rename/i })).not.toBeVisible()
+    await expect(page.getByText('Smoke v2')).toBeVisible()
+  })
+
+  test('Scenario: Deleting a suite via right-click on its index card', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-76' })
+    const projectId = await createSuiteWithOneCase(page, 'Suite Index Delete Project', 'Nightly', 'Deploy works')
+    await page.goto(`/projects/${projectId}/suites`)
+
+    await page.getByText('Nightly').click({ button: 'right' })
+    await page.getByRole('menuitem', { name: /^delete$/i }).click()
+    await page.getByRole('button', { name: /confirm delete/i }).click()
+
+    await expect(page.getByText(/no suites yet/i)).toBeVisible()
+  })
 })

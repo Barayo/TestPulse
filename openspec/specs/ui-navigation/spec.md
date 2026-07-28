@@ -419,7 +419,10 @@ hierarchy, filterable by tag/priority/platform/test-type, and searchable by titl
 all composable together. Selection SHALL be preserved across scope, filter, and
 search changes. The case list SHALL render with a bounded number of DOM rows
 regardless of how many cases are visible, including the unscoped/unfiltered default
-state.
+state. Each index card SHALL offer the same Run suite/Rename/Delete actions via a
+right-click context menu (and a visible "⋯" trigger), matching the context-menu
+pattern already used by folder rows, case rows, and run item rows elsewhere in the
+app, without requiring navigation into the suite's own detail page first.
 
 #### Scenario: Suite index card shows health at a glance
 - **WHEN** a user views the suites index and a suite has at least one run
@@ -472,6 +475,18 @@ state.
 #### Scenario: Customize selection hands off to the New run form
 - **WHEN** a user clicks "Customize selection" in the Run suite dialog
 - **THEN** the app navigates to the project's dedicated "New run" route with the suite selected and its cases pre-selected, editable before creating the run
+
+#### Scenario: Right-clicking an index card opens its actions menu
+- **WHEN** a user right-clicks a suite's card on the Suites index
+- **THEN** a context menu opens at the cursor offering Run suite, Rename, and Delete, without navigating into the suite's detail page
+
+#### Scenario: The visible "⋯" trigger opens the same menu
+- **WHEN** a user clicks the "⋯" trigger on a suite's card
+- **THEN** the same Run suite/Rename/Delete menu opens, anchored to the trigger rather than the cursor
+
+#### Scenario: Acting from the index behaves identically to the detail page
+- **WHEN** a user renames, deletes, or runs a suite from an index card's context menu
+- **THEN** the effect (name change, removal, run creation) is identical to performing the same action from the suite's own detail page
 
 ### Requirement: Run creation
 The Runs page SHALL show the project's runs as the primary content, grouped into two

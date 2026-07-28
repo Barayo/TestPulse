@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { Link, useNavigate, useParams, type NavigateFunction } from 'react-router'
 import { LayersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -11,10 +11,73 @@ import { HealthBar } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { ConfirmBanner } from '@/components/ConfirmBanner'
+import { SuiteActionsMenu, type SuiteActionsMenuHandle } from '@/components/SuiteActionsMenu'
 import type { components } from '@testpulse/shared/api'
 
 type Suite = components['schemas']['Suite']
 type Project = components['schemas']['Project']
+
+// A dedicated component (not inline in the .map() below) so each card owns
+// its own ref to the menu it opens on right-click — a ref can't live inside
+// a bare .map() callback (rules of hooks). Matches FolderRow/CaseRow/
+// RunItemRow's identical precedent (add-suite-index-context-menu).
+function SuiteCard({
+  suite,
+  projectKey,
+  navigate,
+  onChanged,
+  onRunCreated,
+}: {
+  suite: Suite
+  projectKey: string
+  navigate: NavigateFunction
+  onChanged: () => void | Promise<void>
+  onRunCreated: (runKey: string) => void
+}) {
+  const menuRef = useRef<SuiteActionsMenuHandle>(null)
+
+  return (
+    <li
+      className="relative"
+      onContextMenu={(e) => {
+        e.preventDefault()
+        menuRef.current?.openAt(e.clientX, e.clientY)
+      }}
+    >
+      <button
+        type="button"
+        className="flex w-full flex-col gap-2 rounded-lg border p-4 pr-9 text-left hover:border-primary"
+        onClick={() => navigate(`/projects/${projectKey}/suites/${suite.key}`)}
+      >
+        <span className="flex items-center gap-1.5 truncate font-medium">
+          <LayersIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          {suite.name}
+        </span>
+        {suite.passRate === null ? (
+          <span className="text-xs text-muted-foreground">Never run</span>
+        ) : (
+          <HealthBar rate={suite.passRate} />
+        )}
+        <span className="text-xs text-muted-foreground">
+          {suite.caseIds.length} {suite.caseIds.length === 1 ? 'case' : 'cases'}
+          {suite.lastRunAt && ` · ${timeAgo(suite.lastRunAt)}`}
+        </span>
+      </button>
+      <div className="absolute top-3 right-2">
+        <SuiteActionsMenu
+          ref={menuRef}
+          suite={suite}
+          projectKey={projectKey}
+          variant="menu"
+          navigate={navigate}
+          onChanged={onChanged}
+          onRunCreated={onRunCreated}
+        />
+      </div>
+    </li>
+  )
+}
 
 export default function SuitesPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
@@ -24,6 +87,7 @@ export default function SuitesPage() {
   const [suites, setSuites] = useState<Suite[]>([])
   const [creating, setCreating] = useState(false)
   const [suiteName, setSuiteName] = useState('')
+  const [createdRunKey, setCreatedRunKey] = useState<string>()
 
   const load = useCallback(async () => {
     if (!projectKey) return
@@ -81,6 +145,15 @@ export default function SuitesPage() {
         )}
       />
 
+      {createdRunKey && (
+        <ConfirmBanner
+          message="Run created"
+          linkTo={`/runs/${createdRunKey}`}
+          linkLabel="View run →"
+          onDismiss={() => setCreatedRunKey(undefined)}
+        />
+      )}
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="tp-heading">Suites</CardTitle>
@@ -100,27 +173,14 @@ export default function SuitesPage() {
           ) : (
             <ul aria-label="Suites" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {suites.map((s) => (
-                <li key={s.id}>
-                  <button
-                    type="button"
-                    className="flex w-full flex-col gap-2 rounded-lg border p-4 text-left hover:border-primary"
-                    onClick={() => navigate(`/projects/${projectKey}/suites/${s.key}`)}
-                  >
-                    <span className="flex items-center gap-1.5 truncate font-medium">
-                      <LayersIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                      {s.name}
-                    </span>
-                    {s.passRate === null ? (
-                      <span className="text-xs text-muted-foreground">Never run</span>
-                    ) : (
-                      <HealthBar rate={s.passRate} />
-                    )}
-                    <span className="text-xs text-muted-foreground">
-                      {s.caseIds.length} {s.caseIds.length === 1 ? 'case' : 'cases'}
-                      {s.lastRunAt && ` · ${timeAgo(s.lastRunAt)}`}
-                    </span>
-                  </button>
-                </li>
+                <SuiteCard
+                  key={s.id}
+                  suite={s}
+                  projectKey={projectKey}
+                  navigate={navigate}
+                  onChanged={load}
+                  onRunCreated={setCreatedRunKey}
+                />
               ))}
             </ul>
           )}

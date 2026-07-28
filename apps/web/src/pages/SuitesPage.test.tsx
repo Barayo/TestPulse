@@ -5,9 +5,11 @@ import { MemoryRouter, Route, Routes } from 'react-router'
 import SuitesPage from './SuitesPage'
 import { api } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
+const mockPUT = vi.mocked(api.PUT)
+const mockDELETE = vi.mocked(api.DELETE)
 
 let navigatedTo: string | undefined
 vi.mock('react-router', async () => {
@@ -84,6 +86,97 @@ describe('SuitesPage', () => {
     renderSuites()
     await userEvent.click(await screen.findByText('Smoke'))
     expect(navigatedTo).toBe('/projects/p1/suites/p1-S1')
+  })
+
+  it('each card has a right-click / "⋯" context menu offering Run suite, Rename, Delete', async () => {
+    mockSuitesAPI(projectQA, [
+      { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null, lastRunAt: null },
+    ])
+    renderSuites()
+
+    await userEvent.click(await screen.findByRole('button', { name: /actions for smoke/i }))
+    expect(screen.getByRole('menuitem', { name: /run suite/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /rename/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /delete/i })).toBeInTheDocument()
+    // Opening the menu is not the same as navigating into the suite.
+    expect(navigatedTo).toBeUndefined()
+  })
+
+  it('right-clicking a card opens its context menu without navigating', async () => {
+    mockSuitesAPI(projectQA, [
+      { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null, lastRunAt: null },
+    ])
+    renderSuites()
+
+    const card = (await screen.findByText('Smoke')).closest('li')
+    if (!card) throw new Error('card not found')
+    await userEvent.pointer({ keys: '[MouseRight]', target: card })
+
+    expect(await screen.findByRole('menuitem', { name: /rename/i })).toBeInTheDocument()
+    expect(navigatedTo).toBeUndefined()
+  })
+
+  it('renaming a suite from the index menu updates the card and refreshes the list', async () => {
+    mockSuitesAPI(projectQA, [
+      { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null, lastRunAt: null },
+    ])
+    mockPUT.mockResolvedValue({ response: { ok: true } })
+    renderSuites()
+
+    await userEvent.click(await screen.findByRole('button', { name: /actions for smoke/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /rename/i }))
+    const input = screen.getByLabelText(/suite name/i)
+    await userEvent.clear(input)
+    await userEvent.type(input, 'Smoke v2')
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/suites/{suiteKey}',
+        expect.objectContaining({ params: { path: { suiteKey: 'p1-S1' } }, body: { name: 'Smoke v2' } }),
+      )
+    })
+    const suitesGetCalls = mockGET.mock.calls.filter((call) => call[0] === '/api/v1/projects/{projectKey}/suites')
+    await waitFor(() => expect(suitesGetCalls.length).toBeGreaterThan(1))
+  })
+
+  it('deleting a suite from the index menu removes it and stays on the index', async () => {
+    mockSuitesAPI(projectQA, [
+      { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null, lastRunAt: null },
+    ])
+    mockDELETE.mockResolvedValue({ response: { ok: true } })
+    renderSuites()
+
+    await userEvent.click(await screen.findByRole('button', { name: /actions for smoke/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /delete/i }))
+    await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+    await waitFor(() => {
+      expect(mockDELETE).toHaveBeenCalledWith(
+        '/api/v1/suites/{suiteKey}',
+        expect.objectContaining({ params: { path: { suiteKey: 'p1-S1' } } }),
+      )
+    })
+    expect(navigatedTo).toBeUndefined()
+  })
+
+  it('running a suite from the index menu shows the confirmation banner', async () => {
+    mockSuitesAPI(projectQA, [
+      { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null, lastRunAt: null },
+    ])
+    mockPOST.mockResolvedValue({
+      data: { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Smoke run', createdAt: '' },
+      response: { ok: true },
+    })
+    renderSuites()
+
+    await userEvent.click(await screen.findByRole('button', { name: /actions for smoke/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /run suite/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^create run$/i }))
+
+    expect(await screen.findByText(/run created/i)).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /view run/i })
+    expect(link).toHaveAttribute('href', '/runs/p1-R1')
   })
 
   it('creating a suite navigates straight into its new detail page, not an inline form', async () => {

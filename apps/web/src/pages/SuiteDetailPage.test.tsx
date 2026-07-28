@@ -11,16 +11,11 @@ const mockPUT = vi.mocked(api.PUT)
 const mockDELETE = vi.mocked(api.DELETE)
 const mockPOST = vi.mocked(api.POST)
 
-let navigatedTo: string | undefined
-let navigatedState: unknown
 vi.mock('react-router', async () => {
   const actual = await vi.importActual<typeof import('react-router')>('react-router')
   return {
     ...actual,
-    useNavigate: () => (to: string, opts?: { state?: unknown }) => {
-      navigatedTo = to
-      navigatedState = opts?.state
-    },
+    useNavigate: () => vi.fn(),
   }
 })
 
@@ -81,7 +76,6 @@ function renderDetail() {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  navigatedTo = undefined
 })
 
 describe('SuiteDetailPage', () => {
@@ -151,42 +145,6 @@ describe('SuiteDetailPage', () => {
     })
   })
 
-  it('renames the suite', async () => {
-    mockDetailAPI()
-    mockPUT.mockResolvedValue({ data: { ...smokeSuite, name: 'Smoke v2' }, response: { ok: true } })
-    renderDetail()
-
-    await userEvent.click(await screen.findByRole('button', { name: /rename/i }))
-    const input = screen.getByLabelText(/suite name/i)
-    await userEvent.clear(input)
-    await userEvent.type(input, 'Smoke v2')
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
-
-    await waitFor(() => {
-      expect(mockPUT).toHaveBeenCalledWith(
-        '/api/v1/suites/{suiteKey}',
-        expect.objectContaining({ params: { path: { suiteKey: 'p1-S1' } }, body: { name: 'Smoke v2' } }),
-      )
-    })
-  })
-
-  it('deletes the suite and returns to the index', async () => {
-    mockDetailAPI()
-    mockDELETE.mockResolvedValue({ response: { ok: true } })
-    renderDetail()
-
-    await userEvent.click(await screen.findByRole('button', { name: /^delete$/i }))
-    await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
-
-    await waitFor(() => {
-      expect(mockDELETE).toHaveBeenCalledWith(
-        '/api/v1/suites/{suiteKey}',
-        expect.objectContaining({ params: { path: { suiteKey: 'p1-S1' } } }),
-      )
-    })
-    await waitFor(() => expect(navigatedTo).toBe('/projects/p1/suites'))
-  })
-
   it('preserves a member case that no longer exists in the project — no DELETE call for it', async () => {
     mockDetailAPI({ ...smokeSuite, caseIds: ['c1', 'orphan-id'] })
     mockPUT.mockResolvedValue({ response: { ok: true } })
@@ -205,44 +163,6 @@ describe('SuiteDetailPage', () => {
     expect(mockDELETE).not.toHaveBeenCalled()
   })
 
-  it('Run suite opens a confirm dialog showing the case count and an editable name', async () => {
-    mockDetailAPI()
-    renderDetail()
-
-    await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
-    expect(screen.getByText(/1 case from smoke/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument()
-  })
-
-  it('confirming Run suite creates a run from the suite and refreshes its properties', async () => {
-    mockDetailAPI()
-    mockPOST.mockResolvedValue({
-      data: { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Smoke run', createdAt: '' },
-      response: { ok: true },
-    })
-    renderDetail()
-
-    await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
-    const nameInput = screen.getByLabelText(/^name$/i)
-    await userEvent.clear(nameInput)
-    await userEvent.type(nameInput, 'Smoke run')
-    await userEvent.click(screen.getByRole('button', { name: /^create run$/i }))
-
-    await waitFor(() => {
-      expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectKey}/runs',
-        expect.objectContaining({
-          params: { path: { projectKey: 'p1' } },
-          body: { name: 'Smoke run', suiteKey: 'p1-S1' },
-        }),
-      )
-    })
-    // Dialog closes and the suite reloads (Properties reflect the fresh run).
-    await waitFor(() => expect(screen.queryByRole('button', { name: /^create run$/i })).not.toBeInTheDocument())
-    const suiteGetCalls = mockGET.mock.calls.filter((call) => call[0] === '/api/v1/suites/{suiteKey}')
-    expect(suiteGetCalls.length).toBeGreaterThan(1)
-  })
-
   it('shows an inline confirmation banner with a link to the new run after Run suite', async () => {
     mockDetailAPI()
     mockPOST.mockResolvedValue({
@@ -257,21 +177,6 @@ describe('SuiteDetailPage', () => {
     expect(await screen.findByText(/run created/i)).toBeInTheDocument()
     const link = screen.getByRole('link', { name: /view run/i })
     expect(link).toHaveAttribute('href', '/runs/p1-R1')
-  })
-
-  it('Customize selection hands off to the dedicated New run route, pre-seeded with this suite', async () => {
-    mockDetailAPI()
-    renderDetail()
-
-    await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
-    const nameInput = screen.getByLabelText(/^name$/i)
-    await userEvent.clear(nameInput)
-    await userEvent.type(nameInput, 'Custom name')
-    await userEvent.click(screen.getByRole('button', { name: /customize selection/i }))
-
-    expect(navigatedTo).toBe('/projects/p1/runs/new')
-    expect(navigatedState).toEqual({ seedFromSuiteKey: 'p1-S1', seedName: 'Custom name' })
-    expect(mockPOST).not.toHaveBeenCalled()
   })
 
   it('shows a not-found message for an unknown suite key', async () => {
