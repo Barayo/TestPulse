@@ -40,35 +40,35 @@ The web UI SHALL show a breadcrumb trail reflecting the user's current location,
 - **THEN** the breadcrumb ends at the case's parent folder (or "‹ Library" if the case is unsectioned), and the case's title appears only in the page's own heading, not as a trailing breadcrumb segment
 
 ### Requirement: Project switcher
-The web UI SHALL show the active project's identity in a persistent header element as a fused chip — a colored initials avatar, the project name, and (when more than one project is accessible) a chevron — sharing one visual container. The avatar+name portion SHALL be a direct link to that project's own page, separate from switching; the chevron alone SHALL open a searchable project switcher. The same switcher SHALL also be reachable from anywhere in the app via a keyboard shortcut. On the project's own landing page, the chip SHALL NOT render; the switch affordance SHALL instead fuse onto the page's own heading as a chevron. The active project SHALL remain resolved on every route nested under a run (e.g. a run item's own page), not only the run's own exact URL.
+The web UI SHALL show the active project's name in a persistent header element with a caret fused onto it (when more than one project is accessible). The name portion SHALL be a direct link to that project's own page, separate from switching; the caret alone SHALL open a project switcher anchored directly beneath the trigger. The same switcher SHALL also be reachable from anywhere in the app via a keyboard shortcut. On the project's own landing page, the header trigger SHALL NOT render; the switch affordance SHALL instead fuse onto the page's own heading as a chevron, opening a centered searchable dialog (shared across every page that needs a switcher but has no anchored trigger of its own to attach a popover to). The active project SHALL remain resolved on every route nested under a run (e.g. a run item's own page), not only the run's own exact URL.
 
 #### Scenario: Navigating to the active project via the header
-- **WHEN** a user clicks the avatar or name portion of the header chip
+- **WHEN** a user clicks the project name in the header
 - **THEN** they are taken directly to that project's own page — no switcher opens
 
-#### Scenario: Switching project via the header chevron
-- **WHEN** a user clicks the chevron on the header chip
-- **THEN** a searchable list of all projects opens, each showing its suite count, case count, and latest pass rate
+#### Scenario: Switching project via the header caret
+- **WHEN** a user clicks the caret fused onto the header project name
+- **THEN** a searchable list of all projects opens in a popover anchored directly beneath the trigger, each project showing its suite count, case count, and latest pass rate
 
-#### Scenario: Chip renders as plain text with a single project
+#### Scenario: Header trigger renders as plain text with a single project
 - **WHEN** the account has no more than one project
-- **THEN** the header shows the project name as plain, non-interactive text — no avatar, no pill background, no chevron, no hover feedback — since there is nothing to switch to
+- **THEN** the header shows the project name as plain, non-interactive text — no caret, no hover feedback — since there is nothing to switch to
 
 #### Scenario: Switching project via keyboard
 - **WHEN** a user presses the project-switcher keyboard shortcut from any page
-- **THEN** the same project switcher opens, regardless of the current page
+- **THEN** the switcher instance mounted on the current page opens — the header's anchored popover everywhere it renders, or the landing page's centered dialog where it doesn't
 
 #### Scenario: Active project stays resolved on a run item's page
 - **WHEN** a user opens a run item's own page
 - **THEN** the header shows that run's project as the active project, not a "Select project" placeholder
 
-#### Scenario: No header chip on the project's own landing page
+#### Scenario: No header trigger on the project's own landing page
 - **WHEN** a user opens a project's landing page
-- **THEN** the header shows only the TestPulse wordmark (no chip), and a chevron fused onto the page's own heading opens the same switcher
+- **THEN** the header shows only the TestPulse wordmark, and a chevron fused onto the page's own heading opens the switcher's centered dialog instead
 
 #### Scenario: Landing-page heading chevron is plain with a single project
 - **WHEN** a user with only one accessible project opens that project's landing page
-- **THEN** the heading shows no chevron and no switch affordance, matching the header chip's single-project treatment
+- **THEN** the heading shows no chevron and no switch affordance, matching the header trigger's single-project treatment
 
 ### Requirement: Brand wordmark
 The web UI's header SHALL show the TestPulse brand mark — an icon tile

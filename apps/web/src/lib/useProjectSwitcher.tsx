@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import type { SwitcherProject } from '@/components/ProjectSwitcher'
@@ -6,11 +6,18 @@ import type { SwitcherProject } from '@/components/ProjectSwitcher'
 type ProjectSwitcherContextValue = {
   canSwitch: boolean
   openSwitcher: () => void
+  // The top-bar trigger (ProjectSwitcher.tsx) manages its own anchored
+  // popover rather than this shared centered dialog — it registers itself
+  // as ⌘K's target whenever it's mounted (every project-scoped page except
+  // the landing page, where only the h1-fused chevron exists and calls
+  // openSwitcher directly).
+  registerPopoverOpener: (fn: (() => void) | null) => void
 }
 
 const ProjectSwitcherContext = createContext<ProjectSwitcherContextValue>({
   canSwitch: false,
   openSwitcher: () => {},
+  registerPopoverOpener: () => {},
 })
 
 export function useProjectSwitcher(): ProjectSwitcherContextValue {
@@ -33,12 +40,18 @@ export function ProjectSwitcherProvider({ projects, onSelectProject, children }:
   const [query, setQuery] = useState('')
   // Nothing to jump to with 0-1 projects — no affordance should imply one.
   const canSwitch = projects.length > 1
+  const popoverOpenerRef = useRef<(() => void) | null>(null)
+
+  const registerPopoverOpener = useCallback((fn: (() => void) | null) => {
+    popoverOpenerRef.current = fn
+  }, [])
 
   useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
-        setOpen(true)
+        if (popoverOpenerRef.current) popoverOpenerRef.current()
+        else setOpen(true)
       }
     }
     document.addEventListener('keydown', onKeyDown)
@@ -55,7 +68,7 @@ export function ProjectSwitcherProvider({ projects, onSelectProject, children }:
   )
 
   return (
-    <ProjectSwitcherContext.Provider value={{ canSwitch, openSwitcher: () => setOpen(true) }}>
+    <ProjectSwitcherContext.Provider value={{ canSwitch, openSwitcher: () => setOpen(true), registerPopoverOpener }}>
       {children}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md" showCloseButton={false}>

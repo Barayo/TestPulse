@@ -122,7 +122,11 @@ function Layout({ children }: { children: React.ReactNode }) {
                       Administration
                     </span>
                   ) : (
-                    <ProjectSwitcher projects={projects} activeProjectId={activeProjectId} />
+                    <ProjectSwitcher
+                      projects={projects}
+                      activeProjectId={activeProjectId}
+                      onSelectProject={(id) => navigate(`/projects/${id}`)}
+                    />
                   )}
                 </>
               )}

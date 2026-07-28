@@ -18,24 +18,26 @@ function renderSwitcher(
   return render(
     <MemoryRouter>
       <ProjectSwitcherProvider projects={list} onSelectProject={onSelectProject}>
-        <ProjectSwitcher projects={list} {...switcherProps} />
+        <ProjectSwitcher projects={list} onSelectProject={onSelectProject} {...switcherProps} />
       </ProjectSwitcherProvider>
     </MemoryRouter>,
   )
 }
 
 describe('ProjectSwitcher', () => {
-  describe('multiple projects — fused chip', () => {
-    it('renders the active project name as a link to its own page, separate from the switch chevron', () => {
+  describe('multiple projects — name+caret trigger', () => {
+    it('renders the active project name as a link to its own page, separate from the caret', () => {
       renderSwitcher({ activeProjectId: 'p1' })
       const link = screen.getByRole('link', { name: 'Banca Móvil' })
       expect(link).toHaveAttribute('href', '/projects/p1')
       expect(screen.getByRole('button', { name: /switch project/i })).toBeInTheDocument()
     })
 
-    it("renders an avatar with the project name's initial", () => {
+    it('clicking the name navigates directly — it does not open the switcher', async () => {
+      const user = userEvent.setup()
       renderSwitcher({ activeProjectId: 'p1' })
-      expect(screen.getByText('B')).toBeInTheDocument()
+      await user.click(screen.getByRole('link', { name: 'Banca Móvil' }))
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
 
     it('never wraps or grows unbounded for a long project name — truncates instead', () => {
@@ -50,35 +52,43 @@ describe('ProjectSwitcher', () => {
       expect(label).toHaveClass('truncate')
     })
 
-    it('clicking the chevron opens the switcher, not the project link', async () => {
+    it('clicking the caret opens an anchored popover, not the project link', async () => {
       const user = userEvent.setup()
       renderSwitcher({ activeProjectId: 'p1' })
       await user.click(screen.getByRole('button', { name: /switch project/i }))
       expect(await screen.findByRole('dialog')).toBeInTheDocument()
     })
 
-    it("shares one hover container across the name link and the chevron, so they read as one chip", () => {
-      const { container } = renderSwitcher({ activeProjectId: 'p1' })
-      const chip = container.querySelector('[data-testid="project-chip"]')
-      expect(chip).not.toBeNull()
-      expect(chip).toHaveClass('hover:bg-accent')
-      expect(chip?.querySelector('a')).not.toBeNull()
-      expect(chip?.querySelector('button')).not.toBeNull()
+    it('closes the popover on Escape', async () => {
+      const user = userEvent.setup()
+      renderSwitcher({ activeProjectId: 'p1' })
+      await user.click(screen.getByRole('button', { name: /switch project/i }))
+      await screen.findByRole('dialog')
+      await user.keyboard('{Escape}')
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+
+    it('closes the popover on an outside click', async () => {
+      const user = userEvent.setup()
+      renderSwitcher({ activeProjectId: 'p1' })
+      await user.click(screen.getByRole('button', { name: /switch project/i }))
+      await screen.findByRole('dialog')
+      await user.click(document.body)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     })
   })
 
   describe('single project — plain text', () => {
-    it('renders the project name as a plain link with no avatar and no switch chevron', () => {
+    it('renders the project name as a plain link with no caret', () => {
       renderSwitcher({
         projects: [{ id: 'p1', name: 'Banca Móvil', suiteCount: 7, caseCount: 51, passRate: 78 }],
         activeProjectId: 'p1',
       })
       expect(screen.getByRole('link', { name: 'Banca Móvil' })).toHaveAttribute('href', '/projects/p1')
       expect(screen.queryByRole('button', { name: /switch project/i })).not.toBeInTheDocument()
-      expect(screen.queryByText('B')).not.toBeInTheDocument()
     })
 
-    it('hides the switch-project icon when there are no projects at all', () => {
+    it('hides the caret when there are no projects at all', () => {
       renderSwitcher({ projects: [] })
       expect(screen.queryByRole('button', { name: /switch project/i })).not.toBeInTheDocument()
     })
@@ -90,8 +100,8 @@ describe('ProjectSwitcher', () => {
     })
   })
 
-  describe('switcher dialog', () => {
-    it('opens the palette with every project and its stats when the switch chevron is clicked', async () => {
+  describe('switcher popover', () => {
+    it('opens the palette with every project and its stats when the caret is clicked', async () => {
       const user = userEvent.setup()
       renderSwitcher({ activeProjectId: 'p1' })
       await user.click(screen.getByRole('button', { name: /switch project/i }))
@@ -123,7 +133,7 @@ describe('ProjectSwitcher', () => {
       expect(stats).toHaveClass('block')
     })
 
-    it('does not render a close (×) button on the dialog — dismiss via Escape or an outside click, like a command palette', async () => {
+    it('does not render a close (×) button on the popover — dismiss via Escape or an outside click, like a command palette', async () => {
       const user = userEvent.setup()
       renderSwitcher({ activeProjectId: 'p1' })
       await user.click(screen.getByRole('button', { name: /switch project/i }))
