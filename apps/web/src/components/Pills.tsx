@@ -4,6 +4,19 @@
 // platform, and test-type pills keep the exact flat style already shipped
 // on CasePicker; Auto/Manual and Stale are the two variants this change adds.
 
+// Priority is a severity scale, not an arbitrary enum — tint it with the
+// app's existing status bands (healthy/progress/risk have no "low" rung, so
+// low borrows the neutral band) rather than the flat gray every other
+// classification pill uses. Critical reuses the exact bg-destructive/10
+// tint FolderExplorerPage's critical-count pill already established, not a
+// new hue.
+const PRIORITY_TINT: Record<string, string> = {
+  low: 'bg-status-neutral-bg text-status-neutral-fg',
+  medium: 'bg-status-progress-bg text-status-progress-fg',
+  high: 'bg-status-risk-bg text-status-risk-fg',
+  critical: 'bg-destructive/10 text-destructive',
+}
+
 export function ClassificationPills({
   priority,
   platform,
@@ -15,7 +28,11 @@ export function ClassificationPills({
 }) {
   return (
     <>
-      {priority && <span className="rounded-full bg-muted px-2 py-0.5">{priority}</span>}
+      {priority && (
+        <span className={`rounded-full px-2 py-0.5 font-medium ${PRIORITY_TINT[priority] ?? 'bg-muted'}`}>
+          {priority}
+        </span>
+      )}
       {platform && <span className="rounded-full bg-muted px-2 py-0.5">{platform}</span>}
       {testType && <span className="rounded-full bg-muted px-2 py-0.5">{testType}</span>}
     </>

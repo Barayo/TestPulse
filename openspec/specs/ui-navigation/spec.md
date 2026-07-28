@@ -156,8 +156,11 @@ additionally show an automation-coverage meter (the fraction of direct cases mar
 automated, or an explicit "empty" state for a section with no direct cases) — a single-tone
 indicator, not a pass/fail health band, since automation coverage is not an execution-health
 signal. Every case row SHALL show its priority, platform, test type, and automated/manual
-status as compact badges without requiring the case to be opened, plus a "Stale" indicator in
-place of its relative last-updated time once the case has gone unedited for 90 or more days.
+status as compact badges without requiring the case to be opened, with the priority badge
+tinted by severity (low/medium/high/critical, low→high reusing the app's existing neutral/
+progress/risk status bands, critical reusing the same destructive tint as the section row's
+critical-priority indicator) rather than flat/uncolored, plus a "Stale" indicator in place of
+its relative last-updated time once the case has gone unedited for 90 or more days.
 The content list SHALL provide title search and tag/priority/platform/test-type/automated
 filtering scoped to the currently selected section by default, with an explicit toggle to
 search and filter across every section in the project; a cross-project match SHALL be
@@ -210,6 +213,10 @@ indentation) and its direct case count.
 #### Scenario: A section with a critical case shows an indicator
 - **WHEN** a section's direct cases include at least one `critical`-priority case
 - **THEN** the section row shows a critical-priority indicator alongside its case count
+
+#### Scenario: A case row's priority badge is colored by severity
+- **WHEN** a user views case rows in the Library content list with different priorities
+- **THEN** each priority badge is tinted by its severity band (low/medium/high/critical), not rendered in the same flat color as platform or test type
 
 #### Scenario: A section's automation coverage is visible in the content list
 - **WHEN** a user views the content list and a subsection row has at least one direct case
@@ -272,7 +279,8 @@ version, steps, suite memberships, and version history. The page SHALL show its 
 steps as the full-width primary content, alongside a sidebar containing its properties,
 version history, and a results section. Priority, platform, test type, and automated/
 manual status SHALL render as pills; tags and suite memberships SHALL each render as
-individual pill chips rather than comma-joined text. The page header SHALL provide an
+individual pill chips rather than comma-joined text. The priority pill SHALL be tinted by
+severity, the same as everywhere else it renders. The page header SHALL provide an
 actions menu offering "Move to…" and "Delete," using the same underlying actions already
 available from the Library's row-level menu. Each version-history row SHALL show a terse
 signal of what changed relative to the previous version (or that it is the initial
@@ -371,6 +379,10 @@ page.
 #### Scenario: Edit mode preserves the sidebar
 - **WHEN** a user enters edit mode on a case detail page
 - **THEN** the properties sidebar remains visible with Properties as an inline edit form, and Results and Version History still visible read-only
+
+#### Scenario: The Properties sidebar's priority pill is colored by severity
+- **WHEN** a user views a case's Properties sidebar
+- **THEN** the priority pill is tinted by its severity band, the same as the Library row's priority badge
 
 ### Requirement: Editing a test case creates a new version
 A user SHALL be able to edit an existing case's title and steps from its view, and saving SHALL create a new immutable version rather than modifying the existing one.

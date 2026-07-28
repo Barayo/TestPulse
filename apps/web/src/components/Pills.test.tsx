@@ -15,6 +15,26 @@ describe('ClassificationPills', () => {
     expect(screen.queryByText('e2e')).not.toBeInTheDocument()
     expect(screen.getByText('web')).toBeInTheDocument()
   })
+
+  it.each([
+    ['low', 'status-neutral'],
+    ['medium', 'status-progress'],
+    ['high', 'status-risk'],
+  ] as const)('tints the %s priority pill with the %s status band', (priority, tint) => {
+    render(<ClassificationPills priority={priority} />)
+    expect(screen.getByText(priority)).toHaveClass(`bg-${tint}-bg`, `text-${tint}-fg`)
+  })
+
+  it('tints the critical priority pill with the destructive tone, matching the folder critical-count pill', () => {
+    render(<ClassificationPills priority="critical" />)
+    expect(screen.getByText('critical')).toHaveClass('bg-destructive/10', 'text-destructive')
+  })
+
+  it('does not tint platform or test type pills by priority severity', () => {
+    render(<ClassificationPills priority="critical" platform="web" testType="e2e" />)
+    expect(screen.getByText('web')).toHaveClass('bg-muted')
+    expect(screen.getByText('e2e')).toHaveClass('bg-muted')
+  })
 })
 
 describe('AutomationPill', () => {
