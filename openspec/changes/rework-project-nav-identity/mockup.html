@@ -1,0 +1,985 @@
+<meta charset="UTF-8">
+<title>TestPulse — Top Bar Project Switcher: 3 Proposals</title>
+<style>
+  :root {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --radius: 0.5rem;
+    --status-healthy-bg: oklch(0.93 0.03 175); --status-healthy-fg: oklch(0.4 0.1 175);
+    --status-progress-bg: oklch(0.94 0.04 85); --status-progress-fg: oklch(0.45 0.1 85);
+    --status-risk-bg: oklch(0.94 0.04 25); --status-risk-fg: oklch(0.45 0.14 25);
+    --avatar-1-bg: #CFEFEA; --avatar-1-fg: #0F6E63;
+    --avatar-2-bg: #DCEAFB; --avatar-2-fg: #1D5A96;
+    --avatar-3-bg: #E9E2FB; --avatar-3-fg: #5B3FA0;
+    --avatar-4-bg: #F5E7D0; --avatar-4-fg: #8A5A1E;
+    --avatar-5-bg: #FBE1E6; --avatar-5-fg: #A23A55;
+    --shadow-color: 11, 46, 44;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+      --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+      --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+      --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+      --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+      --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+      --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+      --avatar-1-bg: #0F3B36; --avatar-1-fg: #7FE0D2;
+      --avatar-2-bg: #123253; --avatar-2-fg: #8FBBEF;
+      --avatar-3-bg: #2B2149; --avatar-3-fg: #C6B4F5;
+      --avatar-4-bg: #3A2C10; --avatar-4-fg: #EFC77C;
+      --avatar-5-bg: #3A1A21; --avatar-5-fg: #F2A6B6;
+      --shadow-color: 0, 0, 0;
+    }
+  }
+  :root[data-theme="dark"] {
+    --background: #0B2A28; --foreground: #E6F5F3; --card: #12403C; --card-foreground: #E6F5F3;
+    --primary: #2DD4BF; --primary-foreground: #0B2A28; --secondary: #FBBF24; --secondary-foreground: #0B2A28;
+    --muted: #163A37; --muted-foreground: #8FBDB8; --accent: #163F3B; --accent-foreground: #E6F5F3;
+    --destructive: #FF6B57; --border: #1D524C; --input: #1D524C; --ring: #2DD4BF;
+    --status-healthy-bg: oklch(0.28 0.05 175); --status-healthy-fg: oklch(0.85 0.08 175);
+    --status-progress-bg: oklch(0.3 0.06 85); --status-progress-fg: oklch(0.85 0.1 85);
+    --status-risk-bg: oklch(0.3 0.07 25); --status-risk-fg: oklch(0.85 0.12 25);
+    --avatar-1-bg: #0F3B36; --avatar-1-fg: #7FE0D2;
+    --avatar-2-bg: #123253; --avatar-2-fg: #8FBBEF;
+    --avatar-3-bg: #2B2149; --avatar-3-fg: #C6B4F5;
+    --avatar-4-bg: #3A2C10; --avatar-4-fg: #EFC77C;
+    --avatar-5-bg: #3A1A21; --avatar-5-fg: #F2A6B6;
+    --shadow-color: 0, 0, 0;
+  }
+  :root[data-theme="light"] {
+    --background: #F7FAFA; --foreground: #0B2E2C; --card: #FFFFFF; --card-foreground: #0B2E2C;
+    --primary: #14B8A6; --primary-foreground: #FFFFFF; --secondary: #F5C84A; --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F2; --muted-foreground: #5B6B6A; --accent: #EAFAF7; --accent-foreground: #0B2E2C;
+    --destructive: #E8553F; --border: #E1E8E7; --input: #D8E4E3; --ring: #14B8A6;
+    --status-healthy-bg: oklch(0.93 0.03 175); --status-healthy-fg: oklch(0.4 0.1 175);
+    --status-progress-bg: oklch(0.94 0.04 85); --status-progress-fg: oklch(0.45 0.1 85);
+    --status-risk-bg: oklch(0.94 0.04 25); --status-risk-fg: oklch(0.45 0.14 25);
+    --avatar-1-bg: #CFEFEA; --avatar-1-fg: #0F6E63;
+    --avatar-2-bg: #DCEAFB; --avatar-2-fg: #1D5A96;
+    --avatar-3-bg: #E9E2FB; --avatar-3-fg: #5B3FA0;
+    --avatar-4-bg: #F5E7D0; --avatar-4-fg: #8A5A1E;
+    --avatar-5-bg: #FBE1E6; --avatar-5-fg: #A23A55;
+    --shadow-color: 11, 46, 44;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; max-width: 100%; overflow-x: hidden; }
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+  button, input { font-family: inherit; font-size: inherit; color: inherit; }
+  button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+  svg { display: block; flex-shrink: 0; }
+  h1 { margin: 0; }
+  p { margin: 0; }
+
+  /* ---------- mockup-only chrome ---------- */
+  .mock-chrome {
+    position: sticky; top: 0; z-index: 100;
+    background: repeating-linear-gradient(135deg, var(--muted), var(--muted) 10px, var(--accent) 10px, var(--accent) 20px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+  }
+  .mock-chrome-inner { max-width: 1180px; margin: 0 auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .mock-badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+    background: var(--foreground); color: var(--background); padding: 3px 8px; border-radius: 999px; flex-shrink: 0;
+  }
+  .mock-group-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); margin-right: -2px; flex-shrink: 0; }
+  .mock-state-switch {
+    display: inline-flex; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 2px; gap: 2px; flex-shrink: 0;
+  }
+  .mock-state-switch button {
+    background: transparent; border: none; border-radius: calc(var(--radius) - 2px); padding: 5px 10px;
+    font-size: 12px; font-weight: 600; color: var(--muted-foreground); white-space: nowrap;
+  }
+  .mock-state-switch button.active { background: var(--primary); color: var(--primary-foreground); }
+  .mock-state-switch button:not(.active):hover { color: var(--foreground); background: var(--muted); }
+  .mock-theme-btn {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 6px 12px; font-size: 12.5px; font-weight: 500; flex-shrink: 0; margin-left: auto;
+  }
+  .mock-theme-btn:hover { border-color: var(--primary); }
+  .mock-note {
+    max-width: 1180px; margin: 10px auto 0; padding: 8px 14px; border-radius: var(--radius);
+    background: var(--accent); border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+    font-size: 12px; color: var(--foreground);
+  }
+  .mock-note code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; background: var(--card); padding: 1px 4px; border-radius: 4px; }
+  .page-wrap { max-width: 1180px; margin: 0 auto; padding: 16px 20px 80px; }
+
+  /* ---------- recommendation card (always visible, not gated by proposal tab) ---------- */
+  .recommendation {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; margin: 24px 0; display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .recommendation h2 { margin: 0 0 8px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+  .recommendation .tag { display: inline-block; font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--secondary-foreground); background: var(--secondary); border-radius: 999px; padding: 2px 8px; margin-bottom: 6px; }
+  .recommendation-col { flex: 1 1 260px; min-width: 220px; }
+  .recommendation-col h3 { margin: 0 0 3px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); }
+  .recommendation-col p { font-size: 12.5px; color: var(--foreground); line-height: 1.5; margin: 0; }
+  .repeat-note { font-size: 11.5px; color: var(--muted-foreground); margin-top: 10px; max-width: 62ch; }
+  .repeat-note code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; background: var(--muted); padding: 1px 4px; border-radius: 4px; }
+
+  /* ---------- rationale card ---------- */
+  .rationale {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 14px 18px; margin-bottom: 18px; display: flex; gap: 16px; flex-wrap: wrap;
+  }
+  .rationale h2 { margin: 0 0 4px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+  .rationale .tag { display: inline-block; font-family: ui-monospace, monospace; font-size: 10px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--primary); background: var(--accent); border-radius: 999px; padding: 2px 8px; margin-bottom: 6px; }
+  .rationale-col { flex: 1 1 220px; min-width: 200px; }
+  .rationale-col h3 { margin: 0 0 3px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); }
+  .rationale-col p { font-size: 12.5px; color: var(--foreground); line-height: 1.5; }
+  .rationale-col p.muted { color: var(--muted-foreground); }
+  .rationale-col kbd { font-family: ui-monospace, monospace; font-size: 11px; background: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 1px 5px; }
+
+  /* ---------- simulated app shell ---------- */
+  .app-shell { border: 1px solid var(--border); border-radius: calc(var(--radius) + 4px); overflow: visible; background: var(--background); box-shadow: 0 1px 2px rgba(var(--shadow-color), 0.04); }
+  .app-header { position: relative; border-bottom: 1px solid var(--border); border-radius: calc(var(--radius) + 4px) calc(var(--radius) + 4px) 0 0; background: var(--background); }
+  .app-header-inner { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 13px 22px; flex-wrap: wrap; }
+  .brand-row { display: flex; align-items: baseline; gap: 6px; min-width: 0; }
+  .brand-link { display: flex; align-items: center; gap: 6px; text-decoration: none; color: inherit; flex-shrink: 0; }
+  .brand-icon { width: 25px; height: 25px; border-radius: 5px; flex-shrink: 0; position: relative; top: 1px; }
+  .brand-word { font-size: 21px; font-weight: 700; letter-spacing: -0.015em; line-height: 1; white-space: nowrap; }
+  .brand-word .t1 { color: var(--foreground); }
+  .brand-word .t2 { color: var(--primary); }
+  .crumb-sep { font-family: ui-monospace, monospace; font-size: 17px; color: var(--muted-foreground); position: relative; top: -2px; }
+
+  .right-cluster { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .ghost-btn { font-size: 12.5px; color: var(--muted-foreground); background: transparent; border: none; padding: 6px 9px; border-radius: 6px; }
+  .ghost-btn:hover { background: var(--accent); color: var(--foreground); }
+  .user-avatar { width: 27px; height: 27px; border-radius: 999px; background: var(--muted); color: var(--muted-foreground); display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; flex-shrink: 0; }
+
+  .app-main { padding: 20px 22px 40px; min-height: 220px; }
+  .page { display: none; }
+  .crumbtrail { display: flex; align-items: center; gap: 6px; font-family: ui-monospace, monospace; font-size: 11px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted-foreground); margin-bottom: 14px; }
+  .crumbtrail .cur { color: var(--foreground); }
+  /* A breadcrumb trimmed of its redundant "Projects › {Project}" lead and
+     its redundant {h1-duplicate} tail can end up with exactly one segment
+     left (e.g. Suite detail: just "Suites"). That's not meaningless the way
+     a lone *untrimmed* segment was (Breadcrumbs.tsx's real segments.length
+     <= 1 guard assumed the sole segment was always the page's own root,
+     literally repeating the h1 below it) — here it's a genuine, unique,
+     clickable ancestor. Styled as one clickable unit, not a static label,
+     with a leading "‹" so a single bare word doesn't read as inert text. */
+  .crumb-link { color: var(--muted-foreground); text-decoration: none; }
+  .crumb-link:hover, .crumb-link:focus-visible { color: var(--foreground); }
+  .page-head { margin-bottom: 16px; }
+  .page-head h1 { display: flex; align-items: baseline; gap: 6px; font-size: 24px; font-weight: 800; letter-spacing: -0.015em; margin-bottom: 4px; }
+  .page-head p.muted { color: var(--muted-foreground); font-size: 13px; }
+
+  /* ---------- h1-fused switch trigger (Project landing only) ----------
+     The product-owner's own framing: "leave the heading as only indicator
+     of project." Rather than a second, separately-hidden top-bar control
+     (which is what caused the earlier "can't switch from landing" regression
+     — hiding the control hid the only discoverable affordance with it), the
+     switch trigger relocates onto the SAME h1 instance instead of living
+     alongside a duplicate copy of the name. One instance of the name, one
+     click target, present exactly where the eye already is. Shared across
+     all three proposals on purpose: unlike the persistent top-bar control
+     (seen on every page, where each proposal's visual idiom matters), this
+     is a single rarely-seen page's affordance — matching whichever top-bar
+     idiom happens to be selected elsewhere buys nothing and adds a fourth
+     visual language to maintain. Opens the same lightweight centered dialog
+     regardless of proposal. */
+  .h1-switch-btn {
+    display: inline-flex; align-items: center; justify-content: center; align-self: center;
+    width: 26px; height: 26px; border-radius: 7px; border: none; background: transparent;
+    color: var(--muted-foreground); flex-shrink: 0; position: relative; top: -2px;
+  }
+  .h1-switch-btn:hover, .h1-switch-btn[aria-expanded="true"] { background: var(--accent); color: var(--primary); }
+  .h1-switch-btn svg { width: 17px; height: 17px; transition: transform 0.15s ease; }
+  .h1-switch-btn[aria-expanded="true"] svg { transform: rotate(180deg); }
+
+  .fake-table { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+  .fake-row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; background: var(--card); }
+  .fake-row + .fake-row { border-top: 1px solid var(--border); }
+  .fake-row .name { font-weight: 600; flex: 1; min-width: 0; }
+  .fake-row .meta { font-size: 12px; color: var(--muted-foreground); font-family: ui-monospace, monospace; flex-shrink: 0; }
+  .status-pill { font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; flex-shrink: 0; }
+  .status-pill.healthy { background: var(--status-healthy-bg); color: var(--status-healthy-fg); }
+  .status-pill.progress { background: var(--status-progress-bg); color: var(--status-progress-fg); }
+  .status-pill.risk { background: var(--status-risk-bg); color: var(--status-risk-fg); }
+
+  .mini-stats { display: flex; gap: 10px; flex-wrap: wrap; }
+  .mini-stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 16px; min-width: 120px; }
+  .mini-stat .v { font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+  .mini-stat .l { font-size: 10.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted-foreground); }
+
+  /* ---------- shared switcher list markup ---------- */
+  .switch-search {
+    width: 100%; box-sizing: border-box; border: 1px solid var(--input); background: var(--background);
+    border-radius: 6px; padding: 8px 10px; font-size: 13px; color: var(--foreground); margin-bottom: 8px;
+  }
+  .switch-search:focus { outline: none; border-color: var(--ring); box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 22%, transparent); }
+  .switch-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
+  .switch-list li + li { margin-top: 2px; }
+  .switch-item {
+    display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: transparent;
+    border: none; border-radius: 6px; padding: 7px 8px; box-sizing: border-box;
+  }
+  .switch-item:hover, .switch-item:focus-visible { background: var(--accent); }
+  .switch-item.is-active { background: color-mix(in srgb, var(--primary) 10%, transparent); }
+  .switch-item .ia { width: 26px; height: 26px; border-radius: 7px; display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 800; flex-shrink: 0; }
+  .switch-item .it { min-width: 0; flex: 1; }
+  .switch-item .it .n { display: block; font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .switch-item .it .m { display: block; font-size: 11px; color: var(--muted-foreground); font-family: ui-monospace, monospace; }
+  .switch-item .check { margin-left: auto; color: var(--primary); flex-shrink: 0; }
+
+  /* ================= PROPOSAL A: Fused Chip ================= */
+  .chip {
+    display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 6px; border-radius: 8px;
+    border: 1px solid transparent; background: transparent; margin-left: 2px;
+  }
+  .chip:hover { background: var(--accent); }
+  .chip[aria-expanded="true"] { background: var(--accent); border-color: color-mix(in srgb, var(--primary) 35%, transparent); }
+  .chip-avatar { width: 22px; height: 22px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; letter-spacing: 0.02em; background: var(--avatar-1-bg); color: var(--avatar-1-fg); flex-shrink: 0; }
+  .chip-name { font-size: 16.5px; font-weight: 700; color: var(--foreground); line-height: 1; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .chip-chevron { width: 14px; height: 14px; color: var(--muted-foreground); transition: transform 0.15s ease; flex-shrink: 0; }
+  .chip[aria-expanded="true"] .chip-chevron { transform: rotate(180deg); color: var(--primary); }
+
+  /* Single-project mode (all proposals): genuinely plain text, not a
+     disabled-but-still-styled control — no avatar/pill/chevron/caret, no
+     hover feedback of any kind, cursor default. Sized per-view below. */
+  .plain-name { display: inline-flex; align-items: baseline; color: var(--foreground); text-decoration: none; cursor: default; line-height: 1; }
+  .plain-name:hover, .plain-name:focus { color: var(--foreground); text-decoration: none; background: none; outline: none; }
+  #view-a .plain-name { font-size: 16.5px; font-weight: 700; }
+  #view-c .plain-name { font-size: 19px; font-weight: 700; }
+
+  .modal-overlay {
+    position: fixed; inset: 0; background: color-mix(in srgb, #06110f 55%, transparent); z-index: 200;
+    display: none; align-items: flex-start; justify-content: center; padding-top: 15vh;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal-panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    width: 100%; max-width: 420px; padding: 14px; box-shadow: 0 24px 48px -12px rgba(0,0,0,0.35); margin: 0 16px;
+  }
+  .modal-hint { font-size: 11px; color: var(--muted-foreground); padding: 6px 4px 2px; }
+
+  /* ================= PROPOSAL B: Breadcrumb Rail ================= */
+  .rail-crumb {
+    display: inline-flex; align-items: center; gap: 4px; padding: 5px 7px; border-radius: 6px;
+    background: transparent; border: none; font-family: ui-monospace, monospace; font-size: 13.5px;
+    font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted-foreground);
+  }
+  .rail-crumb:hover, .rail-crumb[aria-expanded="true"] { color: var(--foreground); background: var(--accent); }
+  .rail-caret { font-size: 9px; transform: translateY(1px); transition: transform 0.15s ease; }
+  .rail-crumb[aria-expanded="true"] .rail-caret { transform: translateY(1px) rotate(180deg); color: var(--primary); }
+
+  /* Single-project: same voice as the current (last) segment in
+     Breadcrumbs.tsx — mono/uppercase/tracked, text-foreground — but fully
+     decoupled from .rail-crumb so none of its hover/expanded rules apply. */
+  .plain-name-crumb {
+    display: inline-flex; align-items: center; padding: 5px 7px; font-family: ui-monospace, monospace;
+    font-size: 13.5px; font-weight: 700; letter-spacing: 0.05em; text-transform: uppercase;
+    color: var(--foreground); cursor: default; text-decoration: none;
+  }
+  .plain-name-crumb:hover, .plain-name-crumb:focus { color: var(--foreground); background: none; text-decoration: none; outline: none; }
+
+  /* Right-sized for infrequent use: a compact dropdown anchored to the
+     crumb itself (like B's own trigger scale), not a full-width mega-menu
+     spanning the header — that read as over-built for something used
+     rarely per project-owner feedback. .switcher-anchor gives the trigger
+     its own positioning context so the panel opens right under it. */
+  .switcher-anchor { position: relative; display: inline-flex; align-items: baseline; }
+  .rail-panel {
+    position: absolute; top: calc(100% + 8px); left: 0; width: 320px; max-width: calc(100vw - 40px);
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: 0 18px 34px -14px rgba(0,0,0,0.35); z-index: 150; padding: 10px;
+    opacity: 0; transform: translateY(-6px); pointer-events: none; transition: opacity 0.15s ease, transform 0.15s ease;
+  }
+  .rail-panel.open { opacity: 1; transform: translateY(0); pointer-events: auto; }
+  .rail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; max-height: 220px; overflow-y: auto; }
+  .rail-card {
+    display: flex; align-items: center; gap: 9px; text-align: left; background: var(--background);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 10px;
+  }
+  .rail-card:hover, .rail-card:focus-visible { border-color: var(--primary); background: var(--accent); }
+  .rail-card.is-active { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 8%, var(--background)); }
+  .rail-card .ia { width: 24px; height: 24px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 9.5px; font-weight: 800; flex-shrink: 0; }
+  .rail-card .it { min-width: 0; }
+  .rail-card .it .n { display: block; font-size: 12.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rail-card .it .m { display: block; font-size: 10.5px; color: var(--muted-foreground); font-family: ui-monospace, monospace; }
+
+  /* ================= PROPOSAL C: Anchored Popover ================= */
+  .name-trigger {
+    display: inline-flex; align-items: baseline; gap: 3px; background: transparent;
+    border: none; padding: 3px 6px; border-radius: 7px; margin-left: 1px;
+  }
+  .name-trigger:hover, .name-trigger[aria-expanded="true"] { background: var(--accent); }
+  .name-text { font-size: 19px; font-weight: 700; color: var(--foreground); line-height: 1; max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .name-caret { font-size: 11px; color: var(--muted-foreground); position: relative; top: -4px; transition: transform 0.15s ease; }
+  .name-trigger[aria-expanded="true"] .name-caret { color: var(--primary); transform: rotate(180deg); top: -3px; }
+
+  .popover {
+    position: absolute; top: calc(100% + 12px); left: 0; min-width: 320px; background: var(--card);
+    border: 1px solid var(--border); border-radius: var(--radius); box-shadow: 0 22px 44px -14px rgba(0,0,0,0.35);
+    padding: 12px; z-index: 150; opacity: 0; transform: translateY(-4px) scale(0.98); pointer-events: none;
+    transition: opacity 0.12s ease, transform 0.12s ease;
+  }
+  .popover.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
+  .popover::before {
+    content: ''; position: absolute; top: -6px; left: 22px; width: 12px; height: 12px; background: var(--card);
+    border-left: 1px solid var(--border); border-top: 1px solid var(--border); transform: rotate(45deg);
+  }
+
+  /* ---------- view switching ---------- */
+  .view { display: none; }
+  body[data-proposal="a"] #view-a { display: block; }
+  body[data-proposal="b"] #view-b { display: block; }
+  body[data-proposal="c"] #view-c { display: block; }
+  body[data-page="suites"] .page-suites { display: block; }
+  body[data-page="landing"] .page-landing { display: block; }
+  body[data-page="suitedetail"] .page-suitedetail { display: block; }
+
+  /* Landing-page-only rule (all proposals, all project counts): the h1
+     right below already says the project name, so showing the top-bar
+     control here is pure duplication — not "acceptable GitHub-style
+     duplication" as an earlier pass argued, per direct product-owner
+     pushback. .project-slot wraps the "›" separator + whichever control
+     markup so both disappear together, leaving only the wordmark. This
+     also removes the narrow-viewport case where the control wrapped onto
+     its own second line sitting directly above the h1 — there's nothing
+     left to wrap. Unlike the earlier in-flight fix, this isn't a dead end:
+     the switch affordance doesn't just vanish, it relocates onto the h1
+     itself (see .h1-switch-btn below) — ⌘K AND a visible click target both
+     still work from this page, just fused into the one place the name
+     already lives. */
+  .project-slot { display: inline-flex; align-items: baseline; gap: 6px; min-width: 0; }
+  body[data-page="landing"] .project-slot { display: none; }
+
+  .footer-note { text-align: center; font-size: 11px; color: var(--muted-foreground); padding: 24px 0 8px; }
+</style>
+
+<div class="mock-chrome">
+  <div class="mock-chrome-inner">
+    <span class="mock-badge">Prototype</span>
+    <span class="mock-group-label">Proposal</span>
+    <div class="mock-state-switch" id="proposal-switch">
+      <button data-val="a" class="active">A · Fused Chip</button>
+      <button data-val="b">B · Breadcrumb Rail</button>
+      <button data-val="c">C · Anchored Popover</button>
+    </div>
+    <span class="mock-group-label">Page</span>
+    <div class="mock-state-switch" id="page-switch">
+      <button data-val="suites" class="active">Suites (h1 owns "Suites")</button>
+      <button data-val="landing">Project landing (h1 owns project name)</button>
+      <button data-val="suitedetail">Suite detail (deep-ish crumb)</button>
+    </div>
+    <span class="mock-group-label">Projects</span>
+    <div class="mock-state-switch" id="projects-switch">
+      <button data-val="multi" class="active">Multiple</button>
+      <button data-val="single">Single (no switcher)</button>
+    </div>
+    <button class="mock-theme-btn" id="theme-toggle">🌙 Dark mode</button>
+  </div>
+  <div class="mock-note">
+    <strong>Systemic rule (all three layers together):</strong> the top-bar control is the one persistent answer to
+    "which project" — it never repeats a "Projects" home-link either, since the wordmark already goes there. The
+    breadcrumb trail shows only the real, unique, navigable nodes <em>between</em> project and current page — it
+    never leads with "Projects › {Project}" (top bar's job, redundant everywhere, not just on two pages) and never
+    trails with a segment identical to the page's own h1 (page's job). The h1 is the definitive single-instance
+    label for current location. On <strong>Suites/Runs</strong>, that leaves zero segments (breadcrumb renders
+    nothing — same as Landing already did). On <strong>Suite detail</strong>, "Suites" survives alone as a real
+    clickable back-link, because it duplicates neither the top bar (project) nor the h1 (suite name). On
+    <strong>Project landing</strong>, the top-bar control doesn't render at all — the switch affordance (a small
+    chevron) fuses onto the h1 itself instead, so the name appears exactly once but stays clickable. <code>⌘K</code>
+    still opens the right switcher from every page/state. The <strong>Projects → Single</strong> toggle shows the
+    common case throughout: zero switch affordance anywhere, fully plain static text.
+  </div>
+</div>
+
+<div class="page-wrap">
+
+  <!-- ============================================================ -->
+  <!-- PROPOSAL A — Fused Chip                                       -->
+  <!-- ============================================================ -->
+  <section class="view" id="view-a">
+    <div class="rationale">
+      <div class="rationale-col" style="flex-basis:100%">
+        <span class="tag">Proposal A</span>
+        <h2>The Fused Chip</h2>
+      </div>
+      <div class="rationale-col">
+        <h3>Problem it solves</h3>
+        <p>Replaces the wordmark → "›" → bold name → floating arrow-icon <em>chain</em> with a single rounded
+          chip: a small colored initial-avatar, the project name, and a chevron — one visual unit with one shared
+          hover/focus state, instead of two disconnected controls sitting next to each other.</p>
+      </div>
+      <div class="rationale-col">
+        <h3>Interaction</h3>
+        <p>The entire chip is one <code>&lt;button&gt;</code>. Hover tints the whole chip (background, not just an
+          underline on the text). Click opens the same centered search dialog the app already has today — smallest
+          change to the overlay mechanism, so this is the lowest-risk option.</p>
+      </div>
+      <div class="rationale-col">
+        <h3>Keyboard · frequency fit</h3>
+        <p class="muted">Tab lands on the chip as one stop; Enter/Space opens the dialog. <kbd>⌘K</kbd> works from
+          anywhere. Switching is rare, so a small centered dialog (not a persistent panel) is proportionate — it
+          costs nothing when closed and doesn't linger. With 0–1 projects the chip sheds its avatar, pill background
+          and chevron entirely, becoming plain static text — not a disabled-looking control.</p>
+      </div>
+    </div>
+
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <div class="brand-row">
+            <a class="brand-link" href="#" onclick="return false">
+              <svg class="brand-icon" viewBox="0 0 200 200" aria-hidden="true">
+                <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#g-a)" />
+                <defs><linearGradient id="g-a" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#14B8A6" /><stop offset="100%" stop-color="#0D6E6A" />
+                </linearGradient></defs>
+                <path d="M35,112 L62,112 L78,74 L94,140 L112,112 L122,112 L138,130 L172,64" fill="none"
+                  stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span class="brand-word"><span class="t1">Test</span><span class="t2">Pulse</span></span>
+            </a>
+            <span class="project-slot">
+              <span class="crumb-sep" aria-hidden="true">›</span>
+              <button type="button" class="chip multi-only" id="trigger-a" aria-haspopup="dialog" aria-expanded="false"
+                title="Switch project (⌘K)" onclick="onTriggerClick('a')">
+                <span class="chip-avatar">SP</span>
+                <span class="chip-name">Sample Project</span>
+                <svg class="chip-chevron" viewBox="0 0 20 20" fill="none" aria-hidden="true">
+                  <path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+              <a href="#" class="plain-name single-only" style="display:none" onclick="return false">Sample Project</a>
+            </span>
+          </div>
+          <div class="right-cluster">
+            <button class="ghost-btn">Docs</button>
+            <div class="user-avatar">AD</div>
+          </div>
+        </div>
+      </header>
+      <main class="app-main">
+        <div class="page page-suites">
+          <div class="page-head"><h1>Suites</h1><p class="muted">12 suites across this project.</p></div>
+          <div class="fake-table">
+            <div class="fake-row"><span class="name">Smoke Suite</span><span class="status-pill healthy">Healthy</span><span class="meta">18 cases</span></div>
+            <div class="fake-row"><span class="name">Checkout Regression</span><span class="status-pill progress">In progress</span><span class="meta">42 cases</span></div>
+            <div class="fake-row"><span class="name">Payments API</span><span class="status-pill risk">At risk</span><span class="meta">27 cases</span></div>
+          </div>
+          <p class="repeat-note">No breadcrumb here at all — the top bar already says "Sample Project" and this
+            h1 already says "Suites"; a trail of "Projects › Sample Project › Suites" would have repeated both,
+            adding zero new information. (Today's real breadcrumb shows exactly that 3-segment, fully-redundant
+            trail — this is the fix.)</p>
+        </div>
+        <div class="page page-landing">
+          <div class="page-head">
+            <h1><span class="h1-name">Sample Project</span><button type="button" class="h1-switch-btn multi-only" id="trigger-a-h1" aria-haspopup="dialog" aria-expanded="false" title="Switch project (⌘K)" onclick="onTriggerClick('a-h1')">
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button></h1>
+            <p class="muted">SAMPLE · REST API test suite for the sample e-commerce service.</p>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat"><div class="v">12</div><div class="l">Suites</div></div>
+            <div class="mini-stat"><div class="v">148</div><div class="l">Cases</div></div>
+            <div class="mini-stat"><div class="v">92%</div><div class="l">Pass rate</div></div>
+          </div>
+          <p class="repeat-note">Top bar shows only the wordmark here — the chip doesn't render on this page at
+            all, not even collapsed to an icon. The name appears exactly once, in the h1. The switch affordance
+            didn't disappear with it though: a small chevron is fused onto the h1 itself, so there's still one
+            visible, discoverable click target (plus <code>⌘K</code>) — fixing the earlier regression where
+            hiding the chip outright also silently hid the only way to switch from this page.</p>
+        </div>
+        <div class="page page-suitedetail">
+          <nav class="crumbtrail"><a href="#" class="crumb-link" onclick="return false">‹ Suites</a></nav>
+          <div class="page-head"><h1>Checkout Regression</h1><p class="muted">42 cases · In progress</p></div>
+          <div class="fake-table">
+            <div class="fake-row"><span class="name">Apply promo code at checkout</span><span class="status-pill healthy">Pass</span><span class="meta">Run #214</span></div>
+            <div class="fake-row"><span class="name">Guest checkout with saved card</span><span class="status-pill risk">Fail</span><span class="meta">Run #214</span></div>
+            <div class="fake-row"><span class="name">Split shipment across warehouses</span><span class="status-pill progress">Blocked</span><span class="meta">Run #214</span></div>
+          </div>
+          <p class="repeat-note">Breadcrumb keeps exactly one segment: "Suites", a real link back to the list —
+            it duplicates neither the top bar ("Sample Project", still shown above since this h1 isn't the
+            project name) nor this h1 ("Checkout Regression", the suite's own title). Trimmed, not deleted: this
+            is the case a breadcrumb still earns its keep.</p>
+        </div>
+      </main>
+    </div>
+
+    <div class="modal-overlay" id="overlay-a" role="dialog" aria-modal="true" aria-label="Switch project">
+      <div class="modal-panel">
+        <input class="switch-search" id="search-a" placeholder="Search projects…" oninput="filterList('a')">
+        <ul class="switch-list" id="list-a"></ul>
+        <div class="modal-hint">↑↓ to navigate · Enter to select · Esc to close</div>
+      </div>
+    </div>
+    <div class="modal-overlay" id="overlay-a-h1" role="dialog" aria-modal="true" aria-label="Switch project">
+      <div class="modal-panel">
+        <input class="switch-search" id="search-a-h1" placeholder="Search projects…" oninput="filterList('a-h1')">
+        <ul class="switch-list" id="list-a-h1"></ul>
+        <div class="modal-hint">↑↓ to navigate · Enter to select · Esc to close</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- PROPOSAL B — Breadcrumb Rail                                  -->
+  <!-- ============================================================ -->
+  <section class="view" id="view-b">
+    <div class="rationale">
+      <div class="rationale-col" style="flex-basis:100%">
+        <span class="tag">Proposal B</span>
+        <h2>The Breadcrumb Rail</h2>
+      </div>
+      <div class="rationale-col">
+        <h3>Problem it solves</h3>
+        <p>The old bold 20px name read as a <em>second brand element</em> competing with the wordmark. Restyled at
+          breadcrumb scale (mono, uppercase, tracked — the exact voice already used by <code>Breadcrumbs.tsx</code>),
+          it now reads as a continuation of "where am I", not a peer to "TestPulse".</p>
+      </div>
+      <div class="rationale-col">
+        <h3>Interaction</h3>
+        <p>The name + inline caret is one clickable crumb. Click opens a compact dropdown anchored right under the
+          crumb — search plus a small 2-up card grid. (Revised: an earlier version of this proposal spanned the
+          full header width as a mega-menu; that was more visual investment than a rarely-used control earns, so
+          it's now sized like an ordinary dropdown instead.)</p>
+      </div>
+      <div class="rationale-col">
+        <h3>Keyboard · frequency fit</h3>
+        <p class="muted">Tab reaches the crumb as one stop; Enter/Space opens the panel, first search focus is
+          automatic. <kbd>⌘K</kbd> works globally. Single-project mode drops the caret and renders genuinely plain
+          text — same color/weight as the last (current) breadcrumb segment today, no hover feedback at all.</p>
+      </div>
+    </div>
+
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <div class="brand-row">
+            <a class="brand-link" href="#" onclick="return false">
+              <svg class="brand-icon" viewBox="0 0 200 200" aria-hidden="true">
+                <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#g-b)" />
+                <defs><linearGradient id="g-b" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#14B8A6" /><stop offset="100%" stop-color="#0D6E6A" />
+                </linearGradient></defs>
+                <path d="M35,112 L62,112 L78,74 L94,140 L112,112 L122,112 L138,130 L172,64" fill="none"
+                  stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span class="brand-word"><span class="t1">Test</span><span class="t2">Pulse</span></span>
+            </a>
+            <span class="project-slot">
+              <span class="crumb-sep" aria-hidden="true">›</span>
+              <span class="switcher-anchor">
+                <button type="button" class="rail-crumb multi-only" id="trigger-b" aria-haspopup="true" aria-expanded="false"
+                  title="Switch project (⌘K)" onclick="onTriggerClick('b')">
+                  Sample Project
+                  <span class="rail-caret">▾</span>
+                </button>
+                <a href="#" class="plain-name-crumb single-only" style="display:none" onclick="return false">Sample Project</a>
+
+                <div class="rail-panel" id="overlay-b" role="region" aria-label="Switch project">
+                  <input class="switch-search" id="search-b" placeholder="Search projects…" oninput="filterList('b')">
+                  <div class="rail-grid" id="list-b"></div>
+                  <div class="modal-hint">↑↓ to navigate · Enter to select · Esc to close</div>
+                </div>
+              </span>
+            </span>
+          </div>
+          <div class="right-cluster">
+            <button class="ghost-btn">Docs</button>
+            <div class="user-avatar">AD</div>
+          </div>
+        </div>
+      </header>
+      <main class="app-main">
+        <div class="page page-suites">
+          <div class="page-head"><h1>Suites</h1><p class="muted">12 suites across this project.</p></div>
+          <div class="fake-table">
+            <div class="fake-row"><span class="name">Smoke Suite</span><span class="status-pill healthy">Healthy</span><span class="meta">18 cases</span></div>
+            <div class="fake-row"><span class="name">Checkout Regression</span><span class="status-pill progress">In progress</span><span class="meta">42 cases</span></div>
+            <div class="fake-row"><span class="name">Payments API</span><span class="status-pill risk">At risk</span><span class="meta">27 cases</span></div>
+          </div>
+          <p class="repeat-note">No breadcrumb here at all — the top bar already says "Sample Project" and this
+            h1 already says "Suites"; a trail of "Projects › Sample Project › Suites" would have repeated both,
+            adding zero new information. (Today's real breadcrumb shows exactly that 3-segment, fully-redundant
+            trail — this is the fix.)</p>
+        </div>
+        <div class="page page-landing">
+          <div class="page-head">
+            <h1><span class="h1-name">Sample Project</span><button type="button" class="h1-switch-btn multi-only" id="trigger-b-h1" aria-haspopup="dialog" aria-expanded="false" title="Switch project (⌘K)" onclick="onTriggerClick('b-h1')">
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button></h1>
+            <p class="muted">SAMPLE · REST API test suite for the sample e-commerce service.</p>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat"><div class="v">12</div><div class="l">Suites</div></div>
+            <div class="mini-stat"><div class="v">148</div><div class="l">Cases</div></div>
+            <div class="mini-stat"><div class="v">92%</div><div class="l">Pass rate</div></div>
+          </div>
+          <p class="repeat-note">Top bar shows only the wordmark here — the crumb doesn't render on this page
+            at all, not even collapsed to an icon. The name appears exactly once, in the h1. The switch
+            affordance didn't disappear with it though: a small chevron is fused onto the h1 itself, so there's
+            still one visible, discoverable click target (plus <code>⌘K</code>) — fixing the earlier regression
+            where hiding the crumb outright also silently hid the only way to switch from this page.</p>
+        </div>
+        <div class="page page-suitedetail">
+          <nav class="crumbtrail"><a href="#" class="crumb-link" onclick="return false">‹ Suites</a></nav>
+          <div class="page-head"><h1>Checkout Regression</h1><p class="muted">42 cases · In progress</p></div>
+          <div class="fake-table">
+            <div class="fake-row"><span class="name">Apply promo code at checkout</span><span class="status-pill healthy">Pass</span><span class="meta">Run #214</span></div>
+            <div class="fake-row"><span class="name">Guest checkout with saved card</span><span class="status-pill risk">Fail</span><span class="meta">Run #214</span></div>
+            <div class="fake-row"><span class="name">Split shipment across warehouses</span><span class="status-pill progress">Blocked</span><span class="meta">Run #214</span></div>
+          </div>
+          <p class="repeat-note">Breadcrumb keeps exactly one segment: "Suites", a real link back to the list —
+            it duplicates neither the top bar ("Sample Project", still shown above since this h1 isn't the
+            project name) nor this h1 ("Checkout Regression", the suite's own title). Trimmed, not deleted: this
+            is the case a breadcrumb still earns its keep.</p>
+        </div>
+      </main>
+    </div>
+    <div class="modal-overlay" id="overlay-b-h1" role="dialog" aria-modal="true" aria-label="Switch project">
+      <div class="modal-panel">
+        <input class="switch-search" id="search-b-h1" placeholder="Search projects…" oninput="filterList('b-h1')">
+        <ul class="switch-list" id="list-b-h1"></ul>
+        <div class="modal-hint">↑↓ to navigate · Enter to select · Esc to close</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- PROPOSAL C — Anchored Popover                                 -->
+  <!-- ============================================================ -->
+  <section class="view" id="view-c">
+    <div class="rationale">
+      <div class="rationale-col" style="flex-basis:100%">
+        <span class="tag">Proposal C</span>
+        <h2>The Anchored Popover</h2>
+      </div>
+      <div class="rationale-col">
+        <h3>Problem it solves</h3>
+        <p>Keeps the name's current visual weight (it's still the only persistent "where am I" signal on non-landing
+          pages) but removes the separate icon-button entirely — a small caret is fused directly onto the name
+          itself, so there is exactly one click target where there used to be two.</p>
+      </div>
+      <div class="rationale-col">
+        <h3>Interaction</h3>
+        <p>Click the name+caret to open a small card popover anchored right under it (with a connecting pointer),
+          not a centered modal — visually "attached" to the thing you clicked, like Notion/Linear workspace
+          switchers, rather than a dialog that appears in the middle of the screen.</p>
+      </div>
+      <div class="rationale-col">
+        <h3>Keyboard · frequency fit</h3>
+        <p class="muted">Tab reaches the fused name+caret as one stop; Enter/Space opens it, search auto-focuses.
+          <kbd>⌘K</kbd> works globally. Of the three, this adds the least persistent visual weight in its resting
+          state (no avatar, no pill background — just a small caret) for a control used rarely. With 0–1 projects
+          the caret disappears and the name becomes genuinely plain static text — no hover feedback at all.</p>
+      </div>
+    </div>
+
+    <div class="app-shell">
+      <header class="app-header">
+        <div class="app-header-inner">
+          <div class="brand-row">
+            <a class="brand-link" href="#" onclick="return false">
+              <svg class="brand-icon" viewBox="0 0 200 200" aria-hidden="true">
+                <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#g-c)" />
+                <defs><linearGradient id="g-c" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stop-color="#14B8A6" /><stop offset="100%" stop-color="#0D6E6A" />
+                </linearGradient></defs>
+                <path d="M35,112 L62,112 L78,74 L94,140 L112,112 L122,112 L138,130 L172,64" fill="none"
+                  stroke="#FFFFFF" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" />
+              </svg>
+              <span class="brand-word"><span class="t1">Test</span><span class="t2">Pulse</span></span>
+            </a>
+            <span class="project-slot">
+              <span class="crumb-sep" aria-hidden="true">›</span>
+              <span class="switcher-anchor">
+                <button type="button" class="name-trigger multi-only" id="trigger-c" aria-haspopup="dialog" aria-expanded="false"
+                  title="Switch project (⌘K)" onclick="onTriggerClick('c')">
+                  <span class="name-text">Sample Project</span>
+                  <span class="name-caret">▾</span>
+                </button>
+                <a href="#" class="plain-name single-only" style="display:none" onclick="return false">Sample Project</a>
+
+                <div class="popover" id="overlay-c" role="dialog" aria-label="Switch project">
+                  <input class="switch-search" id="search-c" placeholder="Search projects…" oninput="filterList('c')">
+                  <ul class="switch-list" id="list-c"></ul>
+                </div>
+              </span>
+            </span>
+          </div>
+          <div class="right-cluster">
+            <button class="ghost-btn">Docs</button>
+            <div class="user-avatar">AD</div>
+          </div>
+        </div>
+      </header>
+      <main class="app-main">
+        <div class="page page-suites">
+          <div class="page-head"><h1>Suites</h1><p class="muted">12 suites across this project.</p></div>
+          <div class="fake-table">
+            <div class="fake-row"><span class="name">Smoke Suite</span><span class="status-pill healthy">Healthy</span><span class="meta">18 cases</span></div>
+            <div class="fake-row"><span class="name">Checkout Regression</span><span class="status-pill progress">In progress</span><span class="meta">42 cases</span></div>
+            <div class="fake-row"><span class="name">Payments API</span><span class="status-pill risk">At risk</span><span class="meta">27 cases</span></div>
+          </div>
+          <p class="repeat-note">No breadcrumb here at all — the top bar already says "Sample Project" and this
+            h1 already says "Suites"; a trail of "Projects › Sample Project › Suites" would have repeated both,
+            adding zero new information. (Today's real breadcrumb shows exactly that 3-segment, fully-redundant
+            trail — this is the fix.)</p>
+        </div>
+        <div class="page page-landing">
+          <div class="page-head">
+            <h1><span class="h1-name">Sample Project</span><button type="button" class="h1-switch-btn multi-only" id="trigger-c-h1" aria-haspopup="dialog" aria-expanded="false" title="Switch project (⌘K)" onclick="onTriggerClick('c-h1')">
+              <svg viewBox="0 0 20 20" fill="none" aria-hidden="true"><path d="M5 8l5 5 5-5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button></h1>
+            <p class="muted">SAMPLE · REST API test suite for the sample e-commerce service.</p>
+          </div>
+          <div class="mini-stats">
+            <div class="mini-stat"><div class="v">12</div><div class="l">Suites</div></div>
+            <div class="mini-stat"><div class="v">148</div><div class="l">Cases</div></div>
+            <div class="mini-stat"><div class="v">92%</div><div class="l">Pass rate</div></div>
+          </div>
+          <p class="repeat-note">Top bar shows only the wordmark here — the name+caret doesn't render on this
+            page at all, not even collapsed to an icon. The name appears exactly once, in the h1. The switch
+            affordance didn't disappear with it though: a small chevron is fused onto the h1 itself, so there's
+            still one visible, discoverable click target (plus <code>⌘K</code>) — fixing the earlier regression
+            where hiding the control outright also silently hid the only way to switch from this page.</p>
+        </div>
+        <div class="page page-suitedetail">
+          <nav class="crumbtrail"><a href="#" class="crumb-link" onclick="return false">‹ Suites</a></nav>
+          <div class="page-head"><h1>Checkout Regression</h1><p class="muted">42 cases · In progress</p></div>
+          <div class="fake-table">
+            <div class="fake-row"><span class="name">Apply promo code at checkout</span><span class="status-pill healthy">Pass</span><span class="meta">Run #214</span></div>
+            <div class="fake-row"><span class="name">Guest checkout with saved card</span><span class="status-pill risk">Fail</span><span class="meta">Run #214</span></div>
+            <div class="fake-row"><span class="name">Split shipment across warehouses</span><span class="status-pill progress">Blocked</span><span class="meta">Run #214</span></div>
+          </div>
+          <p class="repeat-note">Breadcrumb keeps exactly one segment: "Suites", a real link back to the list —
+            it duplicates neither the top bar ("Sample Project", still shown above since this h1 isn't the
+            project name) nor this h1 ("Checkout Regression", the suite's own title). Trimmed, not deleted: this
+            is the case a breadcrumb still earns its keep.</p>
+        </div>
+      </main>
+    </div>
+    <div class="modal-overlay" id="overlay-c-h1" role="dialog" aria-modal="true" aria-label="Switch project">
+      <div class="modal-panel">
+        <input class="switch-search" id="search-c-h1" placeholder="Search projects…" oninput="filterList('c-h1')">
+        <ul class="switch-list" id="list-c-h1"></ul>
+        <div class="modal-hint">↑↓ to navigate · Enter to select · Esc to close</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="recommendation">
+    <div class="recommendation-col" style="flex-basis:100%">
+      <span class="tag">Recommendation</span>
+      <h2>The system: one non-redundant division of labor, not a page-by-page patch</h2>
+    </div>
+    <div class="recommendation-col">
+      <h3>The division of labor</h3>
+      <p><strong>Top bar</strong> = which project, persistently, on every project-scoped page — and it owns the
+        "Projects" home entry point too (the wordmark already links there), so nothing downstream should repeat
+        it. <strong>Breadcrumb</strong> = only the real, unique, clickable nodes between project and current page;
+        it drops the leading "Projects › {Project}" pair always (top bar's job) and drops a trailing segment
+        whenever it's identical to the page's own h1 (page's job) — what survives, if anything, is shown.
+        <strong>H1</strong> = the one definitive label for current location, never echoed by the other two.</p>
+    </div>
+    <div class="recommendation-col">
+      <h3>Why not just delete Breadcrumbs.tsx</h3>
+      <p>Checked against every real page type, not just the two originally simulated: on Suites/Runs, trimming
+        both ends leaves nothing (matches the mockup's now-empty Suites state). On Suite/Case detail, trimming
+        the lead leaves a real ancestor link ("Suites", "Library › folder…") the top bar and h1 don't cover —
+        deleted entirely, that link is gone with no replacement. Folder Explorer's deep-nesting "…" collapse is
+        untouched by this — only its redundant lead trims away. The rule is "trim the redundant ends," not
+        "remove the component."</p>
+    </div>
+    <div class="recommendation-col">
+      <h3>Landing page: relocate, don't hide-and-lose</h3>
+      <p>The earlier in-flight fix hid the top-bar control outright on landing and, with it, silently removed
+        the only discoverable way to switch from that page — a real regression, correctly caught. The actual
+        fix: the switcher isn't a second thing living next to the name anymore, it's fused onto the h1 itself (a
+        small chevron after "Sample Project"). One instance of the name, one click target, ⌘K still works
+        everywhere. Shared across all three proposals — this piece isn't about which top-bar idiom wins.</p>
+    </div>
+    <div class="recommendation-col">
+      <h3>One loose end for real implementation</h3>
+      <p>Breadcrumbs.tsx currently bails out (renders nothing) whenever <code>segments.length &lt;= 1</code>,
+        written for the old always-3-segment input where a lone segment was guaranteed to just repeat the h1.
+        Once callers pass already-trimmed segments, a length-1 result (e.g. Suite detail's "Suites") is a real
+        link, not noise — that guard needs a small follow-up so it doesn't also eat the one case worth keeping.</p>
+    </div>
+    <div class="recommendation-col">
+      <h3>Pick, among A/B/C</h3>
+      <p><strong>C (Anchored Popover)</strong> is still the best fit for the persistent top-bar control itself:
+        least resting chrome, proportionate open state. That verdict is orthogonal to everything above — the
+        breadcrumb/h1 fix applies identically regardless of which proposal wins.</p>
+    </div>
+  </div>
+
+  <p class="footer-note">TestPulse — top-bar project switcher rework · mockup only, not shipped UI</p>
+</div>
+
+<script>
+  var PROJECTS = [
+    { id: 'sample',   name: 'Sample Project',  initials: 'SP', avatar: 1, suites: 12, cases: 148, pass: '92% pass', active: true },
+    { id: 'checkout',  name: 'Checkout Service', initials: 'CS', avatar: 2, suites: 8,  cases: 76,  pass: '81% pass' },
+    { id: 'mobile',    name: 'Mobile App QA',    initials: 'MA', avatar: 3, suites: 5,  cases: 34,  pass: '67% pass' },
+    { id: 'payments',  name: 'Payments API',     initials: 'PA', avatar: 4, suites: 15, cases: 210, pass: '95% pass' },
+    { id: 'internal',  name: 'Internal Tools',   initials: 'IT', avatar: 5, suites: 3,  cases: 19,  pass: 'no runs' }
+  ];
+  var PROPOSALS = ['a', 'b', 'c'];
+  // Every switcher instance that can open/close/receive ⌘K — the three
+  // persistent top-bar triggers plus the three h1-fused landing triggers
+  // (mutually exclusive with their top-bar counterpart by page state, but
+  // both need to exist in the DOM so ⌘K/close-all/list-render can address
+  // whichever one is actually visible right now).
+  var ALL_SWITCHERS = ['a', 'b', 'c', 'a-h1', 'b-h1', 'c-h1'];
+
+  function checkSvg() {
+    return '<svg class="check" width="16" height="16" viewBox="0 0 20 20" fill="none" aria-hidden="true">' +
+      '<path d="M4 10.5l4 4 8-9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  }
+
+  function renderLists() {
+    // Proposal A / C top-bar triggers + all three h1-fused landing
+    // triggers share the same compact list-row template (switch-item).
+    ['a', 'c', 'a-h1', 'b-h1', 'c-h1'].forEach(function (p) {
+      var ul = document.getElementById('list-' + p);
+      if (!ul) return;
+      ul.innerHTML = PROJECTS.map(function (proj) {
+        return '<li>' +
+          '<button type="button" class="switch-item' + (proj.active ? ' is-active' : '') + '" data-name="' + proj.name.toLowerCase() + '" onclick="selectProject(\'' + p + '\',\'' + proj.id + '\')">' +
+          '<span class="ia" style="background:var(--avatar-' + proj.avatar + '-bg);color:var(--avatar-' + proj.avatar + '-fg)">' + proj.initials + '</span>' +
+          '<span class="it"><span class="n">' + proj.name + '</span><span class="m">' + proj.suites + ' suites · ' + proj.cases + ' cases · ' + proj.pass + '</span></span>' +
+          (proj.active ? checkSvg() : '') +
+          '</button></li>';
+      }).join('');
+    });
+    // Proposal B's own top-bar trigger: grid cards
+    var grid = document.getElementById('list-b');
+    grid.innerHTML = PROJECTS.map(function (proj) {
+      return '<button type="button" class="rail-card' + (proj.active ? ' is-active' : '') + '" data-name="' + proj.name.toLowerCase() + '" onclick="selectProject(\'b\',\'' + proj.id + '\')">' +
+        '<span class="ia" style="background:var(--avatar-' + proj.avatar + '-bg);color:var(--avatar-' + proj.avatar + '-fg)">' + proj.initials + '</span>' +
+        '<span class="it"><span class="n">' + proj.name + '</span><span class="m">' + proj.suites + ' suites · ' + proj.pass + '</span></span>' +
+        '</button>';
+    }).join('');
+  }
+
+  function filterList(p) {
+    var q = document.getElementById('search-' + p).value.trim().toLowerCase();
+    var container = document.getElementById('list-' + p);
+    var items = container.querySelectorAll('[data-name]');
+    items.forEach(function (el) {
+      var match = el.getAttribute('data-name').indexOf(q) !== -1;
+      el.parentElement && el.parentElement.tagName === 'LI'
+        ? (el.parentElement.style.display = match ? '' : 'none')
+        : (el.style.display = match ? '' : 'none');
+    });
+  }
+
+  function selectProject(p, id) {
+    PROJECTS.forEach(function (proj) { proj.active = proj.id === id; });
+    renderLists();
+    closeSwitcher(p);
+  }
+
+  function openSwitcher(p) {
+    closeAllSwitchers();
+    var el = document.getElementById('overlay-' + p);
+    var trigger = document.getElementById('trigger-' + p);
+    if (!el) return;
+    el.classList.add('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    var input = document.getElementById('search-' + p);
+    if (input) {
+      input.value = '';
+      filterList(p);
+      setTimeout(function () { input.focus(); }, 10);
+    }
+  }
+
+  function closeSwitcher(p) {
+    var el = document.getElementById('overlay-' + p);
+    var trigger = document.getElementById('trigger-' + p);
+    if (el) el.classList.remove('open');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  }
+
+  function closeAllSwitchers() { ALL_SWITCHERS.forEach(closeSwitcher); }
+
+  function onTriggerClick(p) {
+    if (document.body.dataset.projects === 'single') return; // no-op: canSwitch === false
+    var el = document.getElementById('overlay-' + p);
+    if (el.classList.contains('open')) { closeSwitcher(p); } else { openSwitcher(p); }
+  }
+
+  // Which switcher instance ⌘K should open depends on page state: the
+  // persistent top-bar trigger everywhere except Project landing, where
+  // that control doesn't render at all and the h1-fused trigger is the
+  // only instance in the DOM for the active proposal.
+  function activeSwitcherId() {
+    var p = document.body.dataset.proposal;
+    return document.body.dataset.page === 'landing' ? p + '-h1' : p;
+  }
+
+  document.addEventListener('keydown', function (e) {
+    if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+      e.preventDefault();
+      openSwitcher(activeSwitcherId()); // unconditional, like today's ProjectSwitcher effect
+    }
+    if (e.key === 'Escape') closeAllSwitchers();
+  });
+
+  document.addEventListener('click', function (e) {
+    ALL_SWITCHERS.forEach(function (p) {
+      var el = document.getElementById('overlay-' + p);
+      var trigger = document.getElementById('trigger-' + p);
+      if (!el || !el.classList.contains('open')) return;
+      if (el.contains(e.target) || (trigger && trigger.contains(e.target))) return;
+      closeSwitcher(p);
+    });
+  });
+
+  function wireSwitch(id, attr, extra) {
+    var group = document.getElementById(id);
+    group.querySelectorAll('button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        group.querySelectorAll('button').forEach(function (b) { b.classList.remove('active'); });
+        btn.classList.add('active');
+        document.body.dataset[attr] = btn.getAttribute('data-val');
+        closeAllSwitchers();
+        if (extra) extra(btn.getAttribute('data-val'));
+      });
+    });
+  }
+
+  wireSwitch('proposal-switch', 'proposal');
+  wireSwitch('page-switch', 'page');
+  wireSwitch('projects-switch', 'projects', function (val) {
+    document.querySelectorAll('.multi-only').forEach(function (el) { el.style.display = val === 'multi' ? '' : 'none'; });
+    document.querySelectorAll('.single-only').forEach(function (el) { el.style.display = val === 'single' ? '' : 'none'; });
+  });
+
+  document.getElementById('theme-toggle').addEventListener('click', function () {
+    var root = document.documentElement;
+    var isDark = root.getAttribute('data-theme') === 'dark' ||
+      (!root.getAttribute('data-theme') && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+    this.textContent = isDark ? '🌙 Dark mode' : '☀️ Light mode';
+  });
+
+  document.body.dataset.proposal = 'a';
+  document.body.dataset.page = 'suites';
+  document.body.dataset.projects = 'multi';
+  renderLists();
+</script>
