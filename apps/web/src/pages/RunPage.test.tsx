@@ -195,9 +195,13 @@ describe('Run execution board', () => {
 describe('Suite linkage and metadata (rework-run-detail-ux)', () => {
   it('links to the source suite when the run has one, showing its name', async () => {
     mockRunAPI([pendingItem], undefined, { ...run, suiteKey: 'p1-S1' }, { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Regression', caseIds: [], createdAt: '', passRate: null, lastRunAt: null })
-    renderRun()
+    const { container } = renderRun()
     const link = await screen.findByRole('link', { name: /from suite: regression/i })
     expect(link).toHaveAttribute('href', '/projects/p1/suites/p1-S1')
+    // Suite's established icon everywhere else (ProjectLandingPanels, RolesPage) is
+    // LayersIcon, not FolderIcon (that's Section's icon) — fix-entity-icon-consistency.
+    expect(link.querySelector('.lucide-layers')).toBeInTheDocument()
+    expect(container.querySelector('.lucide-folder')).not.toBeInTheDocument()
   })
 
   it('shows an explicit ad hoc state when the run has no suite', async () => {

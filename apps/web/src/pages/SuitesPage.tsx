@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { LayersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -101,7 +102,10 @@ export default function SuitesPage() {
                     className="flex w-full flex-col gap-2 rounded-lg border p-4 text-left hover:border-primary"
                     onClick={() => navigate(`/projects/${projectKey}/suites/${s.key}`)}
                   >
-                    <span className="truncate font-medium">{s.name}</span>
+                    <span className="flex items-center gap-1.5 truncate font-medium">
+                      <LayersIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                      {s.name}
+                    </span>
                     {s.passRate === null ? (
                       <span className="text-xs text-muted-foreground">Never run</span>
                     ) : (

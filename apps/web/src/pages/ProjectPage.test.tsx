@@ -220,6 +220,16 @@ describe('ProjectPage landing', () => {
     expect(screen.queryByText(/no runs yet/i)).not.toBeInTheDocument()
   })
 
+  it('uses the Test Case icon on the "Add your first test case" step, not the Section icon', async () => {
+    mockProjectAPI({ folders: [rootFolder], cases: [], suites: [], runs: [] })
+    const { container } = renderProject()
+    await screen.findByText(/get started/i)
+    const step = screen.getByText(/add your first test case/i).closest('button') ?? container
+    // Test Case's established icon everywhere else (ProjectLandingPanels, RolesPage)
+    // is FileTextIcon, not FolderIcon (that's Section's icon) — fix-entity-icon-consistency.
+    expect(step.querySelector('.lucide-file-text')).toBeInTheDocument()
+  })
+
   it('gives each getting-started step a short explanatory tip, not just a bare label', async () => {
     mockProjectAPI({ folders: [rootFolder], cases: [], suites: [], runs: [] })
     renderProject()

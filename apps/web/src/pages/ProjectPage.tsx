@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { FolderIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-react'
+import { FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
@@ -132,7 +132,7 @@ export default function ProjectPage() {
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <GettingStartedStep
-              icon={<FolderIcon className="size-5" />}
+              icon={<FileTextIcon className="size-5" />}
               title="1. Add your first test case"
               tip="Describe the steps to follow and what you expect to happen. You can always edit it later — every change keeps its own version."
               onClick={() => navigate(`/projects/${projectKey}/library`)}

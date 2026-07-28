@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
-import { ArrowRightIcon, ExternalLinkIcon, FolderIcon } from 'lucide-react'
+import { ArrowRightIcon, ExternalLinkIcon, LayersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -237,7 +237,7 @@ export default function RunPage() {
                   to={`/projects/${projectKey}/suites/${run.suiteKey}`}
                   className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                 >
-                  <FolderIcon className="size-3.5" aria-hidden="true" />
+                  <LayersIcon className="size-3.5" aria-hidden="true" />
                   From suite: {suite?.name ?? run.suiteKey}
                 </Link>
               ) : (

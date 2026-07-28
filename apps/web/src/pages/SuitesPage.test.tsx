@@ -63,6 +63,9 @@ describe('SuitesPage', () => {
     expect(within(list).getByText('Smoke')).toBeInTheDocument()
     expect(within(list).getByText(/2 cases/i)).toBeInTheDocument()
     expect(within(list).getByText('90%')).toBeInTheDocument()
+    // Suite's established icon, matching FolderExplorerPage's row-icon treatment —
+    // fix-entity-icon-consistency.
+    expect(list.querySelector('.lucide-layers')).toBeInTheDocument()
   })
 
   it('shows "Never run" instead of a fake 0% for a suite with no runs yet', async () => {
