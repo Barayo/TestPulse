@@ -372,6 +372,12 @@ func (s *Service) SuiteTrend(ctx context.Context, suiteID string) (domain.SuiteT
 	return s.store.Suites.Trend(ctx, suiteID)
 }
 
+// FlakyCases returns every currently-flaky case in a project
+// (add-flaky-test-detection).
+func (s *Service) FlakyCases(ctx context.Context, projectID string) ([]domain.FlakyCase, error) {
+	return s.store.Cases.FlakyCases(ctx, projectID)
+}
+
 func (s *Service) AddCaseToSuite(ctx context.Context, suiteID, caseID string) error {
 	if err := s.store.Suites.AddCase(ctx, suiteID, caseID); err != nil {
 		return err

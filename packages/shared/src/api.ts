@@ -292,6 +292,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/flaky-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List every currently-flaky case in a project */
+        get: operations["listFlakyCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/suites": {
         parameters: {
             query?: never;
@@ -1140,6 +1159,13 @@ export interface components {
             suiteKey: string;
             points: components["schemas"]["SuiteTrendPoint"][];
         };
+        FlakyCase: {
+            caseKey: string;
+            caseTitle: string;
+            currentVersion: number;
+            /** @description 0-100 percentage: min(pass, failedOrBlocked) / (pass + failedOrBlocked) */
+            rate: number;
+        };
         ProjectSummary: {
             projectId: string;
             suiteCount: number;
@@ -1873,6 +1899,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CaseExecution"][];
+                };
+            };
+        };
+    };
+    listFlakyCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flaky cases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlakyCase"][];
                 };
             };
         };

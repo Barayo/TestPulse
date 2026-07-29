@@ -78,6 +78,8 @@ function mockExplorerAPI(overrides: Partial<Record<string, unknown>> = {}) {
       })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: overrides.permissions ?? allPermissions, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/flaky-cases')
+      return Promise.resolve({ data: overrides.flakyCases ?? [], response: { ok: true } })
     if (path === '/api/v1/cases/{caseKey}/versions' && options?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: [
@@ -662,6 +664,20 @@ describe('FolderExplorerPage', () => {
       expect(within(row).getByText('Manual')).toBeInTheDocument()
     })
 
+    it('shows a Flaky pill for a case the server reports as currently flaky', async () => {
+      mockExplorerAPI({ flakyCases: [{ caseKey: 'c1', caseTitle: 'Daily transfer limit', currentVersion: 2, rate: 50 }] })
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).getByText('Flaky')).toBeInTheDocument()
+    })
+
+    it('does not show a Flaky pill for a case the server does not report as flaky', async () => {
+      mockExplorerAPI({ flakyCases: [] })
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).queryByText('Flaky')).not.toBeInTheDocument()
+    })
+
     it('shows a Stale pill for a case untouched 90+ days', async () => {
       const stale = { ...limitCase, updatedAt: new Date(Date.now() - 100 * 24 * 60 * 60 * 1000).toISOString() }
       mockExplorerAPI({ cases: [stale] })
@@ -712,6 +728,41 @@ describe('FolderExplorerPage', () => {
       await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
       expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
       expect(screen.getByText('Low prio case')).toBeInTheDocument()
+    })
+
+    it('filtering by Flaky narrows to cases the server reports as currently flaky', async () => {
+      const other = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'National transfer succeeds' } }
+      mockExplorerAPI({
+        cases: [limitCase, other],
+        flakyCases: [{ caseKey: 'c1', caseTitle: 'Daily transfer limit', currentVersion: 2, rate: 50 }],
+      })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.selectOptions(screen.getByLabelText(/^flaky$/i), 'yes')
+      expect(screen.getByText('Daily transfer limit')).toBeInTheDocument()
+      expect(screen.queryByText('National transfer succeeds')).not.toBeInTheDocument()
+    })
+
+    it('the Flaky filter composes with other active filters', async () => {
+      const otherFlaky = {
+        ...limitCase,
+        id: 'c2',
+        key: 'c2',
+        content: { ...limitCase.content, title: 'Low prio flaky case', priority: 'low' },
+      }
+      mockExplorerAPI({
+        cases: [limitCase, otherFlaky],
+        flakyCases: [
+          { caseKey: 'c1', caseTitle: 'Daily transfer limit', currentVersion: 2, rate: 50 },
+          { caseKey: 'c2', caseTitle: 'Low prio flaky case', currentVersion: 2, rate: 50 },
+        ],
+      })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.selectOptions(screen.getByLabelText(/^flaky$/i), 'yes')
+      await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
+      expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
+      expect(screen.getByText('Low prio flaky case')).toBeInTheDocument()
     })
 
     it('"Clear filters" resets search and every filter dropdown', async () => {

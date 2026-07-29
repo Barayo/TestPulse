@@ -355,6 +355,49 @@ test.describe('Requirement: Library with two-pane navigation', () => {
     await expect(page.getByText('Nested case')).toBeVisible()
     await expect(content(page).getByText('Transfers', { exact: true })).toBeVisible()
   })
+
+  // add-flaky-test-detection: the same "pass in one run, fail in another,
+  // same pinned version" shape as TD-54's per-version Flaky badge, but
+  // checked against the Library's project-scoped Flaky filter/indicator
+  // instead of the version-detail dialog.
+  test('Scenario: A currently-flaky case shows a Flaky indicator and surfaces via the Flaky filter', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-77' })
+    await createProject(page, 'Flaky Filter Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await createCase(page, 'Checkout works')
+    await expect(content(page).getByText('Login works')).toBeVisible()
+    const projectId = new URL(page.url()).pathname.split('/')[2]
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await page.getByLabel(/^name$/i).fill('Run pass')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
+    await page.getByRole('button', { name: /^pass$/i }).click()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await page.getByLabel(/^name$/i).fill('Run fail')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
+    await page.getByRole('button', { name: /^failed$/i }).click()
+
+    await page.goto(`/projects/${projectId}/library`)
+    const row = content(page).getByText('Login works').locator('xpath=ancestor::li')
+    await expect(row.getByText('Flaky')).toBeVisible()
+    await expect(content(page).getByText('Checkout works')).toBeVisible()
+
+    await page.getByRole('combobox', { name: /^flaky$/i }).selectOption('yes')
+    await expect(content(page).getByText('Login works')).toBeVisible()
+    await expect(content(page).getByText('Checkout works')).toHaveCount(0)
+  })
 })
 
 test.describe('Requirement: Creating a folder', () => {

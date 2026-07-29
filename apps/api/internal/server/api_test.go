@@ -327,6 +327,35 @@ func TestScenario_SuiteTrendOverHTTP(t *testing.T) {
 	call(t, h, "GET", "/api/v1/suites/NOPE/trend", nil, 404, nil)
 }
 
+func TestScenario_FlakyCasesOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "flaky one"}, 201, &c)
+
+	var run1, run2 struct{ Key string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 1", "caseKeys": []string{c.Key}}, 201, &run1)
+	var items1 []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run1.Key), nil, 200, &items1)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 2", "caseKeys": []string{c.Key}}, 201, &run2)
+	var items2 []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run2.Key), nil, 200, &items2)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
+
+	var flaky []struct {
+		CaseKey        string `json:"caseKey"`
+		CaseTitle      string `json:"caseTitle"`
+		CurrentVersion int    `json:"currentVersion"`
+		Rate           int    `json:"rate"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/flaky-cases", p.Key), nil, 200, &flaky)
+	if len(flaky) != 1 || flaky[0].CaseKey != c.Key || flaky[0].Rate != 50 {
+		t.Errorf("flaky = %+v, want exactly case %q at rate 50", flaky, c.Key)
+	}
+}
+
 func TestScenario_SuiteDetailOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p, c, suite struct{ Key string }

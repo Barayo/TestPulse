@@ -199,3 +199,45 @@ func TestDeleteSuiteRemovesIt(t *testing.T) {
 		t.Error("GetSuite after delete: want error, got nil")
 	}
 }
+
+// TestFlakyCasesResolvesFromProjectID covers add-flaky-test-detection's
+// service-layer resolution: Service.FlakyCases surfaces a project's
+// currently-flaky cases via the store's aggregation query.
+func TestFlakyCasesResolvesFromProjectID(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+
+	run1, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "run 1", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun run1: %v", err)
+	}
+	items1, err := s.RunItems(ctx, run1.ID, "")
+	if err != nil || len(items1) != 1 {
+		t.Fatalf("RunItems run1: %d, %v", len(items1), err)
+	}
+	if _, err := s.RecordResult(ctx, items1[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+		t.Fatalf("RecordResult run1: %v", err)
+	}
+
+	run2, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "run 2", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun run2: %v", err)
+	}
+	items2, err := s.RunItems(ctx, run2.ID, "")
+	if err != nil || len(items2) != 1 {
+		t.Fatalf("RunItems run2: %d, %v", len(items2), err)
+	}
+	if _, err := s.RecordResult(ctx, items2[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}); err != nil {
+		t.Fatalf("RecordResult run2: %v", err)
+	}
+
+	flaky, err := s.FlakyCases(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("FlakyCases: %v", err)
+	}
+	if len(flaky) != 1 || flaky[0].CaseKey != c.Key {
+		t.Errorf("FlakyCases = %+v, want exactly case %q", flaky, c.Key)
+	}
+}

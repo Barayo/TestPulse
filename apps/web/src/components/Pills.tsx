@@ -54,6 +54,13 @@ export function StalePill() {
   return <span className="rounded-full bg-status-progress-bg px-2 py-0.5 text-status-progress-fg">Stale</span>
 }
 
+// Reuses the same bg-destructive/10 tint as critical priority — flakiness
+// is a real execution-health signal, not a neutral classification like
+// automated/manual (add-flaky-test-detection).
+export function FlakyPill() {
+  return <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-destructive">Flaky</span>
+}
+
 export function tagPills(tags: string[]) {
   const shown = tags.slice(0, 2)
   const overflow = tags.length - shown.length

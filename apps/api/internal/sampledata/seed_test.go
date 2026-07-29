@@ -261,6 +261,30 @@ func TestSeedContentHasAFlakyVersion(t *testing.T) {
 	}
 }
 
+// TestSeedContentSurfacesAFlakyCase covers add-flaky-test-detection's
+// showcase: the same seeded flaky version (checkoutValid — passes in three
+// runs, fails in a fourth, all on its one and only version) must also
+// surface via the project-scoped FlakyCases query, not just the per-version
+// executions signal TestSeedContentHasAFlakyVersion already covers.
+func TestSeedContentSurfacesAFlakyCase(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	flaky, err := svc.FlakyCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("FlakyCases: %v", err)
+	}
+	if len(flaky) == 0 {
+		t.Error("FlakyCases returned none for the Sample Project — the Flaky filter would show nothing")
+	}
+}
+
 // TestSeedContentEndsOnAHealthyRun covers the project health-badge
 // showcase: the chronologically LAST-created run is the one that
 // determines the project's shown pass rate.

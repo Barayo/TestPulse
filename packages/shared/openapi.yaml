@@ -341,6 +341,21 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CaseExecution" }
+  /api/v1/projects/{projectKey}/flaky-cases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listFlakyCases
+      summary: List every currently-flaky case in a project
+      tags: [cases]
+      responses:
+        "200":
+          description: Flaky cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FlakyCase" }
   /api/v1/projects/{projectKey}/suites:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -1441,6 +1456,14 @@ components:
         points:
           type: array
           items: { $ref: "#/components/schemas/SuiteTrendPoint" }
+    FlakyCase:
+      type: object
+      required: [caseKey, caseTitle, currentVersion, rate]
+      properties:
+        caseKey: { type: string }
+        caseTitle: { type: string }
+        currentVersion: { type: integer }
+        rate: { type: integer, description: "0-100 percentage: min(pass, failedOrBlocked) / (pass + failedOrBlocked)" }
     ProjectSummary:
       type: object
       required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite]

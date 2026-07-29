@@ -173,9 +173,11 @@ status as compact badges without requiring the case to be opened, with the prior
 tinted by severity (low/medium/high/critical, low→high reusing the app's existing neutral/
 progress/risk status bands, critical reusing the same destructive tint as the section row's
 critical-priority indicator) rather than flat/uncolored, plus a "Stale" indicator in place of
-its relative last-updated time once the case has gone unedited for 90 or more days.
-The content list SHALL provide title search and tag/priority/platform/test-type/automated
-filtering scoped to the currently selected section by default, with an explicit toggle to
+its relative last-updated time once the case has gone unedited for 90 or more days, and a
+distinct flaky indicator when the case's current version is currently flaky (per the
+`flaky-detection` capability), shown alongside — not instead of — its other badges.
+The content list SHALL provide title search and tag/priority/platform/test-type/automated/
+flaky filtering scoped to the currently selected section by default, with an explicit toggle to
 search and filter across every section in the project; a cross-project match SHALL be
 labeled with its section path. A section with no subsections and no cases, regardless of
 filter state, SHALL read as genuinely empty; a section that has cases but none match an
@@ -244,7 +246,7 @@ indentation) and its direct case count.
 - **THEN** its row shows a "Stale" indicator in place of the usual relative last-updated time
 
 #### Scenario: Filtering the current section never loses navigation state
-- **WHEN** a user applies a tag/priority/platform/test-type/automated filter while viewing a section
+- **WHEN** a user applies a tag/priority/platform/test-type/automated/flaky filter while viewing a section
 - **THEN** only that section's cases matching the filter are shown, and switching sections or clearing the filter restores the section's full contents
 
 #### Scenario: Searching across the whole project labels each match's section
@@ -262,6 +264,14 @@ indentation) and its direct case count.
 #### Scenario: Mobile picker shows hierarchy and counts
 - **WHEN** a user on a viewport narrower than 768px opens "Browse sections"
 - **THEN** each row is indented to reflect its depth and shows its direct case count
+
+#### Scenario: A flaky case is marked in the Library
+- **WHEN** the Library renders a case row whose current version is currently flaky (per the `flaky-detection` capability)
+- **THEN** the row shows a flaky indicator alongside its other classification badges
+
+#### Scenario: Filtering the Library to only flaky cases
+- **WHEN** a user enables the Flaky filter, alone or combined with tag/priority/platform/test-type/automated filters
+- **THEN** only cases whose current version is currently flaky, and that also match any other active filters, are shown
 
 ### Requirement: Creating a section
 A user SHALL be able to create a subsection without navigating away from their current view, and the new section's parent SHALL always be the section where creation was triggered — no parent selector is presented.

@@ -37,6 +37,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermCaseCreate, projectIDParam)).Post("/cases", h.createCase)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/folders", h.listFolders)
 			r.With(h.requirePermission(domain.PermSectionCreate, projectIDParam)).Post("/folders", h.createFolder)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/flaky-cases", h.flakyCases)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/suites", h.listSuites)
 			r.With(h.requirePermission(domain.PermSuiteCreate, projectIDParam)).Post("/suites", h.createSuite)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs", h.listRuns)
@@ -521,6 +522,11 @@ func (h *api) runSummary(w http.ResponseWriter, r *http.Request) {
 func (h *api) suiteTrend(w http.ResponseWriter, r *http.Request) {
 	trend, err := h.svc.SuiteTrend(r.Context(), resolvedID(r, "suiteKey"))
 	h.respond(w, http.StatusOK, trend, err)
+}
+
+func (h *api) flakyCases(w http.ResponseWriter, r *http.Request) {
+	flaky, err := h.svc.FlakyCases(r.Context(), resolvedID(r, "projectKey"))
+	h.respond(w, http.StatusOK, flaky, err)
 }
 
 // --- Items ---

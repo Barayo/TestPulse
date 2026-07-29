@@ -8,7 +8,7 @@ import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
-import { AutomationPill, ClassificationPills, distinctValues, StalePill } from '@/components/Pills'
+import { AutomationPill, ClassificationPills, distinctValues, FlakyPill, StalePill } from '@/components/Pills'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
@@ -147,6 +147,7 @@ function CaseRow({
   testCase,
   suiteNames,
   folderPath,
+  isFlaky,
   onOpen,
   onDragStart,
   onMoveTo,
@@ -158,6 +159,9 @@ function CaseRow({
   // Shown only in "Search entire Library" mode, where cases from many
   // folders are flattened into one list (design.md).
   folderPath?: string
+  // Server-computed (add-flaky-test-detection) — the case's current
+  // version has both a pass and a failed/blocked execution.
+  isFlaky: boolean
   onOpen: () => void
   onDragStart: (e: DragEvent) => void
   onMoveTo: () => void
@@ -205,6 +209,7 @@ function CaseRow({
           testType={testCase.content.testType}
         />
         <AutomationPill automated={Boolean(testCase.content.automated)} />
+        {isFlaky && <FlakyPill />}
         {suiteNames.map((name) => (
           <span key={name} className="rounded-full bg-accent px-2 py-0.5">
             {name}
@@ -230,6 +235,7 @@ export default function FolderExplorerPage() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
+  const [flakyKeys, setFlakyKeys] = useState<Set<string>>(new Set())
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [movingCaseKey, setMovingCaseKey] = useState<string | null>(null)
@@ -242,7 +248,7 @@ export default function FolderExplorerPage() {
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [search, setSearch] = useState('')
-  const [filters, setFilters] = useState({ tag: '', priority: '', platform: '', testType: '', automated: '' })
+  const [filters, setFilters] = useState({ tag: '', priority: '', platform: '', testType: '', automated: '', flaky: '' })
   const [searchEntireLibrary, setSearchEntireLibrary] = useState(false)
 
   const permissions = useProjectPermissions(projectKey)
@@ -250,11 +256,12 @@ export default function FolderExplorerPage() {
   const load = useCallback(async () => {
     if (!projectKey) return
     setNotFound(false)
-    const [{ data: p }, { data: f }, { data: c }, { data: s }] = await Promise.all([
+    const [{ data: p }, { data: f }, { data: c }, { data: s }, { data: flaky }] = await Promise.all([
       api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
       api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
       api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
       api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/projects/{projectKey}/flaky-cases', { params: { path: { projectKey } } }),
     ])
     if (!p) {
       setNotFound(true)
@@ -264,6 +271,7 @@ export default function FolderExplorerPage() {
     setFolders(f ?? [])
     setCases(c ?? [])
     setSuites(s ?? [])
+    setFlakyKeys(new Set((flaky ?? []).map((fc) => fc.caseKey)))
   }, [projectKey])
 
   useEffect(() => {
@@ -308,7 +316,9 @@ export default function FolderExplorerPage() {
   }
 
   const normalizedSearch = search.trim().toLowerCase()
-  const anyFilterActive = Boolean(normalizedSearch || filters.tag || filters.priority || filters.platform || filters.testType || filters.automated)
+  const anyFilterActive = Boolean(
+    normalizedSearch || filters.tag || filters.priority || filters.platform || filters.testType || filters.automated || filters.flaky,
+  )
 
   function caseMatches(c: TestCase): boolean {
     if (normalizedSearch && !c.content.title.toLowerCase().includes(normalizedSearch)) return false
@@ -318,6 +328,8 @@ export default function FolderExplorerPage() {
     if (filters.testType && c.content.testType !== filters.testType) return false
     if (filters.automated === 'yes' && !c.content.automated) return false
     if (filters.automated === 'no' && c.content.automated) return false
+    if (filters.flaky === 'yes' && !flakyKeys.has(c.key)) return false
+    if (filters.flaky === 'no' && flakyKeys.has(c.key)) return false
     return true
   }
 
@@ -330,7 +342,7 @@ export default function FolderExplorerPage() {
 
   function clearFilters() {
     setSearch('')
-    setFilters({ tag: '', priority: '', platform: '', testType: '', automated: '' })
+    setFilters({ tag: '', priority: '', platform: '', testType: '', automated: '', flaky: '' })
   }
 
   function suiteNamesFor(caseId: string): string[] {
@@ -562,6 +574,16 @@ export default function FolderExplorerPage() {
               <option value="yes">Automated</option>
               <option value="no">Manual</option>
             </select>
+            <select
+              aria-label="Flaky"
+              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              value={filters.flaky}
+              onChange={(e) => setFilters((f) => ({ ...f, flaky: e.target.value }))}
+            >
+              <option value="">All cases</option>
+              <option value="yes">Flaky</option>
+              <option value="no">Not flaky</option>
+            </select>
             <button
               type="button"
               className="text-sm font-medium text-primary underline underline-offset-2 disabled:text-muted-foreground disabled:no-underline"
@@ -613,6 +635,7 @@ export default function FolderExplorerPage() {
                         testCase={c}
                         suiteNames={suiteNamesFor(c.id)}
                         folderPath={folderPathLabel(folders, c.folderId)}
+                        isFlaky={flakyKeys.has(c.key)}
                         onOpen={() => openCase(c.key)}
                         onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.key)}
                         onMoveTo={() => {
@@ -655,6 +678,7 @@ export default function FolderExplorerPage() {
                       key={c.id}
                       testCase={c}
                       suiteNames={suiteNamesFor(c.id)}
+                      isFlaky={flakyKeys.has(c.key)}
                       onOpen={() => openCase(c.key)}
                       onDragStart={(e) => e.dataTransfer.setData(CASE_ID_MIME, c.key)}
                       onMoveTo={() => {

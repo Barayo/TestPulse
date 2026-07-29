@@ -387,6 +387,19 @@ type SuiteTrend struct {
 	Points   []SuiteTrendPoint `json:"points"`
 }
 
+// FlakyCase is a case whose current version's executions include both a
+// pass and a failed/blocked result (add-flaky-test-detection). Rate is a
+// 0-100 percentage: min(passCount, failedOrBlockedCount) / (passCount +
+// failedOrBlockedCount) — "how much of a coin flip is this," not simply the
+// failure fraction, so a case that's failed 9 times and passed once doesn't
+// read as "10% flaky."
+type FlakyCase struct {
+	CaseKey        string `json:"caseKey"`
+	CaseTitle      string `json:"caseTitle"`
+	CurrentVersion int    `json:"currentVersion"`
+	Rate           int    `json:"rate"`
+}
+
 // ProjectSummary is the per-project aggregate used by the project list and
 // switcher — suite/case counts and the most recent run's pass rate, computed
 // server-side in a small fixed number of queries regardless of how many
