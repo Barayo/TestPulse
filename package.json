@@ -5,5 +5,11 @@
   "workspaces": [
     "apps/web",
     "packages/shared"
-  ]
+  ],
+  "overrides": {
+    "@redocly/openapi-core": {
+      "js-yaml": "4.3.0",
+      "minimatch": "^10.2.5"
+    }
+  }
 }
