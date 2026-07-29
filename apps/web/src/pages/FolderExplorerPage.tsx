@@ -570,7 +570,7 @@ export default function FolderExplorerPage() {
               value={filters.automated}
               onChange={(e) => setFilters((f) => ({ ...f, automated: e.target.value }))}
             >
-              <option value="">All cases</option>
+              <option value="">All automation</option>
               <option value="yes">Automated</option>
               <option value="no">Manual</option>
             </select>
@@ -580,7 +580,7 @@ export default function FolderExplorerPage() {
               value={filters.flaky}
               onChange={(e) => setFilters((f) => ({ ...f, flaky: e.target.value }))}
             >
-              <option value="">All cases</option>
+              <option value="">All flakiness</option>
               <option value="yes">Flaky</option>
               <option value="no">Not flaky</option>
             </select>
