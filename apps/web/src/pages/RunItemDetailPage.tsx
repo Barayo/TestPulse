@@ -127,8 +127,8 @@ export default function RunItemDetailPage() {
         if (key === 's') return void recordVerdict('skipped', { advance: true })
         if (key === 'r' && item.currentStatus === 'failed') return void markRetest()
       }
-      if (key === 'j') return goToItemOffset(1)
-      if (key === 'k') return goToItemOffset(-1)
+      if (key === 'j' || key === 'arrowdown') return goToItemOffset(1)
+      if (key === 'k' || key === 'arrowup') return goToItemOffset(-1)
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
@@ -157,7 +157,7 @@ export default function RunItemDetailPage() {
           ...(item.currentStatus === 'failed' ? [{ keys: 'R', label: 'Retest' }] : []),
         ]
       : []),
-    { keys: 'J / K', label: 'Next / previous item' },
+    { keys: 'J/K · ↑/↓', label: 'Next / previous item' },
   ]
 
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([

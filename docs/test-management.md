@@ -151,9 +151,11 @@ Both the board and an item's own page support keyboard-driven triage, with a
 persistent shortcuts legend at the bottom of the page and a full list via
 `?`:
 
-- On the board, `j`/`k` move a focus cursor up and down the visible (filtered
-  or grouped) item list, and `Enter` opens the focused item — the same
-  destination as clicking it.
+- On the board, `j`/`k` (or `↓`/`↑`) move a focus cursor up and down the
+  visible (filtered or grouped) item list, and `Enter` opens the focused
+  item — the same destination as clicking it. The focused row is shown with
+  a filled background tint and a left accent bar, not just an outline, so
+  it stays legible next to the row's own status color.
 - On an item's own page, `P`/`F`/`B`/`S` record **Pass**/**Failed**/
   **Blocked**/**Skipped**, and `R` marks retest when the item is currently
   `failed` — the same actions as their on-screen buttons, and subject to the
@@ -161,8 +163,8 @@ persistent shortcuts legend at the bottom of the page and a full list via
   verdict **via a keyboard shortcut** immediately advances to the run's next
   `pending` item, or back to the board once none remain — a fast triage flow
   distinct from the on-screen buttons, which still record and leave you on
-  the item's page. `j`/`k` also work here, moving to the previous/next item
-  in the run regardless of its status.
+  the item's page. `j`/`k` (or `↓`/`↑`) also work here, moving to the
+  previous/next item in the run regardless of its status.
 - Shortcuts are ignored while a text field (comment, "record on behalf of")
   has focus, so typing is never interpreted as a shortcut.
 

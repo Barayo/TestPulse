@@ -484,6 +484,30 @@ describe('Keyboard navigation (add-run-keyboard-shortcuts)', () => {
     input.remove()
   })
 
+  it('ArrowDown/ArrowUp move the focus cursor the same as j/k', async () => {
+    mockRunAPI([pendingItem, item2, item3])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}')
+    await userEvent.keyboard('{ArrowUp}')
+    await userEvent.keyboard('{Enter}')
+
+    expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c2')
+  })
+
+  it('the focused row gets a visible background tint, not just a hairline ring', async () => {
+    mockRunAPI([pendingItem, item2])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.keyboard('j')
+
+    const focused = document.querySelector('[data-focused="true"]')
+    expect(focused).not.toBeNull()
+    expect(focused).toHaveClass('bg-accent')
+  })
+
   it('shows a persistent shortcuts hint and opens an overlay with ?', async () => {
     mockRunAPI([pendingItem])
     renderRun()

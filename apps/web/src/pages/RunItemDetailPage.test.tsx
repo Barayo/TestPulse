@@ -330,6 +330,25 @@ describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
     expect(await screen.findByRole('heading', { name: 'Login works' })).toBeInTheDocument()
   })
 
+  it('ArrowDown/ArrowUp navigate items the same as j/k', async () => {
+    const passItem = {
+      ...item,
+      id: 'i2',
+      caseKey: 'c2',
+      currentStatus: 'pass',
+      content: { ...item.content, title: 'Checkout works' },
+    }
+    mockItemAPI(undefined, undefined, [], [item, passItem])
+    renderPage('/runs/r1/items/c1')
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('{ArrowDown}')
+    expect(await screen.findByRole('heading', { name: 'Checkout works' })).toBeInTheDocument()
+
+    await userEvent.keyboard('{ArrowUp}')
+    expect(await screen.findByRole('heading', { name: 'Login works' })).toBeInTheDocument()
+  })
+
   it('shortcut keys typed into the comment field do not record a verdict', async () => {
     mockItemAPI()
     renderPage()

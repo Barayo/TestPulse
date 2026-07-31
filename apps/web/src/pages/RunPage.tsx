@@ -59,8 +59,9 @@ function RunItemRow({
         type="button"
         onClick={onOpenExecution}
         data-focused={focused ? 'true' : undefined}
-        className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm hover:bg-accent ${focused ? 'ring-2 ring-primary' : ''}`}
+        className={`relative flex w-full items-center justify-between overflow-hidden rounded-md border px-3 py-2 text-left text-sm hover:bg-accent ${focused ? 'bg-accent' : ''}`}
       >
+        {focused && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-primary" />}
         <span className="flex flex-col gap-0.5">
           <span>
             {item.content.title}
@@ -209,11 +210,11 @@ export default function RunPage() {
     function handleKeyDown(e: KeyboardEvent) {
       if (isEditableElementFocused()) return
       const key = e.key.toLowerCase()
-      if (key === 'j') {
+      if (key === 'j' || key === 'arrowdown') {
         setFocusedIndex((i) => Math.min(i + 1, displayOrder.length - 1))
         return
       }
-      if (key === 'k') {
+      if (key === 'k' || key === 'arrowup') {
         setFocusedIndex((i) => Math.max(i - 1, 0))
         return
       }
@@ -227,7 +228,7 @@ export default function RunPage() {
   }, [displayOrder, focusedIndex, runKey, navigate])
 
   const runShortcuts: ShortcutEntry[] = [
-    { keys: 'J / K', label: 'Move selection' },
+    { keys: 'J/K · ↑/↓', label: 'Move selection' },
     { keys: 'Enter', label: 'Open selected item' },
   ]
 
