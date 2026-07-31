@@ -217,7 +217,14 @@ it was not, the board SHALL show an explicit indication that it is an ad hoc
 run rather than showing nothing. The board SHALL provide a single-select
 status filter that narrows the visible items to one status, and an optional
 toggle that groups the full (or filtered) list into status sections ordered
-pass, failed, blocked, skipped, retest, pending.
+pass, failed, blocked, skipped, retest, pending. The board SHALL support
+keyboard navigation of the visible item list: `j`/`k` (or the equivalent
+arrow keys) move a focus cursor down/up the visible items in their
+displayed order, and `Enter` navigates to the focused item's own page, the
+same destination as clicking it. A persistent shortcuts hint SHALL be
+visible on the board, and pressing `?` SHALL open an overlay listing every
+available shortcut. Keyboard navigation SHALL be ignored while a text
+input, textarea, or other editable element has focus.
 
 #### Scenario: Board shows a status breakdown for all statuses
 - **WHEN** a user opens a run with items in more than one status
@@ -255,6 +262,22 @@ pass, failed, blocked, skipped, retest, pending.
 - **WHEN** a user enables "Group by status"
 - **THEN** the visible items (respecting any active filter) are reorganized into status-labeled sections in pass/failed/blocked/skipped/retest/pending order, with no item hidden that wasn't already excluded by the filter
 
+#### Scenario: j/k moves the focus cursor through the visible list
+- **WHEN** a user presses `j` twice then `k` once while the board's item list has focus
+- **THEN** the focus cursor moves down two items then back up one, staying within the currently visible (filtered/grouped) items
+
+#### Scenario: Enter opens the focused item
+- **WHEN** a user has moved the focus cursor to an item with `j`/`k` and presses `Enter`
+- **THEN** the app navigates to that item's own page
+
+#### Scenario: Keyboard navigation is disabled while typing
+- **WHEN** a text input or textarea elsewhere on the page has focus
+- **THEN** pressing `j`, `k`, or `Enter` does not move the focus cursor or navigate
+
+#### Scenario: Shortcuts overlay lists every available key
+- **WHEN** a user presses `?` on the board
+- **THEN** an overlay opens listing the board's keyboard shortcuts, dismissible with `Escape` or `?`
+
 ### Requirement: Run item detail page
 The web UI SHALL provide a dedicated page per run item, reached from the
 run execution board, showing the pinned case version's steps and expected
@@ -263,7 +286,25 @@ version), and the item's result history. When the run is open and the
 viewer has `runRecordResult` permission, the page SHALL provide controls
 to record a verdict with an optional comment. When the run is closed, the
 page SHALL show the item read-only instead of these controls. The page's
-breadcrumb SHALL end at the run, not repeat the item's own heading.
+breadcrumb SHALL end at the run, not repeat the item's own heading. When
+the run is open and the viewer has `runRecordResult` permission, the page
+SHALL also support single-key verdict recording: `P` records `pass`, `F`
+records `failed`, `B` records `blocked`, `S` records `skipped`, and `R`
+marks the item for retest when its current status is `failed` (mirroring
+the on-screen buttons' own visibility rule). Recording a verdict via a
+keyboard shortcut SHALL then navigate to the next `pending` item in the
+run's item order, searching forward from the current item only; if none
+remains, the app SHALL navigate back to the run execution board instead.
+The existing on-screen verdict buttons SHALL retain their current
+behavior — recording the result and remaining on the item's page — and
+SHALL NOT auto-advance. The page SHALL also support `j`/`k` (or the
+equivalent arrow keys) to navigate to the previous/next item in the run's
+item order regardless of status, without returning to the board first. A
+persistent shortcuts hint SHALL be visible on the page, omitting the
+retest key when the item isn't `failed`, and pressing `?` SHALL open an
+overlay listing every available shortcut. Keyboard shortcuts SHALL be
+ignored while a text input, textarea, or other editable element (including
+the comment field and the actor-override field) has focus.
 
 #### Scenario: Execute a case from its detail page
 - **WHEN** a user with `runRecordResult` permission opens a pending
@@ -292,6 +333,49 @@ breadcrumb SHALL end at the run, not repeat the item's own heading.
 - **THEN** the breadcrumb ends at the run, and the item's identifying
   content appears only in the page's own heading, not as a trailing
   breadcrumb segment
+
+#### Scenario: Single key records a verdict
+- **WHEN** a user with `runRecordResult` permission presses `F` on a
+  pending item's page
+- **THEN** a result with verdict `failed` is recorded, the same as
+  clicking the "Failed" button
+
+#### Scenario: Recording a verdict via keyboard auto-advances to the next pending item
+- **WHEN** a user presses a verdict key on an item that has a later
+  `pending` item in the run
+- **THEN** the app navigates to that next pending item's page
+
+#### Scenario: Recording the last pending item's verdict via keyboard returns to the board
+- **WHEN** a user presses a verdict key on the only remaining `pending`
+  item in the run
+- **THEN** the app navigates back to the run execution board
+
+#### Scenario: The on-screen verdict buttons do not auto-advance
+- **WHEN** a user clicks the "Pass" (or Failed/Blocked/Skipped) button
+  instead of using its keyboard shortcut
+- **THEN** the result is recorded and the user remains on the item's page,
+  the same as before this capability existed
+
+#### Scenario: Retest key only fires when the item is failed
+- **WHEN** a user presses `R` on an item whose current status is not
+  `failed`
+- **THEN** no action is taken, and the shortcuts hint does not list `R`
+  for that item
+
+#### Scenario: j/k moves between items regardless of status
+- **WHEN** a user presses `k` on an item's page
+- **THEN** the app navigates to the previous item in the run's item
+  order, even if that item already has a recorded verdict
+
+#### Scenario: Keyboard shortcuts are disabled while typing
+- **WHEN** the comment field or the actor-override field has focus
+- **THEN** pressing `P`, `F`, `B`, `S`, `R`, `J`, or `K` types into that
+  field instead of recording a verdict or navigating
+
+#### Scenario: Shortcuts overlay lists every available key
+- **WHEN** a user presses `?` on the item page
+- **THEN** an overlay opens listing the page's keyboard shortcuts,
+  dismissible with `Escape` or `?`
 
 ### Requirement: Querying executions by case version
 The system SHALL let a caller list every execution (run item) that has ever pinned a given

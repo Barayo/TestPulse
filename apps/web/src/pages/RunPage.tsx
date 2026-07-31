@@ -10,6 +10,8 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { RunStatusBreakdown, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '@/components/RunStatusBreakdown'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
+import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
+import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import {
   Card,
@@ -29,11 +31,13 @@ type Status = components['schemas']['Status']
 function RunItemRow({
   item,
   projectKey,
+  focused,
   onOpenExecution,
   onGoToCase,
 }: {
   item: RunItem
   projectKey?: string
+  focused?: boolean
   onOpenExecution: () => void
   onGoToCase: () => void
 }) {
@@ -54,7 +58,8 @@ function RunItemRow({
       <button
         type="button"
         onClick={onOpenExecution}
-        className="flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm hover:bg-accent"
+        data-focused={focused ? 'true' : undefined}
+        className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm hover:bg-accent ${focused ? 'ring-2 ring-primary' : ''}`}
       >
         <span className="flex flex-col gap-0.5">
           <span>
@@ -93,6 +98,7 @@ export default function RunPage() {
   const [isReopening, setIsReopening] = useState(false)
   const [activeFilter, setActiveFilter] = useState<Status | null>(null)
   const [groupEnabled, setGroupEnabled] = useState(false)
+  const [focusedIndex, setFocusedIndex] = useState(-1)
   const bumpDataRevision = useBumpDataRevision()
 
   // One-shot confirmation after navigating here from NewRunPage on creation
@@ -190,6 +196,40 @@ export default function RunPage() {
     () => STATUS_ORDER.filter((status) => (summary?.counts?.[status] ?? 0) > 0),
     [summary],
   )
+
+  const displayOrder = useMemo(
+    () =>
+      groupEnabled
+        ? STATUS_ORDER.flatMap((status) => visibleItems.filter((item) => item.currentStatus === status))
+        : visibleItems,
+    [visibleItems, groupEnabled],
+  )
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (isEditableElementFocused()) return
+      const key = e.key.toLowerCase()
+      if (key === 'j') {
+        setFocusedIndex((i) => Math.min(i + 1, displayOrder.length - 1))
+        return
+      }
+      if (key === 'k') {
+        setFocusedIndex((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (e.key === 'Enter') {
+        const target = displayOrder[focusedIndex]
+        if (target) navigate(`/runs/${runKey}/items/${target.caseKey}`)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [displayOrder, focusedIndex, runKey, navigate])
+
+  const runShortcuts: ShortcutEntry[] = [
+    { keys: 'J / K', label: 'Move selection' },
+    { keys: 'Enter', label: 'Open selected item' },
+  ]
 
   if (notFound) {
     return (
@@ -317,6 +357,7 @@ export default function RunPage() {
                           key={item.id}
                           item={item}
                           projectKey={project?.key}
+                          focused={displayOrder[focusedIndex]?.id === item.id}
                           onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
                           onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
                         />
@@ -333,6 +374,7 @@ export default function RunPage() {
                   key={item.id}
                   item={item}
                   projectKey={project?.key}
+                  focused={displayOrder[focusedIndex]?.id === item.id}
                   onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
                   onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
                 />
@@ -341,6 +383,9 @@ export default function RunPage() {
           )}
         </CardContent>
       </Card>
+
+      <RunShortcutsHint shortcuts={runShortcuts} />
+      <RunShortcutsOverlay shortcuts={runShortcuts} />
     </div>
   )
 }

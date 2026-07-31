@@ -351,11 +351,21 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// shown pass rate (ProjectRepo.Summaries uses only the most recent run),
 	// so it's deliberately the strongest one.
 
-	// 1. Open run, mid-sprint, mixed verdicts.
+	// 1. Open run, mid-sprint, mixed verdicts. One more case is added but
+	// left unexecuted (`pending`) — a real candidate for keyboard-driven
+	// triage (add-run-keyboard-shortcuts): opening this run and pressing a
+	// verdict key on an already-executed item auto-advances straight to it.
 	if err := RunWithVerdicts(ctx, svc, p.ID, "Sprint 12 execution",
 		[]string{login.ID, badPassword.ID, checkoutValid.ID},
 		[]domain.Verdict{domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass}); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
+	}
+	sprintRun, err := runByName(ctx, svc, p.ID, "Sprint 12 execution")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := svc.AddRunItem(ctx, sprintRun.ID, passwordReset.ID); err != nil {
+		return fmt.Errorf("sampledata: adding pending sprint item: %w", err)
 	}
 
 	// 2. Closed run: a sealed record of a past release sign-off.

@@ -392,6 +392,48 @@ func TestSeedContentCoversRunLifecycleAndImport(t *testing.T) {
 	}
 }
 
+// TestSeedContentHasAPendingItemForKeyboardTriage covers
+// add-run-keyboard-shortcuts: the Sample Project must contain an open run
+// with a real pending item alongside already-executed ones, so the
+// keyboard-driven auto-advance flow (record a verdict, land on the next
+// pending item) has something to demonstrate.
+func TestSeedContentHasAPendingItemForKeyboardTriage(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	for _, r := range runs {
+		if r.Status != domain.RunStatusOpen {
+			continue
+		}
+		items, err := svc.RunItems(actorCtx, r.ID, "")
+		if err != nil {
+			t.Fatalf("RunItems: %v", err)
+		}
+		var sawPending, sawExecuted bool
+		for _, item := range items {
+			if item.CurrentStatus == domain.StatusPending {
+				sawPending = true
+			} else {
+				sawExecuted = true
+			}
+		}
+		if sawPending && sawExecuted {
+			return
+		}
+	}
+	t.Error("no open run has both a pending item and an already-executed item — auto-advance has nothing to demonstrate")
+}
+
 // TestSeedContentShowcasesResultActorLink covers link-result-actor-to-
 // identity: the seed must demonstrate both new paths it adds — a result
 // that defaults its actor from the seeding actor (real actorKind/ref, no

@@ -442,3 +442,57 @@ describe('Run lifecycle (open/closed)', () => {
   })
 
 })
+
+describe('Keyboard navigation (add-run-keyboard-shortcuts)', () => {
+  const item2 = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
+  const item3 = { ...pendingItem, id: 'i3', caseKey: 'c3', content: { ...pendingItem.content, title: 'Logout works' } }
+
+  it('j moves the focus cursor down the visible list; Enter opens the focused item', async () => {
+    mockRunAPI([pendingItem, item2, item3])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.keyboard('jjj')
+    await userEvent.keyboard('{Enter}')
+
+    expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c3')
+  })
+
+  it('k moves the focus cursor back up', async () => {
+    mockRunAPI([pendingItem, item2, item3])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.keyboard('jjj')
+    await userEvent.keyboard('k')
+    await userEvent.keyboard('{Enter}')
+
+    expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c2')
+  })
+
+  it('j/k/Enter do nothing while an unrelated input has focus', async () => {
+    mockRunAPI([pendingItem, item2, item3])
+    renderRun()
+    await screen.findByText('Login works')
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+
+    await userEvent.keyboard('jjj{Enter}')
+
+    expect(screen.queryByTestId('item-page-probe')).not.toBeInTheDocument()
+    input.remove()
+  })
+
+  it('shows a persistent shortcuts hint and opens an overlay with ?', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    expect(screen.getByLabelText('Keyboard shortcuts')).toBeInTheDocument()
+
+    await userEvent.keyboard('?')
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+})

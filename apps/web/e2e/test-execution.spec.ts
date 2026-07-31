@@ -138,6 +138,54 @@ test.describe('Requirement: Run execution board', () => {
     await expect(nav.getByText('Run 1')).toBeVisible()
     await expect(nav.getByText('Login works')).toHaveCount(0)
   })
+
+  // add-run-keyboard-shortcuts
+  test('Scenario: j/k moves the board\'s focus cursor and Enter opens the focused item', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Keyboard List Project')
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Second case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Second case')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works', 'Second case'])
+    // Wait for the run board itself (not the still-unmounting picker form,
+    // which also renders these case titles as checkbox labels) before
+    // sending keys — the switch only exists once RunPage has mounted.
+    await expect(page.getByRole('switch', { name: /group by status/i })).toBeVisible()
+    await expect(page.getByText('Login works')).toBeVisible()
+    await expect(page.getByText('Second case')).toBeVisible()
+
+    await page.keyboard.press('j')
+    const focusedRow = page.locator('[data-focused="true"]')
+    const focusedTitle = (await focusedRow.innerText()).split('\n')[0]
+
+    await page.keyboard.press('Enter')
+
+    await expect(page).toHaveURL(/\/runs\/.+\/items\/.+/)
+    await expect(page.getByRole('heading', { name: focusedTitle })).toBeVisible()
+  })
+})
+
+test.describe('Requirement: Run item detail page', () => {
+  // add-run-keyboard-shortcuts
+  test('Scenario: Recording a verdict via keyboard auto-advances to the next pending item', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Keyboard Verdict Project')
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Second case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Second case')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works', 'Second case'])
+
+    await page.getByText('Login works').first().click()
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
+
+    await page.keyboard.press('f')
+
+    await expect(page.getByRole('heading', { name: 'Second case' })).toBeVisible()
+  })
 })
 
 test.describe('Requirement: Run item status lifecycle', () => {

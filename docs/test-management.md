@@ -145,6 +145,27 @@ Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for 
 - A **Retest** button appears on failed items; marking retest sets the item back to an executable state (`retest` status) without erasing the prior failure from history.
 - Right-clicking an item row opens a shortcut menu: open its execution page (same as clicking the row), or jump straight to the case's own page in the Library without visiting the execution page first.
 
+### Keyboard shortcuts
+
+Both the board and an item's own page support keyboard-driven triage, with a
+persistent shortcuts legend at the bottom of the page and a full list via
+`?`:
+
+- On the board, `j`/`k` move a focus cursor up and down the visible (filtered
+  or grouped) item list, and `Enter` opens the focused item — the same
+  destination as clicking it.
+- On an item's own page, `P`/`F`/`B`/`S` record **Pass**/**Failed**/
+  **Blocked**/**Skipped**, and `R` marks retest when the item is currently
+  `failed` — the same actions as their on-screen buttons, and subject to the
+  same **Record Result** permission and open-run requirement. Recording a
+  verdict **via a keyboard shortcut** immediately advances to the run's next
+  `pending` item, or back to the board once none remain — a fast triage flow
+  distinct from the on-screen buttons, which still record and leave you on
+  the item's page. `j`/`k` also work here, moving to the previous/next item
+  in the run regardless of its status.
+- Shortcuts are ignored while a text field (comment, "record on behalf of")
+  has focus, so typing is never interpreted as a shortcut.
+
 ## Closing and reopening a run
 
 A run is **open** or **closed**, shown as a badge next to its name. Runs are created open. Any actor who can record results (Record Result permission) can click **Close run** to seal it: once closed, its items become read-only — recording a verdict, marking retest, and adding an item are all rejected until it's reopened. This matters once results carry real authorship: a closed run is a stable, final record of who executed what.

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
@@ -11,6 +11,8 @@ import { PropertyRow } from '@/components/PropertyRow'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { StatusBadge } from '@/components/StatusBadge'
+import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
+import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
 
@@ -26,10 +28,12 @@ function isValidDate(iso: string): boolean {
 
 export default function RunItemDetailPage() {
   const { runKey, caseKey } = useParams<{ runKey: string; caseKey: string }>()
+  const navigate = useNavigate()
 
   const [run, setRun] = useState<Run>()
   const [project, setProject] = useState<Project>()
   const [item, setItem] = useState<RunItem>()
+  const [items, setItems] = useState<RunItem[]>([])
   const [results, setResults] = useState<Result[]>([])
   const [notFound, setNotFound] = useState(false)
 
@@ -40,17 +44,18 @@ export default function RunItemDetailPage() {
   const load = useCallback(async () => {
     if (!runKey || !caseKey) return
     setNotFound(false)
-    const [{ data: r }, { data: items }] = await Promise.all([
+    const [{ data: r }, { data: runItems }] = await Promise.all([
       api.GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } }),
       api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
     ])
-    const match = (items ?? []).find((it) => it.caseKey === caseKey)
+    const match = (runItems ?? []).find((it) => it.caseKey === caseKey)
     if (!r || !match) {
       setNotFound(true)
       return
     }
     setRun(r)
     setItem(match)
+    setItems(runItems ?? [])
     const { data: res } = await api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: match.id } } })
     setResults(res ?? [])
   }, [runKey, caseKey])
@@ -68,19 +73,25 @@ export default function RunItemDetailPage() {
       .catch(() => setProject(undefined))
   }, [projectKey])
 
-  async function recordVerdict(verdict: Verdict) {
+  async function recordVerdict(verdict: Verdict, options?: { advance?: boolean }) {
     if (!item) return
     const override = actorOverride.trim()
     await api.POST('/api/v1/items/{itemId}/results', {
       params: { path: { itemId: item.id } },
       body: { verdict, comment, ...(override ? { actor: override } : {}) },
     })
+    if (options?.advance) {
+      const currentIndex = items.findIndex((it) => it.id === item.id)
+      const next = items.slice(currentIndex + 1).find((it) => it.currentStatus === 'pending')
+      navigate(next ? `/runs/${runKey}/items/${next.caseKey}` : `/runs/${runKey}`)
+      return
+    }
     setComment('')
-    const [{ data: items }, { data: res }] = await Promise.all([
+    const [{ data: refreshedItems }, { data: res }] = await Promise.all([
       api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! } } }),
       api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: item.id } } }),
     ])
-    setItem((items ?? []).find((it) => it.id === item.id))
+    setItem((refreshedItems ?? []).find((it) => it.id === item.id))
     setResults(res ?? [])
   }
 
@@ -90,9 +101,39 @@ export default function RunItemDetailPage() {
       params: { path: { itemId: item.id } },
       body: { status: 'retest' },
     })
-    const { data: items } = await api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! } } })
-    setItem((items ?? []).find((it) => it.id === item.id))
+    const { data: refreshedItems } = await api.GET('/api/v1/runs/{runKey}/items', {
+      params: { path: { runKey: runKey! } },
+    })
+    setItem((refreshedItems ?? []).find((it) => it.id === item.id))
   }
+
+  function goToItemOffset(offset: number) {
+    if (!item) return
+    const currentIndex = items.findIndex((it) => it.id === item.id)
+    const target = items[currentIndex + offset]
+    if (!target) return
+    navigate(`/runs/${runKey}/items/${target.caseKey}`)
+  }
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!item || isEditableElementFocused()) return
+      const key = e.key.toLowerCase()
+      const isClosedNow = run?.status === 'closed'
+      if (!isClosedNow) {
+        if (key === 'p') return void recordVerdict('pass', { advance: true })
+        if (key === 'f') return void recordVerdict('failed', { advance: true })
+        if (key === 'b') return void recordVerdict('blocked', { advance: true })
+        if (key === 's') return void recordVerdict('skipped', { advance: true })
+        if (key === 'r' && item.currentStatus === 'failed') return void markRetest()
+      }
+      if (key === 'j') return goToItemOffset(1)
+      if (key === 'k') return goToItemOffset(-1)
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, items, run?.status, runKey, actorOverride, comment])
 
   if (!runKey || !caseKey) return null
   if (notFound) {
@@ -105,6 +146,19 @@ export default function RunItemDetailPage() {
   if (!run || !item) return null
 
   const isClosed = run.status === 'closed'
+
+  const shortcuts: ShortcutEntry[] = [
+    ...(!isClosed
+      ? [
+          { keys: 'P', label: 'Pass' },
+          { keys: 'F', label: 'Failed' },
+          { keys: 'B', label: 'Blocked' },
+          { keys: 'S', label: 'Skipped' },
+          ...(item.currentStatus === 'failed' ? [{ keys: 'R', label: 'Retest' }] : []),
+        ]
+      : []),
+    { keys: 'J / K', label: 'Next / previous item' },
+  ]
 
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
     { label: 'Projects', href: '/' },
@@ -238,6 +292,9 @@ export default function RunItemDetailPage() {
           </CaseSidebarSection>
         </div>
       </div>
+
+      <RunShortcutsHint shortcuts={shortcuts} />
+      <RunShortcutsOverlay shortcuts={shortcuts} />
     </div>
   )
 }

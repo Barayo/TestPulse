@@ -47,11 +47,11 @@ function RunProbe() {
   return <p data-testid="run-probe">run {runKey ?? ''}</p>
 }
 
-function mockItemAPI(itemOverride?: unknown, runOverride?: unknown, results: unknown[] = []) {
+function mockItemAPI(itemOverride?: unknown, runOverride?: unknown, results: unknown[] = [], itemsOverride?: unknown[]) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/items')
-      return Promise.resolve({ data: [itemOverride ?? item], response: { ok: true } })
+      return Promise.resolve({ data: itemsOverride ?? [itemOverride ?? item], response: { ok: true } })
     if (path === '/api/v1/items/{itemId}/results')
       return Promise.resolve({ data: results, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}')
@@ -200,5 +200,166 @@ describe('RunItemDetailPage', () => {
     })
     renderPage()
     expect(await screen.findByText(/item not found/i)).toBeInTheDocument()
+  })
+})
+
+describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
+  it('pressing F records a failed verdict, the same as clicking the Failed button', async () => {
+    mockItemAPI()
+    mockPOST.mockResolvedValue({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('f')
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({
+          params: { path: { itemId: 'i1' } },
+          body: { verdict: 'failed', comment: '' },
+        }),
+      )
+    })
+  })
+
+  it('pressing R marks retest when the item is failed', async () => {
+    mockItemAPI({ ...item, currentStatus: 'failed' })
+    mockPUT.mockResolvedValue({ response: { ok: true } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('r')
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { status: 'retest' } }),
+      )
+    })
+  })
+
+  it('pressing R does nothing when the item is not failed, and the hint omits R', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('r')
+
+    expect(mockPUT).not.toHaveBeenCalled()
+    const hint = screen.getByLabelText('Keyboard shortcuts')
+    expect(within(hint).queryByText('R')).not.toBeInTheDocument()
+  })
+
+  it('recording a verdict navigates to the next pending item in the run', async () => {
+    const nextItem = {
+      ...item,
+      id: 'i2',
+      caseKey: 'c2',
+      currentStatus: 'pending',
+      content: { ...item.content, title: 'Checkout works' },
+    }
+    mockItemAPI(undefined, undefined, [], [item, nextItem])
+    mockPOST.mockResolvedValue({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('f')
+
+    expect(await screen.findByRole('heading', { name: 'Checkout works' })).toBeInTheDocument()
+  })
+
+  it('clicking the on-screen Pass button does not auto-advance, unlike its keyboard shortcut', async () => {
+    const nextItem = {
+      ...item,
+      id: 'i2',
+      caseKey: 'c2',
+      currentStatus: 'pending',
+      content: { ...item.content, title: 'Checkout works' },
+    }
+    mockItemAPI(undefined, undefined, [], [item, nextItem])
+    mockPOST.mockResolvedValue({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
+
+    await waitFor(() => expect(mockPOST).toHaveBeenCalled())
+    expect(screen.getByRole('heading', { name: 'Login works' })).toBeInTheDocument()
+  })
+
+  it('recording the last pending item\'s verdict navigates back to the run', async () => {
+    mockItemAPI(undefined, undefined, [], [item])
+    mockPOST.mockResolvedValue({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('f')
+
+    expect(await screen.findByTestId('run-probe')).toHaveTextContent('run r1')
+  })
+
+  it('j/k navigates to the next/previous item in run order regardless of status', async () => {
+    const passItem = {
+      ...item,
+      id: 'i2',
+      caseKey: 'c2',
+      currentStatus: 'pass',
+      content: { ...item.content, title: 'Checkout works' },
+    }
+    mockItemAPI(undefined, undefined, [], [item, passItem])
+    renderPage('/runs/r1/items/c1')
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('j')
+    expect(await screen.findByRole('heading', { name: 'Checkout works' })).toBeInTheDocument()
+
+    await userEvent.keyboard('k')
+    expect(await screen.findByRole('heading', { name: 'Login works' })).toBeInTheDocument()
+  })
+
+  it('shortcut keys typed into the comment field do not record a verdict', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.type(screen.getByLabelText(/comment/i), 'f is for failed')
+
+    expect(mockPOST).not.toHaveBeenCalled()
+  })
+
+  it('shortcut keys typed into the actor-override field do not record a verdict', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    await userEvent.click(screen.getByRole('button', { name: /record on behalf of someone else/i }))
+
+    await userEvent.type(screen.getByLabelText(/record on behalf of/i), 'bob')
+
+    expect(mockPOST).not.toHaveBeenCalled()
+  })
+
+  it('shows a persistent shortcuts hint and opens an overlay with ?', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    expect(screen.getByLabelText('Keyboard shortcuts')).toBeInTheDocument()
+
+    await userEvent.keyboard('?')
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
 })
