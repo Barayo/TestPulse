@@ -12,6 +12,8 @@ import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
+import { AssignDialog } from '@/components/AssignDialog'
+import { assignRunItems } from '@/lib/assignRunItems'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
@@ -40,6 +42,7 @@ export default function RunItemDetailPage() {
   const [actorOverride, setActorOverride] = useState('')
   const [showActorOverride, setShowActorOverride] = useState(false)
   const [comment, setComment] = useState('')
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false)
 
   const load = useCallback(async () => {
     if (!runKey || !caseKey) return
@@ -105,6 +108,13 @@ export default function RunItemDetailPage() {
       params: { path: { runKey: runKey! } },
     })
     setItem((refreshedItems ?? []).find((it) => it.id === item.id))
+  }
+
+  async function handleAssign(assignee: string) {
+    if (!item) return
+    await assignRunItems([item.id], assignee)
+    setItem((prev) => (prev ? { ...prev, assignee } : prev))
+    setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, assignee } : it)))
   }
 
   function goToItemOffset(offset: number) {
@@ -263,6 +273,21 @@ export default function RunItemDetailPage() {
             <PropertyRow label="Platform" value={item.content.platform} />
             <PropertyRow label="Tags" value={(item.content.tags ?? []).join(', ')} />
             <PropertyRow label="Pinned version" value={`v${item.caseVersion}`} />
+            <PropertyRow
+              label="Assignee"
+              value={
+                <span className="flex items-center gap-2">
+                  {item.assignee || 'Unassigned'}
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    onClick={() => setAssignDialogOpen(true)}
+                  >
+                    Assign to…
+                  </button>
+                </span>
+              }
+            />
             {item.newerVersion && (
               <p className="text-sm text-muted-foreground">A newer version of this case exists</p>
             )}
@@ -292,6 +317,14 @@ export default function RunItemDetailPage() {
           </CaseSidebarSection>
         </div>
       </div>
+
+      <AssignDialog
+        open={assignDialogOpen}
+        onOpenChange={setAssignDialogOpen}
+        currentAssignee={item.assignee}
+        suggestions={Array.from(new Set(items.map((it) => it.assignee).filter((a): a is string => Boolean(a))))}
+        onAssign={(assignee) => void handleAssign(assignee)}
+      />
 
       <RunShortcutsHint shortcuts={shortcuts} />
       <RunShortcutsOverlay shortcuts={shortcuts} />

@@ -320,7 +320,9 @@ affordance, showing a bulk action bar while any item is selected.
 The web UI SHALL provide a dedicated page per run item, reached from the
 run execution board, showing the pinned case version's steps and expected
 result, item properties (status, test name, platform, tags, pinned
-version), and the item's result history. When the run is open and the
+version, assignee), and the item's result history. The assignee property
+SHALL be shown as "Unassigned" when absent, and SHALL offer an "Assign
+to…" control matching the one on the board. When the run is open and the
 viewer has `runRecordResult` permission, the page SHALL provide controls
 to record a verdict with an optional comment. When the run is closed, the
 page SHALL show the item read-only instead of these controls. The page's
@@ -350,6 +352,12 @@ the comment field and the actor-override field) has focus.
   `pass` with a comment
 - **THEN** the item's status updates to `pass` and the result appears in
   the item's history
+
+#### Scenario: Item page shows and updates the assignee
+- **WHEN** a user opens an item's page and uses its "Assign to…" control
+  to assign it to "ana"
+- **THEN** the Properties panel shows "ana" as the assignee without a
+  full page reload, the same as assigning from the board
 
 #### Scenario: Board shows pinned content
 - **WHEN** a case was edited after the run was created

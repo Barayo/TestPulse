@@ -382,3 +382,45 @@ describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
   })
 })
+
+describe('Assignment (add-run-item-assignment-ui)', () => {
+  it('shows the item\'s assignee in Properties, or Unassigned when none', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('Unassigned')).toBeInTheDocument()
+  })
+
+  it('shows a real assignee when the item has one', async () => {
+    mockItemAPI({ ...item, assignee: 'ana' })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('ana')).toBeInTheDocument()
+  })
+
+  it('Assign to… opens the dialog and updates the sidebar without a full reload', async () => {
+    mockItemAPI()
+    mockPUT.mockResolvedValue({ response: { ok: true } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const getCallsBefore = mockGET.mock.calls.length
+
+    await userEvent.click(screen.getByRole('button', { name: /assign to/i }))
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'ana')
+    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+      )
+    })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(await within(sidebar).findByText('ana')).toBeInTheDocument()
+    expect(mockGET.mock.calls.length).toBe(getCallsBefore)
+  })
+})
