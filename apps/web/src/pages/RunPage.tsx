@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
-import { ArrowRightIcon, ExternalLinkIcon, LayersIcon } from 'lucide-react'
+import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +11,9 @@ import { RunStatusBreakdown, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '@/
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
+import { AssignDialog } from '@/components/AssignDialog'
+import { RunBulkActionBar } from '@/components/RunBulkActionBar'
+import { assignRunItems } from '@/lib/assignRunItems'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import {
@@ -32,19 +35,26 @@ function RunItemRow({
   item,
   projectKey,
   focused,
+  selected,
+  onToggleSelect,
   onOpenExecution,
   onGoToCase,
+  onAssign,
 }: {
   item: RunItem
   projectKey?: string
   focused?: boolean
+  selected: boolean
+  onToggleSelect: () => void
   onOpenExecution: () => void
   onGoToCase: () => void
+  onAssign: () => void
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
   const menuItems: RowActionMenuItem[] = [
     { label: 'Open execution', icon: <ArrowRightIcon className="size-4" aria-hidden="true" />, onSelect: onOpenExecution },
     { label: 'Go to case in Library', icon: <ExternalLinkIcon className="size-4" aria-hidden="true" />, onSelect: onGoToCase },
+    { label: 'Assign to…', icon: <UserPlusIcon className="size-4" aria-hidden="true" />, onSelect: onAssign },
   ]
 
   return (
@@ -55,31 +65,43 @@ function RunItemRow({
         menuRef.current?.openAt(e.clientX, e.clientY)
       }}
     >
-      <button
-        type="button"
-        onClick={onOpenExecution}
-        data-focused={focused ? 'true' : undefined}
-        className={`relative flex w-full items-center justify-between overflow-hidden rounded-md border px-3 py-2 text-left text-sm hover:bg-accent ${focused ? 'bg-accent' : ''}`}
-      >
-        {focused && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-primary" />}
-        <span className="flex flex-col gap-0.5">
-          <span>
-            {item.content.title}
-            {item.newerVersion && (
-              <span className="ml-2 text-xs text-muted-foreground">(newer version available)</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="checkbox"
+          aria-label={`Select ${item.content.title}`}
+          checked={selected}
+          onChange={onToggleSelect}
+          className="size-4 shrink-0 rounded border-input"
+        />
+        <button
+          type="button"
+          onClick={onOpenExecution}
+          data-focused={focused ? 'true' : undefined}
+          className={`relative flex flex-1 items-center justify-between overflow-hidden rounded-md border px-3 py-2 text-left text-sm hover:bg-accent ${focused ? 'bg-accent' : ''}`}
+        >
+          {focused && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-primary" />}
+          <span className="flex flex-col gap-0.5">
+            <span>
+              {item.content.title}
+              {item.newerVersion && (
+                <span className="ml-2 text-xs text-muted-foreground">(newer version available)</span>
+              )}
+            </span>
+            {(item.testName || item.content.platform || item.content.tags?.length) && (
+              <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                {item.testName && <span>{item.testName}</span>}
+                {item.content.platform && <span>{item.content.platform}</span>}
+                {item.content.tags?.map((tag) => <span key={tag}>{tag}</span>)}
+              </span>
             )}
           </span>
-          {(item.testName || item.content.platform || item.content.tags?.length) && (
-            <span className="flex flex-wrap gap-2 text-xs text-muted-foreground">
-              {item.testName && <span>{item.testName}</span>}
-              {item.content.platform && <span>{item.content.platform}</span>}
-              {item.content.tags?.map((tag) => <span key={tag}>{tag}</span>)}
-            </span>
-          )}
-        </span>
-        <StatusBadge status={item.currentStatus} />
-      </button>
-      {projectKey && <RowActionMenu ref={menuRef} label={`Actions for ${item.content.title}`} items={menuItems} />}
+          <span className="flex items-center gap-3">
+            <span className="text-xs text-muted-foreground">{item.assignee || 'Unassigned'}</span>
+            <StatusBadge status={item.currentStatus} />
+          </span>
+        </button>
+        {projectKey && <RowActionMenu ref={menuRef} label={`Actions for ${item.content.title}`} items={menuItems} />}
+      </div>
     </li>
   )
 }
@@ -98,8 +120,11 @@ export default function RunPage() {
   const [isClosing, setIsClosing] = useState(false)
   const [isReopening, setIsReopening] = useState(false)
   const [activeFilter, setActiveFilter] = useState<Status | null>(null)
+  const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [groupEnabled, setGroupEnabled] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState(-1)
+  const [assignTarget, setAssignTarget] = useState<{ itemIds: string[]; currentAssignee?: string } | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const bumpDataRevision = useBumpDataRevision()
 
   // One-shot confirmation after navigating here from NewRunPage on creation
@@ -189,14 +214,44 @@ export default function RunPage() {
   }
 
   const visibleItems = useMemo(
-    () => (activeFilter === null ? items : items.filter((item) => item.currentStatus === activeFilter)),
-    [items, activeFilter],
+    () =>
+      items.filter(
+        (item) =>
+          (activeFilter === null || item.currentStatus === activeFilter) &&
+          (assigneeFilter === null || (assigneeFilter === '' ? !item.assignee : item.assignee === assigneeFilter)),
+      ),
+    [items, activeFilter, assigneeFilter],
   )
 
   const presentStatuses = useMemo(
     () => STATUS_ORDER.filter((status) => (summary?.counts?.[status] ?? 0) > 0),
     [summary],
   )
+
+  const distinctAssignees = useMemo(
+    () => Array.from(new Set(items.map((item) => item.assignee).filter((a): a is string => Boolean(a)))).sort(),
+    [items],
+  )
+
+  async function handleAssign(itemIds: string[], assignee: string) {
+    await assignRunItems(itemIds, assignee)
+    setItems((prev) => prev.map((item) => (itemIds.includes(item.id) ? { ...item, assignee } : item)))
+    setSelectedIds(new Set())
+  }
+
+  function toggleSelect(itemId: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(itemId)) next.delete(itemId)
+      else next.add(itemId)
+      return next
+    })
+  }
+
+  const allVisibleSelected = visibleItems.length > 0 && visibleItems.every((item) => selectedIds.has(item.id))
+  function toggleSelectAll() {
+    setSelectedIds(allVisibleSelected ? new Set() : new Set(visibleItems.map((item) => item.id)))
+  }
 
   const displayOrder = useMemo(
     () =>
@@ -329,14 +384,64 @@ export default function RunPage() {
               </button>
             </div>
           )}
+          {summary && summary.total > 0 && (
+            <div role="group" aria-label="Filter items by assignee" className="flex flex-wrap gap-1.5">
+              <button
+                type="button"
+                aria-pressed={assigneeFilter === null}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === null ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
+                onClick={() => setAssigneeFilter(null)}
+              >
+                All
+              </button>
+              {distinctAssignees.map((assignee) => (
+                <button
+                  key={assignee}
+                  type="button"
+                  aria-pressed={assigneeFilter === assignee}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === assignee ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
+                  onClick={() => setAssigneeFilter(assignee)}
+                >
+                  {assignee}
+                </button>
+              ))}
+              <button
+                type="button"
+                aria-pressed={assigneeFilter === ''}
+                className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === '' ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
+                onClick={() => setAssigneeFilter('')}
+              >
+                Unassigned
+              </button>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="space-y-3">
           {summary && summary.total > 0 && (
-            <p className="text-sm text-muted-foreground">
-              {`Showing ${visibleItems.length} of ${summary.total} items`}
-              {activeFilter && ` — filtered to ${STATUS_LABEL[activeFilter].toLowerCase()}`}
-            </p>
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <input
+                type="checkbox"
+                aria-label="Select all"
+                checked={allVisibleSelected}
+                onChange={toggleSelectAll}
+                className="size-4 shrink-0 rounded border-input"
+              />
+              <p>
+                {`Showing ${visibleItems.length} of ${summary.total} items`}
+                {activeFilter && ` — filtered to ${STATUS_LABEL[activeFilter].toLowerCase()}`}
+              </p>
+            </div>
           )}
+          <RunBulkActionBar
+            count={selectedIds.size}
+            actions={[
+              {
+                label: 'Assign selected…',
+                onSelect: () => setAssignTarget({ itemIds: Array.from(selectedIds) }),
+              },
+            ]}
+            onClear={() => setSelectedIds(new Set())}
+          />
           {visibleItems.length === 0 && summary && summary.total > 0 ? (
             <p className="text-sm text-muted-foreground">No items match this filter.</p>
           ) : groupEnabled ? (
@@ -359,8 +464,11 @@ export default function RunPage() {
                           item={item}
                           projectKey={project?.key}
                           focused={displayOrder[focusedIndex]?.id === item.id}
+                          selected={selectedIds.has(item.id)}
+                          onToggleSelect={() => toggleSelect(item.id)}
                           onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
                           onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
+                          onAssign={() => setAssignTarget({ itemIds: [item.id], currentAssignee: item.assignee })}
                         />
                       ))}
                     </ul>
@@ -376,14 +484,28 @@ export default function RunPage() {
                   item={item}
                   projectKey={project?.key}
                   focused={displayOrder[focusedIndex]?.id === item.id}
+                  selected={selectedIds.has(item.id)}
+                  onToggleSelect={() => toggleSelect(item.id)}
                   onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
                   onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
+                  onAssign={() => setAssignTarget({ itemIds: [item.id], currentAssignee: item.assignee })}
                 />
               ))}
             </ul>
           )}
         </CardContent>
       </Card>
+
+      <AssignDialog
+        open={assignTarget !== null}
+        onOpenChange={(open) => !open && setAssignTarget(null)}
+        currentAssignee={assignTarget?.currentAssignee}
+        suggestions={distinctAssignees}
+        title={assignTarget && assignTarget.itemIds.length > 1 ? `Assign ${assignTarget.itemIds.length} items to…` : 'Assign to…'}
+        onAssign={(assignee) => {
+          if (assignTarget) void handleAssign(assignTarget.itemIds, assignee)
+        }}
+      />
 
       <RunShortcutsHint shortcuts={runShortcuts} />
       <RunShortcutsOverlay shortcuts={runShortcuts} />

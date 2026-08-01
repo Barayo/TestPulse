@@ -434,6 +434,48 @@ func TestSeedContentHasAPendingItemForKeyboardTriage(t *testing.T) {
 	t.Error("no open run has both a pending item and an already-executed item — auto-advance has nothing to demonstrate")
 }
 
+// TestSeedContentHasAssignedAndUnassignedItems covers
+// add-run-item-assignment-ui: the Sample Project must show real data for
+// the assignee display, the per-assignee filter (multiple distinct
+// assignees, not just one), and the Unassigned filter — not every item
+// sharing the same assignment state.
+func TestSeedContentHasAssignedAndUnassignedItems(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	assignees := map[string]bool{}
+	sawUnassigned := false
+	for _, r := range runs {
+		items, err := svc.RunItems(actorCtx, r.ID, "")
+		if err != nil {
+			t.Fatalf("RunItems: %v", err)
+		}
+		for _, item := range items {
+			if item.Assignee == "" {
+				sawUnassigned = true
+				continue
+			}
+			assignees[item.Assignee] = true
+		}
+	}
+	if len(assignees) < 2 {
+		t.Errorf("distinct assignees = %d, want at least 2 (got %v)", len(assignees), assignees)
+	}
+	if !sawUnassigned {
+		t.Error("no unassigned item found — the Unassigned filter has nothing to demonstrate")
+	}
+}
+
 // TestSeedContentShowcasesResultActorLink covers link-result-actor-to-
 // identity: the seed must demonstrate both new paths it adds — a result
 // that defaults its actor from the seeding actor (real actorKind/ref, no

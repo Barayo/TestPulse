@@ -10,6 +10,7 @@ vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() }
 vi.mock('@/lib/DataRevision', () => ({ useBumpDataRevision: vi.fn() }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
+const mockPUT = vi.mocked(api.PUT)
 const mockBump = vi.fn()
 
 const run = {
@@ -250,8 +251,9 @@ describe('Status filter (rework-run-detail-ux)', () => {
     mockRunAPI([pendingItem, passItem, failedItem], summary)
     renderRun()
     await screen.findByText('Login works')
-    await userEvent.click(screen.getByRole('button', { name: /^failed/i }))
-    await userEvent.click(screen.getByRole('button', { name: /^all/i }))
+    const group = screen.getByRole('group', { name: /filter items by status/i })
+    await userEvent.click(within(group).getByRole('button', { name: /^failed/i }))
+    await userEvent.click(within(group).getByRole('button', { name: /^all/i }))
 
     expect(screen.getByText('Login works')).toBeInTheDocument()
     expect(screen.getByText('Checkout works')).toBeInTheDocument()
@@ -518,5 +520,156 @@ describe('Keyboard navigation (add-run-keyboard-shortcuts)', () => {
     await userEvent.keyboard('?')
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
+  })
+})
+
+describe('Assignment (add-run-item-assignment-ui)', () => {
+  const assignedItem = { ...pendingItem, id: 'i2', caseKey: 'c2', assignee: 'ana', content: { ...pendingItem.content, title: 'Checkout works' } }
+  const otherAssignedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', assignee: 'luis', content: { ...pendingItem.content, title: 'Logout works' } }
+
+  it('a row shows its assignee, or Unassigned when none', async () => {
+    mockRunAPI([pendingItem, assignedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const unassignedRow = screen.getByText('Login works').closest('li') as HTMLElement
+    const assignedRow = screen.getByText('Checkout works').closest('li') as HTMLElement
+    expect(within(unassignedRow).getByText('Unassigned')).toBeInTheDocument()
+    expect(within(assignedRow).getByText('ana')).toBeInTheDocument()
+  })
+
+  it('the row menu\'s "Assign to…" opens AssignDialog prefilled and suggesting other assignees', async () => {
+    mockRunAPI([pendingItem, assignedItem, otherAssignedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const row = screen.getByText('Checkout works').closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for checkout works/i }))
+    await userEvent.click(within(row).getByRole('menuitem', { name: /assign to/i }))
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(screen.getByLabelText(/^name$/i)).toHaveValue('ana')
+    const optionValues = Array.from(document.querySelectorAll('datalist option')).map((o) => o.getAttribute('value'))
+    expect(optionValues).toContain('luis')
+  })
+
+  it('submitting the dialog assigns the item and updates the row without a full reload', async () => {
+    mockRunAPI([pendingItem])
+    mockPUT.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await screen.findByText('Login works')
+    const getCallsBefore = mockGET.mock.calls.length
+
+    const row = screen.getByText('Login works').closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(within(row).getByRole('menuitem', { name: /assign to/i }))
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'ana')
+    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+      )
+    })
+    expect(await within(row).findByText('ana')).toBeInTheDocument()
+    expect(mockGET.mock.calls.length).toBe(getCallsBefore)
+  })
+
+  it('the assignee filter renders one chip per distinct assignee, plus Unassigned and All', async () => {
+    mockRunAPI([pendingItem, assignedItem, otherAssignedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const group = screen.getByRole('group', { name: /filter items by assignee/i })
+    expect(within(group).getByRole('button', { name: /^all/i })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /^ana/i })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /^luis/i })).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /unassigned/i })).toBeInTheDocument()
+  })
+
+  it('selecting an assignee chip narrows the list; Unassigned narrows to items with no assignee', async () => {
+    mockRunAPI([pendingItem, assignedItem, otherAssignedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const group = screen.getByRole('group', { name: /filter items by assignee/i })
+    await userEvent.click(within(group).getByRole('button', { name: /^ana/i }))
+
+    expect(screen.getByText('Checkout works')).toBeInTheDocument()
+    expect(screen.queryByText('Login works')).not.toBeInTheDocument()
+    expect(screen.queryByText('Logout works')).not.toBeInTheDocument()
+
+    await userEvent.click(within(group).getByRole('button', { name: /unassigned/i }))
+
+    expect(screen.getByText('Login works')).toBeInTheDocument()
+    expect(screen.queryByText('Checkout works')).not.toBeInTheDocument()
+  })
+
+  it('the assignee filter composes with an active status filter', async () => {
+    const assignedFailed = { ...assignedItem, currentStatus: 'failed' }
+    mockRunAPI(
+      [pendingItem, assignedFailed],
+      { runId: 'r1', total: 2, counts: { pending: 1, failed: 1 } },
+    )
+    renderRun()
+    await screen.findByText('Login works')
+
+    const statusGroup = screen.getByRole('group', { name: /filter items by status/i })
+    await userEvent.click(within(statusGroup).getByRole('button', { name: /^failed/i }))
+    const assigneeGroup = screen.getByRole('group', { name: /filter items by assignee/i })
+    await userEvent.click(within(assigneeGroup).getByRole('button', { name: /^ana/i }))
+
+    expect(screen.getByText('Checkout works')).toBeInTheDocument()
+    expect(screen.queryByText('Login works')).not.toBeInTheDocument()
+  })
+
+  it('checking a row checkbox shows a bulk action bar with the selection count', async () => {
+    mockRunAPI([pendingItem, assignedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const row = screen.getByText('Login works').closest('li') as HTMLElement
+    await userEvent.click(within(row).getByRole('checkbox', { name: /select login works/i }))
+
+    expect(screen.getByText(/1 selected/i)).toBeInTheDocument()
+  })
+
+  it('select all selects every currently visible item, not items hidden by an active filter', async () => {
+    const passItem = { ...pendingItem, id: 'i2', caseKey: 'c2', currentStatus: 'pass', content: { ...pendingItem.content, title: 'Checkout works' } }
+    mockRunAPI([pendingItem, passItem], { runId: 'r1', total: 2, counts: { pending: 1, pass: 1 } })
+    renderRun()
+    await screen.findByText('Login works')
+    const statusGroup = screen.getByRole('group', { name: /filter items by status/i })
+    await userEvent.click(within(statusGroup).getByRole('button', { name: /^pass/i }))
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select all/i }))
+
+    expect(screen.getByText(/1 selected/i)).toBeInTheDocument()
+  })
+
+  it('bulk-assigning from the action bar assigns every selected item and clears the selection', async () => {
+    mockRunAPI([pendingItem, assignedItem])
+    mockPUT.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    await userEvent.click(screen.getByRole('button', { name: /assign selected/i }))
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'ana')
+    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+      )
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { assignee: 'ana' } }),
+      )
+    })
+    expect(screen.queryByText(/^\d+ selected$/i)).not.toBeInTheDocument()
   })
 })

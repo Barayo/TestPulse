@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { useBumpDataRevision } from '@/lib/DataRevision'
+import { assignRunItems } from '@/lib/assignRunItems'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CasePicker, type CasePickerCase } from '@/components/CasePicker'
 import type { components } from '@testpulse/shared/api'
@@ -40,6 +41,7 @@ export default function NewRunPage() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [runName, setRunName] = useState('')
+  const [defaultAssignee, setDefaultAssignee] = useState('')
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectedSuiteKey, setSelectedSuiteKey] = useState('')
   const [seededFromSuiteName, setSeededFromSuiteName] = useState('')
@@ -129,7 +131,16 @@ export default function NewRunPage() {
       },
     })
     bumpLanding()
-    if (data) navigate(`/runs/${data.key}`, { state: { justCreated: true } })
+    if (data) {
+      const assignee = defaultAssignee.trim()
+      if (assignee) {
+        const { data: createdItems } = await api.GET('/api/v1/runs/{runKey}/items', {
+          params: { path: { runKey: data.key } },
+        })
+        await assignRunItems((createdItems ?? []).map((item) => item.id), assignee)
+      }
+      navigate(`/runs/${data.key}`, { state: { justCreated: true } })
+    }
   }
 
   if (!projectKey) return null
@@ -161,7 +172,7 @@ export default function NewRunPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreateRun} className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-[1fr_260px]">
+            <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
                 <Label htmlFor="run-name">Name</Label>
                 <Input
@@ -186,6 +197,15 @@ export default function NewRunPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="run-default-assignee">Default assignee (optional)</Label>
+                <Input
+                  id="run-default-assignee"
+                  value={defaultAssignee}
+                  onChange={(e) => setDefaultAssignee(e.target.value)}
+                  placeholder="Assign every item to…"
+                />
               </div>
             </div>
 

@@ -5,9 +5,10 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import NewRunPage from './NewRunPage'
 import { api } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
+const mockPUT = vi.mocked(api.PUT)
 
 function makeCase(key: string, id: string, title: string, folderId = 'root') {
   return {
@@ -28,7 +29,7 @@ const folders = [{ id: 'root', name: 'Library', projectId: 'p1', parentFolderId:
 
 const smokeSuite = { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null, lastRunAt: null }
 
-function mockNewRunAPI(cases: unknown[] = [], suites: unknown[] = []) {
+function mockNewRunAPI(cases: unknown[] = [], suites: unknown[] = [], createdItems: unknown[] = []) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
@@ -38,6 +39,7 @@ function mockNewRunAPI(cases: unknown[] = [], suites: unknown[] = []) {
     if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/folders') return Promise.resolve({ data: folders, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: createdItems, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -204,5 +206,47 @@ describe('NewRunPage', () => {
     const probe = await screen.findByTestId('location-probe')
     expect(probe).toHaveTextContent('/runs/p1-R2')
     expect(probe).toHaveTextContent('justCreated')
+  })
+
+  it('entering a default assignee assigns every created item after the run is created', async () => {
+    mockNewRunAPI([caseA, caseB], [], [{ id: 'i1' }, { id: 'i2' }])
+    mockPOST.mockResolvedValue({
+      data: { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Sprint 2', createdAt: '' },
+      response: { ok: true },
+    })
+    mockPUT.mockResolvedValue({ response: { ok: true } })
+    renderNewRun()
+
+    await userEvent.type(await screen.findByLabelText(/^name$/i), 'Sprint 2')
+    await userEvent.click(await screen.findByRole('checkbox', { name: /login works/i }))
+    await userEvent.type(screen.getByLabelText(/default assignee/i), 'ana')
+    await userEvent.click(screen.getByRole('button', { name: /create run/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+      )
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { assignee: 'ana' } }),
+      )
+    })
+  })
+
+  it('leaving the default assignee empty creates the run without any assign calls', async () => {
+    mockNewRunAPI([caseA], [], [{ id: 'i1' }])
+    mockPOST.mockResolvedValue({
+      data: { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Ad hoc run', createdAt: '' },
+      response: { ok: true },
+    })
+    renderNewRun()
+
+    await userEvent.type(await screen.findByLabelText(/^name$/i), 'Ad hoc run')
+    await userEvent.click(await screen.findByRole('checkbox', { name: /login works/i }))
+    await userEvent.click(screen.getByRole('button', { name: /create run/i }))
+
+    await screen.findByTestId('location-probe')
+    expect(mockPUT).not.toHaveBeenCalled()
   })
 })

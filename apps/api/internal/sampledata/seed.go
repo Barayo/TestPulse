@@ -367,6 +367,28 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if _, err := svc.AddRunItem(ctx, sprintRun.ID, passwordReset.ID); err != nil {
 		return fmt.Errorf("sampledata: adding pending sprint item: %w", err)
 	}
+	// Two of the four items are assigned to different people, two are left
+	// unassigned — real data for the assignee display, filter (including
+	// Unassigned), and bulk-assign flow (add-run-item-assignment-ui) to
+	// show against, rather than every item sharing one state.
+	sprintItems, err := svc.RunItems(ctx, sprintRun.ID, "")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	for _, item := range sprintItems {
+		var assignee string
+		switch item.CaseID {
+		case login.ID:
+			assignee = "Julia López"
+		case badPassword.ID:
+			assignee = "Miguel Alonso"
+		default:
+			continue
+		}
+		if err := svc.UpdateItem(ctx, item.ID, service.ItemUpdate{Assignee: &assignee}); err != nil {
+			return fmt.Errorf("sampledata: assigning sprint item: %w", err)
+		}
+	}
 
 	// 2. Closed run: a sealed record of a past release sign-off.
 	closedRunName := "Release 1.0 sign-off"

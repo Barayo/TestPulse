@@ -143,7 +143,27 @@ Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for 
 - Selecting an item navigates to its own page (`/runs/{runKey}/items/{caseKey}`) — the same single-window, content+sidebar pattern as a case's own detail page, not an inline panel — showing the pinned case's steps and expected result, a **Your name** / **Comment** form, verdict buttons (**Pass**, **Failed**, **Blocked**, **Skipped**), item properties, and result **History** in the sidebar.
 - Recording a verdict updates the item's status immediately, without leaving the item's page.
 - A **Retest** button appears on failed items; marking retest sets the item back to an executable state (`retest` status) without erasing the prior failure from history.
-- Right-clicking an item row opens a shortcut menu: open its execution page (same as clicking the row), or jump straight to the case's own page in the Library without visiting the execution page first.
+- Right-clicking an item row opens a shortcut menu: open its execution page (same as clicking the row), **Assign to…**, or jump straight to the case's own page in the Library without visiting the execution page first.
+
+### Assigning items
+
+Each row shows who it's assigned to, or **Unassigned**. **Assign to…** (from
+the row's right-click menu) opens a small dialog with a free-text field —
+still free text, not yet a real person/team reference — that also suggests
+assignees already used elsewhere in the run for quick reuse. An **assignee
+filter** row, alongside the status filter, offers one chip per distinct
+assignee present plus an explicit **Unassigned** and **All**; it composes
+with the status filter, so both can narrow the list together.
+
+A checkbox per row (plus a header **Select all**, scoped to whatever the
+active filter currently shows) enables **bulk assignment**: select several
+items and a bulk action bar appears with an **Assign selected…** action that
+assigns them all in one dialog.
+
+Creating a run (`/projects/{projectKey}/runs/new`) has an optional
+**Default assignee** field — every item in the new run is assigned to that
+person immediately after creation, the same as using **Assign to…**
+afterward, just without the extra clicks.
 
 ### Keyboard shortcuts
 

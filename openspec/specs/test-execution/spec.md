@@ -190,11 +190,39 @@ The actor SHALL default to the authenticated caller who recorded the result; a c
 - **THEN** the result reflects it, the same as a result produced by an import
 
 ### Requirement: Run item assignment
-The system SHALL let a user with `runRecordResult` permission on a project assign a run item to a person (free-text identity until the identity capability lands); any user with `read` permission MAY filter a run's items by assignee.
+The system SHALL let a user with `runRecordResult` permission on a project assign a run item to a person (free-text identity until the identity capability lands); any user with `read` permission MAY filter a run's items by assignee. The web UI SHALL provide an assign control on each run item's board row, reached via the row's existing right-click/`⋯` menu, offering a free-text field that also lists assignees already used elsewhere in the same run for quick reuse. The board SHALL provide an assignee filter alongside the existing status filter: one chip per distinct assignee present in the run, plus an explicit `Unassigned` chip and an `All` chip, composing with the status filter and grouping without hiding any item that neither filter excludes. The board SHALL support selecting multiple items and assigning them all in one action. Run creation SHALL accept an optional default assignee, applied to every item in the newly created run.
 
 #### Scenario: Assign and filter
 - **WHEN** two items are assigned to "ana" and one to "luis"
 - **THEN** filtering the run's items by assignee "ana" returns exactly the two items
+
+#### Scenario: Assigning an item from the board
+- **WHEN** a user with `runRecordResult` permission opens an item's row menu, chooses "Assign to…", and enters a name
+- **THEN** the item's assignee updates, and the row reflects it without a full page reload
+
+#### Scenario: Recent assignees are suggested
+- **WHEN** a user opens the assign dialog for an item in a run where other items are already assigned to "ana" and "luis"
+- **THEN** both names are offered as quick suggestions in the field
+
+#### Scenario: Filtering to Unassigned
+- **WHEN** a user selects the "Unassigned" assignee filter chip on a run with both assigned and unassigned items
+- **THEN** only items with no assignee are shown
+
+#### Scenario: Assignee filter composes with the status filter
+- **WHEN** a user has an assignee filter and a status filter both active
+- **THEN** only items matching both are shown
+
+#### Scenario: Bulk-assigning selected items
+- **WHEN** a user selects several items on the board and assigns them all to "ana" in one action
+- **THEN** every selected item's assignee becomes "ana"
+
+#### Scenario: A new run's items inherit its default assignee
+- **WHEN** a user creates a run with a default assignee of "ana"
+- **THEN** every item in that run is assigned to "ana" immediately after creation
+
+#### Scenario: A run created without a default assignee leaves items unassigned
+- **WHEN** a user creates a run without specifying a default assignee
+- **THEN** every item in that run starts unassigned, unchanged from today's behavior
 
 ### Requirement: Run summary
 The system SHALL provide a per-run summary with item counts by current status, consumable by the UI and future MCP clients, visible to any user with `read` permission on the run's project.
@@ -224,7 +252,9 @@ displayed order, and `Enter` navigates to the focused item's own page, the
 same destination as clicking it. A persistent shortcuts hint SHALL be
 visible on the board, and pressing `?` SHALL open an overlay listing every
 available shortcut. Keyboard navigation SHALL be ignored while a text
-input, textarea, or other editable element has focus.
+input, textarea, or other editable element has focus. The board SHALL
+support selecting multiple items via a checkbox per row and a "select all"
+affordance, showing a bulk action bar while any item is selected.
 
 #### Scenario: Board shows a status breakdown for all statuses
 - **WHEN** a user opens a run with items in more than one status
@@ -277,6 +307,14 @@ input, textarea, or other editable element has focus.
 #### Scenario: Shortcuts overlay lists every available key
 - **WHEN** a user presses `?` on the board
 - **THEN** an overlay opens listing the board's keyboard shortcuts, dismissible with `Escape` or `?`
+
+#### Scenario: Selecting items shows a bulk action bar
+- **WHEN** a user checks one or more item rows
+- **THEN** a bulk action bar appears showing how many items are selected and the actions available for that selection
+
+#### Scenario: Select all selects every visible item
+- **WHEN** a user activates "select all" while the board shows a filtered subset of items
+- **THEN** only the currently visible items become selected, not items hidden by the active filter
 
 ### Requirement: Run item detail page
 The web UI SHALL provide a dedicated page per run item, reached from the
