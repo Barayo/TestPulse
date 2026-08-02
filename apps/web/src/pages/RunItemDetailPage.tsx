@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -100,6 +100,15 @@ export default function RunItemDetailPage() {
     setResults(res ?? [])
   }
 
+  const lastVerdict = results.length > 0 ? results[results.length - 1].verdict : undefined
+
+  function handleCommentKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && lastVerdict && comment.trim()) {
+      e.preventDefault()
+      void recordVerdict(lastVerdict)
+    }
+  }
+
   async function markRetest() {
     if (!item) return
     await api.PUT('/api/v1/items/{itemId}/status', {
@@ -168,6 +177,7 @@ export default function RunItemDetailPage() {
           { keys: 'B', label: 'Blocked' },
           { keys: 'S', label: 'Skipped' },
           ...(item.currentStatus === 'failed' ? [{ keys: 'R', label: 'Retest' }] : []),
+          ...(lastVerdict ? [{ keys: '⌘/Ctrl+Enter', label: 'Save comment' }] : []),
         ]
       : []),
     { keys: 'J/K · ↑/↓', label: 'Next / previous item' },
@@ -219,7 +229,26 @@ export default function RunItemDetailPage() {
               <>
                 <div className="space-y-1">
                   <Label htmlFor="comment">Comment</Label>
-                  <Textarea id="comment" value={comment} onChange={(e) => setComment(e.target.value)} />
+                  <Textarea
+                    id="comment"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    onKeyDown={handleCommentKeyDown}
+                  />
+                  {lastVerdict ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!comment.trim()}
+                      onClick={() => void recordVerdict(lastVerdict)}
+                    >
+                      Save comment
+                    </Button>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      This comment is saved together with a verdict — record one below.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1">
                   {showActorOverride ? (

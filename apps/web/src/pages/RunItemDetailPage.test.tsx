@@ -192,6 +192,79 @@ describe('RunItemDetailPage', () => {
     expect(screen.getByText(/this run is closed/i)).toBeInTheDocument()
   })
 
+  it('offers a Save comment button once a prior verdict exists, which resubmits that verdict with the new comment', async () => {
+    mockItemAPI({ ...item, currentStatus: 'failed' }, undefined, [
+      { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' },
+    ])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    await userEvent.type(screen.getByLabelText(/comment/i), 'still failing after retry')
+    await userEvent.click(screen.getByRole('button', { name: /save comment/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({
+          params: { path: { itemId: 'i1' } },
+          body: { verdict: 'failed', comment: 'still failing after retry' },
+        }),
+      )
+    })
+    expect(screen.getByLabelText(/comment/i)).toHaveValue('')
+  })
+
+  it('disables Save comment until a comment is typed', async () => {
+    mockItemAPI({ ...item, currentStatus: 'failed' }, undefined, [
+      { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' },
+    ])
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    expect(screen.getByRole('button', { name: /save comment/i })).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/comment/i), 'a note')
+    expect(screen.getByRole('button', { name: /save comment/i })).not.toBeDisabled()
+  })
+
+  it('has no Save comment button and shows a hint instead when the item has no prior verdict yet', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    expect(screen.queryByRole('button', { name: /save comment/i })).not.toBeInTheDocument()
+    expect(screen.getByText(/saved together with a verdict/i)).toBeInTheDocument()
+  })
+
+  it('Ctrl/Cmd+Enter in the comment field saves the comment when a prior verdict exists', async () => {
+    mockItemAPI({ ...item, currentStatus: 'failed' }, undefined, [
+      { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'failed', comment: '', createdAt: '' },
+    ])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    await userEvent.type(screen.getByLabelText(/comment/i), 'still failing after retry')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({
+          params: { path: { itemId: 'i1' } },
+          body: { verdict: 'failed', comment: 'still failing after retry' },
+        }),
+      )
+    })
+  })
+
+  it('Ctrl/Cmd+Enter does nothing when there is no prior verdict to save the comment against', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    await userEvent.type(screen.getByLabelText(/comment/i), 'a note')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+
+    expect(mockPOST).not.toHaveBeenCalled()
+  })
+
   it('shows a not-found message when the item does not exist', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })

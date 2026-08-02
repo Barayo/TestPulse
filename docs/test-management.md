@@ -172,6 +172,20 @@ every item in the new run is assigned to that person or team immediately
 after creation, the same as using **Assign to…** afterward, just without the
 extra clicks.
 
+### Comments
+
+A comment is always recorded together with a verdict — there's no
+standalone "save comment" action independent of a result row. The
+**Comment** field reflects this directly: once the item has at least one
+prior verdict, a **Save comment** button appears beneath the field
+(disabled until you type something) that re-submits that same verdict
+with the new comment attached, appending a fresh entry to History without
+changing the item's current status — the way to leave a follow-up note
+("still failing after retry") without pretending to re-record a fresh
+result. Before any verdict has ever been recorded, no button is shown; a
+hint explains the comment is saved together with whichever verdict you
+record below instead.
+
 ### Keyboard shortcuts
 
 Both the board and an item's own page support keyboard-driven triage, with a
@@ -193,7 +207,10 @@ persistent shortcuts legend at the bottom of the page and a full list via
   the item's page. `j`/`k` (or `↓`/`↑`) also work here, moving to the
   previous/next item in the run regardless of its status.
 - Shortcuts are ignored while a text field (comment, "record on behalf of")
-  has focus, so typing is never interpreted as a shortcut.
+  has focus, so typing is never interpreted as a shortcut — with one
+  exception: `⌘/Ctrl+Enter` while focused in the Comment field does the
+  same thing as clicking **Save comment** (see Comments, above),
+  available once the item has a prior verdict to attach the comment to.
 
 ## Closing and reopening a run
 
