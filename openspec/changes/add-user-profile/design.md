@@ -20,6 +20,11 @@ either — they're only reachable by typing the URL.
 - Leave a clean seam for the features this is really in service of —
   token management (exists, just needs linking to) and password
   change (doesn't exist yet) — without building them now.
+- A single `Avatar` rendering path used everywhere a person's identity
+  already appears — PeoplePage, ProjectMembersPage, run-item assignee
+  chips, and user-attributed result History entries — not just the
+  header/Profile page, so a chosen preset propagates consistently
+  instead of only showing where it was set.
 
 **Non-Goals:**
 - Custom photo upload. Would require picking a storage answer for the
@@ -59,6 +64,23 @@ computed client-side, not stored.** Same GitHub/Slack pattern — first
 letter of display name (or email if no display name), background color
 deterministically derived from hashing the user id, so it's stable
 across sessions without needing a database column for it.
+
+**`Avatar` is the single rendering path for user identity app-wide, not
+header-only.** `PeoplePage.tsx` and `ProjectMembersPage.tsx` already
+render identity via the generated-color `avatarStyle`/`initialsFor`
+helpers (no per-user customization); the run-item assignee chips added
+by `link-run-item-assignee-to-identity` use the same helpers. All
+switch to `Avatar` so a chosen preset (or the generated fallback) is
+consistent everywhere. This also covers `RunItemDetailPage.tsx`'s
+result History list: an entry already carries `actorKind`/`actorRefId`,
+so one where `actorKind === 'user'` can resolve and show that user's
+current `Avatar` the same way an assignee does — entries with
+`actorKind: 'agent'`/`'unknown'`, or where the "record on behalf of"
+free-text override was used, have no real user to key an avatar off
+and keep today's plain-text treatment (a distinct agent/bot icon is a
+separate design decision, not folded in here). Team identity has no
+`avatar_key` in this proposal and keeps its existing generated-color
+square chip everywhere, unchanged.
 
 **Rejected: TV/comics-character avatars.** Considered and explicitly
 rejected — those are trademarked/copyrighted IP regardless of the

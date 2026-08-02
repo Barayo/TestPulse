@@ -25,6 +25,13 @@ avatar field existing, and both will be implemented together.
   placeholder pointing at password change — not implemented yet, no
   password-change endpoint exists today; noted so the page doesn't look
   incomplete when that ships later.
+- `PeoplePage.tsx`, `ProjectMembersPage.tsx`, the run-item assignee
+  chips (`RunPage.tsx`, `RunItemDetailPage.tsx`), and
+  `RunItemDetailPage.tsx`'s result History list (for `actorKind: 'user'`
+  entries) switch from the ad hoc `avatarStyle`/`initialsFor`
+  generated-color helpers to the shared `Avatar` component, so a chosen
+  preset is consistent everywhere identity is shown, not just the
+  header.
 
 ## Explicitly Out of Scope
 
@@ -46,11 +53,13 @@ avatar field existing, and both will be implemented together.
 
 - Affected specs: `authentication` (new "Self-service profile"
   requirement), `ui-navigation` (header avatar replaces email/links to
-  profile).
+  profile; chosen avatar propagates to every identity surface).
 - Affected code: `apps/api/internal/domain` (User gains DisplayName,
   AvatarKey, Timezone), `apps/api/internal/service`,
   `apps/api/internal/db/migrations` (amend `users` table, pre-1.0
   policy), `packages/shared/openapi.yaml` (`PATCH /api/v1/users/me`),
-  `apps/web/src/pages` (new ProfilePage), `apps/web/src/App.tsx` (header
-  avatar), new avatar asset files.
+  `apps/web/src/pages` (new ProfilePage; `PeoplePage.tsx`,
+  `ProjectMembersPage.tsx`, `RunPage.tsx`, `RunItemDetailPage.tsx`
+  switch to shared `Avatar`), `apps/web/src/App.tsx` (header avatar),
+  new avatar asset files.
 - Closes GitHub #36 and #37 (merged into this one change).

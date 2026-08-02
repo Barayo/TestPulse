@@ -30,17 +30,27 @@
 - [ ] 5.2 Replace the header's `{user.email}` span with the `Avatar` link
 - [ ] 5.3 Confirm green; `make coverage-web`
 
-## 6. Verification
+## 6. Frontend: propagate `Avatar` to other user-identity surfaces
 
-- [ ] 6.1 `make lint`, `make test`, coverage gates all green
-- [ ] 6.2 Manual check against the compose stack: set a display name, pick an avatar, set a timezone, confirm the header updates and the Profile page's links to Tokens/Users work
+- [ ] 6.1 Write failing tests: `PeoplePage.tsx`'s Users list and `ProjectMembersPage.tsx`'s Members list render each user row through `Avatar` instead of `avatarStyle`/`initialsFor` directly
+- [ ] 6.2 Update `PeoplePage.tsx` and `ProjectMembersPage.tsx` accordingly; team rows are unaffected (no `avatar_key` for teams)
+- [ ] 6.3 Write failing tests: a `kind: 'user'` run-item assignee (`RunPage.tsx` board rows, `RunItemDetailPage.tsx`'s Properties sidebar) renders through `Avatar`; a `kind: 'team'` assignee is unaffected
+- [ ] 6.4 Update `RunPage.tsx` and `RunItemDetailPage.tsx` accordingly
+- [ ] 6.5 Write failing tests: `RunItemDetailPage.tsx`'s result History list shows an `Avatar` for entries where `actorKind === 'user'`, resolving that user's *current* `avatarKey`/display name (not the historical `actor` string) — either via a small Result-API resolution mirroring how assignee already resolves server-side, or a client-side users lookup like PeoplePage already does, whichever is simpler at implementation time; entries with `actorKind: 'agent'`/`'unknown'` or a free-text override are unaffected
+- [ ] 6.6 Implement
+- [ ] 6.7 Confirm green; `make coverage-web`
 
-## 7. Sample Project showcase (CLAUDE.md standing rule)
+## 7. Verification
 
-- [ ] 7.1 This feature is about the current user's own profile, not project content — it has no natural home inside the Sample Project itself. Judgment call, confirm with the user before implementing: set the bootstrap admin's profile (display name, a preset avatar, a timezone) at the same point `BootstrapAdmin`/`sampledata.Seed` run at startup, so a fresh instance's header shows a filled-in example immediately instead of the generated-initial default — giving an evaluator something to look at before they've touched Settings themselves.
-- [ ] 7.2 If implemented, add a corresponding assertion (bootstrap admin has a non-empty display name/avatar/timezone after startup) alongside the existing `seedSampleProjectIfEmpty`-adjacent tests in `cmd/testpulse-api`.
+- [ ] 7.1 `make lint`, `make test`, coverage gates all green
+- [ ] 7.2 Manual check against the compose stack: set a display name, pick an avatar, set a timezone, confirm the header updates, the Profile page's links to Tokens/Users work, and the chosen avatar shows on PeoplePage, ProjectMembersPage, run-item assignees, and user-attributed History entries
 
-## 8. Docs and spec sync
+## 8. Sample Project showcase (CLAUDE.md standing rule)
 
-- [ ] 8.1 Update `docs/` wherever the header/settings navigation is documented
-- [ ] 8.2 Confirm `openspec validate add-user-profile` passes
+- [ ] 8.1 This feature is about the current user's own profile, not project content — it has no natural home inside the Sample Project itself. Judgment call, confirm with the user before implementing: set the bootstrap admin's profile (display name, a preset avatar, a timezone) at the same point `BootstrapAdmin`/`sampledata.Seed` run at startup, so a fresh instance's header shows a filled-in example immediately instead of the generated-initial default — giving an evaluator something to look at before they've touched Settings themselves.
+- [ ] 8.2 If implemented, add a corresponding assertion (bootstrap admin has a non-empty display name/avatar/timezone after startup) alongside the existing `seedSampleProjectIfEmpty`-adjacent tests in `cmd/testpulse-api`.
+
+## 9. Docs and spec sync
+
+- [ ] 9.1 Update `docs/` wherever the header/settings navigation is documented
+- [ ] 9.2 Confirm `openspec validate add-user-profile` passes
