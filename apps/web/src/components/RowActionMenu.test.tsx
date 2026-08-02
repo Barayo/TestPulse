@@ -101,4 +101,19 @@ describe('RowActionMenu', () => {
     await userEvent.keyboard('{Escape}')
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
+
+  it('renders a custom trigger instead of the default overflow icon when one is given', async () => {
+    render(
+      <RowActionMenu
+        label="Mark as"
+        trigger={<span data-testid="custom-trigger-content">Mark as</span>}
+        items={[{ label: 'Pass', onSelect: vi.fn() }]}
+      />,
+    )
+    const trigger = screen.getByRole('button', { name: 'Mark as' })
+    expect(trigger.querySelector('[data-testid="custom-trigger-content"]')).toBeInTheDocument()
+    expect(trigger.querySelector('svg')).not.toBeInTheDocument()
+    await userEvent.click(trigger)
+    expect(screen.getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
+  })
 })

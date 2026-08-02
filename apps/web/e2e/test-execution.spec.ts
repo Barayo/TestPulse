@@ -350,6 +350,124 @@ test.describe('Requirement: Run item assignment', () => {
     await expect(page.getByText('2 selected')).not.toBeVisible()
   })
 
+  test('Scenario: Bulk-recording a verdict for selected items on an open run', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Bulk Verdict Project')
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Second case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Second case')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works', 'Second case'])
+
+    await page.getByRole('checkbox', { name: /select login works/i }).check()
+    await page.getByRole('checkbox', { name: /select second case/i }).check()
+    await expect(page.getByText('2 selected')).toBeVisible()
+    await page.getByRole('button', { name: 'Mark as' }).click()
+    await page.getByRole('menuitem', { name: 'Failed' }).click()
+
+    const loginRow = page.getByText('Login works').first().locator('xpath=ancestor::li')
+    const secondRow = page.getByText('Second case').first().locator('xpath=ancestor::li')
+    await expect(loginRow.getByText(/failed/i)).toBeVisible()
+    await expect(secondRow.getByText(/failed/i)).toBeVisible()
+    await expect(page.getByText('2 selected')).not.toBeVisible()
+  })
+
+  test('Scenario: Right-clicking a checked row shows the bulk menu instead of single-item actions', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Right-Click Bulk Project')
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Second case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Second case')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works', 'Second case'])
+
+    await page.getByRole('checkbox', { name: /select login works/i }).check()
+    await page.getByRole('checkbox', { name: /select second case/i }).check()
+
+    const loginRow = page.getByText('Login works').first().locator('xpath=ancestor::li')
+    await loginRow.click({ button: 'right' })
+
+    await expect(page.getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: 'Pass' })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /open execution/i })).not.toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /go to case in library/i })).not.toBeVisible()
+
+    await page.getByRole('menuitem', { name: 'Failed' }).click()
+
+    const secondRow = page.getByText('Second case').first().locator('xpath=ancestor::li')
+    await expect(loginRow.getByText(/failed/i)).toBeVisible()
+    await expect(secondRow.getByText(/failed/i)).toBeVisible()
+  })
+
+  test('Scenario: Right-clicking an unchecked row leaves an active selection untouched', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Right-Click Unchecked Project')
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Second case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Second case')).toBeVisible()
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Third case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Third case')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works', 'Second case', 'Third case'])
+
+    await page.getByRole('checkbox', { name: /select login works/i }).check()
+    await page.getByRole('checkbox', { name: /select second case/i }).check()
+    await expect(page.getByText('2 selected')).toBeVisible()
+
+    const thirdRow = page.getByText('Third case').first().locator('xpath=ancestor::li')
+    await thirdRow.click({ button: 'right' })
+
+    await expect(page.getByRole('menuitem', { name: /open execution/i })).toBeVisible()
+    await expect(page.getByRole('menuitem', { name: /go to case in library/i })).toBeVisible()
+    await expect(page.getByText('2 selected')).toBeVisible()
+    await expect(page.getByRole('checkbox', { name: /select third case/i })).not.toBeChecked()
+  })
+
+  test('Scenario: Space selects the focused row and Shift+click extends the range (add-run-board-select-shortcuts)', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Select Shortcuts Project')
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Second case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Second case')).toBeVisible()
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Third case')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await expect(page.getByText('Third case')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works', 'Second case', 'Third case'])
+    // Wait for the run board itself (not the still-unmounting picker form,
+    // which also renders these case titles as checkbox labels) before
+    // sending keys — see the j/k scenario above for the same guard.
+    await expect(page.getByRole('switch', { name: /group by status/i })).toBeVisible()
+    await expect(page.getByText('Login works')).toBeVisible()
+
+    await page.keyboard.press('j')
+    await page.keyboard.press('Space')
+    await expect(page.getByText('1 selected')).toBeVisible()
+    await expect(page.getByRole('checkbox', { name: /select login works/i })).toBeChecked()
+
+    await page.getByRole('checkbox', { name: /select third case/i }).click({ modifiers: ['Shift'] })
+    await expect(page.getByText('3 selected')).toBeVisible()
+    await expect(page.getByRole('checkbox', { name: /select second case/i })).toBeChecked()
+    await expect(page.getByRole('checkbox', { name: /select third case/i })).toBeChecked()
+
+    await page.getByRole('button', { name: 'Mark as' }).click()
+    await page.getByRole('menuitem', { name: 'Failed' }).click()
+
+    const loginRow = page.getByText('Login works').first().locator('xpath=ancestor::li')
+    const secondRow = page.getByText('Second case').first().locator('xpath=ancestor::li')
+    const thirdRow = page.getByText('Third case').first().locator('xpath=ancestor::li')
+    await expect(loginRow.getByText(/failed/i)).toBeVisible()
+    await expect(secondRow.getByText(/failed/i)).toBeVisible()
+    await expect(thirdRow.getByText(/failed/i)).toBeVisible()
+  })
+
   test('Scenario: Creating a run with a default assignee pre-assigns every item', async ({ page }) => {
     const projectId = await createProjectWithCase(page, 'Default Assignee Project')
     const ana = await addProjectMember(page, projectId, 'Ana')

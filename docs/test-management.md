@@ -143,7 +143,7 @@ Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for 
 - Selecting an item navigates to its own page (`/runs/{runKey}/items/{caseKey}`) — the same single-window, content+sidebar pattern as a case's own detail page, not an inline panel — showing the pinned case's steps and expected result, a **Your name** / **Comment** form, verdict buttons (**Pass**, **Failed**, **Blocked**, **Skipped**), item properties (including **Assignee**, with its own **Assign to…** control), and result **History** in the sidebar.
 - Recording a verdict updates the item's status immediately, without leaving the item's page.
 - A **Retest** button appears on failed items; marking retest sets the item back to an executable state (`retest` status) without erasing the prior failure from history.
-- Right-clicking an item row opens a shortcut menu: open its execution page (same as clicking the row), **Assign to…**, or jump straight to the case's own page in the Library without visiting the execution page first.
+- Right-clicking an item row opens a shortcut menu: open its execution page (same as clicking the row), **Assign to…**, or jump straight to the case's own page in the Library without visiting the execution page first. If that row is part of an active multi-item selection (see **Assigning items**, below), the menu switches to the same bulk actions available in the bulk action bar instead — right-clicking a row outside the current selection always shows the ordinary single-item menu, and opening either menu never changes which items are selected.
 
 ### Assigning items
 
@@ -164,7 +164,30 @@ both can narrow the list together.
 A checkbox per row (plus a header **Select all**, scoped to whatever the
 active filter currently shows) enables **bulk assignment**: select several
 items and a bulk action bar appears with an **Assign selected…** action that
-assigns them all in one dialog.
+assigns them all in one dialog. On an open run, the same bar also offers a
+**Mark as** dropdown listing all four verdicts (Pass, Failed, Blocked,
+Skipped, each labeled with the same status-color dot used everywhere else
+on the board), recording the chosen verdict against every selected item at
+once; each still writes its own independent entry to that item's result
+history, exactly as if recorded one at a time, so the audit trail never
+collapses a bulk action into a single combined record. This control isn't
+offered on a closed run, the same restriction individual verdict recording
+already has.
+
+Each row's checkbox is dimmed at rest — quiet rather than absent, so it
+doesn't compete with the row's own content while you're just scanning the
+board — and returns to full opacity the moment it's relevant: on hover, when
+it carries the `j`/`k` keyboard focus cursor, or once any item anywhere in
+the list is selected (every row's checkbox, not just the one under the
+cursor, so the whole list stays legible mid-selection). The header **Select
+all** checkbox is exempt and always renders at full opacity. Two extra
+selection gestures sit alongside the checkbox: pressing **Space** toggles
+the selection state of whichever item currently carries the `j`/`k` focus
+cursor, and **Shift-clicking** a row extends the selection as a contiguous
+range from the last row you touched to the one you just clicked — adding to
+the existing selection, never replacing it — or, if nothing's been touched
+yet, simply selects that one row and becomes the anchor for the next
+Shift-click.
 
 Creating a run (`/projects/{projectKey}/runs/new`) has an optional
 **Default assignee** field, backed by the same project-member picker —

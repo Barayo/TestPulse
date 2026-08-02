@@ -70,6 +70,44 @@ function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown, 
   })
 }
 
+function mockAssignmentAPI(items: unknown[], summary?: unknown) {
+  mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+    if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: items, response: { ok: true } })
+    if (path === '/api/v1/runs/{runKey}/summary')
+      return Promise.resolve({
+        data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
+        response: { ok: true },
+      })
+    if (path === '/api/v1/projects/{projectKey}')
+      return Promise.resolve({
+        data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+        response: { ok: true },
+      })
+    if (path === '/api/v1/projects/{projectKey}/members')
+      return Promise.resolve({
+        data: {
+          users: [
+            { userId: 'u-ana', roleId: 'role-tester' },
+            { userId: 'u-luis', roleId: 'role-tester' },
+          ],
+          teams: [],
+        },
+        response: { ok: true },
+      })
+    if (path === '/api/v1/users')
+      return Promise.resolve({
+        data: [
+          { id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
+          { id: 'u-luis', email: 'luis@example.com', isTenantAdmin: false, createdAt: '' },
+        ],
+        response: { ok: true },
+      })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+    return Promise.resolve({ data: undefined, response: { ok: true } })
+  })
+}
+
 function ItemPageProbe() {
   const { runKey, caseKey } = useParams<{ runKey?: string; caseKey?: string }>()
   return <p data-testid="item-page-probe">item {runKey} {caseKey}</p>
@@ -539,44 +577,6 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
     content: { ...pendingItem.content, title: 'Logout works' },
   }
 
-  function mockAssignmentAPI(items: unknown[], summary?: unknown) {
-    mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
-      if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: items, response: { ok: true } })
-      if (path === '/api/v1/runs/{runKey}/summary')
-        return Promise.resolve({
-          data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
-          response: { ok: true },
-        })
-      if (path === '/api/v1/projects/{projectKey}')
-        return Promise.resolve({
-          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
-          response: { ok: true },
-        })
-      if (path === '/api/v1/projects/{projectKey}/members')
-        return Promise.resolve({
-          data: {
-            users: [
-              { userId: 'u-ana', roleId: 'role-tester' },
-              { userId: 'u-luis', roleId: 'role-tester' },
-            ],
-            teams: [],
-          },
-          response: { ok: true },
-        })
-      if (path === '/api/v1/users')
-        return Promise.resolve({
-          data: [
-            { id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
-            { id: 'u-luis', email: 'luis@example.com', isTenantAdmin: false, createdAt: '' },
-          ],
-          response: { ok: true },
-        })
-      if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
-      return Promise.resolve({ data: undefined, response: { ok: true } })
-    })
-  }
-
   it('a row shows its assignee, or Unassigned when none', async () => {
     mockAssignmentAPI([pendingItem, assignedItem])
     renderRun()
@@ -716,5 +716,296 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
       )
     })
     expect(screen.queryByText(/^\d+ selected$/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('Bulk verdict actions (add-bulk-status-verdicts)', () => {
+  const secondItem = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
+
+  it('shows a "Mark as" dropdown listing all four verdicts on an open run', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as' }))
+
+    expect(screen.getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Failed' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Blocked' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Skipped' })).toBeInTheDocument()
+  })
+
+  it('picking a verdict from the dropdown records it for every selected item and clears the selection', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Pass' }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { verdict: 'pass' } }),
+      )
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { verdict: 'pass' } }),
+      )
+    })
+    expect(screen.queryByText(/^\d+ selected$/i)).not.toBeInTheDocument()
+  })
+
+  it('does not offer a "Mark as" dropdown on a closed run', async () => {
+    mockRunAPI([pendingItem, secondItem], undefined, { ...run, status: 'closed' })
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+
+    expect(screen.getByRole('button', { name: /assign selected/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Mark as' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Right-click a row while a multi-selection is active (add-bulk-status-verdicts)', () => {
+  const secondItem = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
+  const thirdItem = { ...pendingItem, id: 'i3', caseKey: 'c3', content: { ...pendingItem.content, title: 'Password reset works' } }
+
+  it('opening the row menu on a checked row, with others also selected, shows the bulk menu instead of single-item actions', async () => {
+    mockRunAPI([pendingItem, secondItem, thirdItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    const row = screen.getByText('Login works').closest('li') as HTMLElement
+    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+
+    expect(within(row).getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
+    expect(within(row).getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
+    expect(within(row).getByRole('menuitem', { name: 'Failed' })).toBeInTheDocument()
+    expect(within(row).getByRole('menuitem', { name: 'Blocked' })).toBeInTheDocument()
+    expect(within(row).getByRole('menuitem', { name: 'Skipped' })).toBeInTheDocument()
+    expect(within(row).queryByRole('menuitem', { name: /open execution/i })).not.toBeInTheDocument()
+    expect(within(row).queryByRole('menuitem', { name: /go to case in library/i })).not.toBeInTheDocument()
+  })
+
+  it('opening the row menu on an unchecked row, while others are selected, still shows single-item actions and leaves the selection alone', async () => {
+    mockRunAPI([pendingItem, secondItem, thirdItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    const row = screen.getByText('Password reset works').closest('li') as HTMLElement
+    await userEvent.click(within(row).getByRole('button', { name: /actions for password reset works/i }))
+
+    expect(within(row).getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
+    expect(within(row).getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
+    expect(within(row).getByRole('menuitem', { name: /^assign to…$/i })).toBeInTheDocument()
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /select password reset works/i })).not.toBeChecked()
+  })
+
+  it('picking a verdict from a checked row\'s bulk menu records it for the whole selection', async () => {
+    mockRunAPI([pendingItem, secondItem, thirdItem])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    const row = screen.getByText('Login works').closest('li') as HTMLElement
+    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(within(row).getByRole('menuitem', { name: 'Failed' }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { verdict: 'failed' } }),
+      )
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { verdict: 'failed' } }),
+      )
+    })
+  })
+
+  it('picking "Assign N selected…" from a checked row\'s bulk menu opens AssignDialog scoped to the whole selection', async () => {
+    mockAssignmentAPI([pendingItem, secondItem, thirdItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    const row = screen.getByText('Login works').closest('li') as HTMLElement
+    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(within(row).getByRole('menuitem', { name: 'Assign 2 selected…' }))
+
+    expect(await screen.findByText('Assign 2 items to…')).toBeInTheDocument()
+  })
+
+  it('the bulk row menu offers no verdict actions on a closed run', async () => {
+    mockRunAPI([pendingItem, secondItem, thirdItem], undefined, { ...run, status: 'closed' })
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    const row = screen.getByText('Login works').closest('li') as HTMLElement
+    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+
+    expect(within(row).getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
+    expect(within(row).queryByRole('menuitem', { name: 'Pass' })).not.toBeInTheDocument()
+  })
+})
+
+describe('Checkbox opacity (add-run-board-select-shortcuts)', () => {
+  const secondItem = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
+
+  it('a row checkbox is dimmed at rest — not selected, not focused, no active selection', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const checkbox = screen.getByRole('checkbox', { name: /select login works/i })
+    expect(checkbox).toHaveClass('opacity-40')
+    expect(checkbox).not.toHaveClass('opacity-100')
+  })
+
+  it('a row checkbox goes full opacity once it carries the j/k focus cursor', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.keyboard('j')
+
+    const checkbox = screen.getByRole('checkbox', { name: /select login works/i })
+    expect(checkbox).toHaveClass('opacity-100')
+    expect(checkbox).not.toHaveClass('opacity-40')
+  })
+
+  it('every row checkbox goes full opacity once any item in the list is selected', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+
+    const otherCheckbox = screen.getByRole('checkbox', { name: /select checkout works/i })
+    expect(otherCheckbox).toHaveClass('opacity-100')
+    expect(otherCheckbox).not.toHaveClass('opacity-40')
+  })
+
+  it('the header "select all" checkbox is never dimmed', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const selectAll = screen.getByRole('checkbox', { name: 'Select all' })
+    expect(selectAll).not.toHaveClass('opacity-40')
+  })
+})
+
+describe('Space toggles the focused row (add-run-board-select-shortcuts)', () => {
+  const secondItem = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
+
+  it('pressing Space toggles the j/k-focused item into the selection', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.keyboard('j')
+    await userEvent.keyboard(' ')
+
+    expect(screen.getByRole('checkbox', { name: /select login works/i })).toBeChecked()
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+  })
+
+  it('pressing Space again toggles the same item back out', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.keyboard('j')
+    await userEvent.keyboard(' ')
+    await userEvent.keyboard(' ')
+
+    expect(screen.getByRole('checkbox', { name: /select login works/i })).not.toBeChecked()
+    expect(screen.queryByText(/^\d+ selected$/i)).not.toBeInTheDocument()
+  })
+
+  it('Space is ignored while an unrelated input has focus', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    renderRun()
+    await screen.findByText('Login works')
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+
+    await userEvent.keyboard(' ')
+
+    expect(screen.queryByText(/^\d+ selected$/i)).not.toBeInTheDocument()
+    input.remove()
+  })
+})
+
+describe('Shift+click range-select (add-run-board-select-shortcuts)', () => {
+  const secondItem = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
+  const thirdItem = { ...pendingItem, id: 'i3', caseKey: 'c3', content: { ...pendingItem.content, title: 'Password reset works' } }
+
+  it('Shift-clicking a row further down adds the whole range to the existing selection', async () => {
+    const user = userEvent.setup()
+    mockRunAPI([pendingItem, secondItem, thirdItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await user.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await user.keyboard('{Shift>}')
+    await user.click(screen.getByRole('checkbox', { name: /select password reset works/i }))
+    await user.keyboard('{/Shift}')
+
+    expect(screen.getByRole('checkbox', { name: /select login works/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /select checkout works/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /select password reset works/i })).toBeChecked()
+    expect(screen.getByText('3 selected')).toBeInTheDocument()
+  })
+
+  it('Shift-clicking with no prior selection selects just that row and becomes the new anchor', async () => {
+    const user = userEvent.setup()
+    mockRunAPI([pendingItem, secondItem, thirdItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await user.keyboard('{Shift>}')
+    await user.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    await user.keyboard('{/Shift}')
+
+    expect(screen.getByRole('checkbox', { name: /select login works/i })).not.toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /select checkout works/i })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /select password reset works/i })).not.toBeChecked()
+    expect(screen.getByText('1 selected')).toBeInTheDocument()
+  })
+
+  it('a plain click after a Shift+click range still works as an ordinary single toggle', async () => {
+    const user = userEvent.setup()
+    mockRunAPI([pendingItem, secondItem, thirdItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    await user.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await user.keyboard('{Shift>}')
+    await user.click(screen.getByRole('checkbox', { name: /select password reset works/i }))
+    await user.keyboard('{/Shift}')
+    await user.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+
+    expect(screen.getByRole('checkbox', { name: /select checkout works/i })).not.toBeChecked()
+    expect(screen.getByText('2 selected')).toBeInTheDocument()
   })
 })

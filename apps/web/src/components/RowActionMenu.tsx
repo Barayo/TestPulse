@@ -22,8 +22,10 @@ export type RowActionMenuHandle = {
 // top-level nav (redesign-delete-mode-menu). Also openable via right-click
 // at the cursor through the imperative handle (unify-library-row-menus) —
 // one state machine and one set of items, two entry points.
-export const RowActionMenu = forwardRef<RowActionMenuHandle, { label: string; items: RowActionMenuItem[] }>(
-  function RowActionMenu({ label, items }, ref) {
+export const RowActionMenu = forwardRef<
+  RowActionMenuHandle,
+  { label: string; items: RowActionMenuItem[]; trigger?: ReactNode }
+>(function RowActionMenu({ label, items, trigger }, ref) {
     const [open, setOpen] = useState(false)
     const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
     const wrapRef = useRef<HTMLDivElement>(null)
@@ -101,13 +103,17 @@ export const RowActionMenu = forwardRef<RowActionMenuHandle, { label: string; it
           aria-label={label}
           aria-haspopup="menu"
           aria-expanded={open}
-          className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground"
+          className={
+            trigger
+              ? 'flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-sm font-medium hover:bg-accent'
+              : 'flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
+          }
           onClick={() => {
             setCursorPos(null)
             setOpen((o) => !o)
           }}
         >
-          <MoreHorizontalIcon className="size-4" aria-hidden="true" />
+          {trigger ?? <MoreHorizontalIcon className="size-4" aria-hidden="true" />}
         </button>
 
         {/* A cursor-positioned (right-click) menu is portaled to <body> —

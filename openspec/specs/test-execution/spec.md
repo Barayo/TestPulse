@@ -157,7 +157,7 @@ Each run item SHALL carry a current status, one of `pending`, `pass`, `failed`, 
 - **THEN** the request is rejected with a validation error
 
 ### Requirement: Append-only result log
-Each run item SHALL have an append-only result log. A result records an actor, verdict (`pass`, `failed`, `skipped`, `blocked`), optional comment, and timestamp. Results MUST NOT be editable or deletable through the API. A result MAY additionally carry optional execution metadata: start time, end time, platform, version, and tags. Recording a result SHALL require `runRecordResult` permission on the run's project.
+Each run item SHALL have an append-only result log. A result records an actor, verdict (`pass`, `failed`, `skipped`, `blocked`), optional comment, and timestamp. Results MUST NOT be editable or deletable through the API. A result MAY additionally carry optional execution metadata: start time, end time, platform, version, and tags. Recording a result SHALL require `runRecordResult` permission on the run's project. A bulk verdict action recording the same verdict against multiple selected items SHALL produce one independent result row per item — identical in shape to, and indistinguishable in the log from, that many individual recordings — never a single combined or summarized entry.
 
 The actor SHALL default to the authenticated caller who recorded the result; a client MAY still explicitly supply an `actor` display name to override it (e.g. an agent recording a result on behalf of a named human tester). Regardless of an override, the result SHALL also store which real actor (if any) authenticated the request that created it, denormalized so that link survives the actor's own later deletion. A result recorded before this capability existed has no real actor behind it and is marked accordingly, rather than erroring or fabricating an identity.
 
@@ -188,6 +188,10 @@ The actor SHALL default to the authenticated caller who recorded the result; a c
 #### Scenario: A manually-recorded result can also carry execution metadata
 - **WHEN** a user records a verdict through the UI and supplies a platform or version
 - **THEN** the result reflects it, the same as a result produced by an import
+
+#### Scenario: A bulk verdict produces one row per item, not a batch record
+- **WHEN** a user bulk-records `failed` against 3 selected items
+- **THEN** the result log gains exactly 3 new rows, one per item, each independently attributed to the same actor and timestamped individually
 
 ### Requirement: Run item assignment
 The system SHALL let a user with `runRecordResult` permission on a project assign a run item to a real user or team who is a member of that project — free text is no longer accepted as an assignment input. Each run item SHALL reference its assignee via a real foreign key (`assigneeUserId` xor `assigneeTeamId`), enforced by the database; if the referenced user or team is later deleted, the item SHALL automatically revert to unassigned rather than retaining a dangling reference. Any user with `read` permission MAY filter a run's items by assignee. The web UI SHALL provide an assign control on each run item's board row, reached via the row's existing right-click/`⋯` menu, offering a search-and-pick list scoped to the project's actual members (people and teams, listed separately). The board SHALL provide an assignee filter alongside the existing status filter: one chip per distinct assignee present in the run, plus an explicit `Unassigned` chip and an `All` chip, composing with the status filter and grouping without hiding any item that neither filter excludes. The board SHALL support selecting multiple items and assigning them all to one real user or team in one action. Run creation SHALL accept an optional default assignee (a real project member), applied to every item in the newly created run.
@@ -247,7 +251,14 @@ possible statuses (pending/pass/failed/skipped/blocked/retest) and the
 overall pass rate. Selecting an item SHALL navigate to a dedicated item
 page rather than showing its detail inline. Right-clicking an item row
 SHALL open a context menu offering to open the item's execution page or
-jump directly to the case's own page in the Library. When the run was
+jump directly to the case's own page in the Library — unless that row is
+part of an active multi-item selection (more than one item checked), in
+which case the context menu SHALL instead offer the same bulk actions
+available in the bulk action bar (assign the selection, mark it with a
+verdict); right-clicking a row that is not part of the current selection
+SHALL always show the single-item menu regardless of whether other rows
+are selected, and opening a context menu SHALL NOT itself change which
+items are selected. When the run was
 created from a suite, the board SHALL show a link back to that suite; when
 it was not, the board SHALL show an explicit indication that it is an ad hoc
 run rather than showing nothing. The board SHALL provide a single-select
@@ -262,7 +273,24 @@ visible on the board, and pressing `?` SHALL open an overlay listing every
 available shortcut. Keyboard navigation SHALL be ignored while a text
 input, textarea, or other editable element has focus. The board SHALL
 support selecting multiple items via a checkbox per row and a "select all"
-affordance, showing a bulk action bar while any item is selected.
+affordance, showing a bulk action bar while any item is selected. Each
+row's checkbox SHALL render at reduced opacity while the board is at rest
+(no hover, no keyboard focus on that row, no active selection), returning
+to full opacity when that row is hovered, when it carries the keyboard
+focus cursor, or whenever at least one item anywhere in the list is
+selected; the header "select all" affordance is exempt from this and SHALL
+always render at full opacity. In addition to the checkbox, the board SHALL
+support two selection shortcuts: pressing Space SHALL toggle the selection
+state of the item currently under the keyboard focus cursor, and
+Shift-clicking a row SHALL add the contiguous range of items between the
+most recently toggled row and the clicked row to the existing selection
+without clearing it — or, if no row has been toggled yet in the current
+session, SHALL select just the clicked row and establish it as the anchor
+for a subsequent range selection. On an
+open run, the bulk action bar SHALL offer a "Mark as" control listing all
+four verdicts (Pass, Failed, Blocked, Skipped) that records the chosen
+verdict against every selected item in one action; this control SHALL NOT
+be offered when the run is closed.
 
 #### Scenario: Board shows a status breakdown for all statuses
 - **WHEN** a user opens a run with items in more than one status
@@ -323,6 +351,42 @@ affordance, showing a bulk action bar while any item is selected.
 #### Scenario: Select all selects every visible item
 - **WHEN** a user activates "select all" while the board shows a filtered subset of items
 - **THEN** only the currently visible items become selected, not items hidden by the active filter
+
+#### Scenario: Bulk-recording a verdict for selected items
+- **WHEN** a user selects several items on an open run, opens "Mark as", and picks "Pass"
+- **THEN** every selected item receives a `pass` result and its current status updates accordingly
+
+#### Scenario: The "Mark as" control is unavailable on a closed run
+- **WHEN** a user selects items on a closed run
+- **THEN** the bulk action bar does not offer any verdict-recording action
+
+#### Scenario: Right-clicking a selected row shows the bulk menu
+- **WHEN** more than one item is selected and a user right-clicks a row that is part of that selection
+- **THEN** the context menu offers the same bulk actions as the bulk action bar instead of that row's single-item actions
+
+#### Scenario: Right-clicking an unselected row leaves the selection untouched
+- **WHEN** items are selected and a user right-clicks a row that is not part of the selection
+- **THEN** the context menu shows that row's ordinary single-item actions, and the existing selection is unchanged
+
+#### Scenario: A row's checkbox is quiet at rest and returns to full opacity when relevant
+- **WHEN** no item on the board is selected and a row is neither hovered nor under the keyboard focus cursor
+- **THEN** that row's checkbox renders at reduced opacity, and it returns to full opacity as soon as the row is hovered, gains the keyboard focus cursor, or any item anywhere in the list becomes selected
+
+#### Scenario: The "select all" checkbox is always fully visible
+- **WHEN** the board is at rest with nothing selected
+- **THEN** the header "select all" checkbox renders at full opacity, unlike the per-row checkboxes
+
+#### Scenario: Space toggles the keyboard-focused item
+- **WHEN** a user has moved the focus cursor to an item with `j`/`k` and presses Space
+- **THEN** that item's selection state toggles, the same as clicking its checkbox, and the page does not scroll
+
+#### Scenario: Shift-click extends the selection as a range
+- **WHEN** a user has already selected one item and Shift-clicks a row further down the visible list
+- **THEN** every item between the two, inclusive, is added to the selection, and any items already selected remain selected
+
+#### Scenario: Shift-click with no prior selection selects just that row
+- **WHEN** a user Shift-clicks a row before toggling or selecting anything else on the board
+- **THEN** only that row becomes selected, and it becomes the anchor for the next Shift-click's range
 
 ### Requirement: Run item detail page
 The web UI SHALL provide a dedicated page per run item, reached from the

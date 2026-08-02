@@ -7,7 +7,7 @@ type Status = components['schemas']['Status']
 // "pass" semantic); failed/blocked get coral, reserved exclusively for this
 // semantic; skipped gets its own warn tone at reduced weight, distinct from
 // the neutral pending/retest dot.
-const dotClass: Record<Status, string> = {
+export const dotClass: Record<Status, string> = {
   pending: 'bg-muted-foreground/40',
   pass: 'bg-primary',
   failed: 'bg-destructive',
