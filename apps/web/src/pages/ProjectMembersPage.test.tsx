@@ -20,7 +20,7 @@ const membership = {
   teams: [{ teamId: 't1', roleId: 'r-tester' }],
 }
 const users = [
-  { id: 'u1', email: 'jane@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
+  { id: 'u1', email: 'jane@example.com', isTenantAdmin: false, avatarKey: 'ada-lovelace', deactivatedAt: null, createdAt: '' },
   { id: 'u2', email: 'bob@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
 ]
 const teams = [{ id: 't1', name: 'QA Core', memberIds: [], createdAt: '' }]
@@ -58,6 +58,14 @@ function renderPage() {
 }
 
 describe('ProjectMembersPage', () => {
+  it('renders a member row through the shared Avatar, showing a chosen preset image (add-user-profile)', async () => {
+    mockAPI(true)
+    renderPage()
+    const row = (await screen.findByText('jane@example.com')).closest('li') as HTMLElement
+    const img = within(row).getByRole('img')
+    expect(img.getAttribute('src')).toMatch(/ada-lovelace/)
+  })
+
   it('lists direct members and assigned teams with their roles', async () => {
     mockAPI(true)
     renderPage()

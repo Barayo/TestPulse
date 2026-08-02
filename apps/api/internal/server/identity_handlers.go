@@ -25,6 +25,7 @@ func mountIdentity(r chi.Router, h *api) {
 	r.Route("/users", func(r chi.Router) {
 		r.Get("/", h.listUsers)
 		r.Get("/me", h.currentUser)
+		r.Patch("/me", h.updateCurrentUserProfile)
 		r.With(requireTenantAdmin).Post("/", h.createUser)
 		r.With(requireTenantAdmin).Patch("/{userId}", h.updateUser)
 	})
@@ -117,6 +118,27 @@ func (h *api) currentUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := h.svc.GetUser(r.Context(), actor.ID)
+	h.respond(w, http.StatusOK, user, err)
+}
+
+type userProfileUpdate struct {
+	DisplayName *string `json:"displayName"`
+	AvatarKey   *string `json:"avatarKey"`
+	Timezone    *string `json:"timezone"`
+}
+
+func (h *api) updateCurrentUserProfile(w http.ResponseWriter, r *http.Request) {
+	in, err := decode[userProfileUpdate](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	actor, _ := domain.ActorFromContext(r.Context())
+	user, err := h.svc.UpdateOwnProfile(r.Context(), actor, domain.UserProfileUpdate{
+		DisplayName: in.DisplayName,
+		AvatarKey:   in.AvatarKey,
+		Timezone:    in.Timezone,
+	})
 	h.respond(w, http.StatusOK, user, err)
 }
 

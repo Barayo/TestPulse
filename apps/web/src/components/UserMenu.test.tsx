@@ -23,13 +23,26 @@ describe('UserMenu', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it('opens the menu with API tokens and Log out only', async () => {
+  it('opens the menu with Profile, API tokens, and Log out only', async () => {
     renderMenu()
     await userEvent.click(screen.getByRole('button', { name: /jane@example.com/i }))
+    expect(screen.getByRole('menuitem', { name: /^profile$/i })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /api tokens/i })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /log out/i })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: /^users$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: /^teams$/i })).not.toBeInTheDocument()
+  })
+
+  it('the trigger shows an Avatar chip, not just plain text (add-user-profile)', () => {
+    renderMenu()
+    const trigger = screen.getByRole('button', { name: /jane@example.com/i })
+    expect(trigger.querySelector('img, span[style]')).not.toBeNull()
+  })
+
+  it('the Profile menuitem links to /settings/profile', async () => {
+    renderMenu()
+    await userEvent.click(screen.getByRole('button', { name: /jane@example.com/i }))
+    expect(screen.getByRole('menuitem', { name: /^profile$/i })).toHaveAttribute('href', '/settings/profile')
   })
 
   it('calls onLogout when Log out is clicked', async () => {

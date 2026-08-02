@@ -1,17 +1,22 @@
 ## ADDED Requirements
 
 ### Requirement: User identity in the header links to the Profile page
-The web UI's header SHALL show the authenticated user's avatar in place
-of their raw email, and it SHALL link to the Profile page — the primary
-entry point into account settings.
+The web UI's header SHALL show the authenticated user's avatar
+alongside their email in the account menu trigger, and that menu SHALL
+offer a Profile entry — the primary entry point into account settings.
+(The header's account control had already evolved from plain email text
+into a dropdown menu, offering API tokens and Log out, by a separate,
+more recent change than the one that first proposed this requirement;
+Profile joins that existing menu rather than the avatar itself becoming
+a direct link.)
 
 #### Scenario: Header shows the user's avatar
 - **WHEN** an authenticated user views any page
-- **THEN** their avatar (preset or generated default) is shown in the header instead of their email address
+- **THEN** their avatar (preset or generated default) is shown next to their email in the header's account menu trigger
 
-#### Scenario: Clicking the avatar opens the Profile page
-- **WHEN** a user clicks their avatar in the header
-- **THEN** they are taken to the Profile page
+#### Scenario: Opening the account menu offers Profile
+- **WHEN** a user opens the header's account menu
+- **THEN** it offers a Profile entry, alongside the existing API tokens and Log out entries, that navigates to the Profile page
 
 #### Scenario: Profile page links to existing settings
 - **WHEN** a user opens the Profile page

@@ -718,6 +718,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      operationId: updateCurrentUserProfile
+      summary: Update the caller's own display name, avatar, or timezone
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserProfileUpdate" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v1/users/{userId}:
     parameters:
       - { name: userId, in: path, required: true, schema: { type: string } }
@@ -1328,6 +1345,7 @@ components:
         kind: { type: string, enum: [user, team] }
         id: { type: string }
         name: { type: string }
+        avatarKey: { type: string, nullable: true }
     RunItem:
       type: object
       required: [id, runId, caseId, caseKey, caseVersion, currentStatus, content, newerVersion, createdAt]
@@ -1529,11 +1547,21 @@ components:
         id: { type: string }
         email: { type: string }
         isTenantAdmin: { type: boolean }
+        displayName: { type: string, nullable: true }
+        avatarKey: { type: string, nullable: true }
+        timezone: { type: string, nullable: true }
         deactivatedAt:
           type: string
           format: date-time
           nullable: true
         createdAt: { type: string, format: date-time }
+    UserProfileUpdate:
+      type: object
+      description: Self-service profile fields — a user editing their own display name, avatar, or timezone.
+      properties:
+        displayName: { type: string, nullable: true }
+        avatarKey: { type: string, nullable: true }
+        timezone: { type: string, nullable: true }
     UserInput:
       type: object
       required: [email, password]

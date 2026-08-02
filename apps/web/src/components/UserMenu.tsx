@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { Avatar } from '@/components/Avatar'
 
 type Props = {
-  user: { email: string }
+  user: { email: string; displayName?: string | null; avatarKey?: string | null }
   onLogout: () => void
 }
 
@@ -36,12 +37,19 @@ export function UserMenu({ user, onLogout }: Props) {
     <div ref={ref} className="relative">
       <button
         type="button"
-        className="max-w-[8rem] truncate rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sm:max-w-none"
+        className="flex max-w-[10rem] items-center gap-1.5 truncate rounded-md px-2 py-1 text-sm text-muted-foreground hover:bg-accent hover:text-foreground sm:max-w-none"
         aria-haspopup="menu"
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
       >
-        {user.email}
+        <span aria-hidden="true">
+          <Avatar
+            seed={user.displayName || user.email}
+            avatarKey={user.avatarKey}
+            className="size-5 rounded-full text-[10px]"
+          />
+        </span>
+        <span className="truncate">{user.email}</span>
       </button>
 
       {open && (
@@ -50,6 +58,14 @@ export function UserMenu({ user, onLogout }: Props) {
           aria-label="Account"
           className="absolute right-0 z-50 mt-1 w-48 rounded-md border bg-card py-1 text-sm shadow-lg"
         >
+          <Link
+            role="menuitem"
+            to="/settings/profile"
+            className="block px-3 py-1.5 hover:bg-accent"
+            onClick={() => setOpen(false)}
+          >
+            Profile
+          </Link>
           <Link
             role="menuitem"
             to="/settings/tokens"

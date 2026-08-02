@@ -2,7 +2,14 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { api } from '@/lib/api'
 import { onSessionExpired } from '@/lib/sessionExpiry'
 
-export type AuthUser = { id: string; email: string; isTenantAdmin: boolean }
+export type AuthUser = {
+  id: string
+  email: string
+  isTenantAdmin: boolean
+  displayName?: string | null
+  avatarKey?: string | null
+  timezone?: string | null
+}
 
 type LoginResult = { ok: true; user: AuthUser } | { ok: false; error: string }
 
@@ -12,6 +19,7 @@ type AuthContextValue = {
   sessionExpired: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   logout: () => Promise<void>
+  refreshUser: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -69,8 +77,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null)
   }, [])
 
+  // Re-fetches the current user — called after a self-service profile
+  // update (add-user-profile) so the header reflects the change without a
+  // full page reload.
+  const refreshUser = useCallback(async () => {
+    const { data, response } = await api.GET('/api/v1/users/me')
+    if (response.ok && data) setUser(data as AuthUser)
+  }, [])
+
   return (
-    <AuthContext.Provider value={{ user, loading, sessionExpired, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, sessionExpired, login, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   )

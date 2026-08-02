@@ -24,6 +24,7 @@ import LoginPage from '@/pages/LoginPage'
 import PeoplePage from '@/pages/PeoplePage'
 import RolesPage from '@/pages/RolesPage'
 import TokensPage from '@/pages/TokensPage'
+import ProfilePage from '@/pages/ProfilePage'
 import ProjectMembersPage from '@/pages/ProjectMembersPage'
 
 function Layout({ children }: { children: React.ReactNode }) {
@@ -280,6 +281,14 @@ function App() {
               element={
                 <RequireAuth>
                   <TokensPage />
+                </RequireAuth>
+              }
+            />
+            <Route
+              path="/settings/profile"
+              element={
+                <RequireAuth>
+                  <ProfilePage />
                 </RequireAuth>
               }
             />

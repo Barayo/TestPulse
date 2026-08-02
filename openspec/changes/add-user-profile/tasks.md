@@ -1,56 +1,56 @@
 ## 1. Contract first
 
-- [ ] 1.1 Add `displayName`, `avatarKey`, `timezone` (all optional) to the `User` schema in `packages/shared/openapi.yaml`
-- [ ] 1.2 Add `PATCH /api/v1/users/me` (body: displayName?, avatarKey?, timezone?; returns updated `User`) to the contract, distinct from the existing admin `PATCH /api/v1/users/{id}`
-- [ ] 1.3 `make generate`, confirm no drift
+- [x] 1.1 Add `displayName`, `avatarKey`, `timezone` (all optional) to the `User` schema in `packages/shared/openapi.yaml`
+- [x] 1.2 Add `PATCH /api/v1/users/me` (body: displayName?, avatarKey?, timezone?; returns updated `User`) to the contract, distinct from the existing admin `PATCH /api/v1/users/{id}`
+- [x] 1.3 `make generate`, confirm no drift
 
 ## 2. Avatar assets
 
-- [ ] 2.1 Source ~12 preset portraits from Wikimedia Commons (historical scientists/verification-adjacent figures — see design.md); verify each image's individual license (public domain vs. CC-BY-SA) and record attribution where required
-- [ ] 2.2 Add the images to `assets/` and a matching set of web-optimized copies under `apps/web/src/assets/avatars/` (or equivalent), keyed by a stable string (e.g. `ada-lovelace`)
-- [ ] 2.3 Write a small shared manifest (key -> display name, image path) consumed by both the picker UI and the header/avatar-rendering component
+- [x] 2.1 Sourced 12 preset portraits from Wikimedia Commons, each individually license-checked — see `assets/avatars/ATTRIBUTION.md` for the full table (source, license, attribution requirement per image). Rosalind Franklin (originally proposed in design.md) was dropped after research turned up genuinely unclear/disputed copyright status on her best-known photographs; substituted Emmy Noether (clean public domain, pre-1910, anonymous author).
+- [x] 2.2 Master images (512×512, square-cropped — top-aligned for straightforward bust portraits, a manually chosen region for the three full-figure sources where a naive crop would miss the face) at `assets/avatars/<key>.jpg`; web-bundled copies (128×128) at `apps/web/src/assets/avatars/<key>.jpg`
+- [x] 2.3 `apps/web/src/lib/avatarPresets.ts` — the shared manifest (key → display name → bundled image), consumed by both `ProfilePage`'s picker and the `Avatar` component
 
 ## 3. Backend: self-service profile (TDD)
 
-- [ ] 3.1 Write failing store/domain tests: `avatar_key jsonb`/`text`, `display_name text`, `timezone text` persist and round-trip on `User`
-- [ ] 3.2 Amend the users migration in place (pre-1.0 policy) to add the three nullable columns; thread through `domain.User` and the store
-- [ ] 3.3 Write failing service/handler tests for `PATCH /api/v1/users/me`: updates only the caller's own row; rejects an unknown `avatarKey` not in the known preset set; a user cannot target another user's id via this route
-- [ ] 3.4 Implement the service method and handler; confirm green; `make coverage-api`
+- [x] 3.1 Write failing store/domain tests: `avatar_key`/`display_name`/`timezone text` persist and round-trip on `User`
+- [x] 3.2 New migration `00006_add_user_profile.sql` adding the three nullable columns (CLAUDE.md's migration policy changed after this change was drafted — never edit an existing migration file; a stacked file is now required even pre-1.0); threaded through `domain.User` and the store
+- [x] 3.3 Write failing service/handler tests for `PATCH /api/v1/users/me`: updates only the caller's own row; rejects an unknown `avatarKey` not in the known preset set (`domain.AvatarPresetKeys`); a user cannot target another user's id via this route (no such parameter exists on it)
+- [x] 3.4 Implement the service method (`Service.UpdateOwnProfile`) and handler (`api.updateCurrentUserProfile`, `PATCH /users/me` — a static route, so it doesn't collide with the admin `/{userId}` route); confirm green; `make coverage-api` (81.1%, ≥80% gate)
 
 ## 4. Frontend: Profile page (TDD)
 
-- [ ] 4.1 Write failing tests for a new `ProfilePage` at `/settings/profile`: shows current display name/avatar/timezone; avatar picker lists all presets plus "generated default"; saving calls `PATCH /api/v1/users/me` and reflects the update; links to `/settings/tokens` always, `/settings/users` only when the account is admin; a visible (disabled/"coming soon") entry for password change
-- [ ] 4.2 Implement `ProfilePage.tsx` and the route in `App.tsx`
-- [ ] 4.3 Write a small `Avatar` component: renders the preset image if `avatarKey` is set, else a generated initial-on-color computed from display name/email + user id
-- [ ] 4.4 Confirm green
+- [x] 4.1 Write failing tests for a new `ProfilePage` at `/settings/profile`: shows current display name/avatar/timezone; avatar picker lists all presets plus "generated default"; saving calls `PATCH /api/v1/users/me` and reflects the update; links to `/settings/tokens` always, `/settings/users` only when the account is admin; a visible (disabled/"coming soon") entry for password change
+- [x] 4.2 Implement `ProfilePage.tsx` and the route in `App.tsx`
+- [x] 4.3 `Avatar` component (`apps/web/src/components/Avatar.tsx`): renders the preset image if `avatarKey` resolves to a known preset, else the existing generated initial-on-color chip (`avatarStyle`/`initialsFor`)
+- [x] 4.4 Confirm green (7/7 `ProfilePage.test.tsx`, 4/4 `Avatar.test.tsx`)
 
 ## 5. Frontend: header avatar (TDD)
 
-- [ ] 5.1 Write failing `App.test.tsx` assertions: the header shows the `Avatar` component instead of the raw email; it's a link to `/settings/profile`
-- [ ] 5.2 Replace the header's `{user.email}` span with the `Avatar` link
-- [ ] 5.3 Confirm green; `make coverage-web`
+- [x] 5.1 Write failing tests: `UserMenu.tsx`'s trigger shows an `Avatar` (not just plain email text), and the dropdown gains a "Profile" entry linking to `/settings/profile`. (The header's account control had already evolved from plain `{email}` text into a `UserMenu` dropdown by a separate, more recent change since this proposal was drafted — adapted to that reality rather than reverting it: Profile joins the existing menu instead of the trigger itself becoming a link.)
+- [x] 5.2 `UserMenu.tsx`'s trigger now renders `<Avatar>` (`aria-hidden`, decorative — the adjacent email text already carries the accessible name) + email; added a "Profile" menuitem before "API tokens". `useAuth`'s `AuthUser` extended with `displayName`/`avatarKey`/`timezone`; added `refreshUser()` so `ProfilePage` can update the header without a full reload.
+- [x] 5.3 Confirm green; `make coverage-web`. (Fixed two pre-existing `App.test.tsx` fixtures that didn't explicitly stub `/api/v1/users/me`, falling through to a generic `{data: []}` catch-all — harmless before this change since nothing dereferenced into the response, now exposed since `Avatar` needs a real `email`/`displayName`.)
 
 ## 6. Frontend: propagate `Avatar` to other user-identity surfaces
 
-- [ ] 6.1 Write failing tests: `PeoplePage.tsx`'s Users list and `ProjectMembersPage.tsx`'s Members list render each user row through `Avatar` instead of `avatarStyle`/`initialsFor` directly
-- [ ] 6.2 Update `PeoplePage.tsx` and `ProjectMembersPage.tsx` accordingly; team rows are unaffected (no `avatar_key` for teams)
-- [ ] 6.3 Write failing tests: a `kind: 'user'` run-item assignee (`RunPage.tsx` board rows, `RunItemDetailPage.tsx`'s Properties sidebar) renders through `Avatar`; a `kind: 'team'` assignee is unaffected
-- [ ] 6.4 Update `RunPage.tsx` and `RunItemDetailPage.tsx` accordingly
-- [ ] 6.5 Write failing tests: `RunItemDetailPage.tsx`'s result History list shows an `Avatar` for entries where `actorKind === 'user'`, resolving that user's *current* `avatarKey`/display name (not the historical `actor` string) — either via a small Result-API resolution mirroring how assignee already resolves server-side, or a client-side users lookup like PeoplePage already does, whichever is simpler at implementation time; entries with `actorKind: 'agent'`/`'unknown'` or a free-text override are unaffected
-- [ ] 6.6 Implement
-- [ ] 6.7 Confirm green; `make coverage-web`
+- [x] 6.1 Write failing tests: `PeoplePage.tsx`'s Users list and `ProjectMembersPage.tsx`'s Members list render each user row through `Avatar` instead of `avatarStyle`/`initialsFor` directly
+- [x] 6.2 Updated `PeoplePage.tsx` and `ProjectMembersPage.tsx` accordingly; team rows unaffected (still the generated-color square chip, no `avatar_key` concept for teams)
+- [x] 6.3 Write failing tests: a `kind: 'user'` run-item assignee (`RunPage.tsx` board rows, `RunItemDetailPage.tsx`'s Properties sidebar) renders through `Avatar`; a `kind: 'team'` assignee is unaffected
+- [x] 6.4 Updated `RunPage.tsx` and `RunItemDetailPage.tsx` accordingly. Required a small backend addition beyond the original task scope: `RunItemAssignee` (contract), `domain.Assignee`, and the `Items` SQL query (`store/runs.go`) gained `avatarKey`, resolved live via `LEFT JOIN users` (same "always current" guarantee the assignee's `name` already had) — new store regression test `TestAssigneeAvatarKeyResolvesLive` confirms it updates when the assignee's profile changes, not just at assignment time.
+- [x] 6.5 Write failing tests: `RunItemDetailPage.tsx`'s result History list shows an `Avatar` for entries where `actorKind === 'user'`, resolving that user's *current* `avatarKey` (not the historical `actor` string); entries with `actorKind: 'agent'`/`'unknown'` or a free-text override are unaffected
+- [x] 6.6 Implemented via the client-side lookup option (simpler at implementation time, per the task's own note): `RunItemDetailPage` fetches `GET /api/v1/users` once on load (not Tenant-Admin-gated) and resolves `actorRefId` → `avatarKey`, mirroring `PeoplePage`'s existing pattern
+- [x] 6.7 Confirm green: unit 768/768, typecheck clean, `make coverage-web` (Statements 92.19%, Branches 83.45%, Functions 90.25%, Lines 94.84% — all ≥80% gate)
 
 ## 7. Verification
 
-- [ ] 7.1 `make lint`, `make test`, coverage gates all green
-- [ ] 7.2 Manual check against the compose stack: set a display name, pick an avatar, set a timezone, confirm the header updates, the Profile page's links to Tokens/Users work, and the chosen avatar shows on PeoplePage, ProjectMembersPage, run-item assignees, and user-attributed History entries
+- [x] 7.1 Go: `go test ./...` all packages pass; `make coverage-api` 81.1% (≥80% gate). Web: `npx tsc -b --force` clean; `npx vitest run` 768/768; `make coverage-web` all four metrics ≥80%.
+- [x] 7.2 Manual check against a freshly-rebuilt compose stack (`down -v` + `up --build`): verified the bootstrap-admin profile seed shows immediately in the header (Grace Hopper avatar); changed avatar to Ada Lovelace and saved — header updated instantly without a reload; PeoplePage shows the same avatar for admin, generated chips for users with no preset; a run item's History entry attributed to admin shows Ada Lovelace (the *current* profile, live-resolved, not whatever was set when the result was recorded); a run item assigned to a user with no avatarKey correctly shows the generated fallback. Full e2e suite (90/90) confirmed no regressions.
 
 ## 8. Sample Project showcase (CLAUDE.md standing rule)
 
-- [ ] 8.1 This feature is about the current user's own profile, not project content — it has no natural home inside the Sample Project itself. Judgment call, confirm with the user before implementing: set the bootstrap admin's profile (display name, a preset avatar, a timezone) at the same point `BootstrapAdmin`/`sampledata.Seed` run at startup, so a fresh instance's header shows a filled-in example immediately instead of the generated-initial default — giving an evaluator something to look at before they've touched Settings themselves.
-- [ ] 8.2 If implemented, add a corresponding assertion (bootstrap admin has a non-empty display name/avatar/timezone after startup) alongside the existing `seedSampleProjectIfEmpty`-adjacent tests in `cmd/testpulse-api`.
+- [x] 8.1 Confirmed with the user: yes, seed it. `Service.BootstrapAdmin` (which only ever runs once, on a genuinely empty `users` table — the same guard that already made it safe to auto-create the first admin) now also sets that admin's profile: display name "Admin", avatar `grace-hopper`, timezone "UTC".
+- [x] 8.2 `TestBootstrapAdminSeedsAProfile` (`internal/service/identity_test.go`) asserts the bootstrap admin has a non-empty `DisplayName`, an `AvatarKey` that resolves in `domain.AvatarPresetKeys`, and a non-empty `Timezone` after `BootstrapAdmin` runs.
 
 ## 9. Docs and spec sync
 
-- [ ] 9.1 Update `docs/` wherever the header/settings navigation is documented
-- [ ] 9.2 Confirm `openspec validate add-user-profile` passes
+- [x] 9.1 Updated `docs/api.md` (`PATCH /api/v1/users/me`), `docs/database.md` (`users` profile columns), `docs/development.md` (header account menu, `/settings/profile`), `docs/test-management.md` (live-resolved assignee/History avatars). Delta specs (`authentication`, `ui-navigation`) revised in place to match what actually shipped — the header's account control had already evolved into a dropdown menu by a separate change since this proposal was drafted, so "Profile" joins that menu rather than the avatar itself becoming a direct link.
+- [x] 9.2 `openspec validate --specs` and `openspec validate add-user-profile` both pass

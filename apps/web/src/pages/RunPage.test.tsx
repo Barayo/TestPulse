@@ -566,7 +566,7 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
     ...pendingItem,
     id: 'i2',
     caseKey: 'c2',
-    assignee: { kind: 'user' as const, id: 'u-ana', name: 'ana@example.com' },
+    assignee: { kind: 'user' as const, id: 'u-ana', name: 'ana@example.com', avatarKey: 'ada-lovelace' },
     content: { ...pendingItem.content, title: 'Checkout works' },
   }
   const otherAssignedItem = {
@@ -576,6 +576,16 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
     assignee: { kind: 'user' as const, id: 'u-luis', name: 'luis@example.com' },
     content: { ...pendingItem.content, title: 'Logout works' },
   }
+
+  it('a user assignee with a chosen avatar renders through the shared Avatar (add-user-profile)', async () => {
+    mockAssignmentAPI([pendingItem, assignedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const assignedRow = screen.getByText('Checkout works').closest('li') as HTMLElement
+    const img = within(assignedRow).getByRole('img')
+    expect(img.getAttribute('src')).toMatch(/ada-lovelace/)
+  })
 
   it('a row shows its assignee, or Unassigned when none', async () => {
     mockAssignmentAPI([pendingItem, assignedItem])

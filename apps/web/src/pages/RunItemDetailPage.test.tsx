@@ -230,6 +230,45 @@ describe('RunItemDetailPage', () => {
     expect(within(row).getByText(/hour ago/i)).toBeInTheDocument()
   })
 
+  it('shows an Avatar for a user-attributed history entry, resolving their current avatarKey (add-user-profile)', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: [item], response: { ok: true } })
+      if (path === '/api/v1/items/{itemId}/results')
+        return Promise.resolve({
+          data: [
+            {
+              id: 'res1',
+              runItemId: 'i1',
+              actor: 'ana@example.com',
+              actorKind: 'user',
+              actorRefId: 'u-ana',
+              verdict: 'pass',
+              comment: '',
+              createdAt: new Date().toISOString(),
+            },
+          ],
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/users')
+        return Promise.resolve({
+          data: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, avatarKey: 'ada-lovelace', createdAt: '' }],
+          response: { ok: true },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderPage()
+    const history = await screen.findByText(/ana@example.com/i)
+    const row = history.closest('li')!
+    const img = within(row).getByRole('img')
+    expect(img.getAttribute('src')).toMatch(/ada-lovelace/)
+  })
+
   it('shows the item read-only, without verdict controls, on a closed run', async () => {
     mockItemAPI(undefined, { ...run, status: 'closed' })
     renderPage()
@@ -563,6 +602,16 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
 
     const sidebar = screen.getByTestId('run-item-sidebar')
     expect(within(sidebar).getByText('ana@example.com')).toBeInTheDocument()
+  })
+
+  it('a user assignee with a chosen avatar renders through the shared Avatar (add-user-profile)', async () => {
+    mockItemAPI({ ...item, assignee: { kind: 'user', id: 'u-ana', name: 'ana@example.com', avatarKey: 'ada-lovelace' } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    const img = within(sidebar).getByRole('img')
+    expect(img.getAttribute('src')).toMatch(/ada-lovelace/)
   })
 
   it('Assign to… opens the dialog and updates the sidebar without a full reload', async () => {

@@ -15,7 +15,7 @@ const mockDELETE = vi.mocked(api.DELETE)
 const manyMemberIds = ['m1', 'm2', 'm3', 'm4', 'm5', 'm6', 'm7']
 const users = [
   { id: 'u1', email: 'me@example.com', isTenantAdmin: true, deactivatedAt: null, createdAt: '' },
-  { id: 'u2', email: 'other@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
+  { id: 'u2', email: 'other@example.com', isTenantAdmin: false, avatarKey: 'ada-lovelace', deactivatedAt: null, createdAt: '' },
   ...manyMemberIds.map((id, i) => ({
     id,
     email: `member${i + 1}@example.com`,
@@ -74,6 +74,14 @@ describe('PeoplePage', () => {
   })
 
   describe('Users', () => {
+    it('renders a user row through the shared Avatar, showing a chosen preset image (add-user-profile)', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      const row = (await screen.findByText('other@example.com')).closest('li') as HTMLElement
+      const img = within(row).getByRole('img')
+      expect(img.getAttribute('src')).toMatch(/ada-lovelace/)
+    })
+
     it('filters the roster by email via a search box', async () => {
       mockAsTenantAdmin(true)
       const user = userEvent.setup()

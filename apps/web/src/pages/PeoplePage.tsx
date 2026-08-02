@@ -4,6 +4,7 @@ import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { isValidEmail } from '@/lib/email'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
+import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,7 +12,13 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 
-type User = { id: string; email: string; isTenantAdmin: boolean; deactivatedAt: string | null }
+type User = {
+  id: string
+  email: string
+  isTenantAdmin: boolean
+  avatarKey?: string | null
+  deactivatedAt: string | null
+}
 type Team = { id: string; name: string; memberIds: string[]; createdAt: string }
 type UserOption = { id: string; email: string }
 
@@ -191,7 +198,9 @@ export default function PeoplePage() {
           <ul className="space-y-3">
             {sortedTeams.map((t) => {
               const expanded = expandedTeamId === t.id
-              const memberUsers = t.memberIds.map((id) => users.find((u) => u.id === id) ?? { id, email: id })
+              const memberUsers = t.memberIds.map(
+                (id) => users.find((u) => u.id === id) ?? { id, email: id, avatarKey: null },
+              )
               // Filtering existing members and searching the directory to
               // add someone new are different tasks that scale differently
               // (one narrows an already-bounded list; the other searches
@@ -254,12 +263,7 @@ export default function PeoplePage() {
                             {visibleMembers.map((u) => (
                               <li key={u.id} className="flex items-center justify-between px-2 py-1.5">
                                 <span className="flex items-center gap-2">
-                                  <span
-                                    className="flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                                    style={avatarStyle(u.email)}
-                                  >
-                                    {initialsFor(u.email)}
-                                  </span>
+                                  <Avatar seed={u.email} avatarKey={u.avatarKey} className="size-5 rounded-full text-[10px]" />
                                   {u.email}
                                 </span>
                                 {/* Removing a member cascades to whatever
@@ -418,12 +422,7 @@ export default function PeoplePage() {
                 className="group grid grid-cols-[1fr_36px] items-center gap-3 border-b px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_140px_120px_36px]"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <span
-                    className="flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                    style={avatarStyle(u.email)}
-                  >
-                    {initialsFor(u.email)}
-                  </span>
+                  <Avatar seed={u.email} avatarKey={u.avatarKey} className="size-7 rounded-full text-xs" />
                   <span className="truncate font-semibold">{u.email}</span>
                 </div>
                 <div className="hidden text-muted-foreground sm:block">{u.isTenantAdmin ? 'Tenant Admin' : 'Member'}</div>

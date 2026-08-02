@@ -300,6 +300,11 @@ describe('App shell', () => {
   it('resolves the active project from a run route to show its name on the switcher', async () => {
     mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
       if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/users/me')
+        return Promise.resolve({
+          data: { id: 'u1', email: 'admin@example.com', isTenantAdmin: true },
+          response: { ok: true },
+        })
       if (path === '/api/v1/projects')
         return Promise.resolve({
           data: [{ id: 'id1', key: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }],
@@ -356,6 +361,11 @@ describe('App shell', () => {
   it('falls back to no active project when resolving it from a run route fails', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/users/me')
+        return Promise.resolve({
+          data: { id: 'u1', email: 'admin@example.com', isTenantAdmin: true },
+          response: { ok: true },
+        })
       if (path === '/api/v1/runs/{runKey}') return Promise.reject(new Error('network down'))
       if (path === '/api/v1/runs/{runKey}/summary')
         return Promise.resolve({ data: { runId: 'rid1', total: 0, counts: {} }, response: { ok: true } })

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
+import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
@@ -129,12 +130,20 @@ function RunItemRow({
           <span className="flex items-center gap-3">
             <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
               {item.assignee ? (
-                <span
-                  className={`flex size-4 shrink-0 items-center justify-center text-[9px] font-bold ${item.assignee.kind === 'team' ? 'rounded-sm' : 'rounded-full'}`}
-                  style={avatarStyle(item.assignee.name)}
-                >
-                  {initialsFor(item.assignee.name)}
-                </span>
+                item.assignee.kind === 'team' ? (
+                  <span
+                    className="flex size-4 shrink-0 items-center justify-center rounded-sm text-[9px] font-bold"
+                    style={avatarStyle(item.assignee.name)}
+                  >
+                    {initialsFor(item.assignee.name)}
+                  </span>
+                ) : (
+                  <Avatar
+                    seed={item.assignee.name}
+                    avatarKey={item.assignee.avatarKey}
+                    className="size-4 rounded-full text-[9px]"
+                  />
+                )
               ) : (
                 <span
                   className="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground/40"

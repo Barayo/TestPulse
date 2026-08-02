@@ -282,6 +282,29 @@ func TestBootstrapAdminSeedsOnEmptyTable(t *testing.T) {
 	}
 }
 
+// A fresh instance's admin gets a filled-in profile (add-user-profile) —
+// something for an evaluator to see before they've touched Settings.
+func TestBootstrapAdminSeedsAProfile(t *testing.T) {
+	s := testService(t)
+	if err := s.BootstrapAdmin(context.Background(), "admin@example.com", "correcthorse"); err != nil {
+		t.Fatalf("BootstrapAdmin: %v", err)
+	}
+	users, _ := s.ListUsers(context.Background())
+	if len(users) != 1 {
+		t.Fatalf("users = %+v, want 1", users)
+	}
+	u := users[0]
+	if u.DisplayName == nil || *u.DisplayName == "" {
+		t.Errorf("DisplayName = %v, want non-empty", u.DisplayName)
+	}
+	if u.AvatarKey == nil || !domain.AvatarPresetKeys[*u.AvatarKey] {
+		t.Errorf("AvatarKey = %v, want a known preset", u.AvatarKey)
+	}
+	if u.Timezone == nil || *u.Timezone == "" {
+		t.Errorf("Timezone = %v, want non-empty", u.Timezone)
+	}
+}
+
 func TestBootstrapAdminSkipsWhenUsersExist(t *testing.T) {
 	s := testService(t)
 	mustCreateUser(t, s, "existing@example.com", "correcthorse", false)

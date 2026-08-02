@@ -84,6 +84,56 @@ func TestUserListAndSetTenantAdminAndDeactivate(t *testing.T) {
 	}
 }
 
+func TestUserUpdateProfile(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "profile@example.com", false)
+
+	if u.DisplayName != nil || u.AvatarKey != nil || u.Timezone != nil {
+		t.Fatalf("new user profile fields = %+v, want all nil", u)
+	}
+
+	displayName := "Ada"
+	avatarKey := "ada-lovelace"
+	timezone := "Europe/Madrid"
+	updated, err := s.Users.UpdateProfile(ctx, u.ID, domain.UserProfileUpdate{
+		DisplayName: &displayName,
+		AvatarKey:   &avatarKey,
+		Timezone:    &timezone,
+	})
+	if err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+	if updated.DisplayName == nil || *updated.DisplayName != displayName {
+		t.Errorf("DisplayName = %v, want %q", updated.DisplayName, displayName)
+	}
+	if updated.AvatarKey == nil || *updated.AvatarKey != avatarKey {
+		t.Errorf("AvatarKey = %v, want %q", updated.AvatarKey, avatarKey)
+	}
+	if updated.Timezone == nil || *updated.Timezone != timezone {
+		t.Errorf("Timezone = %v, want %q", updated.Timezone, timezone)
+	}
+
+	got, err := s.Users.Get(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("Get after update: %v", err)
+	}
+	if got.DisplayName == nil || *got.DisplayName != displayName {
+		t.Errorf("Get().DisplayName = %v, want %q (round-trip)", got.DisplayName, displayName)
+	}
+}
+
+func TestUserUpdateProfileUnknownIDNotFound(t *testing.T) {
+	s := testStore(t)
+	name := "Nobody"
+	_, err := s.Users.UpdateProfile(context.Background(), "00000000-0000-0000-0000-000000000000", domain.UserProfileUpdate{
+		DisplayName: &name,
+	})
+	if err != store.ErrNotFound {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
 func TestUserReactivate(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

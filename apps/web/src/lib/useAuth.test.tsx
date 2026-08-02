@@ -120,6 +120,26 @@ describe('useAuth', () => {
     expect(result.current.sessionExpired).toBe(false)
   })
 
+  it('refreshUser re-fetches /users/me and updates the context (add-user-profile)', async () => {
+    mockGET.mockResolvedValueOnce({
+      data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },
+      response: { ok: true },
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+    await waitFor(() => expect(result.current.user).not.toBeNull())
+
+    mockGET.mockResolvedValueOnce({
+      data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false, displayName: 'Ada', avatarKey: 'ada-lovelace' },
+      response: { ok: true },
+    })
+    await act(async () => {
+      await result.current.refreshUser()
+    })
+
+    expect(result.current.user?.displayName).toBe('Ada')
+    expect(result.current.user?.avatarKey).toBe('ada-lovelace')
+  })
+
   it('throws when used outside an AuthProvider', () => {
     function Bad() {
       useAuth()

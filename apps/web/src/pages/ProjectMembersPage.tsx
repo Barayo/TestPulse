@@ -3,6 +3,7 @@ import { useParams } from 'react-router'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
+import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
@@ -128,12 +129,7 @@ export default function ProjectMembersPage() {
                 return (
                   <li key={m.userId} className="flex items-center justify-between gap-2 px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="flex size-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                        style={avatarStyle(label)}
-                      >
-                        {initialsFor(label)}
-                      </span>
+                      <Avatar seed={label} avatarKey={u?.avatarKey} className="size-6 rounded-full text-[10px]" />
                       <span className="truncate">{label}</span>
                     </span>
                     <div className="flex items-center gap-2">

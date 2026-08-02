@@ -146,7 +146,21 @@ func (s *Service) BootstrapAdmin(ctx context.Context, email, password string) er
 	if len(users) > 0 {
 		return nil
 	}
-	_, err = s.CreateUser(ctx, email, password, true)
+	user, err := s.CreateUser(ctx, email, password, true)
+	if err != nil {
+		return err
+	}
+	// A filled-in profile (add-user-profile) so a fresh instance's header
+	// shows something other than a generated initial before anyone has
+	// touched Settings — same reasoning as pre-seeding the Sample Project.
+	displayName := "Admin"
+	avatarKey := "grace-hopper"
+	timezone := "UTC"
+	_, err = s.store.Users.UpdateProfile(ctx, user.ID, domain.UserProfileUpdate{
+		DisplayName: &displayName,
+		AvatarKey:   &avatarKey,
+		Timezone:    &timezone,
+	})
 	return err
 }
 
@@ -180,6 +194,24 @@ func (s *Service) ListUsers(ctx context.Context) ([]domain.User, error) {
 
 func (s *Service) GetUser(ctx context.Context, id string) (domain.User, error) {
 	return s.store.Users.Get(ctx, id)
+}
+
+// UpdateOwnProfile applies the self-service profile fields (add-user-profile)
+// against the actor's own user row — there is no target-user parameter, so
+// this can never edit anyone else's profile.
+func (s *Service) UpdateOwnProfile(ctx context.Context, actor domain.Actor, update domain.UserProfileUpdate) (domain.User, error) {
+	if actor.Kind != domain.ActorKindUser {
+		return domain.User{}, invalid("only a human user has a profile to update")
+	}
+	if update.AvatarKey != nil && *update.AvatarKey != "" && !domain.AvatarPresetKeys[*update.AvatarKey] {
+		return domain.User{}, invalid("unknown avatar key %q", *update.AvatarKey)
+	}
+	user, err := s.store.Users.UpdateProfile(ctx, actor.ID, update)
+	if err != nil {
+		return domain.User{}, err
+	}
+	s.audit(ctx, "update_profile", "user", actor.ID)
+	return user, nil
 }
 
 func (s *Service) SetTenantAdmin(ctx context.Context, userID string, isTenantAdmin bool) error {

@@ -634,7 +634,8 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** Update the caller's own display name, avatar, or timezone */
+        patch: operations["updateCurrentUserProfile"];
         trace?: never;
     };
     "/api/v1/users/{userId}": {
@@ -1066,6 +1067,7 @@ export interface components {
             kind: "user" | "team";
             id: string;
             name: string;
+            avatarKey?: string | null;
         };
         RunItem: {
             id: string;
@@ -1206,10 +1208,19 @@ export interface components {
             id: string;
             email: string;
             isTenantAdmin: boolean;
+            displayName?: string | null;
+            avatarKey?: string | null;
+            timezone?: string | null;
             /** Format: date-time */
             deactivatedAt?: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @description Self-service profile fields — a user editing their own display name, avatar, or timezone. */
+        UserProfileUpdate: {
+            displayName?: string | null;
+            avatarKey?: string | null;
+            timezone?: string | null;
         };
         UserInput: {
             email: string;
@@ -2541,6 +2552,32 @@ export interface operations {
                     "application/json": components["schemas"]["User"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateCurrentUserProfile: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UserProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated user */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
         };
     };

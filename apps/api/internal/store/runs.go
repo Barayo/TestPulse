@@ -350,7 +350,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain.RunItem, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT i.id, i.run_id, i.case_id, c.key, i.case_version,
-		        i.assignee_user_id, i.assignee_team_id, u.email, t.name,
+		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
 		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
 		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
@@ -370,17 +370,17 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 	items := []domain.RunItem{}
 	for rows.Next() {
 		var (
-			it                                                                  domain.RunItem
-			assigneeUserID, assigneeTeamID, assigneeUserEmail, assigneeTeamName *string
-			title, description, expected                                        string
-			priority                                                            string
-			stepsJSON                                                           []byte
-			tags                                                                []string
-			platform, testType                                                  string
-			automated                                                           bool
+			it                                                                                 domain.RunItem
+			assigneeUserID, assigneeTeamID, assigneeUserEmail, assigneeTeamName, assigneeAvatar *string
+			title, description, expected                                                        string
+			priority                                                                             string
+			stepsJSON                                                                            []byte
+			tags                                                                                  []string
+			platform, testType                                                                   string
+			automated                                                                             bool
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
-			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName,
+			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,
 			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
 			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err
@@ -392,7 +392,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		it.Content = content
 		switch {
 		case assigneeUserID != nil:
-			it.Assignee = &domain.Assignee{Kind: domain.AssigneeKindUser, ID: *assigneeUserID, Name: *assigneeUserEmail}
+			it.Assignee = &domain.Assignee{Kind: domain.AssigneeKindUser, ID: *assigneeUserID, Name: *assigneeUserEmail, AvatarKey: assigneeAvatar}
 		case assigneeTeamID != nil:
 			it.Assignee = &domain.Assignee{Kind: domain.AssigneeKindTeam, ID: *assigneeTeamID, Name: *assigneeTeamName}
 		}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
-export type UserOption = { id: string; email: string }
+export type UserOption = { id: string; email: string; avatarKey?: string | null }
 
 type Props = {
   users: UserOption[]

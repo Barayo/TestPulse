@@ -156,7 +156,14 @@ team that already holds a role on the project, and the assignment is a real
 foreign-key reference (`assignee_user_id` / `assignee_team_id` on the run
 item), not display text. If the assigned user or team is later removed from
 the system, the item reverts to unassigned rather than pointing at a name
-that no longer resolves to anyone. An **assignee filter** row, alongside the
+that no longer resolves to anyone. A user assignee's avatar (`add-user-profile`)
+is resolved live — it always reflects whatever the assigned person currently
+has set on their own profile, not a value captured at assignment time; a team
+assignee keeps its existing generated-color square chip, since teams have no
+avatar of their own. The same live-resolved avatar appears next to a
+user-attributed entry in an item's result **History** — an entry recorded by
+an agent, or with an unknown actor, or where "record on behalf of" was used,
+shows no avatar, since there's no real user identity to key one off. An **assignee filter** row, alongside the
 status filter, offers one chip per distinct assignee present plus an
 explicit **Unassigned** and **All**; it composes with the status filter, so
 both can narrow the list together.

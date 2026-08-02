@@ -332,6 +332,9 @@ type Assignee struct {
 	Kind AssigneeKind `json:"kind"`
 	ID   string       `json:"id"`
 	Name string       `json:"name"`
+	// AvatarKey is only ever set for a user assignee (add-user-profile) —
+	// teams have no avatar concept and always leave this nil.
+	AvatarKey *string `json:"avatarKey"`
 }
 
 type RunItem struct {
@@ -570,8 +573,39 @@ type User struct {
 	ID            string     `json:"id"`
 	Email         string     `json:"email"`
 	IsTenantAdmin bool       `json:"isTenantAdmin"`
+	DisplayName   *string    `json:"displayName"`
+	AvatarKey     *string    `json:"avatarKey"`
+	Timezone      *string    `json:"timezone"`
 	DeactivatedAt *time.Time `json:"deactivatedAt"`
 	CreatedAt     time.Time  `json:"createdAt"`
+}
+
+// AvatarPresetKeys is the fixed, curated set of avatar preset keys
+// (add-user-profile design.md) — static bundled assets, not database rows.
+// A nil/absent AvatarKey renders as a generated initial-on-color instead.
+var AvatarPresetKeys = map[string]bool{
+	"ada-lovelace":      true,
+	"alan-turing":       true,
+	"grace-hopper":      true,
+	"marie-curie":       true,
+	"charles-darwin":    true,
+	"katherine-johnson": true,
+	"isaac-newton":      true,
+	"albert-einstein":   true,
+	"emmy-noether":      true,
+	"nikola-tesla":      true,
+	"mary-anning":       true,
+	"john-von-neumann":  true,
+}
+
+// UserProfileUpdate carries the self-service profile fields a user may
+// change about themselves (add-user-profile) — distinct from the
+// Tenant-Admin-only fields (IsTenantAdmin, DeactivatedAt) a user can never
+// set on their own record. A nil field leaves that column unchanged.
+type UserProfileUpdate struct {
+	DisplayName *string
+	AvatarKey   *string
+	Timezone    *string
 }
 
 // Team is a named group of users with no scope of its own — it only gains

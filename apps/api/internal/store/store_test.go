@@ -1069,6 +1069,38 @@ func TestAppendResultPersistsActorLink(t *testing.T) {
 	}
 }
 
+// A user assignee's avatarKey resolves live (add-user-profile) — the
+// item's assignee reflects whatever the user currently has set, not a
+// value pinned at assignment time.
+func TestAssigneeAvatarKeyResolvesLive(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "one")
+	run, _ := s.Runs.Create(ctx, p.ID, "r", []string{c.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+
+	ana := mustUser(t, s, "ana@example.com", false)
+	if err := s.Runs.AssignItemToUser(ctx, items[0].ID, ana.ID); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+
+	before, _ := s.Runs.Items(ctx, run.ID, "")
+	if before[0].Assignee.AvatarKey != nil {
+		t.Errorf("AvatarKey before set = %v, want nil", before[0].Assignee.AvatarKey)
+	}
+
+	avatarKey := "ada-lovelace"
+	if _, err := s.Users.UpdateProfile(ctx, ana.ID, domain.UserProfileUpdate{AvatarKey: &avatarKey}); err != nil {
+		t.Fatalf("UpdateProfile: %v", err)
+	}
+
+	after, _ := s.Runs.Items(ctx, run.ID, "")
+	if after[0].Assignee.AvatarKey == nil || *after[0].Assignee.AvatarKey != avatarKey {
+		t.Errorf("AvatarKey after set = %v, want %q", after[0].Assignee.AvatarKey, avatarKey)
+	}
+}
+
 func TestAssignAndFilterByAssignee(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

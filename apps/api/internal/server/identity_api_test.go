@@ -210,3 +210,36 @@ func TestScenario_CurrentUserReflectsSessionActor(t *testing.T) {
 		t.Errorf("me = %+v", me)
 	}
 }
+
+func TestScenario_UpdateOwnProfile(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	cookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var updated jmap
+	callAs(t, h, cookie, "PATCH", "/api/v1/users/me",
+		jmap{"displayName": "Ada", "avatarKey": "ada-lovelace", "timezone": "Europe/Madrid"}, 200, &updated)
+	if updated["displayName"] != "Ada" || updated["avatarKey"] != "ada-lovelace" || updated["timezone"] != "Europe/Madrid" {
+		t.Errorf("updated = %+v", updated)
+	}
+
+	var me jmap
+	callAs(t, h, cookie, "GET", "/api/v1/users/me", nil, 200, &me)
+	if me["displayName"] != "Ada" {
+		t.Errorf("me after update = %+v", me)
+	}
+}
+
+func TestScenario_UpdateOwnProfileRejectsUnknownAvatarKey(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	cookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var errBody jmap
+	callAs(t, h, cookie, "PATCH", "/api/v1/users/me", jmap{"avatarKey": "not-a-real-preset"}, 400, &errBody)
+}
+
+func TestScenario_UpdateOwnProfileRequiresAuthentication(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+
+	var errBody jmap
+	callAs(t, h, "", "PATCH", "/api/v1/users/me", jmap{"displayName": "Ada"}, 401, &errBody)
+}

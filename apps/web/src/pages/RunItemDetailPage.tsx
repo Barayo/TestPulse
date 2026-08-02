@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
+import { Avatar } from '@/components/Avatar'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,10 @@ export default function RunItemDetailPage() {
   const [items, setItems] = useState<RunItem[]>([])
   const [results, setResults] = useState<Result[]>([])
   const [notFound, setNotFound] = useState(false)
+  // Resolves a user-attributed history entry's *current* avatar (add-user-profile)
+  // — actorRefId -> avatarKey, fetched once, the same client-side lookup
+  // pattern PeoplePage already uses.
+  const [userAvatars, setUserAvatars] = useState<Record<string, string | null | undefined>>({})
 
   const [actorOverride, setActorOverride] = useState('')
   const [showActorOverride, setShowActorOverride] = useState(false)
@@ -64,6 +69,8 @@ export default function RunItemDetailPage() {
     setItems(runItems ?? [])
     const { data: res } = await api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: match.id } } })
     setResults(res ?? [])
+    const { data: allUsers } = await api.GET('/api/v1/users')
+    setUserAvatars(Object.fromEntries((allUsers ?? []).map((u) => [u.id, u.avatarKey])))
   }, [runKey, caseKey])
 
   useEffect(() => {
@@ -322,12 +329,20 @@ export default function RunItemDetailPage() {
                 <span className="flex items-center gap-2">
                   {item.assignee ? (
                     <span className="flex min-w-0 items-center gap-1.5">
-                      <span
-                        className={`flex size-5 shrink-0 items-center justify-center text-[10px] font-bold ${item.assignee.kind === 'team' ? 'rounded-md' : 'rounded-full'}`}
-                        style={avatarStyle(item.assignee.name)}
-                      >
-                        {initialsFor(item.assignee.name)}
-                      </span>
+                      {item.assignee.kind === 'team' ? (
+                        <span
+                          className="flex size-5 shrink-0 items-center justify-center rounded-md text-[10px] font-bold"
+                          style={avatarStyle(item.assignee.name)}
+                        >
+                          {initialsFor(item.assignee.name)}
+                        </span>
+                      ) : (
+                        <Avatar
+                          seed={item.assignee.name}
+                          avatarKey={item.assignee.avatarKey}
+                          className="size-5 rounded-full text-[10px]"
+                        />
+                      )}
                       <span className="truncate">{item.assignee.name}</span>
                     </span>
                   ) : (
@@ -366,7 +381,10 @@ export default function RunItemDetailPage() {
                         <span className="text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
                       )}
                     </div>
-                    <p className="text-muted-foreground">
+                    <p className="flex items-center gap-1.5 text-muted-foreground">
+                      {r.actorKind === 'user' && r.actorRefId && (
+                        <Avatar seed={r.actor} avatarKey={userAvatars[r.actorRefId]} className="size-4 rounded-full text-[9px]" />
+                      )}
                       {r.actor}
                       {r.comment && ` — ${r.comment}`}
                     </p>
