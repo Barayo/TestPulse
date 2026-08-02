@@ -151,6 +151,52 @@ describe('RunItemDetailPage', () => {
     })
   })
 
+  it('clicking Pass repeatedly before the request resolves only records one verdict', async () => {
+    mockItemAPI()
+    let resolvePost: (value: unknown) => void = () => {}
+    mockPOST.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve
+        }),
+    )
+    renderPage()
+    const passButton = await screen.findByRole('button', { name: /^pass$/i })
+
+    await userEvent.click(passButton)
+    await userEvent.click(passButton)
+    await userEvent.click(passButton)
+
+    expect(mockPOST).toHaveBeenCalledTimes(1)
+    resolvePost({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+  })
+
+  it('disables the verdict buttons while a recording is in flight', async () => {
+    mockItemAPI()
+    let resolvePost: (value: unknown) => void = () => {}
+    mockPOST.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve
+        }),
+    )
+    renderPage()
+    const passButton = await screen.findByRole('button', { name: /^pass$/i })
+    await userEvent.click(passButton)
+
+    expect(screen.getByRole('button', { name: /^pass$/i })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /^failed$/i })).toBeDisabled()
+
+    resolvePost({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+    await waitFor(() => expect(screen.getByRole('button', { name: /^pass$/i })).not.toBeDisabled())
+  })
+
   it('offers retest on a failed item', async () => {
     mockItemAPI({ ...item, currentStatus: 'failed' })
     mockPUT.mockResolvedValue({ response: { ok: true } })
@@ -277,6 +323,27 @@ describe('RunItemDetailPage', () => {
 })
 
 describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
+  it('pressing P twice before the request resolves only records one verdict', async () => {
+    mockItemAPI()
+    let resolvePost: (value: unknown) => void = () => {}
+    mockPOST.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePost = resolve
+        }),
+    )
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('pp')
+
+    expect(mockPOST).toHaveBeenCalledTimes(1)
+    resolvePost({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+  })
+
   it('pressing F records a failed verdict, the same as clicking the Failed button', async () => {
     mockItemAPI()
     mockPOST.mockResolvedValue({

@@ -44,6 +44,7 @@ export default function RunItemDetailPage() {
   const [actorOverride, setActorOverride] = useState('')
   const [showActorOverride, setShowActorOverride] = useState(false)
   const [comment, setComment] = useState('')
+  const [isRecording, setIsRecording] = useState(false)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
 
   const load = useCallback(async () => {
@@ -79,25 +80,30 @@ export default function RunItemDetailPage() {
   }, [projectKey])
 
   async function recordVerdict(verdict: Verdict, options?: { advance?: boolean }) {
-    if (!item) return
-    const override = actorOverride.trim()
-    await api.POST('/api/v1/items/{itemId}/results', {
-      params: { path: { itemId: item.id } },
-      body: { verdict, comment, ...(override ? { actor: override } : {}) },
-    })
-    if (options?.advance) {
-      const currentIndex = items.findIndex((it) => it.id === item.id)
-      const next = items.slice(currentIndex + 1).find((it) => it.currentStatus === 'pending')
-      navigate(next ? `/runs/${runKey}/items/${next.caseKey}` : `/runs/${runKey}`)
-      return
+    if (!item || isRecording) return
+    setIsRecording(true)
+    try {
+      const override = actorOverride.trim()
+      await api.POST('/api/v1/items/{itemId}/results', {
+        params: { path: { itemId: item.id } },
+        body: { verdict, comment, ...(override ? { actor: override } : {}) },
+      })
+      if (options?.advance) {
+        const currentIndex = items.findIndex((it) => it.id === item.id)
+        const next = items.slice(currentIndex + 1).find((it) => it.currentStatus === 'pending')
+        navigate(next ? `/runs/${runKey}/items/${next.caseKey}` : `/runs/${runKey}`)
+        return
+      }
+      setComment('')
+      const [{ data: refreshedItems }, { data: res }] = await Promise.all([
+        api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! } } }),
+        api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: item.id } } }),
+      ])
+      setItem((refreshedItems ?? []).find((it) => it.id === item.id))
+      setResults(res ?? [])
+    } finally {
+      setIsRecording(false)
     }
-    setComment('')
-    const [{ data: refreshedItems }, { data: res }] = await Promise.all([
-      api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! } } }),
-      api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: item.id } } }),
-    ])
-    setItem((refreshedItems ?? []).find((it) => it.id === item.id))
-    setResults(res ?? [])
   }
 
   const lastVerdict = results.length > 0 ? results[results.length - 1].verdict : undefined
@@ -155,7 +161,7 @@ export default function RunItemDetailPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, items, run?.status, runKey, actorOverride, comment])
+  }, [item, items, run?.status, runKey, actorOverride, comment, isRecording])
 
   if (!runKey || !caseKey) return null
   if (notFound) {
@@ -239,7 +245,7 @@ export default function RunItemDetailPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={!comment.trim()}
+                      disabled={!comment.trim() || isRecording}
                       onClick={() => void recordVerdict(lastVerdict)}
                     >
                       Save comment
@@ -272,20 +278,25 @@ export default function RunItemDetailPage() {
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <Button size="sm" onClick={() => void recordVerdict('pass')}>
+                  <Button size="sm" disabled={isRecording} onClick={() => void recordVerdict('pass')}>
                     Pass
                   </Button>
-                  <Button size="sm" variant="destructive" onClick={() => void recordVerdict('failed')}>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={isRecording}
+                    onClick={() => void recordVerdict('failed')}
+                  >
                     Failed
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => void recordVerdict('blocked')}>
+                  <Button size="sm" variant="outline" disabled={isRecording} onClick={() => void recordVerdict('blocked')}>
                     Blocked
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => void recordVerdict('skipped')}>
+                  <Button size="sm" variant="outline" disabled={isRecording} onClick={() => void recordVerdict('skipped')}>
                     Skipped
                   </Button>
                   {item.currentStatus === 'failed' && (
-                    <Button size="sm" variant="secondary" onClick={() => void markRetest()}>
+                    <Button size="sm" variant="secondary" disabled={isRecording} onClick={() => void markRetest()}>
                       Retest
                     </Button>
                   )}
