@@ -887,6 +887,32 @@ func TestRunItemTestNamePersists(t *testing.T) {
 	}
 }
 
+// Items created together in one run.Create call share a single
+// transaction, so a naive `created_at` default (frozen at transaction
+// start) makes every item's timestamp identical, leaving their listed
+// order undefined. Regression test for that.
+func TestRunItemsListedInInsertionOrder(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "one")
+	c2 := mustCase(t, s, p.ID, "two")
+	c3 := mustCase(t, s, p.ID, "three")
+	run, err := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c1.ID, c2.ID, c3.ID})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	items, err := s.Runs.Items(ctx, run.ID, "")
+	if err != nil || len(items) != 3 {
+		t.Fatalf("Items = %d, %v; want 3", len(items), err)
+	}
+	if items[0].Content.Title != "one" || items[1].Content.Title != "two" || items[2].Content.Title != "three" {
+		t.Errorf("item order = %q, %q, %q; want one, two, three",
+			items[0].Content.Title, items[1].Content.Title, items[2].Content.Title)
+	}
+}
+
 func TestAppendResultUpdatesStatusAndAccumulates(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
