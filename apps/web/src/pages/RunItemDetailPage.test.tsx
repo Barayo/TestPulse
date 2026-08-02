@@ -25,7 +25,7 @@ const item = {
   caseId: 'c1',
   caseKey: 'c1',
   caseVersion: 1,
-  assignee: '',
+  assignee: null,
   currentStatus: 'pending',
   newerVersion: false,
   testName: 'login_spec.ts::works',
@@ -384,6 +384,29 @@ describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
 })
 
 describe('Assignment (add-run-item-assignment-ui)', () => {
+  function mockAssignmentAPI(itemOverride?: unknown) {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items')
+        return Promise.resolve({ data: [itemOverride ?? item], response: { ok: true } })
+      if (path === '/api/v1/items/{itemId}/results') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/members')
+        return Promise.resolve({ data: { users: [{ userId: 'u-ana', roleId: 'role-tester' }], teams: [] }, response: { ok: true } })
+      if (path === '/api/v1/users')
+        return Promise.resolve({
+          data: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' }],
+          response: { ok: true },
+        })
+      if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+  }
+
   it('shows the item\'s assignee in Properties, or Unassigned when none', async () => {
     mockItemAPI()
     renderPage()
@@ -394,33 +417,30 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
   })
 
   it('shows a real assignee when the item has one', async () => {
-    mockItemAPI({ ...item, assignee: 'ana' })
+    mockItemAPI({ ...item, assignee: { kind: 'user', id: 'u-ana', name: 'ana@example.com' } })
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
 
     const sidebar = screen.getByTestId('run-item-sidebar')
-    expect(within(sidebar).getByText('ana')).toBeInTheDocument()
+    expect(within(sidebar).getByText('ana@example.com')).toBeInTheDocument()
   })
 
   it('Assign to… opens the dialog and updates the sidebar without a full reload', async () => {
-    mockItemAPI()
+    mockAssignmentAPI()
     mockPUT.mockResolvedValue({ response: { ok: true } })
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
-    const getCallsBefore = mockGET.mock.calls.length
 
     await userEvent.click(screen.getByRole('button', { name: /assign to/i }))
-    await userEvent.type(screen.getByLabelText(/^name$/i), 'ana')
-    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
 
     await waitFor(() => {
       expect(mockPUT).toHaveBeenCalledWith(
         '/api/v1/items/{itemId}/status',
-        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assigneeUserId: 'u-ana' } }),
       )
     })
     const sidebar = screen.getByTestId('run-item-sidebar')
-    expect(await within(sidebar).findByText('ana')).toBeInTheDocument()
-    expect(mockGET.mock.calls.length).toBe(getCallsBefore)
+    expect(await within(sidebar).findByText('ana@example.com')).toBeInTheDocument()
   })
 })

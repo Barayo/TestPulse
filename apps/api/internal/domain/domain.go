@@ -316,13 +316,31 @@ const (
 	RunStatusClosed RunStatus = "closed"
 )
 
+// AssigneeKind distinguishes a user from a team as a run item's assignee
+// (link-run-item-assignee-to-identity).
+type AssigneeKind string
+
+const (
+	AssigneeKindUser AssigneeKind = "user"
+	AssigneeKindTeam AssigneeKind = "team"
+)
+
+// Assignee is a run item's real assignee, resolved from its foreign key —
+// nil when the item is unassigned (including when its previously-assigned
+// user or team has since been deleted).
+type Assignee struct {
+	Kind AssigneeKind `json:"kind"`
+	ID   string       `json:"id"`
+	Name string       `json:"name"`
+}
+
 type RunItem struct {
 	ID            string      `json:"id"`
 	RunID         string      `json:"runId"`
 	CaseID        string      `json:"caseId"`
 	CaseKey       string      `json:"caseKey"`
 	CaseVersion   int         `json:"caseVersion"`
-	Assignee      string      `json:"assignee"`
+	Assignee      *Assignee   `json:"assignee,omitempty"`
 	CurrentStatus Status      `json:"currentStatus"`
 	Content       CaseContent `json:"content"` // pinned version's content
 	NewerVersion  bool        `json:"newerVersion"`

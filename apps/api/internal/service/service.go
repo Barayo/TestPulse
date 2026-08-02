@@ -530,14 +530,16 @@ func (s *Service) Results(ctx context.Context, itemID string) ([]domain.Result, 
 	return s.store.Runs.Results(ctx, itemID)
 }
 
-// ItemUpdate carries optional status and/or assignee changes.
+// ItemUpdate carries optional status and/or assignee changes. AssigneeUserID
+// and AssigneeTeamID are mutually exclusive (link-run-item-assignee-to-identity).
 type ItemUpdate struct {
-	Status   *string
-	Assignee *string
+	Status         *string
+	AssigneeUserID *string
+	AssigneeTeamID *string
 }
 
 func (s *Service) UpdateItem(ctx context.Context, itemID string, upd ItemUpdate) error {
-	if upd.Status == nil && upd.Assignee == nil {
+	if upd.Status == nil && upd.AssigneeUserID == nil && upd.AssigneeTeamID == nil {
 		return invalid("nothing to update: provide status and/or assignee")
 	}
 	if upd.Status != nil {
@@ -549,13 +551,51 @@ func (s *Service) UpdateItem(ctx context.Context, itemID string, upd ItemUpdate)
 			return runClosedAsConflict(err)
 		}
 	}
-	if upd.Assignee != nil {
-		if err := s.store.Runs.AssignItem(ctx, itemID, *upd.Assignee); err != nil {
-			return runClosedAsConflict(err)
+	if upd.AssigneeUserID != nil || upd.AssigneeTeamID != nil {
+		projectID, err := s.ProjectIDForItem(ctx, itemID)
+		if err != nil {
+			return err
+		}
+		membership, err := s.ProjectMembership(ctx, projectID)
+		if err != nil {
+			return err
+		}
+		if upd.AssigneeUserID != nil {
+			if !isProjectMemberUser(membership, *upd.AssigneeUserID) {
+				return store.ErrNotFound
+			}
+			if err := s.store.Runs.AssignItemToUser(ctx, itemID, *upd.AssigneeUserID); err != nil {
+				return runClosedAsConflict(err)
+			}
+		} else {
+			if !isProjectMemberTeam(membership, *upd.AssigneeTeamID) {
+				return store.ErrNotFound
+			}
+			if err := s.store.Runs.AssignItemToTeam(ctx, itemID, *upd.AssigneeTeamID); err != nil {
+				return runClosedAsConflict(err)
+			}
 		}
 	}
 	s.audit(ctx, "update", "run_item", itemID)
 	return nil
+}
+
+func isProjectMemberUser(m domain.ProjectMembership, userID string) bool {
+	for _, u := range m.Users {
+		if u.UserID == userID {
+			return true
+		}
+	}
+	return false
+}
+
+func isProjectMemberTeam(m domain.ProjectMembership, teamID string) bool {
+	for _, t := range m.Teams {
+		if t.TeamID == teamID {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Service) RunSummary(ctx context.Context, runID string) (domain.RunSummary, error) {

@@ -841,8 +841,9 @@ func TestClosedRunRejectsMutations(t *testing.T) {
 	if err := s.Runs.SetItemStatus(ctx, item.ID, domain.StatusRetest); !errors.Is(err, store.ErrRunClosed) {
 		t.Errorf("SetItemStatus on closed run = %v, want ErrRunClosed", err)
 	}
-	if err := s.Runs.AssignItem(ctx, item.ID, "ana"); !errors.Is(err, store.ErrRunClosed) {
-		t.Errorf("AssignItem on closed run = %v, want ErrRunClosed", err)
+	ana := mustUser(t, s, "closed-run-assignee@example.com", false)
+	if err := s.Runs.AssignItemToUser(ctx, item.ID, ana.ID); !errors.Is(err, store.ErrRunClosed) {
+		t.Errorf("AssignItemToUser on closed run = %v, want ErrRunClosed", err)
 	}
 }
 
@@ -1052,14 +1053,95 @@ func TestAssignAndFilterByAssignee(t *testing.T) {
 	run, _ := s.Runs.Create(ctx, p.ID, "r", []string{c1.ID, c2.ID, c3.ID})
 	items, _ := s.Runs.Items(ctx, run.ID, "")
 
-	for i, assignee := range []string{"ana", "ana", "luis"} {
-		if err := s.Runs.AssignItem(ctx, items[i].ID, assignee); err != nil {
+	ana := mustUser(t, s, "ana@example.com", false)
+	luis := mustUser(t, s, "luis@example.com", false)
+	for i, userID := range []string{ana.ID, ana.ID, luis.ID} {
+		if err := s.Runs.AssignItemToUser(ctx, items[i].ID, userID); err != nil {
 			t.Fatalf("assign: %v", err)
 		}
 	}
-	anas, err := s.Runs.Items(ctx, run.ID, "ana")
+	anas, err := s.Runs.Items(ctx, run.ID, ana.ID)
 	if err != nil || len(anas) != 2 {
 		t.Errorf("filter by ana = %d items, %v; want 2", len(anas), err)
+	}
+	for _, item := range anas {
+		if item.Assignee == nil || item.Assignee.Kind != domain.AssigneeKindUser || item.Assignee.ID != ana.ID || item.Assignee.Name != "ana@example.com" {
+			t.Errorf("Assignee = %+v, want user ana", item.Assignee)
+		}
+	}
+}
+
+func TestAssignItemToTeam(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "one")
+	run, _ := s.Runs.Create(ctx, p.ID, "r", []string{c1.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	team, err := s.Teams.Create(ctx, "QA Core")
+	if err != nil {
+		t.Fatalf("create team: %v", err)
+	}
+
+	if err := s.Runs.AssignItemToTeam(ctx, items[0].ID, team.ID); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+	got, _ := s.Runs.Items(ctx, run.ID, "")
+	if got[0].Assignee == nil || got[0].Assignee.Kind != domain.AssigneeKindTeam || got[0].Assignee.ID != team.ID || got[0].Assignee.Name != "QA Core" {
+		t.Errorf("Assignee = %+v, want team QA Core", got[0].Assignee)
+	}
+}
+
+func TestAssignItemToUserThenTeamClearsUser(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "one")
+	run, _ := s.Runs.Create(ctx, p.ID, "r", []string{c1.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	ana := mustUser(t, s, "ana2@example.com", false)
+	team, _ := s.Teams.Create(ctx, "QA Core 2")
+
+	if err := s.Runs.AssignItemToUser(ctx, items[0].ID, ana.ID); err != nil {
+		t.Fatalf("assign user: %v", err)
+	}
+	if err := s.Runs.AssignItemToTeam(ctx, items[0].ID, team.ID); err != nil {
+		t.Fatalf("assign team: %v", err)
+	}
+	got, _ := s.Runs.Items(ctx, run.ID, "")
+	if got[0].Assignee == nil || got[0].Assignee.Kind != domain.AssigneeKindTeam {
+		t.Errorf("Assignee = %+v, want team-only after reassignment", got[0].Assignee)
+	}
+}
+
+// Users are only ever soft-deactivated in this system (no hard-delete
+// path exists), so this exercises the ON DELETE SET NULL behavior against
+// a team instead — Teams.Delete is a real, exercised hard-delete path.
+// The same constraint on assignee_user_id is defensive/future-proofing:
+// nothing in the current API can trigger it, but it stays correct if a
+// hard user-delete path is ever added.
+func TestDeletingAssignedTeamRevertsItemToUnassigned(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "one")
+	run, _ := s.Runs.Create(ctx, p.ID, "r", []string{c1.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	team, _ := s.Teams.Create(ctx, "Temp Assignee Team")
+	if err := s.Runs.AssignItemToTeam(ctx, items[0].ID, team.ID); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+
+	if err := s.Teams.Delete(ctx, team.ID); err != nil {
+		t.Fatalf("delete team: %v", err)
+	}
+
+	got, err := s.Runs.Items(ctx, run.ID, "")
+	if err != nil {
+		t.Fatalf("Items: %v", err)
+	}
+	if got[0].Assignee != nil {
+		t.Errorf("Assignee = %+v, want nil after assigned team is deleted", got[0].Assignee)
 	}
 }
 

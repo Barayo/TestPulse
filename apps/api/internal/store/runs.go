@@ -346,17 +346,22 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 }
 
 // Items returns run items with pinned content and the newer-version flag,
-// optionally filtered by assignee.
-func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.RunItem, error) {
+// optionally filtered by assignee (a user or team id — matches either).
+func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain.RunItem, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT i.id, i.run_id, i.case_id, c.key, i.case_version, i.assignee, i.current_status, i.test_name, i.created_at,
+		`SELECT i.id, i.run_id, i.case_id, c.key, i.case_version,
+		        i.assignee_user_id, i.assignee_team_id, u.email, t.name,
+		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
 		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
 		 FROM test_run_items i
 		 JOIN test_cases c ON c.id = i.case_id
 		 JOIN test_case_versions v ON v.case_id = i.case_id AND v.version = i.case_version
-		 WHERE i.run_id = $1 AND ($2 = '' OR i.assignee = $2)
-		 ORDER BY i.created_at`, runID, assignee)
+		 LEFT JOIN users u ON u.id = i.assignee_user_id
+		 LEFT JOIN teams t ON t.id = i.assignee_team_id
+		 WHERE i.run_id = $1
+		   AND ($2 = '' OR i.assignee_user_id::text = $2 OR i.assignee_team_id::text = $2)
+		 ORDER BY i.created_at`, runID, assigneeID)
 	if err != nil {
 		return nil, err
 	}
@@ -365,16 +370,18 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 	items := []domain.RunItem{}
 	for rows.Next() {
 		var (
-			it                           domain.RunItem
-			title, description, expected string
-			priority                     string
-			stepsJSON                    []byte
-			tags                         []string
-			platform, testType           string
-			automated                    bool
+			it                                                                  domain.RunItem
+			assigneeUserID, assigneeTeamID, assigneeUserEmail, assigneeTeamName *string
+			title, description, expected                                        string
+			priority                                                            string
+			stepsJSON                                                           []byte
+			tags                                                                []string
+			platform, testType                                                  string
+			automated                                                           bool
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
-			&it.Assignee, &it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
+			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName,
+			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
 			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err
 		}
@@ -383,6 +390,12 @@ func (r *RunRepo) Items(ctx context.Context, runID, assignee string) ([]domain.R
 			return nil, err
 		}
 		it.Content = content
+		switch {
+		case assigneeUserID != nil:
+			it.Assignee = &domain.Assignee{Kind: domain.AssigneeKindUser, ID: *assigneeUserID, Name: *assigneeUserEmail}
+		case assigneeTeamID != nil:
+			it.Assignee = &domain.Assignee{Kind: domain.AssigneeKindTeam, ID: *assigneeTeamID, Name: *assigneeTeamName}
+		}
 		items = append(items, it)
 	}
 	return items, rows.Err()
@@ -502,12 +515,27 @@ func (r *RunRepo) SetItemStatus(ctx context.Context, itemID string, status domai
 	return nil
 }
 
-func (r *RunRepo) AssignItem(ctx context.Context, itemID, assignee string) error {
+func (r *RunRepo) AssignItemToUser(ctx context.Context, itemID, userID string) error {
 	if err := checkItemRunOpen(ctx, r.pool, itemID); err != nil {
 		return err
 	}
 	tag, err := r.pool.Exec(ctx,
-		`UPDATE test_run_items SET assignee = $2 WHERE id = $1`, itemID, assignee)
+		`UPDATE test_run_items SET assignee_user_id = $2, assignee_team_id = NULL WHERE id = $1`, itemID, userID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+func (r *RunRepo) AssignItemToTeam(ctx context.Context, itemID, teamID string) error {
+	if err := checkItemRunOpen(ctx, r.pool, itemID); err != nil {
+		return err
+	}
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE test_run_items SET assignee_team_id = $2, assignee_user_id = NULL WHERE id = $1`, itemID, teamID)
 	if err != nil {
 		return err
 	}

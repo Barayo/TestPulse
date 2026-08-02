@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { assignRunItems } from '@/lib/assignRunItems'
+import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CasePicker, type CasePickerCase } from '@/components/CasePicker'
 import type { components } from '@testpulse/shared/api'
@@ -41,7 +42,8 @@ export default function NewRunPage() {
   const [folders, setFolders] = useState<Folder[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [runName, setRunName] = useState('')
-  const [defaultAssignee, setDefaultAssignee] = useState('')
+  const [defaultAssignee, setDefaultAssignee] = useState<AssigneePick | null>(null)
+  const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectedSuiteKey, setSelectedSuiteKey] = useState('')
   const [seededFromSuiteName, setSeededFromSuiteName] = useState('')
@@ -132,12 +134,11 @@ export default function NewRunPage() {
     })
     bumpLanding()
     if (data) {
-      const assignee = defaultAssignee.trim()
-      if (assignee) {
+      if (defaultAssignee) {
         const { data: createdItems } = await api.GET('/api/v1/runs/{runKey}/items', {
           params: { path: { runKey: data.key } },
         })
-        await assignRunItems((createdItems ?? []).map((item) => item.id), assignee)
+        await assignRunItems((createdItems ?? []).map((item) => item.id), defaultAssignee)
       }
       navigate(`/runs/${data.key}`, { state: { justCreated: true } })
     }
@@ -200,12 +201,28 @@ export default function NewRunPage() {
               </div>
               <div className="space-y-1">
                 <Label htmlFor="run-default-assignee">Default assignee (optional)</Label>
-                <Input
-                  id="run-default-assignee"
-                  value={defaultAssignee}
-                  onChange={(e) => setDefaultAssignee(e.target.value)}
-                  placeholder="Assign every item to…"
-                />
+                <div className="flex items-center gap-2">
+                  <Button
+                    id="run-default-assignee"
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-start font-normal"
+                    onClick={() => setAssignDialogOpen(true)}
+                  >
+                    {defaultAssignee ? defaultAssignee.label : 'Assign every item to…'}
+                  </Button>
+                  {defaultAssignee && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Clear default assignee"
+                      onClick={() => setDefaultAssignee(null)}
+                    >
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
 
@@ -229,6 +246,14 @@ export default function NewRunPage() {
           </form>
         </CardContent>
       </Card>
+
+      <AssignDialog
+        open={assignDialogOpen}
+        onOpenChange={setAssignDialogOpen}
+        projectKey={projectKey}
+        title="Default assignee…"
+        onAssign={setDefaultAssignee}
+      />
     </div>
   )
 }

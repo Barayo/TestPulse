@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
@@ -11,7 +12,7 @@ import { RunStatusBreakdown, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '@/
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
-import { AssignDialog } from '@/components/AssignDialog'
+import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
 import { RunBulkActionBar } from '@/components/RunBulkActionBar'
 import { assignRunItems } from '@/lib/assignRunItems'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
@@ -96,7 +97,22 @@ function RunItemRow({
             )}
           </span>
           <span className="flex items-center gap-3">
-            <span className="text-xs text-muted-foreground">{item.assignee || 'Unassigned'}</span>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              {item.assignee ? (
+                <span
+                  className={`flex size-4 shrink-0 items-center justify-center text-[9px] font-bold ${item.assignee.kind === 'team' ? 'rounded-sm' : 'rounded-full'}`}
+                  style={avatarStyle(item.assignee.name)}
+                >
+                  {initialsFor(item.assignee.name)}
+                </span>
+              ) : (
+                <span
+                  className="size-4 shrink-0 rounded-full border border-dashed border-muted-foreground/40"
+                  aria-hidden="true"
+                />
+              )}
+              {item.assignee?.name ?? 'Unassigned'}
+            </span>
             <StatusBadge status={item.currentStatus} />
           </span>
         </button>
@@ -123,7 +139,7 @@ export default function RunPage() {
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [groupEnabled, setGroupEnabled] = useState(false)
   const [focusedIndex, setFocusedIndex] = useState(-1)
-  const [assignTarget, setAssignTarget] = useState<{ itemIds: string[]; currentAssignee?: string } | null>(null)
+  const [assignTarget, setAssignTarget] = useState<{ itemIds: string[] } | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const bumpDataRevision = useBumpDataRevision()
 
@@ -218,7 +234,8 @@ export default function RunPage() {
       items.filter(
         (item) =>
           (activeFilter === null || item.currentStatus === activeFilter) &&
-          (assigneeFilter === null || (assigneeFilter === '' ? !item.assignee : item.assignee === assigneeFilter)),
+          (assigneeFilter === null ||
+            (assigneeFilter === '' ? !item.assignee : item.assignee?.id === assigneeFilter)),
       ),
     [items, activeFilter, assigneeFilter],
   )
@@ -228,14 +245,23 @@ export default function RunPage() {
     [summary],
   )
 
-  const distinctAssignees = useMemo(
-    () => Array.from(new Set(items.map((item) => item.assignee).filter((a): a is string => Boolean(a)))).sort(),
-    [items],
-  )
+  const distinctAssignees = useMemo(() => {
+    const byId = new Map<string, string>()
+    for (const item of items) {
+      if (item.assignee) byId.set(item.assignee.id, item.assignee.name)
+    }
+    return Array.from(byId, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name))
+  }, [items])
 
-  async function handleAssign(itemIds: string[], assignee: string) {
+  async function handleAssign(itemIds: string[], assignee: AssigneePick) {
     await assignRunItems(itemIds, assignee)
-    setItems((prev) => prev.map((item) => (itemIds.includes(item.id) ? { ...item, assignee } : item)))
+    setItems((prev) =>
+      prev.map((item) =>
+        itemIds.includes(item.id)
+          ? { ...item, assignee: { kind: assignee.kind, id: assignee.id, name: assignee.label } }
+          : item,
+      ),
+    )
     setSelectedIds(new Set())
   }
 
@@ -396,13 +422,13 @@ export default function RunPage() {
               </button>
               {distinctAssignees.map((assignee) => (
                 <button
-                  key={assignee}
+                  key={assignee.id}
                   type="button"
-                  aria-pressed={assigneeFilter === assignee}
-                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === assignee ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
-                  onClick={() => setAssigneeFilter(assignee)}
+                  aria-pressed={assigneeFilter === assignee.id}
+                  className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === assignee.id ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
+                  onClick={() => setAssigneeFilter(assignee.id)}
                 >
-                  {assignee}
+                  {assignee.name}
                 </button>
               ))}
               <button
@@ -468,7 +494,7 @@ export default function RunPage() {
                           onToggleSelect={() => toggleSelect(item.id)}
                           onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
                           onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
-                          onAssign={() => setAssignTarget({ itemIds: [item.id], currentAssignee: item.assignee })}
+                          onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                         />
                       ))}
                     </ul>
@@ -488,7 +514,7 @@ export default function RunPage() {
                   onToggleSelect={() => toggleSelect(item.id)}
                   onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
                   onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
-                  onAssign={() => setAssignTarget({ itemIds: [item.id], currentAssignee: item.assignee })}
+                  onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                 />
               ))}
             </ul>
@@ -496,16 +522,17 @@ export default function RunPage() {
         </CardContent>
       </Card>
 
-      <AssignDialog
-        open={assignTarget !== null}
-        onOpenChange={(open) => !open && setAssignTarget(null)}
-        currentAssignee={assignTarget?.currentAssignee}
-        suggestions={distinctAssignees}
-        title={assignTarget && assignTarget.itemIds.length > 1 ? `Assign ${assignTarget.itemIds.length} items to…` : 'Assign to…'}
-        onAssign={(assignee) => {
-          if (assignTarget) void handleAssign(assignTarget.itemIds, assignee)
-        }}
-      />
+      {projectKey && (
+        <AssignDialog
+          open={assignTarget !== null}
+          onOpenChange={(open) => !open && setAssignTarget(null)}
+          projectKey={projectKey}
+          title={assignTarget && assignTarget.itemIds.length > 1 ? `Assign ${assignTarget.itemIds.length} items to…` : 'Assign to…'}
+          onAssign={(assignee) => {
+            if (assignTarget) void handleAssign(assignTarget.itemIds, assignee)
+          }}
+        />
+      )}
 
       <RunShortcutsHint shortcuts={runShortcuts} />
       <RunShortcutsOverlay shortcuts={runShortcuts} />

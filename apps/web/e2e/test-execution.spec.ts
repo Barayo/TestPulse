@@ -41,6 +41,22 @@ async function createRun(page: Page, name: string, caseTitles: string[]) {
   await page.getByRole('button', { name: 'Create run' }).click()
 }
 
+// link-run-item-assignee-to-identity: assignment now targets a real project
+// member, not free text — create the user and grant project membership via
+// the API (mirrors project-rbac.spec.ts's loginAsNewUser/assignRole), since
+// the scenarios here only need the person to exist and appear in the
+// AssignDialog's picker, not to act as that user themselves.
+async function addProjectMember(page: Page, projectId: string, label: string): Promise<{ userId: string; email: string }> {
+  const email = `${unique(label).replace(/\s+/g, '-').toLowerCase()}@example.com`
+  const created = await (await page.request.post('/api/v1/users', { data: { email, password: 'correcthorse' } })).json()
+  const roles: { id: string; name: string }[] = await (await page.request.get('/api/v1/roles')).json()
+  const roleId = roles.find((r) => r.name === 'Tester')?.id
+  if (!roleId) throw new Error(`no seeded role named "Tester" found in ${JSON.stringify(roles)}`)
+  const res = await page.request.put(`/api/v1/projects/${projectId}/members/${created.id}`, { data: { roleId } })
+  expect(res.status()).toBe(204)
+  return { userId: created.id, email }
+}
+
 test.describe('Requirement: Run creation pins case versions', () => {
   test('Scenario: Run pins versions at creation; board shows pinned content', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-24' })
@@ -282,9 +298,10 @@ test.describe('Requirement: Run summary', () => {
 })
 
 test.describe('Requirement: Run item assignment', () => {
-  // add-run-item-assignment-ui
+  // add-run-item-assignment-ui, link-run-item-assignee-to-identity
   test('Scenario: Assign an item from the board, then filter by assignee and by Unassigned', async ({ page }) => {
     const projectId = await createProjectWithCase(page, 'Assignment Project')
+    const ana = await addProjectMember(page, projectId, 'Ana')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
     await page.getByRole('button', { name: /create test case/i }).click()
@@ -296,12 +313,11 @@ test.describe('Requirement: Run item assignment', () => {
     const row = page.getByText('Login works').first().locator('xpath=ancestor::li')
     await row.getByRole('button', { name: /actions for login works/i }).click()
     await page.getByRole('menuitem', { name: /assign to/i }).click()
-    await page.getByLabel(/^name$/i).fill('ana')
-    await page.getByRole('button', { name: /^assign$/i }).click()
-    await expect(row.getByText('ana')).toBeVisible()
+    await page.getByRole('button', { name: ana.email }).click()
+    await expect(row.getByText(ana.email)).toBeVisible()
 
     const assigneeFilters = page.getByRole('group', { name: /filter items by assignee/i })
-    await assigneeFilters.getByRole('button', { name: /^ana/i }).click()
+    await assigneeFilters.getByRole('button', { name: ana.email }).click()
     await expect(page.getByText('Login works')).toBeVisible()
     await expect(page.getByText('Second case')).not.toBeVisible()
 
@@ -312,6 +328,7 @@ test.describe('Requirement: Run item assignment', () => {
 
   test('Scenario: Bulk-assigning two selected items in one action', async ({ page }) => {
     const projectId = await createProjectWithCase(page, 'Bulk Assign Project')
+    const ana = await addProjectMember(page, projectId, 'Ana')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
     await page.getByRole('button', { name: /create test case/i }).click()
@@ -324,30 +341,48 @@ test.describe('Requirement: Run item assignment', () => {
     await page.getByRole('checkbox', { name: /select second case/i }).check()
     await expect(page.getByText('2 selected')).toBeVisible()
     await page.getByRole('button', { name: /assign selected/i }).click()
-    await page.getByLabel(/^name$/i).fill('ana')
-    await page.getByRole('button', { name: /^assign$/i }).click()
+    await page.getByRole('button', { name: ana.email }).click()
 
     const loginRow = page.getByText('Login works').first().locator('xpath=ancestor::li')
     const secondRow = page.getByText('Second case').first().locator('xpath=ancestor::li')
-    await expect(loginRow.getByText('ana')).toBeVisible()
-    await expect(secondRow.getByText('ana')).toBeVisible()
+    await expect(loginRow.getByText(ana.email)).toBeVisible()
+    await expect(secondRow.getByText(ana.email)).toBeVisible()
     await expect(page.getByText('2 selected')).not.toBeVisible()
   })
 
   test('Scenario: Creating a run with a default assignee pre-assigns every item', async ({ page }) => {
     const projectId = await createProjectWithCase(page, 'Default Assignee Project')
+    const ana = await addProjectMember(page, projectId, 'Ana')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Second case')).toBeVisible()
 
     await page.goto(`/projects/${projectId}/runs/new`)
-    await page.getByLabel(/default assignee/i).fill('ana')
+    await page.getByRole('button', { name: /default assignee/i }).click()
+    await page.getByRole('button', { name: ana.email }).click()
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
 
     const loginRow = page.getByText('Login works').first().locator('xpath=ancestor::li')
     const secondRow = page.getByText('Second case').first().locator('xpath=ancestor::li')
-    await expect(loginRow.getByText('ana')).toBeVisible()
-    await expect(secondRow.getByText('ana')).toBeVisible()
+    await expect(loginRow.getByText(ana.email)).toBeVisible()
+    await expect(secondRow.getByText(ana.email)).toBeVisible()
+  })
+
+  test('Scenario: Someone outside the project is not offered as an assignee', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Non-Member Assignee Project')
+    const ana = await addProjectMember(page, projectId, 'Ana')
+    const outsiderEmail = `${unique('Outsider').replace(/\s+/g, '-').toLowerCase()}@example.com`
+    await page.request.post('/api/v1/users', { data: { email: outsiderEmail, password: 'correcthorse' } })
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works'])
+
+    const row = page.getByText('Login works').first().locator('xpath=ancestor::li')
+    await row.getByRole('button', { name: /actions for login works/i }).click()
+    await page.getByRole('menuitem', { name: /assign to/i }).click()
+
+    await expect(page.getByRole('button', { name: ana.email })).toBeVisible()
+    await expect(page.getByRole('button', { name: outsiderEmail })).not.toBeVisible()
   })
 })

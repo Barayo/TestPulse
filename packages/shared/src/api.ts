@@ -1060,6 +1060,13 @@ export interface components {
             /** @description Explicit cases to include */
             caseKeys?: string[];
         };
+        /** @description A run item's real assignee (link-run-item-assignee-to-identity) — always a real user or team, resolved at read time so the name is always current. */
+        RunItemAssignee: {
+            /** @enum {string} */
+            kind: "user" | "team";
+            id: string;
+            name: string;
+        };
         RunItem: {
             id: string;
             runId: string;
@@ -1067,7 +1074,8 @@ export interface components {
             /** @description The pinned case's own key — lets a client route to the case's detail page or a per-item page without a second lookup. */
             caseKey: string;
             caseVersion: number;
-            assignee: string;
+            /** @description Absent (null) when the item is unassigned, including when its previously-assigned user or team has since been deleted. */
+            assignee?: components["schemas"]["RunItemAssignee"] | null;
             currentStatus: components["schemas"]["Status"];
             /** @description Content of the pinned version, not the current one */
             content: components["schemas"]["CaseContent"];
@@ -1133,9 +1141,11 @@ export interface components {
             caseKey: string;
             verdict: components["schemas"]["Verdict"];
         };
+        /** @description assigneeUserId and assigneeTeamId are mutually exclusive (link-run-item-assignee-to-identity) — assignment must reference a real project member, free text is no longer accepted. */
         ItemStatusUpdate: {
             status?: components["schemas"]["Status"];
-            assignee?: string;
+            assigneeUserId?: string;
+            assigneeTeamId?: string;
         };
         RunSummary: {
             runId: string;

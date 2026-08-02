@@ -148,12 +148,18 @@ Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for 
 ### Assigning items
 
 Each row shows who it's assigned to, or **Unassigned**. **Assign to…** (from
-the row's right-click menu) opens a small dialog with a free-text field —
-still free text, not yet a real person/team reference — that also suggests
-assignees already used elsewhere in the run for quick reuse. An **assignee
-filter** row, alongside the status filter, offers one chip per distinct
-assignee present plus an explicit **Unassigned** and **All**; it composes
-with the status filter, so both can narrow the list together.
+the row's right-click menu) opens a picker scoped to the project's actual
+membership — a searchable list of the project's members, people and teams
+shown in separate sections, fetched from `GET /projects/{projectKey}/members`.
+There's no free-text entry: an item can only be assigned to a real user or
+team that already holds a role on the project, and the assignment is a real
+foreign-key reference (`assignee_user_id` / `assignee_team_id` on the run
+item), not display text. If the assigned user or team is later removed from
+the system, the item reverts to unassigned rather than pointing at a name
+that no longer resolves to anyone. An **assignee filter** row, alongside the
+status filter, offers one chip per distinct assignee present plus an
+explicit **Unassigned** and **All**; it composes with the status filter, so
+both can narrow the list together.
 
 A checkbox per row (plus a header **Select all**, scoped to whatever the
 active filter currently shows) enables **bulk assignment**: select several
@@ -161,9 +167,10 @@ items and a bulk action bar appears with an **Assign selected…** action that
 assigns them all in one dialog.
 
 Creating a run (`/projects/{projectKey}/runs/new`) has an optional
-**Default assignee** field — every item in the new run is assigned to that
-person immediately after creation, the same as using **Assign to…**
-afterward, just without the extra clicks.
+**Default assignee** field, backed by the same project-member picker —
+every item in the new run is assigned to that person or team immediately
+after creation, the same as using **Assign to…** afterward, just without the
+extra clicks.
 
 ### Keyboard shortcuts
 

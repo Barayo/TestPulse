@@ -36,7 +36,7 @@ func TestNotFoundPaths(t *testing.T) {
 	_, err = s.Runs.AddItem(ctx, missingID, missingID, "")
 	checks["Runs.AddItem"] = err
 	checks["Runs.SetItemStatus"] = s.Runs.SetItemStatus(ctx, missingID, domain.StatusRetest)
-	checks["Runs.AssignItem"] = s.Runs.AssignItem(ctx, missingID, "ana")
+	checks["Runs.AssignItemToUser"] = s.Runs.AssignItemToUser(ctx, missingID, missingID)
 	_, err = s.Runs.Summary(ctx, missingID)
 	checks["Runs.Summary"] = err
 

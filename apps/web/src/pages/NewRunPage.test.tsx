@@ -40,6 +40,14 @@ function mockNewRunAPI(cases: unknown[] = [], suites: unknown[] = [], createdIte
     if (path === '/api/v1/projects/{projectKey}/folders') return Promise.resolve({ data: folders, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: createdItems, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/members')
+      return Promise.resolve({ data: { users: [{ userId: 'u-ana', roleId: 'role-tester' }], teams: [] }, response: { ok: true } })
+    if (path === '/api/v1/users')
+      return Promise.resolve({
+        data: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' }],
+        response: { ok: true },
+      })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -219,17 +227,18 @@ describe('NewRunPage', () => {
 
     await userEvent.type(await screen.findByLabelText(/^name$/i), 'Sprint 2')
     await userEvent.click(await screen.findByRole('checkbox', { name: /login works/i }))
-    await userEvent.type(screen.getByLabelText(/default assignee/i), 'ana')
+    await userEvent.click(screen.getByRole('button', { name: /default assignee/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
     await userEvent.click(screen.getByRole('button', { name: /create run/i }))
 
     await waitFor(() => {
       expect(mockPUT).toHaveBeenCalledWith(
         '/api/v1/items/{itemId}/status',
-        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assigneeUserId: 'u-ana' } }),
       )
       expect(mockPUT).toHaveBeenCalledWith(
         '/api/v1/items/{itemId}/status',
-        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { assignee: 'ana' } }),
+        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { assigneeUserId: 'u-ana' } }),
       )
     })
   })

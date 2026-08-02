@@ -100,9 +100,9 @@ exactly one folder, defaulting to the project's root; see
 | GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's, and `status` (`open`/`closed`) |
 | POST | `/api/v1/runs/{runKey}/close` | Seal a run — requires `runRecordResult`, the same permission needed to record a verdict |
 | POST | `/api/v1/runs/{runKey}/reopen` | Reopen a closed run — requires `manageProject`, the project-admin-level permission |
-| GET / POST | `/api/v1/runs/{runKey}/items` | List items (optionally `?assignee=`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
+| GET / POST | `/api/v1/runs/{runKey}/items` | List items (optionally `?assignee=<userId-or-teamId>`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
 | GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`verdict`, `comment`, optional `actor` override — see below) |
-| PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or `assignee` |
+| PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or assign to a real project member: `assigneeUserId` or `assigneeTeamId` (mutually exclusive; the id must belong to the project's membership) |
 | GET | `/api/v1/runs/{runKey}/summary` | Item counts by current status |
 | POST | `/api/v1/projects/{projectKey}/imports` | Bulk-import a JUnit XML report: matches each `<testcase>` to an existing case by its `key`, creates one run with items/results for every match. `201` if every test matched; `207` if some/all didn't (see [Importing results](importing-results.md)) |
 

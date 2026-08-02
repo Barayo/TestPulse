@@ -455,18 +455,25 @@ func TestSeedContentHasAssignedAndUnassignedItems(t *testing.T) {
 	}
 	assignees := map[string]bool{}
 	sawUnassigned := false
+	sawLinkedUser := false
 	for _, r := range runs {
 		items, err := svc.RunItems(actorCtx, r.ID, "")
 		if err != nil {
 			t.Fatalf("RunItems: %v", err)
 		}
 		for _, item := range items {
-			if item.Assignee == "" {
+			if item.Assignee == nil {
 				sawUnassigned = true
 				continue
 			}
-			assignees[item.Assignee] = true
+			assignees[item.Assignee.ID] = true
+			if item.Assignee.Kind == domain.AssigneeKindUser {
+				sawLinkedUser = true
+			}
 		}
+	}
+	if !sawLinkedUser {
+		t.Error("no assignment is a real linked user — link-run-item-assignee-to-identity requires a real reference, not free text")
 	}
 	if len(assignees) < 2 {
 		t.Errorf("distinct assignees = %d, want at least 2 (got %v)", len(assignees), assignees)

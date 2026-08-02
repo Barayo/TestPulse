@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Button } from '@/components/ui/button'
@@ -12,7 +14,7 @@ import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
-import { AssignDialog } from '@/components/AssignDialog'
+import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
 import { assignRunItems } from '@/lib/assignRunItems'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { timeAgo } from '@/lib/timeAgo'
@@ -110,11 +112,12 @@ export default function RunItemDetailPage() {
     setItem((refreshedItems ?? []).find((it) => it.id === item.id))
   }
 
-  async function handleAssign(assignee: string) {
+  async function handleAssign(assignee: AssigneePick) {
     if (!item) return
     await assignRunItems([item.id], assignee)
-    setItem((prev) => (prev ? { ...prev, assignee } : prev))
-    setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, assignee } : it)))
+    const resolved = { kind: assignee.kind, id: assignee.id, name: assignee.label }
+    setItem((prev) => (prev ? { ...prev, assignee: resolved } : prev))
+    setItems((prev) => prev.map((it) => (it.id === item.id ? { ...it, assignee: resolved } : it)))
   }
 
   function goToItemOffset(offset: number) {
@@ -277,13 +280,32 @@ export default function RunItemDetailPage() {
               label="Assignee"
               value={
                 <span className="flex items-center gap-2">
-                  {item.assignee || 'Unassigned'}
+                  {item.assignee ? (
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className={`flex size-5 shrink-0 items-center justify-center text-[10px] font-bold ${item.assignee.kind === 'team' ? 'rounded-md' : 'rounded-full'}`}
+                        style={avatarStyle(item.assignee.name)}
+                      >
+                        {initialsFor(item.assignee.name)}
+                      </span>
+                      <span className="truncate">{item.assignee.name}</span>
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      <span
+                        className="size-5 shrink-0 rounded-full border border-dashed border-muted-foreground/40"
+                        aria-hidden="true"
+                      />
+                      Unassigned
+                    </span>
+                  )}
                   <button
                     type="button"
-                    className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    aria-label="Assign to…"
+                    className="text-muted-foreground hover:text-foreground"
                     onClick={() => setAssignDialogOpen(true)}
                   >
-                    Assign to…
+                    <UserPlusIcon className="size-3.5" aria-hidden="true" />
                   </button>
                 </span>
               }
@@ -318,13 +340,14 @@ export default function RunItemDetailPage() {
         </div>
       </div>
 
-      <AssignDialog
-        open={assignDialogOpen}
-        onOpenChange={setAssignDialogOpen}
-        currentAssignee={item.assignee}
-        suggestions={Array.from(new Set(items.map((it) => it.assignee).filter((a): a is string => Boolean(a))))}
-        onAssign={(assignee) => void handleAssign(assignee)}
-      />
+      {projectKey && (
+        <AssignDialog
+          open={assignDialogOpen}
+          onOpenChange={setAssignDialogOpen}
+          projectKey={projectKey}
+          onAssign={(assignee) => void handleAssign(assignee)}
+        />
+      )}
 
       <RunShortcutsHint shortcuts={shortcuts} />
       <RunShortcutsOverlay shortcuts={shortcuts} />

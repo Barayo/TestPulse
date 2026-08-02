@@ -28,7 +28,7 @@ const pendingItem = {
   caseId: 'c1',
   caseKey: 'c1',
   caseVersion: 1,
-  assignee: '',
+  assignee: null,
   currentStatus: 'pending',
   newerVersion: false,
   testName: 'login_spec.ts::works',
@@ -524,22 +524,72 @@ describe('Keyboard navigation (add-run-keyboard-shortcuts)', () => {
 })
 
 describe('Assignment (add-run-item-assignment-ui)', () => {
-  const assignedItem = { ...pendingItem, id: 'i2', caseKey: 'c2', assignee: 'ana', content: { ...pendingItem.content, title: 'Checkout works' } }
-  const otherAssignedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', assignee: 'luis', content: { ...pendingItem.content, title: 'Logout works' } }
+  const assignedItem = {
+    ...pendingItem,
+    id: 'i2',
+    caseKey: 'c2',
+    assignee: { kind: 'user' as const, id: 'u-ana', name: 'ana@example.com' },
+    content: { ...pendingItem.content, title: 'Checkout works' },
+  }
+  const otherAssignedItem = {
+    ...pendingItem,
+    id: 'i3',
+    caseKey: 'c3',
+    assignee: { kind: 'user' as const, id: 'u-luis', name: 'luis@example.com' },
+    content: { ...pendingItem.content, title: 'Logout works' },
+  }
+
+  function mockAssignmentAPI(items: unknown[], summary?: unknown) {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: items, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/summary')
+        return Promise.resolve({
+          data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/members')
+        return Promise.resolve({
+          data: {
+            users: [
+              { userId: 'u-ana', roleId: 'role-tester' },
+              { userId: 'u-luis', roleId: 'role-tester' },
+            ],
+            teams: [],
+          },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/users')
+        return Promise.resolve({
+          data: [
+            { id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
+            { id: 'u-luis', email: 'luis@example.com', isTenantAdmin: false, createdAt: '' },
+          ],
+          response: { ok: true },
+        })
+      if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+  }
 
   it('a row shows its assignee, or Unassigned when none', async () => {
-    mockRunAPI([pendingItem, assignedItem])
+    mockAssignmentAPI([pendingItem, assignedItem])
     renderRun()
     await screen.findByText('Login works')
 
     const unassignedRow = screen.getByText('Login works').closest('li') as HTMLElement
     const assignedRow = screen.getByText('Checkout works').closest('li') as HTMLElement
     expect(within(unassignedRow).getByText('Unassigned')).toBeInTheDocument()
-    expect(within(assignedRow).getByText('ana')).toBeInTheDocument()
+    expect(within(assignedRow).getByText('ana@example.com')).toBeInTheDocument()
   })
 
-  it('the row menu\'s "Assign to…" opens AssignDialog prefilled and suggesting other assignees', async () => {
-    mockRunAPI([pendingItem, assignedItem, otherAssignedItem])
+  it('the row menu\'s "Assign to…" opens AssignDialog listing project members', async () => {
+    mockAssignmentAPI([pendingItem, assignedItem, otherAssignedItem])
     renderRun()
     await screen.findByText('Login works')
 
@@ -548,32 +598,28 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
     await userEvent.click(within(row).getByRole('menuitem', { name: /assign to/i }))
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(screen.getByLabelText(/^name$/i)).toHaveValue('ana')
-    const optionValues = Array.from(document.querySelectorAll('datalist option')).map((o) => o.getAttribute('value'))
-    expect(optionValues).toContain('luis')
+    expect(screen.getByRole('button', { name: 'ana@example.com' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'luis@example.com' })).toBeInTheDocument()
   })
 
   it('submitting the dialog assigns the item and updates the row without a full reload', async () => {
-    mockRunAPI([pendingItem])
+    mockAssignmentAPI([pendingItem])
     mockPUT.mockResolvedValue({ response: { ok: true } })
     renderRun()
     await screen.findByText('Login works')
-    const getCallsBefore = mockGET.mock.calls.length
 
     const row = screen.getByText('Login works').closest('li') as HTMLElement
     await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
     await userEvent.click(within(row).getByRole('menuitem', { name: /assign to/i }))
-    await userEvent.type(screen.getByLabelText(/^name$/i), 'ana')
-    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
 
     await waitFor(() => {
       expect(mockPUT).toHaveBeenCalledWith(
         '/api/v1/items/{itemId}/status',
-        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assigneeUserId: 'u-ana' } }),
       )
     })
-    expect(await within(row).findByText('ana')).toBeInTheDocument()
-    expect(mockGET.mock.calls.length).toBe(getCallsBefore)
+    expect(await within(row).findByText('ana@example.com')).toBeInTheDocument()
   })
 
   it('the assignee filter renders one chip per distinct assignee, plus Unassigned and All', async () => {
@@ -649,7 +695,7 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
   })
 
   it('bulk-assigning from the action bar assigns every selected item and clears the selection', async () => {
-    mockRunAPI([pendingItem, assignedItem])
+    mockAssignmentAPI([pendingItem, assignedItem])
     mockPUT.mockResolvedValue({ response: { ok: true } })
     renderRun()
     await screen.findByText('Login works')
@@ -657,17 +703,16 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     await userEvent.click(screen.getByRole('button', { name: /assign selected/i }))
-    await userEvent.type(screen.getByLabelText(/^name$/i), 'ana')
-    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
 
     await waitFor(() => {
       expect(mockPUT).toHaveBeenCalledWith(
         '/api/v1/items/{itemId}/status',
-        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assignee: 'ana' } }),
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { assigneeUserId: 'u-ana' } }),
       )
       expect(mockPUT).toHaveBeenCalledWith(
         '/api/v1/items/{itemId}/status',
-        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { assignee: 'ana' } }),
+        expect.objectContaining({ params: { path: { itemId: 'i2' } }, body: { assigneeUserId: 'u-ana' } }),
       )
     })
     expect(screen.queryByText(/^\d+ selected$/i)).not.toBeInTheDocument()

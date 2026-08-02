@@ -20,10 +20,11 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
-	ctx = domain.WithActor(ctx, domain.Actor{
+	adminActor := domain.Actor{
 		ID: admin.ID, Kind: domain.ActorKindUser, DisplayName: admin.Email,
 		EffectiveUserID: admin.ID, IsTenantAdmin: admin.IsTenantAdmin,
-	})
+	}
+	ctx = domain.WithActor(ctx, adminActor)
 
 	p, err := svc.CreateProject(ctx, service.ProjectInput{
 		Name: "Sample Project",
@@ -37,6 +38,39 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	}
 	if err := svc.MarkSample(ctx, p.ID); err != nil {
 		return fmt.Errorf("sampledata: marking project sample: %w", err)
+	}
+
+	// Real project members (link-run-item-assignee-to-identity): assignment
+	// only accepts a real user or team now, so the Sample Project needs at
+	// least one more real user beyond the bootstrap admin to demonstrate
+	// picking between multiple real assignees at all.
+	julia, err := svc.CreateUser(ctx, "julia@example.com", "correcthorse1", false)
+	if err != nil {
+		return fmt.Errorf("sampledata: creating demo user: %w", err)
+	}
+	miguel, err := svc.CreateUser(ctx, "miguel@example.com", "correcthorse1", false)
+	if err != nil {
+		return fmt.Errorf("sampledata: creating demo user: %w", err)
+	}
+	roles, err := svc.ListRoles(ctx)
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	var testerRole domain.Role
+	for _, role := range roles {
+		if role.Name == "Tester" {
+			testerRole = role
+			break
+		}
+	}
+	if testerRole.ID == "" {
+		return fmt.Errorf("sampledata: default Tester role not found")
+	}
+	if err := svc.SetProjectMember(ctx, adminActor, p.ID, julia.ID, testerRole.ID); err != nil {
+		return fmt.Errorf("sampledata: adding demo project member: %w", err)
+	}
+	if err := svc.SetProjectMember(ctx, adminActor, p.ID, miguel.ID, testerRole.ID); err != nil {
+		return fmt.Errorf("sampledata: adding demo project member: %w", err)
 	}
 
 	root, err := RootFolder(ctx, svc, p.ID)
@@ -367,25 +401,26 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if _, err := svc.AddRunItem(ctx, sprintRun.ID, passwordReset.ID); err != nil {
 		return fmt.Errorf("sampledata: adding pending sprint item: %w", err)
 	}
-	// Two of the four items are assigned to different people, two are left
-	// unassigned — real data for the assignee display, filter (including
-	// Unassigned), and bulk-assign flow (add-run-item-assignment-ui) to
+	// Two of the four items are assigned to different real project members,
+	// two are left unassigned — real data for the assignee display, filter
+	// (including Unassigned), and bulk-assign flow
+	// (add-run-item-assignment-ui, link-run-item-assignee-to-identity) to
 	// show against, rather than every item sharing one state.
 	sprintItems, err := svc.RunItems(ctx, sprintRun.ID, "")
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	for _, item := range sprintItems {
-		var assignee string
+		var userID string
 		switch item.CaseID {
 		case login.ID:
-			assignee = "Julia López"
+			userID = julia.ID
 		case badPassword.ID:
-			assignee = "Miguel Alonso"
+			userID = miguel.ID
 		default:
 			continue
 		}
-		if err := svc.UpdateItem(ctx, item.ID, service.ItemUpdate{Assignee: &assignee}); err != nil {
+		if err := svc.UpdateItem(ctx, item.ID, service.ItemUpdate{AssigneeUserID: &userID}); err != nil {
 			return fmt.Errorf("sampledata: assigning sprint item: %w", err)
 		}
 	}

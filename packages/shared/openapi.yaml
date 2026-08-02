@@ -1317,9 +1317,20 @@ components:
           type: array
           items: { type: string }
           description: Explicit cases to include
+    RunItemAssignee:
+      type: object
+      required: [kind, id, name]
+      description: >-
+        A run item's real assignee (link-run-item-assignee-to-identity) —
+        always a real user or team, resolved at read time so the name is
+        always current.
+      properties:
+        kind: { type: string, enum: [user, team] }
+        id: { type: string }
+        name: { type: string }
     RunItem:
       type: object
-      required: [id, runId, caseId, caseKey, caseVersion, assignee, currentStatus, content, newerVersion, createdAt]
+      required: [id, runId, caseId, caseKey, caseVersion, currentStatus, content, newerVersion, createdAt]
       properties:
         id: { type: string }
         runId: { type: string }
@@ -1328,7 +1339,10 @@ components:
           type: string
           description: The pinned case's own key — lets a client route to the case's detail page or a per-item page without a second lookup.
         caseVersion: { type: integer }
-        assignee: { type: string }
+        assignee:
+          allOf: [{ $ref: "#/components/schemas/RunItemAssignee" }]
+          nullable: true
+          description: Absent (null) when the item is unassigned, including when its previously-assigned user or team has since been deleted.
         currentStatus: { $ref: "#/components/schemas/Status" }
         content:
           allOf: [{ $ref: "#/components/schemas/CaseContent" }]
@@ -1424,9 +1438,14 @@ components:
         verdict: { $ref: "#/components/schemas/Verdict" }
     ItemStatusUpdate:
       type: object
+      description: >-
+        assigneeUserId and assigneeTeamId are mutually exclusive
+        (link-run-item-assignee-to-identity) — assignment must reference a
+        real project member, free text is no longer accepted.
       properties:
         status: { $ref: "#/components/schemas/Status" }
-        assignee: { type: string }
+        assigneeUserId: { type: string }
+        assigneeTeamId: { type: string }
     RunSummary:
       type: object
       required: [runId, total, counts]

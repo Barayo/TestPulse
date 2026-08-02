@@ -255,13 +255,40 @@ func TestScenario_RunLifecycleOverHTTP(t *testing.T) {
 	// "Invalid status rejected" scenario.
 	call(t, h, "PUT", fmt.Sprintf("/api/v1/items/%s/status", items[0].ID), jmap{"status": "bogus"}, 400, nil)
 
-	// "Assign and filter" scenario.
-	call(t, h, "PUT", fmt.Sprintf("/api/v1/items/%s/status", items[0].ID), jmap{"assignee": "ana"}, 204, nil)
+	// "Assign and filter" scenario (link-run-item-assignee-to-identity):
+	// assignment only accepts a real project member.
+	var member struct{ ID string }
+	call(t, h, "POST", "/api/v1/users", jmap{"email": "ana-scenario@example.com", "password": "correcthorse1"}, 201, &member)
+	var roles []struct {
+		ID   string
+		Name string
+	}
+	call(t, h, "GET", "/api/v1/roles", nil, 200, &roles)
+	var testerRoleID string
+	for _, role := range roles {
+		if role.Name == "Tester" {
+			testerRoleID = role.ID
+		}
+	}
+	if testerRoleID == "" {
+		t.Fatal("Tester role not found")
+	}
+	call(t, h, "PUT", fmt.Sprintf("/api/v1/projects/%s/members/%s", p.Key, member.ID), jmap{"roleId": testerRoleID}, 204, nil)
+
+	call(t, h, "PUT", fmt.Sprintf("/api/v1/items/%s/status", items[0].ID), jmap{"assigneeUserId": member.ID}, 204, nil)
 	var filtered []jmap
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items?assignee=ana", run.Key), nil, 200, &filtered)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items?assignee=%s", run.Key, member.ID), nil, 200, &filtered)
 	if len(filtered) != 1 {
 		t.Errorf("assignee filter = %d items, want 1", len(filtered))
 	}
+	if assignee, ok := filtered[0]["assignee"].(map[string]any); !ok || assignee["id"] != member.ID || assignee["kind"] != "user" {
+		t.Errorf("assignee = %+v, want linked user %s", filtered[0]["assignee"], member.ID)
+	}
+
+	// "Assigning to a non-member is rejected" scenario.
+	var outsider struct{ ID string }
+	call(t, h, "POST", "/api/v1/users", jmap{"email": "outsider-scenario@example.com", "password": "correcthorse1"}, 201, &outsider)
+	call(t, h, "PUT", fmt.Sprintf("/api/v1/items/%s/status", items[0].ID), jmap{"assigneeUserId": outsider.ID}, 404, nil)
 
 	// "Summary counts by status" scenario: 1 pass, 1 pending.
 	var sum struct {

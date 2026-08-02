@@ -1,33 +1,84 @@
-import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { AssignDialog } from './AssignDialog'
+import { api } from '@/lib/api'
+
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn() } }))
+const mockGET = vi.mocked(api.GET)
+
+function mockMembersAPI() {
+  mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/projects/{projectKey}/members')
+      return Promise.resolve({
+        data: { users: [{ userId: 'u1', roleId: 'r1' }], teams: [{ teamId: 't1', roleId: 'r1' }] },
+        response: { ok: true },
+      })
+    if (path === '/api/v1/users')
+      return Promise.resolve({
+        data: [
+          { id: 'u1', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
+          { id: 'u2', email: 'outsider@example.com', isTenantAdmin: false, createdAt: '' },
+        ],
+        response: { ok: true },
+      })
+    if (path === '/api/v1/teams')
+      return Promise.resolve({
+        data: [{ id: 't1', name: 'QA Core', memberIds: [], createdAt: '' }],
+        response: { ok: true },
+      })
+    return Promise.resolve({ data: undefined, response: { ok: true } })
+  })
+}
+
+beforeEach(() => {
+  vi.resetAllMocks()
+})
 
 describe('AssignDialog', () => {
-  it('renders a text field and lists suggestions as datalist options', () => {
-    render(<AssignDialog open onOpenChange={() => {}} suggestions={['ana', 'luis']} onAssign={() => {}} />)
+  it('lists the project\'s members, people and teams separately labeled, no free-text input', async () => {
+    mockMembersAPI()
+    render(<AssignDialog open onOpenChange={() => {}} projectKey="p1" onAssign={() => {}} />)
 
-    const field = screen.getByLabelText(/^name$/i)
-    expect(field).toBeInTheDocument()
-    const optionValues = Array.from(document.querySelectorAll('datalist option')).map((o) => o.getAttribute('value'))
-    expect(optionValues).toEqual(['ana', 'luis'])
+    expect(await screen.findByRole('button', { name: 'ana@example.com' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'QA Core' })).toBeInTheDocument()
+    expect(screen.queryByText('outsider@example.com')).not.toBeInTheDocument()
+    expect(screen.getByText('People')).toBeInTheDocument()
+    expect(screen.getByText('Teams')).toBeInTheDocument()
   })
 
-  it('is prefilled with the current assignee when provided', () => {
-    render(
-      <AssignDialog open onOpenChange={() => {}} currentAssignee="ana" suggestions={[]} onAssign={() => {}} />,
-    )
-
-    expect(screen.getByLabelText(/^name$/i)).toHaveValue('ana')
-  })
-
-  it('calls onAssign with the entered value on submit', async () => {
+  it('calls onAssign with the picked user and closes', async () => {
+    mockMembersAPI()
     const onAssign = vi.fn()
-    render(<AssignDialog open onOpenChange={() => {}} suggestions={[]} onAssign={onAssign} />)
+    const onOpenChange = vi.fn()
+    render(<AssignDialog open onOpenChange={onOpenChange} projectKey="p1" onAssign={onAssign} />)
 
-    await userEvent.type(screen.getByLabelText(/^name$/i), 'ana')
-    await userEvent.click(screen.getByRole('button', { name: /^assign$/i }))
+    await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
 
-    expect(onAssign).toHaveBeenCalledWith('ana')
+    expect(onAssign).toHaveBeenCalledWith({ kind: 'user', id: 'u1', label: 'ana@example.com' })
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('calls onAssign with the picked team', async () => {
+    mockMembersAPI()
+    const onAssign = vi.fn()
+    render(<AssignDialog open onOpenChange={() => {}} projectKey="p1" onAssign={onAssign} />)
+
+    await userEvent.click(await screen.findByRole('button', { name: 'QA Core' }))
+
+    expect(onAssign).toHaveBeenCalledWith({ kind: 'team', id: 't1', label: 'QA Core' })
+  })
+
+  it('search narrows the list', async () => {
+    mockMembersAPI()
+    render(<AssignDialog open onOpenChange={() => {}} projectKey="p1" onAssign={() => {}} />)
+    await screen.findByRole('button', { name: 'ana@example.com' })
+
+    await userEvent.type(screen.getByPlaceholderText(/search/i), 'qa')
+
+    await waitFor(() => {
+      expect(screen.queryByRole('button', { name: 'ana@example.com' })).not.toBeInTheDocument()
+    })
+    expect(screen.getByRole('button', { name: 'QA Core' })).toBeInTheDocument()
   })
 })

@@ -548,14 +548,15 @@ func (h *api) recordResult(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) updateItem(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Status   *string `json:"status"`
-		Assignee *string `json:"assignee"`
+		Status         *string `json:"status"`
+		AssigneeUserID *string `json:"assigneeUserId"`
+		AssigneeTeamID *string `json:"assigneeTeamId"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
 		return
 	}
 	err = h.svc.UpdateItem(r.Context(), chi.URLParam(r, "itemID"),
-		service.ItemUpdate{Status: body.Status, Assignee: body.Assignee})
+		service.ItemUpdate{Status: body.Status, AssigneeUserID: body.AssigneeUserID, AssigneeTeamID: body.AssigneeTeamID})
 	h.respond(w, http.StatusNoContent, nil, err)
 }

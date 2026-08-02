@@ -102,9 +102,98 @@ func TestClosedRunMutationsReturnConflictError(t *testing.T) {
 	err = s.UpdateItem(ctx, item.ID, service.ItemUpdate{Status: &status})
 	wantConflict(t, "UpdateItem(status)", err)
 
-	assignee := "ana"
-	err = s.UpdateItem(ctx, item.ID, service.ItemUpdate{Assignee: &assignee})
+	admin := actorFor(mustCreateUser(t, s, "admin-closed-run@example.com", "correcthorse", true))
+	member := mustCreateUser(t, s, "member-closed-run@example.com", "correcthorse", false)
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Tester (closed-run-test)", CanRead: true, CanRunRecordResult: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, p.ID, member.ID, role.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+	memberID := member.ID
+	err = s.UpdateItem(ctx, item.ID, service.ItemUpdate{AssigneeUserID: &memberID})
 	wantConflict(t, "UpdateItem(assignee)", err)
+}
+
+// TestAssignItemRequiresProjectMembership covers
+// link-run-item-assignee-to-identity: assignment can only reference a
+// real user who is actually a member of the item's project.
+func TestAssignItemRequiresProjectMembership(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "sprint 1", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	items, err := s.RunItems(ctx, run.ID, "")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("RunItems: %d, %v", len(items), err)
+	}
+	item := items[0]
+
+	admin := actorFor(mustCreateUser(t, s, "admin-membership@example.com", "correcthorse", true))
+	outsider := mustCreateUser(t, s, "outsider@example.com", "correcthorse", false)
+
+	outsiderID := outsider.ID
+	err = s.UpdateItem(ctx, item.ID, service.ItemUpdate{AssigneeUserID: &outsiderID})
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("assigning a non-member user: err = %v, want ErrNotFound", err)
+	}
+
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Tester (membership-test)", CanRead: true, CanRunRecordResult: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, p.ID, outsider.ID, role.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+	if err := s.UpdateItem(ctx, item.ID, service.ItemUpdate{AssigneeUserID: &outsiderID}); err != nil {
+		t.Fatalf("assigning a project member: %v", err)
+	}
+	got, err := s.RunItems(ctx, run.ID, "")
+	if err != nil || got[0].Assignee == nil || got[0].Assignee.ID != outsider.ID {
+		t.Errorf("Assignee = %+v, %v, want %s", got[0].Assignee, err, outsider.ID)
+	}
+}
+
+// TestAssignItemRejectsNonMemberTeam covers the same rule for teams.
+func TestAssignItemRejectsNonMemberTeam(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "sprint 1", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	items, _ := s.RunItems(ctx, run.ID, "")
+	item := items[0]
+
+	admin := actorFor(mustCreateUser(t, s, "admin-team-membership@example.com", "correcthorse", true))
+	team, err := s.CreateTeam(ctx, admin, "Unrelated Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+
+	teamID := team.ID
+	err = s.UpdateItem(ctx, item.ID, service.ItemUpdate{AssigneeTeamID: &teamID})
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("assigning a non-member team: err = %v, want ErrNotFound", err)
+	}
+
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Tester (team-membership-test)", CanRead: true, CanRunRecordResult: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectTeamRole(ctx, admin, p.ID, team.ID, role.ID); err != nil {
+		t.Fatalf("SetProjectTeamRole: %v", err)
+	}
+	if err := s.UpdateItem(ctx, item.ID, service.ItemUpdate{AssigneeTeamID: &teamID}); err != nil {
+		t.Fatalf("assigning a member team: %v", err)
+	}
 }
 
 // TestSuiteTrendResolvesFromSuiteID covers add-suite-pass-rate-trend's
