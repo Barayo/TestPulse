@@ -8,6 +8,22 @@ re-encoded; none are resold or used for any commercial endorsement, and
 none depict a living person's likeness for a purpose implying their
 endorsement.
 
+**Color treatment (2026-08-03, Pepe design review):** every preset is
+grayscale-converted, contrast-normalized, then blended 35% with a
+teal duotone (`#0B2E2C` shadows → `#14B8A6` highlights, the app's own
+foreground/primary tokens) — a deliberate, uniform post-processing pass
+across all 23, not per-image editing. The 23 sources span black-and-white
+photographs, sepia prints, oil paintings, an engraving, and a red-chalk
+drawing; displayed unprocessed at 40px they read as a mismatched pile of
+archival scans rather than one coherent icon set. A full-strength duotone
+was tried and rejected — it washed out facial detail (especially on
+painted portraits) into a flat, muddy wash; 35% keeps tonal contrast
+crisp while still giving the set a real, visible, on-brand cast. This
+treatment applies **only** to the 23 curated presets — a user's own
+uploaded photo (`add-custom-avatar-upload`) is never color-treated, since
+it's a real photo of a real person and should look like them, not a
+stylized illustration.
+
 | Key | Subject | Source | License | Attribution required? |
 |---|---|---|---|---|
 | `ada-lovelace` | Ada Lovelace, watercolor by Alfred Edward Chalon, c. 1840 | [Commons](https://commons.wikimedia.org/wiki/File:Ada_Lovelace_portrait.jpg) | PD-old-100-expired / CC-PD-Mark | No |
