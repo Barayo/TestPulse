@@ -19,7 +19,7 @@
 
 ## 4. Frontend: Profile page (TDD)
 
-- [x] 4.1 Write failing tests for a new `ProfilePage` at `/settings/profile`: shows current display name/avatar/timezone; avatar picker lists all presets plus "generated default"; saving calls `PATCH /api/v1/users/me` and reflects the update; links to `/settings/tokens` always, `/settings/users` only when the account is admin; a visible (disabled/"coming soon") entry for password change
+- [x] 4.1 Write failing tests for a new `ProfilePage` at `/settings/profile`: shows current display name/avatar/timezone; avatar picker lists all presets plus "generated default"; saving calls `PATCH /api/v1/users/me` and reflects the update; links to `/settings/tokens`; a visible (disabled/"coming soon") entry for password change. **Revised after review**: the originally-planned admin-only "Manage users" link was dropped — it pointed at a route (`/settings/users`) that doesn't exist (the real page is `/settings/people`), and even fixed it would have duplicated the top-level Admin menu's existing "People" entry, contradicting `UserMenu.tsx`'s own established principle that instance administration is a distinct concern from personal account settings and deliberately lives outside it.
 - [x] 4.2 Implement `ProfilePage.tsx` and the route in `App.tsx`
 - [x] 4.3 `Avatar` component (`apps/web/src/components/Avatar.tsx`): renders the preset image if `avatarKey` resolves to a known preset, else the existing generated initial-on-color chip (`avatarStyle`/`initialsFor`)
 - [x] 4.4 Confirm green (7/7 `ProfilePage.test.tsx`, 4/4 `Avatar.test.tsx`)

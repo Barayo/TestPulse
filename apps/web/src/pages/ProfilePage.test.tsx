@@ -95,18 +95,12 @@ describe('ProfilePage', () => {
     expect(screen.getByRole('link', { name: /api tokens/i })).toHaveAttribute('href', '/settings/tokens')
   })
 
-  it('links to Users management only for a tenant admin', async () => {
+  it('does not duplicate instance administration here, admin or not — that stays under the top-level Admin menu', async () => {
     mockMe({ ...meResponse, isTenantAdmin: true })
     renderPage()
     await screen.findByLabelText(/display name/i)
-    expect(screen.getByRole('link', { name: /manage users/i })).toHaveAttribute('href', '/settings/users')
-  })
-
-  it('does not link to Users management for a non-admin', async () => {
-    mockMe()
-    renderPage()
-    await screen.findByLabelText(/display name/i)
     expect(screen.queryByRole('link', { name: /manage users/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /^people$/i })).not.toBeInTheDocument()
   })
 
   it('shows a disabled password-change entry as a coming-soon placeholder', async () => {
@@ -115,5 +109,12 @@ describe('ProfilePage', () => {
     await screen.findByLabelText(/display name/i)
     const changePassword = screen.getByRole('button', { name: /change password/i })
     expect(changePassword).toBeDisabled()
+  })
+
+  it('the coming-soon label is visible text, not only a hover tooltip (Pepe review)', async () => {
+    mockMe()
+    renderPage()
+    await screen.findByLabelText(/display name/i)
+    expect(screen.getByText(/coming soon/i)).toBeVisible()
   })
 })

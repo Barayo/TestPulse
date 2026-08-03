@@ -747,7 +747,7 @@ offer a Profile entry — the primary entry point into account settings.
 
 #### Scenario: Profile page links to existing settings
 - **WHEN** a user opens the Profile page
-- **THEN** it links to the existing Tokens page, and to the Users page if the account is an admin — both previously reachable only by typing their URL directly
+- **THEN** it links to the existing Tokens page, previously reachable only by typing its URL directly; it does not duplicate instance administration (People, Roles) even for an admin account, since that already has its own entry point in the top-level Admin menu and is not a personal-account concern
 
 ### Requirement: Chosen avatar is shown everywhere a person's identity appears
 A user's `Avatar` (preset or generated default) SHALL render

@@ -16,15 +16,20 @@ avatar field existing, and both will be implemented together.
   design.md), and a timezone (IANA identifier).
 - Adds `PATCH /api/v1/users/me` for a user to update their own profile
   fields (display name, avatar, timezone) — distinct from the existing
-  admin-only user management (`UsersPage.tsx`/`PATCH /api/v1/users/{id}`).
+  admin-only user management (`PeoplePage.tsx`/`PATCH /api/v1/users/{id}`).
 - The header's plain-email text becomes an avatar (generated
-  initial-on-background by default, or the chosen preset), which is now
-  a link to the Profile page — the first real doorway into Settings.
-- Profile page also links out to the two already-existing, previously
-  orphaned settings pages (Tokens, and Users for admins), and includes a
-  placeholder pointing at password change — not implemented yet, no
-  password-change endpoint exists today; noted so the page doesn't look
-  incomplete when that ships later.
+  initial-on-background by default, or the chosen preset) next to the
+  email, and the account menu gains a Profile entry — the first real
+  doorway into Settings.
+- Profile page also links out to the previously-orphaned Tokens page,
+  and includes a placeholder pointing at password change — not
+  implemented yet, no password-change endpoint exists today; noted so
+  the page doesn't look incomplete when that ships later. It does
+  **not** link to instance administration (People/Roles) even for an
+  admin account — revised during implementation once it became clear
+  that would duplicate the top-level Admin menu's existing entry point,
+  and the target route (`/settings/users`) doesn't actually exist (the
+  real page is `/settings/people`).
 - `PeoplePage.tsx`, `ProjectMembersPage.tsx`, the run-item assignee
   chips (`RunPage.tsx`, `RunItemDetailPage.tsx`), and
   `RunItemDetailPage.tsx`'s result History list (for `actorKind: 'user'`

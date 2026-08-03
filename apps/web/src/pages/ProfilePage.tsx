@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link } from 'react-router'
+import { KeyRoundIcon, LockIcon, ChevronRightIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/useAuth'
 import { Avatar } from '@/components/Avatar'
@@ -138,18 +139,45 @@ export default function ProfilePage() {
         <CardHeader>
           <CardTitle className="tp-heading">Account</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-2">
-          <Link to="/settings/tokens" className="block text-sm text-primary hover:underline">
-            API tokens
-          </Link>
-          {user.isTenantAdmin && (
-            <Link to="/settings/users" className="block text-sm text-primary hover:underline">
-              Manage users
-            </Link>
-          )}
-          <Button type="button" variant="outline" size="sm" disabled title="Coming soon">
-            Change password
-          </Button>
+        <CardContent>
+          <ul className="rounded-lg border">
+            <li className="border-b last:border-b-0">
+              <Link
+                to="/settings/tokens"
+                className="flex items-center gap-3 px-4 py-3 hover:bg-accent"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <KeyRoundIcon className="size-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block text-sm font-medium">API tokens</span>
+                  <span className="block text-xs text-muted-foreground">Manage tokens for CI and integrations</span>
+                </span>
+                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+              </Link>
+            </li>
+            <li className="border-b last:border-b-0">
+              <button
+                type="button"
+                disabled
+                title="Coming soon"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left disabled:cursor-not-allowed"
+              >
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                  <LockIcon className="size-4" aria-hidden="true" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-muted-foreground">Change password</span>
+                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      Coming soon
+                    </span>
+                  </span>
+                  <span className="block text-xs text-muted-foreground">Password login isn&apos;t available yet on this instance</span>
+                </span>
+              </button>
+            </li>
+          </ul>
         </CardContent>
       </Card>
     </div>
