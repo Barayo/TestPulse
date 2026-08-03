@@ -15,6 +15,17 @@ import nikolaTesla from '@/assets/avatars/nikola-tesla.jpg'
 import maryAnning from '@/assets/avatars/mary-anning.jpg'
 import johnVonNeumann from '@/assets/avatars/john-von-neumann.jpg'
 import emmyNoether from '@/assets/avatars/emmy-noether.jpg'
+import severoOchoa from '@/assets/avatars/severo-ochoa.jpg'
+import barbaraMcclintock from '@/assets/avatars/barbara-mcclintock.jpg'
+import richardFeynman from '@/assets/avatars/richard-feynman.jpg'
+import leonardoDaVinci from '@/assets/avatars/leonardo-da-vinci.jpg'
+import archimedes from '@/assets/avatars/archimedes.jpg'
+import charlesBabbage from '@/assets/avatars/charles-babbage.jpg'
+import galileoGalilei from '@/assets/avatars/galileo-galilei.jpg'
+import michaelFaraday from '@/assets/avatars/michael-faraday.jpg'
+import srinivasaRamanujan from '@/assets/avatars/srinivasa-ramanujan.jpg'
+import hideyoNoguchi from '@/assets/avatars/hideyo-noguchi.jpg'
+import confucius from '@/assets/avatars/confucius.jpg'
 
 export type AvatarPresetKey =
   | 'ada-lovelace'
@@ -29,6 +40,17 @@ export type AvatarPresetKey =
   | 'mary-anning'
   | 'john-von-neumann'
   | 'emmy-noether'
+  | 'severo-ochoa'
+  | 'barbara-mcclintock'
+  | 'richard-feynman'
+  | 'leonardo-da-vinci'
+  | 'archimedes'
+  | 'charles-babbage'
+  | 'galileo-galilei'
+  | 'michael-faraday'
+  | 'srinivasa-ramanujan'
+  | 'hideyo-noguchi'
+  | 'confucius'
 
 export const AVATAR_PRESETS: { key: AvatarPresetKey; name: string; image: string }[] = [
   { key: 'ada-lovelace', name: 'Ada Lovelace', image: adaLovelace },
@@ -43,6 +65,17 @@ export const AVATAR_PRESETS: { key: AvatarPresetKey; name: string; image: string
   { key: 'mary-anning', name: 'Mary Anning', image: maryAnning },
   { key: 'john-von-neumann', name: 'John von Neumann', image: johnVonNeumann },
   { key: 'emmy-noether', name: 'Emmy Noether', image: emmyNoether },
+  { key: 'severo-ochoa', name: 'Severo Ochoa', image: severoOchoa },
+  { key: 'barbara-mcclintock', name: 'Barbara McClintock', image: barbaraMcclintock },
+  { key: 'richard-feynman', name: 'Richard Feynman', image: richardFeynman },
+  { key: 'leonardo-da-vinci', name: 'Leonardo da Vinci', image: leonardoDaVinci },
+  { key: 'archimedes', name: 'Archimedes', image: archimedes },
+  { key: 'charles-babbage', name: 'Charles Babbage', image: charlesBabbage },
+  { key: 'galileo-galilei', name: 'Galileo Galilei', image: galileoGalilei },
+  { key: 'michael-faraday', name: 'Michael Faraday', image: michaelFaraday },
+  { key: 'srinivasa-ramanujan', name: 'Srinivasa Ramanujan', image: srinivasaRamanujan },
+  { key: 'hideyo-noguchi', name: 'Hideyo Noguchi', image: hideyoNoguchi },
+  { key: 'confucius', name: 'Confucius', image: confucius },
 ]
 
 const AVATAR_PRESET_MAP: Record<string, string> = Object.fromEntries(

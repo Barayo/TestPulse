@@ -89,7 +89,7 @@ open-source app is a real exposure, not a style preference.
 
 **`PATCH /api/v1/users/me` is a new, separate endpoint from
 `PATCH /api/v1/users/{id}`.** The existing admin endpoint
-(`UsersPage.tsx`) manages *other* users' role/deactivation — a
+(`PeoplePage.tsx`) manages *other* users' role/deactivation — a
 different authorization shape (admin-only, any target user) from a
 user editing their own display name/avatar/timezone (any authenticated
 user, self only, no role fields touchable). Reusing one endpoint for
@@ -104,9 +104,12 @@ does.
 
 ## Risks / Trade-offs
 
-- Twelve avatars is a small gallery — acceptable for v1 given the
-  explicit goal of "pick one, not curate an infinite closet"; expanding
-  the set later is just adding more static files, no migration.
+- The gallery grew from an initial twelve to twenty-three avatars during
+  implementation (adding Nobel laureates and broadening geographic
+  representation — India, Japan, China — beyond the initial mostly
+  Western/American set), still acceptable for v1 given the explicit
+  goal of "pick one, not curate an infinite closet"; expanding the set
+  further is just adding more static files, no migration.
 - Wikimedia sourcing/licensing is left as implementation-time work
   rather than nailed down here — each image needs its own license check
   (public domain vs. CC-BY-SA has different attribution obligations),
