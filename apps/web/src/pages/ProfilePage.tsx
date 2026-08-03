@@ -138,7 +138,7 @@ export default function ProfilePage() {
             <fieldset className="space-y-2">
               <legend className="text-sm font-medium">Avatar</legend>
               <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Avatar">
-                <label className="flex flex-col items-center gap-1">
+                <label className="flex flex-col items-center gap-1" title="Generated default">
                   <input
                     type="radio"
                     name="avatar"
@@ -158,7 +158,7 @@ export default function ProfilePage() {
                   </span>
                 </label>
                 {avatarKey === 'custom' ? (
-                  <label className="flex flex-col items-center gap-1">
+                  <label className="flex flex-col items-center gap-1" title="Your uploaded photo">
                     <input
                       type="radio"
                       name="avatar"
@@ -198,7 +198,7 @@ export default function ProfilePage() {
                   onChange={handleAvatarFileSelected}
                 />
                 {AVATAR_PRESETS.map((preset) => (
-                  <label key={preset.key} className="flex flex-col items-center gap-1">
+                  <label key={preset.key} className="flex flex-col items-center gap-1" title={preset.name}>
                     <input
                       type="radio"
                       name="avatar"

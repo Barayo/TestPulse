@@ -8,21 +8,41 @@ re-encoded; none are resold or used for any commercial endorsement, and
 none depict a living person's likeness for a purpose implying their
 endorsement.
 
-**Color treatment (2026-08-03, Pepe design review):** every preset is
-grayscale-converted, contrast-normalized, then blended 35% with a
-teal duotone (`#0B2E2C` shadows → `#14B8A6` highlights, the app's own
-foreground/primary tokens) — a deliberate, uniform post-processing pass
-across all 23, not per-image editing. The 23 sources span black-and-white
-photographs, sepia prints, oil paintings, an engraving, and a red-chalk
-drawing; displayed unprocessed at 40px they read as a mismatched pile of
-archival scans rather than one coherent icon set. A full-strength duotone
-was tried and rejected — it washed out facial detail (especially on
-painted portraits) into a flat, muddy wash; 35% keeps tonal contrast
-crisp while still giving the set a real, visible, on-brand cast. This
-treatment applies **only** to the 23 curated presets — a user's own
-uploaded photo (`add-custom-avatar-upload`) is never color-treated, since
-it's a real photo of a real person and should look like them, not a
-stylized illustration.
+**Uniform processing pipeline (2026-08-03, Pepe design review, extended
+same day after background-removal follow-up):** every preset goes
+through the same four-step pass, not per-image editing:
+
+1. **Background removal** (`rembg`, `isnet-general-use` model) isolates
+   the subject from whatever the original photo/painting/engraving's
+   background was — a mix of studio backdrops, painted dark backgrounds,
+   flags, aged paper, and plain walls that clashed badly with each other
+   at 40px.
+2. **Auto-crop to the subject** — the alpha mask's bounding box (+10%
+   padding), padded to a centered square. This also fixed several
+   sources whose original manual crop had the face too small or too
+   close to an edge (`mary-anning`, `severo-ochoa`, `barbara-mcclintock`)
+   without needing a full recrop-by-hand pass.
+3. **Composite onto one flat backdrop** (`#F0F3F2`, the app's own
+   `--muted` token) — every preset now sits on the *same* background,
+   not 23 different ones.
+4. **Grayscale, contrast-normalize, then blend 35% with a teal duotone**
+   (`#0B2E2C` shadows → `#14B8A6` highlights, the app's own
+   foreground/primary tokens) — unifies tone across photographs,
+   paintings, and line art while keeping facial detail legible. A
+   full-strength duotone was tried and rejected first — it washed
+   portraits into a flat, muddy wash; 35% was the kept middle ground.
+
+This treatment applies **only** to the 23 curated presets — a user's own
+uploaded photo (`add-custom-avatar-upload`) is never processed this way,
+since it's a real photo of a real person and should look like them, not
+a stylized illustration.
+
+Background removal is imperfect on some source material — anything with
+low contrast between subject and background (a faint pencil/chalk
+drawing on similarly-toned paper) fails outright rather than producing a
+mediocre result; see `leonardo-da-vinci` below, which was re-sourced
+from a different, higher-contrast original for exactly this reason
+rather than shipped with a bad cutout.
 
 | Key | Subject | Source | License | Attribution required? |
 |---|---|---|---|---|
@@ -41,7 +61,7 @@ stylized illustration.
 | `severo-ochoa` | Severo Ochoa, 1959 press photo (Nobel laureate, Physiology or Medicine 1959) | [Commons](https://commons.wikimedia.org/wiki/File:Severo_Ochoa_1959.jpg) | Public domain (PD-US-no-notice, published 1931–1977 without a copyright notice) | No |
 | `barbara-mcclintock` | Barbara McClintock in her laboratory, 1947 (Nobel laureate, Physiology or Medicine 1983) | [Commons](https://en.wikipedia.org/wiki/File:Barbara_McClintock_(1902-1992)_shown_in_her_laboratory_in_1947.jpg) | Public domain (Smithsonian Institution Archives — no known copyright restrictions) | No |
 | `richard-feynman` | Richard Feynman, Los Alamos identity badge photo (Nobel laureate, Physics 1965) | [Commons](https://commons.wikimedia.org/wiki/File:Richard_P._Feynman_Los_Alamos_ID_badge_photo.jpg) | PD LosAlamos | **Yes — credit "Los Alamos National Laboratory"** |
-| `leonardo-da-vinci` | Leonardo da Vinci, red chalk drawing, Biblioteca Reale di Torino, c. 1510–1518, traditionally called a self-portrait | [Commons](https://commons.wikimedia.org/wiki/File:Leonardo_self.jpg) | Public domain (life+100 expired; pre-1931 publication) | No |
+| `leonardo-da-vinci` | Leonardo da Vinci, line engraving by George Cooke, after Horenout | [Commons](https://commons.wikimedia.org/wiki/File:Leonardo_da_Vinci._Line_engraving_by_G._Cooke._Wellcome_V0006064.jpg) | CC BY 4.0 (Wellcome Collection) | **Yes — credit Wellcome Collection** |
 | `archimedes` | Archimedes, engraving by an unknown artist, c. 1584, from André Thevet's *Les vrais pourtraits...* | [Commons](https://commons.wikimedia.org/wiki/File:Archimedes1.jpg) | Public Domain Mark 1.0 | No |
 | `charles-babbage` | Charles Babbage, photograph, 1860, photographer unknown | [Commons](https://commons.wikimedia.org/wiki/File:Charles_Babbage_-_1860.jpg) | Public domain (life+70 expired) | No |
 | `galileo-galilei` | Galileo Galilei, painting by Justus Sustermans, 1635 (Uffizi Gallery) | [Commons](https://commons.wikimedia.org/wiki/File:Justus_Sustermans_-_Portrait_of_Galileo_Galilei_(Uffizi).jpg) | Public Domain Mark 1.0 (life+100 expired) | No |
@@ -51,15 +71,21 @@ stylized illustration.
 | `confucius` | Confucius, album leaf, anonymous artist, Yuan dynasty (1279–1368), National Palace Museum, Taipei — "Half Portraits of the Great Sage and Virtuous Men of Old" | [Commons](https://commons.wikimedia.org/wiki/File:Half_Portraits_of_the_Great_Sage_and_Virtuous_Men_of_Old_-_Confucius.jpg) | PD-1923 | No |
 
 Two notes on authenticity, not licensing (both images are unambiguously
-clean to use): the `leonardo-da-vinci` drawing's attribution to Leonardo
-himself, and its identification as a *self*-portrait specifically, has
-been contested by scholars since 1980 (the subject looks older than
-Leonardo ever became) — it remains the image most commonly recognized
-as "Leonardo da Vinci" and is used on that basis. The `archimedes`
-engraving is a 16th-century imagined likeness, not a real one — no
-portrait made from life exists, since he died c. 1,800 years earlier;
-this is normal for how classical figures are depicted and is true of
-essentially every "Archimedes" image available anywhere.
+clean to use): the `archimedes` and `leonardo-da-vinci` images are both
+later engravings, not portraits made from life — Archimedes died c.
+1,800 years before his engraving was made, and the Cooke engraving of
+da Vinci is an 18th/19th-century print, not a contemporary likeness.
+This is normal for how historical/classical figures are depicted in
+absence of a photograph, and true of essentially every available image
+of either man.
+
+`leonardo-da-vinci` was originally sourced as a red-chalk drawing
+traditionally (and disputedly) called a self-portrait
+([Leonardo_self.jpg](https://commons.wikimedia.org/wiki/File:Leonardo_self.jpg),
+still clean to use license-wise) — re-sourced to the Cooke engraving
+above during the background-removal pass because the drawing's low
+contrast against its paper made automated background removal fail
+outright on every model tried.
 
 Originally considered and **rejected**: Rosalind Franklin — her
 best-known photographs have unclear/disputed copyright status (the
@@ -75,19 +101,20 @@ differently-sourced attribution obligation on top of the one
 `john-von-neumann`/`richard-feynman` already carry. Worth adding later
 if there's appetite for the extra credit-line bookkeeping.
 
-**Two images require an in-app attribution credit, not yet added**:
-`john-von-neumann` and `richard-feynman` (both "PD LosAlamos" —
-Los Alamos National Laboratory's own terms ask for a credit, even
-though the images are otherwise free to use for any purpose). Neither
-is currently displayed anywhere in the running app; if these stay in
-the preset set, add a small "Photo: Los Alamos National Laboratory"
-credit line somewhere reachable (e.g. a Settings/About page) to satisfy
-that condition honestly.
+**Three images require an in-app attribution credit, not yet added**:
+`john-von-neumann` and `richard-feynman` (both "PD LosAlamos" — Los
+Alamos National Laboratory's own terms ask for a credit, even though
+the images are otherwise free to use for any purpose), and
+`leonardo-da-vinci` (CC BY 4.0, Wellcome Collection — legally requires
+a credit, not just a courtesy). None of the three is currently
+displayed anywhere in the running app; if these stay in the preset set,
+add credit lines ("Photo: Los Alamos National Laboratory";
+"Engraving: Wellcome Collection, CC BY 4.0") somewhere reachable (e.g.
+a Settings/About page) to satisfy those conditions honestly.
 
-Each master image (`assets/avatars/<key>.jpg`, 512×512) is a square
-crop of the original — full-width top-aligned for straightforward
-bust/headshot portraits, a manually chosen region for the five
-full-figure/scene sources (`katherine-johnson`, `mary-anning`,
-`emmy-noether`, `severo-ochoa`, `barbara-mcclintock`) where a naive
-crop would have missed the subject's face. `apps/web/src/assets/avatars/<key>.jpg`
-(128×128) is the web-bundled copy actually rendered by the app.
+Each master image (`assets/avatars/<key>.jpg`, 512×512) and its
+128×128 web copy (`apps/web/src/assets/avatars/<key>.jpg`) is produced
+by the uniform processing pipeline described above (background removal
+→ auto-crop to subject → composite on the shared backdrop → teal-tint)
+run against a manually chosen starting crop/region of the original
+source image per subject.
