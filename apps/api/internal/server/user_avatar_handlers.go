@@ -28,7 +28,7 @@ func (h *api) updateCurrentUserAvatar(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "missing avatar file"})
 		return
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	data, err := io.ReadAll(file)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "could not read uploaded file"})
