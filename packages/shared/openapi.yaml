@@ -735,6 +735,55 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/users/me/avatar:
+    post:
+      operationId: updateCurrentUserAvatar
+      summary: Upload a custom photo avatar (JPEG/PNG/WebP, max 500KB) — replaces any preset selection
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar: { type: string, format: binary }
+              required: [avatar]
+      responses:
+        "200":
+          description: Updated user (avatarKey is now "custom")
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      operationId: removeCurrentUserAvatar
+      summary: Remove the caller's custom photo avatar, reverting to the generated default
+      tags: [users]
+      responses:
+        "200":
+          description: Updated user (avatarKey is now unset)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/users/{userId}/avatar:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getUserAvatar
+      summary: The raw image bytes for a user's custom photo avatar, if they have one
+      tags: [users]
+      responses:
+        "200":
+          description: Avatar image (always JPEG)
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "304": { description: Not modified (matched If-None-Match) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/users/{userId}:
     parameters:
       - { name: userId, in: path, required: true, schema: { type: string } }
@@ -1548,7 +1597,13 @@ components:
         email: { type: string }
         isTenantAdmin: { type: boolean }
         displayName: { type: string, nullable: true }
-        avatarKey: { type: string, nullable: true }
+        avatarKey:
+          type: string
+          nullable: true
+          description: >-
+            A preset key, null (generated default), or the reserved value
+            "custom" meaning the user has uploaded their own photo —
+            fetch it from GET /api/v1/users/{userId}/avatar.
         timezone: { type: string, nullable: true }
         deactivatedAt:
           type: string
@@ -1560,7 +1615,13 @@ components:
       description: Self-service profile fields — a user editing their own display name, avatar, or timezone.
       properties:
         displayName: { type: string, nullable: true }
-        avatarKey: { type: string, nullable: true }
+        avatarKey:
+          type: string
+          nullable: true
+          description: >-
+            A known preset key, or null for the generated default. The
+            reserved value "custom" is rejected here — set only by
+            POST /api/v1/users/me/avatar.
         timezone: { type: string, nullable: true }
     UserInput:
       type: object

@@ -638,6 +638,43 @@ export interface paths {
         patch: operations["updateCurrentUserProfile"];
         trace?: never;
     };
+    "/api/v1/users/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload a custom photo avatar (JPEG/PNG/WebP, max 500KB) — replaces any preset selection */
+        post: operations["updateCurrentUserAvatar"];
+        /** Remove the caller's custom photo avatar, reverting to the generated default */
+        delete: operations["removeCurrentUserAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        /** The raw image bytes for a user's custom photo avatar, if they have one */
+        get: operations["getUserAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/{userId}": {
         parameters: {
             query?: never;
@@ -1209,6 +1246,7 @@ export interface components {
             email: string;
             isTenantAdmin: boolean;
             displayName?: string | null;
+            /** @description A preset key, null (generated default), or the reserved value "custom" meaning the user has uploaded their own photo — fetch it from GET /api/v1/users/{userId}/avatar. */
             avatarKey?: string | null;
             timezone?: string | null;
             /** Format: date-time */
@@ -1219,6 +1257,7 @@ export interface components {
         /** @description Self-service profile fields — a user editing their own display name, avatar, or timezone. */
         UserProfileUpdate: {
             displayName?: string | null;
+            /** @description A known preset key, or null for the generated default. The reserved value "custom" is rejected here — set only by POST /api/v1/users/me/avatar. */
             avatarKey?: string | null;
             timezone?: string | null;
         };
@@ -2579,6 +2618,87 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateCurrentUserAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    avatar: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Updated user (avatarKey is now "custom") */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    removeCurrentUserAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Updated user (avatarKey is now unset) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    getUserAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Avatar image (always JPEG) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            /** @description Not modified (matched If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
         };
     };
     updateUser: {

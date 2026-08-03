@@ -20,6 +20,7 @@ type Store struct {
 	Suites         *SuiteRepo
 	Runs           *RunRepo
 	Users          *UserRepo
+	UserAvatars    *UserAvatarRepo
 	Sessions       *SessionRepo
 	ApiTokens      *ApiTokenRepo
 	Audit          *AuditRepo
@@ -36,6 +37,7 @@ func New(pool *pgxpool.Pool) *Store {
 		Suites:         &SuiteRepo{pool: pool},
 		Runs:           &RunRepo{pool: pool},
 		Users:          &UserRepo{pool: pool},
+		UserAvatars:    &UserAvatarRepo{pool: pool},
 		Sessions:       &SessionRepo{pool: pool},
 		ApiTokens:      &ApiTokenRepo{pool: pool},
 		Audit:          &AuditRepo{pool: pool},

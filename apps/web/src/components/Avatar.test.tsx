@@ -27,4 +27,17 @@ describe('Avatar', () => {
     render(<Avatar seed="ana@example.com" className="size-6 rounded-full" />)
     expect(screen.getByText('A')).toHaveClass('size-6', 'rounded-full')
   })
+
+  it('renders an uploaded custom photo via the avatar endpoint when avatarKey is "custom"', () => {
+    render(<Avatar seed="ana@example.com" avatarKey="custom" userId="u1" className="size-6 rounded-full" />)
+    const img = screen.getByRole('img')
+    expect(img).toHaveAttribute('src', '/api/v1/users/u1/avatar')
+    expect(screen.queryByText('A')).not.toBeInTheDocument()
+  })
+
+  it('falls back to the generated chip for "custom" with no userId to fetch from', () => {
+    render(<Avatar seed="ana@example.com" avatarKey="custom" className="size-6 rounded-full" />)
+    expect(screen.getByText('A')).toBeInTheDocument()
+    expect(screen.queryByRole('img')).not.toBeInTheDocument()
+  })
 })

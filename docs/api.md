@@ -130,6 +130,9 @@ this capability shipped read back with `actorKind: "unknown"`.
 | POST | `/api/v1/auth/logout` | End the current session |
 | GET | `/api/v1/users/me` | The currently authenticated actor, as a user record |
 | PATCH | `/api/v1/users/me` | Update the caller's own `displayName`, `avatarKey`, and/or `timezone` — self-service only, no target-user parameter |
+| POST | `/api/v1/users/me/avatar` | Upload a custom photo avatar (`multipart/form-data`, field `avatar`; JPEG/PNG/WebP, max 500KB) — server-side center-cropped and resized to 128×128, sets `avatarKey` to the reserved value `"custom"` |
+| DELETE | `/api/v1/users/me/avatar` | Remove the caller's custom photo avatar, reverting to the generated default |
+| GET | `/api/v1/users/{userId}/avatar` | The raw image bytes for a user's custom photo avatar (always JPEG), if they have one — cacheable via `ETag`/`Cache-Control` |
 | GET | `/api/v1/users` | List users |
 | POST | `/api/v1/users` | Create a user (`email`, `password`, `isTenantAdmin`) — Tenant Admin only |
 | PATCH | `/api/v1/users/{userId}` | Change `isTenantAdmin` and/or `deactivate` — Tenant Admin only |

@@ -203,6 +203,9 @@ func (s *Service) UpdateOwnProfile(ctx context.Context, actor domain.Actor, upda
 	if actor.Kind != domain.ActorKindUser {
 		return domain.User{}, invalid("only a human user has a profile to update")
 	}
+	if update.AvatarKey != nil && *update.AvatarKey == customAvatarKey {
+		return domain.User{}, invalid("%q is a reserved avatar key, set only by uploading a photo", customAvatarKey)
+	}
 	if update.AvatarKey != nil && *update.AvatarKey != "" && !domain.AvatarPresetKeys[*update.AvatarKey] {
 		return domain.User{}, invalid("unknown avatar key %q", *update.AvatarKey)
 	}

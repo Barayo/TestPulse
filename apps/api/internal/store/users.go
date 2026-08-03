@@ -99,6 +99,27 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id string, update domain.U
 	return u, nil
 }
 
+// ClearAvatarKey sets avatar_key back to NULL (generated default) —
+// UpdateProfile's COALESCE-based update cannot express "set this column to
+// NULL" (a nil *string is indistinguishable from "leave unchanged"), so
+// removing a custom avatar needs this dedicated, unambiguous call instead
+// (add-custom-avatar-upload).
+func (r *UserRepo) ClearAvatarKey(ctx context.Context, id string) (domain.User, error) {
+	var u domain.User
+	err := r.pool.QueryRow(ctx,
+		`UPDATE users SET avatar_key = NULL WHERE id = $1
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at`,
+		id,
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.User{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.User{}, err
+	}
+	return u, nil
+}
+
 func (r *UserRepo) SetTenantAdmin(ctx context.Context, id string, isTenantAdmin bool) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE users SET is_tenant_admin = $2 WHERE id = $1`, id, isTenantAdmin)
 	if err != nil {

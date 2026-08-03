@@ -263,7 +263,12 @@ export default function PeoplePage() {
                             {visibleMembers.map((u) => (
                               <li key={u.id} className="flex items-center justify-between px-2 py-1.5">
                                 <span className="flex items-center gap-2">
-                                  <Avatar seed={u.email} avatarKey={u.avatarKey} className="size-5 rounded-full text-[10px]" />
+                                  <Avatar
+                                    seed={u.email}
+                                    avatarKey={u.avatarKey}
+                                    userId={u.id}
+                                    className="size-5 rounded-full text-[10px]"
+                                  />
                                   {u.email}
                                 </span>
                                 {/* Removing a member cascades to whatever
@@ -422,7 +427,7 @@ export default function PeoplePage() {
                 className="group grid grid-cols-[1fr_36px] items-center gap-3 border-b px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_140px_120px_36px]"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
-                  <Avatar seed={u.email} avatarKey={u.avatarKey} className="size-7 rounded-full text-xs" />
+                  <Avatar seed={u.email} avatarKey={u.avatarKey} userId={u.id} className="size-7 rounded-full text-xs" />
                   <span className="truncate font-semibold">{u.email}</span>
                 </div>
                 <div className="hidden text-muted-foreground sm:block">{u.isTenantAdmin ? 'Tenant Admin' : 'Member'}</div>

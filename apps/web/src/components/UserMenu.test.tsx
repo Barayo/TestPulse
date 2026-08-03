@@ -11,7 +11,7 @@ import { UserMenu } from './UserMenu'
 function renderMenu(onLogout = vi.fn()) {
   return render(
     <MemoryRouter>
-      <UserMenu user={{ email: 'jane@example.com' }} onLogout={onLogout} />
+      <UserMenu user={{ id: 'u1', email: 'jane@example.com' }} onLogout={onLogout} />
     </MemoryRouter>,
   )
 }

@@ -1,6 +1,6 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import { Link } from 'react-router'
-import { KeyRoundIcon, LockIcon, ChevronRightIcon } from 'lucide-react'
+import { KeyRoundIcon, LockIcon, ChevronRightIcon, UploadIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/useAuth'
 import { Avatar } from '@/components/Avatar'
@@ -11,6 +11,13 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 
+// Mirrors avatarimage.MaxUploadBytes / the format allowlist on the server
+// (add-custom-avatar-upload design.md) — a client-side precheck is a
+// convenience that avoids a round trip, not a security boundary; the
+// server re-validates regardless.
+const MAX_AVATAR_UPLOAD_BYTES = 500 * 1024
+const ACCEPTED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth()
   const [displayName, setDisplayName] = useState('')
@@ -18,6 +25,9 @@ export default function ProfilePage() {
   const [timezone, setTimezone] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [uploadError, setUploadError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!user) return
@@ -41,6 +51,59 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleAvatarFileSelected(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setUploadError(null)
+
+    if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
+      setUploadError(`${file.name} isn't a JPEG, PNG, or WebP image. Try a different photo.`)
+      return
+    }
+    if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
+      setUploadError(`${file.name} is ${(file.size / 1024).toFixed(0)}KB — the limit is 500KB. Try a smaller image.`)
+      return
+    }
+
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('avatar', file)
+      // openapi-fetch's generated body type expects the schema's object
+      // shape, not a FormData instance — use fetch directly for this one
+      // multipart request (openapi-fetch passes FormData through
+      // unchanged at runtime, but its types don't model that).
+      const res = await fetch('/api/v1/users/me/avatar', {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setUploadError('Upload failed. Try again.')
+        return
+      }
+      const updated = await res.json()
+      setAvatarKey(updated.avatarKey ?? null)
+      await refreshUser()
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  async function handleRemoveAvatar() {
+    setUploading(true)
+    try {
+      const { data, response } = await api.DELETE('/api/v1/users/me/avatar', {})
+      if (response.ok && data) {
+        setAvatarKey(data.avatarKey ?? null)
+        await refreshUser()
+      }
+    } finally {
+      setUploading(false)
+    }
+  }
+
   if (!user) return null
 
   return (
@@ -58,6 +121,7 @@ export default function ProfilePage() {
               <Avatar
                 seed={displayName || user.email}
                 avatarKey={avatarKey}
+                userId={user.id}
                 className="size-12 rounded-full text-base"
               />
               <div className="flex-1 space-y-1">
@@ -93,6 +157,46 @@ export default function ProfilePage() {
                     {(displayName || user.email)[0]?.toUpperCase() ?? '?'}
                   </span>
                 </label>
+                {avatarKey === 'custom' ? (
+                  <label className="flex flex-col items-center gap-1">
+                    <input
+                      type="radio"
+                      name="avatar"
+                      className="sr-only"
+                      checked
+                      onChange={() => setAvatarKey('custom')}
+                      aria-label="Your uploaded photo"
+                    />
+                    <Avatar
+                      seed={displayName || user.email}
+                      avatarKey="custom"
+                      userId={user.id}
+                      className="size-10 rounded-full border-2 border-primary text-xs"
+                    />
+                  </label>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    title="Upload a photo"
+                    aria-label="Upload a photo"
+                    className="flex size-10 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed"
+                  >
+                    {uploading ? (
+                      <Loader2Icon className="size-4 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <UploadIcon className="size-4" aria-hidden="true" />
+                    )}
+                  </button>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept={ACCEPTED_AVATAR_TYPES.join(',')}
+                  className="sr-only"
+                  onChange={handleAvatarFileSelected}
+                />
                 {AVATAR_PRESETS.map((preset) => (
                   <label key={preset.key} className="flex flex-col items-center gap-1">
                     <input
@@ -113,6 +217,32 @@ export default function ProfilePage() {
                   </label>
                 ))}
               </div>
+              {uploadError && (
+                <div
+                  role="alert"
+                  className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2.5"
+                >
+                  <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-medium">Couldn&apos;t upload that file</p>
+                    <p className="text-sm text-muted-foreground">{uploadError}</p>
+                  </div>
+                </div>
+              )}
+              {avatarKey === 'custom' && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
+                  <span>Using your uploaded photo</span>
+                  <button
+                    type="button"
+                    onClick={handleRemoveAvatar}
+                    disabled={uploading}
+                    className="font-medium text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Remove
+                  </button>
+                </div>
+              )}
             </fieldset>
 
             <div className="space-y-1">

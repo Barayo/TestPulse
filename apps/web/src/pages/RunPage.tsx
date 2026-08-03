@@ -141,6 +141,7 @@ function RunItemRow({
                   <Avatar
                     seed={item.assignee.name}
                     avatarKey={item.assignee.avatarKey}
+                    userId={item.assignee.id}
                     className="size-4 rounded-full text-[9px]"
                   />
                 )

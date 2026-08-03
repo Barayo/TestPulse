@@ -3,7 +3,7 @@ import { Link } from 'react-router'
 import { Avatar } from '@/components/Avatar'
 
 type Props = {
-  user: { email: string; displayName?: string | null; avatarKey?: string | null }
+  user: { id: string; email: string; displayName?: string | null; avatarKey?: string | null }
   onLogout: () => void
 }
 
@@ -46,6 +46,7 @@ export function UserMenu({ user, onLogout }: Props) {
           <Avatar
             seed={user.displayName || user.email}
             avatarKey={user.avatarKey}
+            userId={user.id}
             className="size-5 rounded-full text-[10px]"
           />
         </span>

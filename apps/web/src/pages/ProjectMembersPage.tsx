@@ -129,7 +129,12 @@ export default function ProjectMembersPage() {
                 return (
                   <li key={m.userId} className="flex items-center justify-between gap-2 px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2">
-                      <Avatar seed={label} avatarKey={u?.avatarKey} className="size-6 rounded-full text-[10px]" />
+                      <Avatar
+                        seed={label}
+                        avatarKey={u?.avatarKey}
+                        userId={m.userId}
+                        className="size-6 rounded-full text-[10px]"
+                      />
                       <span className="truncate">{label}</span>
                     </span>
                     <div className="flex items-center gap-2">

@@ -6,9 +6,10 @@ import ProfilePage from './ProfilePage'
 import { api } from '@/lib/api'
 import { AuthProvider } from '@/lib/useAuth'
 
-vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), DELETE: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
 const mockPATCH = vi.mocked(api.PATCH)
+const mockDELETE = vi.mocked(api.DELETE)
 
 const meResponse = {
   id: 'u1',
@@ -116,5 +117,104 @@ describe('ProfilePage', () => {
     renderPage()
     await screen.findByLabelText(/display name/i)
     expect(screen.getByText(/coming soon/i)).toBeVisible()
+  })
+
+  describe('custom photo avatar upload (add-custom-avatar-upload, Pepe interaction design)', () => {
+    beforeEach(() => {
+      vi.stubGlobal('fetch', vi.fn())
+    })
+
+    it('shows an upload control in the avatar picker', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.getByRole('button', { name: /upload a photo/i })).toBeInTheDocument()
+    })
+
+    it('selecting a valid file uploads it immediately and selects the resulting avatar', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+
+      const updatedMe = { ...meResponse, avatarKey: 'custom' }
+      vi.mocked(fetch).mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve(updatedMe),
+      } as Response)
+      mockMe(updatedMe)
+
+      const file = new File(['fake-jpeg-bytes'], 'photo.jpg', { type: 'image/jpeg' })
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      await userEvent.upload(input, file)
+
+      await waitFor(() => {
+        expect(fetch).toHaveBeenCalledWith(
+          '/api/v1/users/me/avatar',
+          expect.objectContaining({ method: 'POST', credentials: 'include' }),
+        )
+      })
+      expect(await screen.findByRole('button', { name: /^remove$/i })).toBeInTheDocument()
+    })
+
+    it('rejects an oversized file client-side, with an inline error, without calling the endpoint', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+
+      const file = new File(['x'], 'huge.jpg', { type: 'image/jpeg' })
+      Object.defineProperty(file, 'size', { value: 600 * 1024 })
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      await userEvent.upload(input, file)
+
+      expect(await screen.findByText(/500 ?KB/i)).toBeInTheDocument()
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it('rejects a wrong-type file client-side, with an inline error, without calling the endpoint', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+
+      const file = new File(['fake-gif-bytes'], 'screenshot.gif', { type: 'image/gif' })
+      const input = document.querySelector('input[type="file"]') as HTMLInputElement
+      // A real user can still pick a mismatched file (drag-drop, "All
+      // Files" in the OS picker) despite `accept` — bypass user-event's
+      // own accept-filtering so this exercises our client-side check.
+      await userEvent.upload(input, file, { applyAccept: false })
+
+      expect(await screen.findByText(/jpeg, png, or webp/i)).toBeInTheDocument()
+      expect(fetch).not.toHaveBeenCalled()
+    })
+
+    it('shows a Remove action only once a custom avatar is set, and removing calls the delete endpoint', async () => {
+      mockMe({ ...meResponse, avatarKey: 'custom' })
+      renderPage()
+      // avatarKey syncs from the loaded user via an effect that runs after
+      // mount — await it directly (findBy retries) rather than asserting
+      // synchronously right after an unrelated findByLabelText resolves.
+      const removeButton = await screen.findByRole('button', { name: /^remove$/i })
+
+      mockDELETE.mockResolvedValue({
+        data: { ...meResponse, avatarKey: null },
+        response: { ok: true },
+      })
+      mockMe({ ...meResponse, avatarKey: null })
+
+      await userEvent.click(removeButton)
+
+      await waitFor(() => {
+        expect(mockDELETE).toHaveBeenCalledWith('/api/v1/users/me/avatar', expect.anything())
+      })
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /^remove$/i })).not.toBeInTheDocument()
+      })
+    })
+
+    it('does not show a Remove action when no custom avatar is set', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.queryByRole('button', { name: /^remove$/i })).not.toBeInTheDocument()
+    })
   })
 })

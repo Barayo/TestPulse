@@ -340,6 +340,7 @@ export default function RunItemDetailPage() {
                         <Avatar
                           seed={item.assignee.name}
                           avatarKey={item.assignee.avatarKey}
+                          userId={item.assignee.id}
                           className="size-5 rounded-full text-[10px]"
                         />
                       )}
@@ -383,7 +384,12 @@ export default function RunItemDetailPage() {
                     </div>
                     <p className="flex items-center gap-1.5 text-muted-foreground">
                       {r.actorKind === 'user' && r.actorRefId && (
-                        <Avatar seed={r.actor} avatarKey={userAvatars[r.actorRefId]} className="size-4 rounded-full text-[9px]" />
+                        <Avatar
+                          seed={r.actor}
+                          avatarKey={userAvatars[r.actorRefId]}
+                          userId={r.actorRefId}
+                          className="size-4 rounded-full text-[9px]"
+                        />
                       )}
                       {r.actor}
                       {r.comment && ` — ${r.comment}`}
