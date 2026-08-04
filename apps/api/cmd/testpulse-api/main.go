@@ -44,7 +44,7 @@ func run() error {
 	}
 	defer pool.Close()
 
-	if err := db.Migrate(ctx, pool); err != nil {
+	if err := db.MigrateWithOptions(ctx, pool, cfg.AllowMissingMigrations); err != nil {
 		return fmt.Errorf("running migrations: %w", err)
 	}
 	logger.Info("migrations applied", "status", "current")

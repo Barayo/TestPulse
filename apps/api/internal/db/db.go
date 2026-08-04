@@ -34,13 +34,32 @@ func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 // Migrate applies all pending migrations. Goose tracks applied versions in
 // the goose_db_version table, so repeated startups are no-ops.
 func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	return MigrateWithOptions(ctx, pool, false)
+}
+
+// MigrateWithOptions is Migrate with an escape hatch for recovering from a
+// migration-history gap: allowMissing=true tells goose to apply any
+// migration whose version is below the database's recorded max version but
+// was never itself recorded as applied — rather than refuse to start, which
+// is goose's default (and correct) behavior, since that gap is normally a
+// sign of a genuinely broken deploy history (2026-08-03: a stale build that
+// didn't embed one migration file applied every version around it, leaving
+// that one version missing from the applied set forever after). This is a
+// deliberate, rarely-used recovery path — TESTPULSE_ALLOW_MISSING_MIGRATIONS
+// wires it up, off by default, so the safety check stays on for normal
+// operation.
+func MigrateWithOptions(ctx context.Context, pool *pgxpool.Pool, allowMissing bool) error {
 	goose.SetBaseFS(migrationsFS)
 	if err := goose.SetDialect("postgres"); err != nil {
 		return err
 	}
 	sqlDB := stdlib.OpenDBFromPool(pool)
 	defer func() { _ = sqlDB.Close() }()
-	return goose.UpContext(ctx, sqlDB, "migrations")
+	var opts []goose.OptionsFunc
+	if allowMissing {
+		opts = append(opts, goose.WithAllowMissing())
+	}
+	return goose.UpContext(ctx, sqlDB, "migrations", opts...)
 }
 
 // MigrationsCurrent reports whether the database schema is at the latest

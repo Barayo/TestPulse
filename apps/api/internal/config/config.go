@@ -11,16 +11,24 @@
 //	                        admin user on first startup if the users table
 //	                        is empty; ignored on any later startup once
 //	                        users exist
+//	TESTPULSE_ALLOW_MISSING_MIGRATIONS
+//	                        (default "false") recovery escape hatch — see
+//	                        internal/db.MigrateWithOptions. Only set this
+//	                        temporarily, to unblock a startup after a
+//	                        migration-history gap; leave it off otherwise,
+//	                        since it's the check that catches that gap in
+//	                        the first place.
 package config
 
 import "fmt"
 
 type Config struct {
-	DatabaseURL   string
-	Addr          string
-	LogLevel      string
-	AdminEmail    string
-	AdminPassword string
+	DatabaseURL            string
+	Addr                   string
+	LogLevel               string
+	AdminEmail             string
+	AdminPassword          string
+	AllowMissingMigrations bool
 }
 
 // Load reads configuration via getenv (os.Getenv in production, a stub in
@@ -28,11 +36,12 @@ type Config struct {
 // has no default.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		DatabaseURL:   getenv("TESTPULSE_DATABASE_URL"),
-		Addr:          withDefault(getenv("TESTPULSE_ADDR"), ":8080"),
-		LogLevel:      withDefault(getenv("TESTPULSE_LOG_LEVEL"), "info"),
-		AdminEmail:    getenv("TESTPULSE_ADMIN_EMAIL"),
-		AdminPassword: getenv("TESTPULSE_ADMIN_PASSWORD"),
+		DatabaseURL:            getenv("TESTPULSE_DATABASE_URL"),
+		Addr:                   withDefault(getenv("TESTPULSE_ADDR"), ":8080"),
+		LogLevel:               withDefault(getenv("TESTPULSE_LOG_LEVEL"), "info"),
+		AdminEmail:             getenv("TESTPULSE_ADMIN_EMAIL"),
+		AdminPassword:          getenv("TESTPULSE_ADMIN_PASSWORD"),
+		AllowMissingMigrations: getenv("TESTPULSE_ALLOW_MISSING_MIGRATIONS") == "true",
 	}
 
 	if cfg.DatabaseURL == "" {

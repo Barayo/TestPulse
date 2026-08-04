@@ -40,6 +40,17 @@ recorded in the OpenSpec change `establish-architecture` (see
 - **Migrations at startup.** Schema migrations (goose, embedded SQL files in
   `apps/api/internal/db/migrations/`) apply automatically and idempotently when
   the binary starts. Readiness reports unready until the schema is current.
+  goose refuses to start if it finds a **migration-history gap** — a file
+  whose version is below the database's recorded max applied version, but
+  which was never itself recorded as applied (this happened in production
+  2026-08-03: a deploy applied migrations up to version 7 without ever
+  recording version 6, most likely a stale Docker build-cache layer that
+  didn't embed that one file — every later startup then crash-looped
+  refusing to proceed past the gap). Recovery: set
+  `TESTPULSE_ALLOW_MISSING_MIGRATIONS=true` temporarily (one deploy), which
+  applies the missing migration and continues rather than refusing — then
+  unset it again once recovered. Leave it off otherwise; it's the check
+  that catches this exact class of bug.
 - **12-factor configuration.** All runtime configuration comes from
   `TESTPULSE_*` environment variables — the same mechanism under compose,
   Helm, or a bare binary. Missing required values fail fast at startup, naming

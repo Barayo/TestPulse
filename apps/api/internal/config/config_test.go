@@ -89,3 +89,28 @@ func TestLoadAdminBootstrapCredentialsSet(t *testing.T) {
 		t.Errorf("AdminEmail/AdminPassword = %q/%q", cfg.AdminEmail, cfg.AdminPassword)
 	}
 }
+
+func TestLoadAllowMissingMigrationsDefaultsFalse(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AllowMissingMigrations {
+		t.Error("AllowMissingMigrations should default false")
+	}
+}
+
+func TestLoadAllowMissingMigrationsSet(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":             "postgres://localhost/testpulse",
+		"TESTPULSE_ALLOW_MISSING_MIGRATIONS": "true",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.AllowMissingMigrations {
+		t.Error("AllowMissingMigrations = false, want true")
+	}
+}
