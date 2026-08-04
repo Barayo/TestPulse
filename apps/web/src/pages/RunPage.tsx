@@ -109,7 +109,7 @@ function RunItemRow({
           type="button"
           onClick={onOpenExecution}
           data-focused={focused ? 'true' : undefined}
-          className={`relative flex flex-1 items-center justify-between overflow-hidden rounded-md border px-3 py-2 text-left text-sm hover:bg-accent ${focused ? 'bg-accent' : ''}`}
+          className={`relative flex flex-1 items-center justify-between overflow-hidden rounded-md border px-3 py-2 text-left text-sm hover:bg-accent dark:bg-card/40 ${focused ? 'bg-accent' : ''}`}
         >
           {focused && <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-primary" />}
           <span className="flex flex-col gap-0.5">

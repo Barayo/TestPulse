@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { Avatar } from '@/components/Avatar'
+import { Pill } from '@/components/ui/Pill'
+import { useTheme } from '@/lib/ThemeProvider'
+import type { Theme } from '@/lib/theme'
 
 type Props = {
   user: { id: string; email: string; displayName?: string | null; avatarKey?: string | null }
@@ -16,6 +19,7 @@ type Props = {
 export function UserMenu({ user, onLogout }: Props) {
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
+  const [, setThemeOverride, themeOverride] = useTheme()
 
   useEffect(() => {
     if (!open) return
@@ -57,7 +61,7 @@ export function UserMenu({ user, onLogout }: Props) {
         <div
           role="menu"
           aria-label="Account"
-          className="absolute right-0 z-50 mt-1 w-48 rounded-md border bg-card py-1 text-sm shadow-lg"
+          className="absolute right-0 z-50 mt-1 w-56 rounded-md border bg-card py-1 text-sm shadow-lg"
         >
           <Link
             role="menuitem"
@@ -75,6 +79,18 @@ export function UserMenu({ user, onLogout }: Props) {
           >
             API tokens
           </Link>
+          <div className="px-3 py-1.5">
+            <div role="group" aria-label="Theme" className="flex gap-1">
+              {(['System', 'Light', 'Dark'] as const).map((label) => {
+                const value: Theme | null = label === 'System' ? null : (label.toLowerCase() as Theme)
+                return (
+                  <Pill key={label} active={themeOverride === value} onClick={() => setThemeOverride(value)}>
+                    {label}
+                  </Pill>
+                )
+              })}
+            </div>
+          </div>
           <div className="my-1 border-t" />
           <button
             type="button"

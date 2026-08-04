@@ -8,6 +8,7 @@ import { useActiveProjectId } from '@/lib/useActiveProject'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
 import { ProjectSwitcherProvider } from '@/lib/useProjectSwitcher'
 import { DataRevisionProvider } from '@/lib/DataRevision'
+import { ThemeProvider } from '@/lib/ThemeProvider'
 import { AuthProvider, useAuth } from '@/lib/useAuth'
 import { SessionExpiredModal } from '@/components/SessionExpiredModal'
 import ProjectsPage from '@/pages/ProjectsPage'
@@ -165,145 +166,147 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
 function App() {
   return (
-    <BrowserRouter>
-      <AuthProvider>
-        <DataRevisionProvider>
-          <SessionExpiredModal />
-          <Routes>
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/" element={<RequireAuth><ProjectsPage /></RequireAuth>} />
-            <Route
-              path="/projects/:projectKey"
-              element={
-                <RequireAuth>
-                  <ProjectPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/suites"
-              element={
-                <RequireAuth>
-                  <SuitesPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/suites/:suiteKey"
-              element={
-                <RequireAuth>
-                  <SuiteDetailPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/runs"
-              element={
-                <RequireAuth>
-                  <RunsPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/runs/new"
-              element={
-                <RequireAuth>
-                  <NewRunPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/library"
-              element={
-                <RequireAuth>
-                  <FolderExplorerPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/library/:folderId"
-              element={
-                <RequireAuth>
-                  <FolderExplorerPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/cases/:caseKey"
-              element={
-                <RequireAuth>
-                  <CaseDetailPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/projects/:projectKey/members"
-              element={
-                <RequireAuth>
-                  <ProjectMembersPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/runs/:runKey"
-              element={
-                <RequireAuth>
-                  <RunPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/runs/:runKey/items/:caseKey"
-              element={
-                <RequireAuth>
-                  <RunItemDetailPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/settings/people"
-              element={
-                <RequireAuth>
-                  <PeoplePage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/settings/roles"
-              element={
-                <RequireAuth>
-                  <RolesPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/settings/tokens"
-              element={
-                <RequireAuth>
-                  <TokensPage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="/settings/profile"
-              element={
-                <RequireAuth>
-                  <ProfilePage />
-                </RequireAuth>
-              }
-            />
-            <Route
-              path="*"
-              element={
-                <RequireAuth>
-                  <p className="text-sm text-muted-foreground">Page not found.</p>
-                </RequireAuth>
-              }
-            />
-          </Routes>
-        </DataRevisionProvider>
-      </AuthProvider>
-    </BrowserRouter>
+    <ThemeProvider>
+      <BrowserRouter>
+        <AuthProvider>
+          <DataRevisionProvider>
+            <SessionExpiredModal />
+            <Routes>
+              <Route path="/login" element={<LoginPage />} />
+              <Route path="/" element={<RequireAuth><ProjectsPage /></RequireAuth>} />
+              <Route
+                path="/projects/:projectKey"
+                element={
+                  <RequireAuth>
+                    <ProjectPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/suites"
+                element={
+                  <RequireAuth>
+                    <SuitesPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/suites/:suiteKey"
+                element={
+                  <RequireAuth>
+                    <SuiteDetailPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/runs"
+                element={
+                  <RequireAuth>
+                    <RunsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/runs/new"
+                element={
+                  <RequireAuth>
+                    <NewRunPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/library"
+                element={
+                  <RequireAuth>
+                    <FolderExplorerPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/library/:folderId"
+                element={
+                  <RequireAuth>
+                    <FolderExplorerPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/cases/:caseKey"
+                element={
+                  <RequireAuth>
+                    <CaseDetailPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/projects/:projectKey/members"
+                element={
+                  <RequireAuth>
+                    <ProjectMembersPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/runs/:runKey"
+                element={
+                  <RequireAuth>
+                    <RunPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/runs/:runKey/items/:caseKey"
+                element={
+                  <RequireAuth>
+                    <RunItemDetailPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/people"
+                element={
+                  <RequireAuth>
+                    <PeoplePage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/roles"
+                element={
+                  <RequireAuth>
+                    <RolesPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/tokens"
+                element={
+                  <RequireAuth>
+                    <TokensPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/profile"
+                element={
+                  <RequireAuth>
+                    <ProfilePage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="*"
+                element={
+                  <RequireAuth>
+                    <p className="text-sm text-muted-foreground">Page not found.</p>
+                  </RequireAuth>
+                }
+              />
+            </Routes>
+          </DataRevisionProvider>
+        </AuthProvider>
+      </BrowserRouter>
+    </ThemeProvider>
   )
 }
 

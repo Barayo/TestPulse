@@ -18,6 +18,7 @@ import { useSortOverride } from '@/lib/useSortOverride'
 import { sortProjects, DEFAULT_SORT_DIRECTION, type SortKey } from '@/lib/sortProjects'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Pill } from '@/components/ui/Pill'
 
 type StatusFilter = 'Healthy' | 'In progress' | 'At risk' | 'No runs yet'
 const STATUS_FILTERS: StatusFilter[] = ['Healthy', 'In progress', 'At risk', 'No runs yet']
@@ -31,35 +32,6 @@ const SORT_KEY_LABELS: Record<SortKey, string> = {
 
 function statusOf(p: ProjectSummary): StatusFilter {
   return p.passRate === null ? 'No runs yet' : healthLabel(p.passRate)
-}
-
-// Segmented pill control shared by the view-mode toggle and the status
-// filter chips — active = solid dark fill, inactive = white/bordered,
-// matching the approved mockup's filter-chip treatment throughout.
-function Pill({
-  active,
-  onClick,
-  children,
-  ...rest
-}: { active: boolean; onClick: () => void; children: React.ReactNode } & Omit<
-  React.ButtonHTMLAttributes<HTMLButtonElement>,
-  'onClick' | 'className'
->) {
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={`whitespace-nowrap rounded-full border px-3.5 py-1.5 text-sm font-semibold transition-colors ${
-        active
-          ? 'border-foreground bg-foreground text-background'
-          : 'border-border bg-card text-muted-foreground hover:text-foreground'
-      }`}
-      {...rest}
-    >
-      {children}
-    </button>
-  )
 }
 
 // "+ New project" and the empty-state CTA are kept structurally separate

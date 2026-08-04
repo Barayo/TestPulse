@@ -149,13 +149,18 @@
     --muted-foreground: #8FBDB8;
     --accent: #163F3B;
     --accent-foreground: #E6F5F3;
-    --destructive: #FF6B57;
+    /* #FF9484, not the lighter-seeming #FF6B57 originally authored here:
+       --destructive renders as real body text (error copy, Flaky/Critical
+       pills, destructive menu items), and #FF6B57 measured only 4.11:1
+       against --card — under WCAG AA's 4.5:1 text minimum. #FF9484 measures
+       5.38:1 (add-dark-mode-toggle). */
+    --destructive: #FF9484;
     --border: #1D524C;
     --input: #1D524C;
     --ring: #2DD4BF;
     --chart-1: #2DD4BF;
     --chart-2: #FBBF24;
-    --chart-3: #FF6B57;
+    --chart-3: #FF9484;
     --chart-4: #E6F5F3;
     --chart-5: #8FBDB8;
     --sidebar: #12403C;

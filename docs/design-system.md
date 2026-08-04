@@ -365,6 +365,41 @@ expected result (found via live review: the edit form's fields were unreadably c
 step with real content, e.g. full HTTP-call descriptions). Reach for `Textarea` over `Input`
 for any field whose realistic content can exceed a short label or single short phrase.
 
+## Theme: light/dark, System/Light/Dark
+
+The palette is authored as CSS custom properties in `apps/web/src/index.css`: a base
+`:root` block (light) and a `.dark { … }` block with the same property names —
+every component reads `bg-background`, `text-foreground`, `bg-card`, etc., never a
+literal color, so both themes come "for free" once a component sticks to tokens.
+The `.dark` class is applied to `document.documentElement` by `ThemeProvider`
+(`apps/web/src/lib/ThemeProvider.tsx`), which wraps the whole app once in `App.tsx`
+— no page or component ever toggles it itself.
+
+**Resolution**: no stored preference follows the live OS `prefers-color-scheme`
+(`useResolvedTheme.ts`, via a `matchMedia` `change` listener — it updates without a
+reload if the OS theme changes mid-session, not just at first load). An explicit
+choice from the System/Light/Dark control in the user menu overrides it and persists
+to `localStorage["testpulse.themeOverride"]` (`useThemeOverride.ts`) — absence of the
+key means System, mirroring the `T | null` shape `useViewModeOverride.ts` already
+established for the project list's view mode. Client-only; no server-side storage.
+
+**The toggle** (`UserMenu.tsx`) is the shared `Pill` component
+(`components/ui/Pill.tsx`, also used by `ProjectsPage.tsx`'s status filters) in a
+3-segment `role="group"` row — not a 2-state switch, since "follow the OS" is a real
+third state distinct from "I chose light."
+
+**A token value is a design decision, not just a color pick** — when adding or
+changing a dark-mode token, verify contrast against the surface it actually renders
+on (not a generic white/black reference), especially for anything used as real body
+text. Two examples from the initial dark-mode activation (`add-dark-mode-toggle`):
+`--destructive` was originally authored at `#FF6B57` (4.11:1 against `--card`, under
+the WCAG AA 4.5:1 text minimum — it renders as real error copy, not just a fill) and
+corrected to `#FF9484` (5.38:1); the pending/retest status dot's
+`bg-muted-foreground/40` measured only ~2.1:1 in dark mode (under the 3:1 non-text
+minimum) and needed a dot-local `dark:bg-muted-foreground/60`, since brightening the
+`--muted-foreground` token itself would have overshot every other place it's used as
+text.
+
 ## What this document doesn't cover yet
 
 It has no enforcement mechanism (no lint rule stops a future page from reaching for a bare
