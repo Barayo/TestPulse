@@ -383,10 +383,18 @@ to `localStorage["testpulse.themeOverride"]` (`useThemeOverride.ts`) — absence
 key means System, mirroring the `T | null` shape `useViewModeOverride.ts` already
 established for the project list's view mode. Client-only; no server-side storage.
 
-**The toggle** (`UserMenu.tsx`) is the shared `Pill` component
-(`components/ui/Pill.tsx`, also used by `ProjectsPage.tsx`'s status filters) in a
-3-segment `role="group"` row — not a 2-state switch, since "follow the OS" is a real
-third state distinct from "I chose light."
+**The toggle** lives on `ProfilePage.tsx`'s "Appearance" card (between "Your
+details" and "Account"), not the account dropdown — a first version put it in
+`UserMenu.tsx` using the shared `Pill` component (`components/ui/Pill.tsx`, built
+for `ProjectsPage.tsx`'s status-filter chips: solid-fill active state, meant for a
+row of togglable list filters), which read as the loudest, chunkiest element in an
+otherwise plain-text menu, and was the only row there that didn't navigate anywhere
+— a sign it was the wrong category of control for that surface. A set-once,
+whole-app preference belongs on the settings page you deliberately navigate to, not
+a transient, dismiss-on-click-outside dropdown. It's still a 3-segment `role="group"`
+row (not a 2-state switch, since "follow the OS" is a real third state distinct from
+"I chose light"), but restyled as a quiet settings switch — muted track, `bg-card`
+active segment with a subtle shadow, no solid-fill treatment.
 
 **A token value is a design decision, not just a color pick** — when adding or
 changing a dark-mode token, verify contrast against the surface it actually renders

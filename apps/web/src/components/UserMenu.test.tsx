@@ -57,39 +57,16 @@ describe('UserMenu', () => {
     expect(onLogout).toHaveBeenCalled()
   })
 
-  it('shows a System/Light/Dark theme control between API tokens and Log out', async () => {
+  // The theme control briefly lived here (add-dark-mode-toggle) but was
+  // moved to ProfilePage's new Appearance card after design review: a
+  // solid-fill filter-chip control built for toggling list filters read as
+  // the loudest, chunkiest element in an otherwise plain-text menu, and was
+  // the only row that didn't navigate anywhere — a set-once whole-app
+  // preference belongs on the deliberately-navigated-to settings page, not
+  // a transient dropdown.
+  it('has no theme control — that lives on the Profile page now', async () => {
     renderMenu()
     await userEvent.click(screen.getByRole('button', { name: /jane@example.com/i }))
-    const group = screen.getByRole('group', { name: /theme/i })
-    expect(group).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^system$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^light$/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /^dark$/i })).toBeInTheDocument()
-  })
-
-  it('marks System active by default with no stored override', async () => {
-    renderMenu()
-    await userEvent.click(screen.getByRole('button', { name: /jane@example.com/i }))
-    expect(screen.getByRole('button', { name: /^system$/i })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getByRole('button', { name: /^light$/i })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByRole('button', { name: /^dark$/i })).toHaveAttribute('aria-pressed', 'false')
-  })
-
-  it('clicking Dark sets the override and marks Dark active', async () => {
-    renderMenu()
-    await userEvent.click(screen.getByRole('button', { name: /jane@example.com/i }))
-    await userEvent.click(screen.getByRole('button', { name: /^dark$/i }))
-    expect(screen.getByRole('button', { name: /^dark$/i })).toHaveAttribute('aria-pressed', 'true')
-    expect(window.localStorage.getItem('testpulse.themeOverride')).toBe('dark')
-  })
-
-  it('clicking System after an override clears it', async () => {
-    window.localStorage.setItem('testpulse.themeOverride', 'light')
-    renderMenu()
-    await userEvent.click(screen.getByRole('button', { name: /jane@example.com/i }))
-    expect(screen.getByRole('button', { name: /^light$/i })).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(screen.getByRole('button', { name: /^system$/i }))
-    expect(screen.getByRole('button', { name: /^system$/i })).toHaveAttribute('aria-pressed', 'true')
-    expect(window.localStorage.getItem('testpulse.themeOverride')).toBeNull()
+    expect(screen.queryByRole('group', { name: /theme/i })).not.toBeInTheDocument()
   })
 })

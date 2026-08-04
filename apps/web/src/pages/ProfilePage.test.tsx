@@ -42,6 +42,7 @@ function renderPage() {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  window.localStorage.clear()
 })
 
 describe('ProfilePage', () => {
@@ -117,6 +118,49 @@ describe('ProfilePage', () => {
     renderPage()
     await screen.findByLabelText(/display name/i)
     expect(screen.getByText(/coming soon/i)).toBeVisible()
+  })
+
+  describe('Appearance (add-dark-mode-toggle, moved here after design review — a set-once whole-app preference belongs on the deliberately-navigated-to settings page, not a transient account dropdown)', () => {
+    it('shows an Appearance card with a System/Light/Dark theme control', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.getByText('Appearance')).toBeInTheDocument()
+      const group = screen.getByRole('group', { name: /theme/i })
+      expect(group).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^system$/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^light$/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^dark$/i })).toBeInTheDocument()
+    })
+
+    it('marks System active by default with no stored override', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.getByRole('button', { name: /^system$/i })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: /^light$/i })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.getByRole('button', { name: /^dark$/i })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('clicking Dark sets the override and marks Dark active', async () => {
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      await userEvent.click(screen.getByRole('button', { name: /^dark$/i }))
+      expect(screen.getByRole('button', { name: /^dark$/i })).toHaveAttribute('aria-pressed', 'true')
+      expect(window.localStorage.getItem('testpulse.themeOverride')).toBe('dark')
+    })
+
+    it('clicking System after an override clears it', async () => {
+      window.localStorage.setItem('testpulse.themeOverride', 'light')
+      mockMe()
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.getByRole('button', { name: /^light$/i })).toHaveAttribute('aria-pressed', 'true')
+      await userEvent.click(screen.getByRole('button', { name: /^system$/i }))
+      expect(screen.getByRole('button', { name: /^system$/i })).toHaveAttribute('aria-pressed', 'true')
+      expect(window.localStorage.getItem('testpulse.themeOverride')).toBeNull()
+    })
   })
 
   describe('custom photo avatar upload (add-custom-avatar-upload, Pepe interaction design)', () => {

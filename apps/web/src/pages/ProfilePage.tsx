@@ -10,6 +10,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { useTheme } from '@/lib/ThemeProvider'
+import type { Theme } from '@/lib/theme'
+
+const THEME_LABELS = ['System', 'Light', 'Dark'] as const
 
 // Mirrors avatarimage.MaxUploadBytes / the format allowlist on the server
 // (add-custom-avatar-upload design.md) — a client-side precheck is a
@@ -20,6 +24,7 @@ const ACCEPTED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth()
+  const [, setThemeOverride, themeOverride] = useTheme()
   const [displayName, setDisplayName] = useState('')
   const [avatarKey, setAvatarKey] = useState<string | null>(null)
   const [timezone, setTimezone] = useState('')
@@ -262,6 +267,41 @@ export default function ProfilePage() {
               {saved && <span className="text-sm text-muted-foreground">Saved</span>}
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="tp-heading">Appearance</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium">Theme</p>
+              <p className="text-xs text-muted-foreground">
+                Follow your system, or choose light or dark.
+              </p>
+            </div>
+            <div role="group" aria-label="Theme" className="flex gap-0.5 rounded-full bg-muted p-1">
+              {THEME_LABELS.map((label) => {
+                const value: Theme | null = label === 'System' ? null : (label.toLowerCase() as Theme)
+                const active = themeOverride === value
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setThemeOverride(value)}
+                    className={`rounded-full px-3 py-1 text-sm font-medium transition-colors ${
+                      active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
