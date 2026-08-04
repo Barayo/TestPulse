@@ -696,6 +696,26 @@ test.describe('Requirement: Editing a test case creates a new version', () => {
     await page.getByRole('link', { name: /back to library/i }).click()
     await expect(content(page).getByText('Login works v2')).toBeVisible()
   })
+
+  test('Scenario: A version history row shows who made the change', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-73' })
+    await createProject(page, 'Version Actor Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await page.getByText('Login works').click()
+    await page.getByRole('button', { name: /^edit$/i }).click()
+    await page.getByLabel(/^title$/i).fill('Login works v2')
+    await page.getByRole('button', { name: /save changes/i }).click()
+
+    // The e2e session is authenticated as the Tenant Admin (global-setup.ts),
+    // whose display name is the hardcoded "Admin" (BootstrapAdmin) — so the
+    // new version's row folds that actor's avatar and first name into the
+    // change-signal line.
+    const history = page.getByRole('list', { name: /version history/i })
+    const v2Row = history.getByRole('button').filter({ hasText: 'v2' })
+    await expect(v2Row.getByText('Admin', { exact: true })).toBeVisible()
+    await expect(v2Row.getByText('Admin', { exact: true })).toHaveAttribute('title', 'Admin')
+  })
 })
 
 test.describe('Requirement: Project list with permission-ready create action', () => {

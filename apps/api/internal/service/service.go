@@ -219,6 +219,16 @@ func (s *Service) userActor(ctx context.Context) (domain.Actor, error) {
 	return actor, nil
 }
 
+// resolveActor reads the authenticated caller's kind/ref off the request
+// context, falling back to "unknown" when none is resolved (reachable only
+// if a call site ran ahead of auth middleware).
+func resolveActor(ctx context.Context) (domain.ResultActorKind, string) {
+	if actor, ok := domain.ActorFromContext(ctx); ok {
+		return domain.ResultActorKind(actor.Kind), actor.ID
+	}
+	return domain.ResultActorUnknown, ""
+}
+
 // --- Cases ---
 
 // CreateCase creates a case; an empty folderID defaults to the project's
@@ -227,7 +237,8 @@ func (s *Service) CreateCase(ctx context.Context, projectID, folderID string, co
 	if err := content.Validate(); err != nil {
 		return domain.TestCase{}, invalid("%s", err)
 	}
-	c, err := s.store.Cases.Create(ctx, projectID, folderID, content)
+	actorKind, actorRefID := resolveActor(ctx)
+	c, err := s.store.Cases.Create(ctx, projectID, folderID, content, actorKind, actorRefID)
 	if err != nil {
 		return domain.TestCase{}, err
 	}
@@ -250,7 +261,8 @@ func (s *Service) EditCase(ctx context.Context, caseID string, content domain.Ca
 	if err := content.Validate(); err != nil {
 		return domain.TestCase{}, invalid("%s", err)
 	}
-	c, err := s.store.Cases.NewVersion(ctx, caseID, content)
+	actorKind, actorRefID := resolveActor(ctx)
+	c, err := s.store.Cases.NewVersion(ctx, caseID, content, actorKind, actorRefID)
 	if err != nil {
 		return domain.TestCase{}, err
 	}

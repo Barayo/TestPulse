@@ -184,6 +184,14 @@ func (s *Service) CreateUser(ctx context.Context, email, password string, isTena
 	if err != nil {
 		return domain.User{}, err
 	}
+	// A real starting display name rather than permanently NULL until the
+	// account visits Profile settings (link-case-version-actor-to-identity
+	// design.md) — a default, not locked in; the account can change it later.
+	defaultName := domain.DefaultDisplayName(email)
+	user, err = s.store.Users.UpdateProfile(ctx, user.ID, domain.UserProfileUpdate{DisplayName: &defaultName})
+	if err != nil {
+		return domain.User{}, err
+	}
 	s.audit(ctx, "create", "user", user.ID)
 	return user, nil
 }

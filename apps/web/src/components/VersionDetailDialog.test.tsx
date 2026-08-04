@@ -19,7 +19,7 @@ const baseContent = {
   automated: false,
 }
 
-const v1 = { caseId: 'c1', version: 1, content: baseContent, createdAt: '2026-01-01T00:00:00Z' }
+const v1 = { caseId: 'c1', version: 1, content: baseContent, actorKind: 'unknown' as const, createdAt: '2026-01-01T00:00:00Z' }
 const v2 = {
   caseId: 'c1',
   version: 2,
@@ -28,6 +28,7 @@ const v2 = {
     title: 'Login works (updated)',
     steps: [{ action: 'Open login page', expected: 'Form visible with SSO button' }],
   },
+  actorKind: 'unknown' as const,
   createdAt: '2026-02-01T00:00:00Z',
 }
 

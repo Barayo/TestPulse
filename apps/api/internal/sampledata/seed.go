@@ -48,9 +48,21 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: creating demo user: %w", err)
 	}
-	miguel, err := svc.CreateUser(ctx, "miguel@example.com", "correcthorse1", false)
+	sam, err := svc.CreateUser(ctx, "sam@example.com", "correcthorse1", false)
 	if err != nil {
 		return fmt.Errorf("sampledata: creating demo user: %w", err)
+	}
+	// A real preset avatar (not just Julia's generated initial) and a second
+	// actor identity — used below to show a case version edited by someone
+	// other than the Tenant Admin (link-case-version-actor-to-identity).
+	juliaAvatar := "ada-lovelace"
+	juliaActor := domain.Actor{
+		ID: julia.ID, Kind: domain.ActorKindUser, DisplayName: "Julia",
+		EffectiveUserID: julia.ID,
+	}
+	juliaCtx := domain.WithActor(ctx, juliaActor)
+	if _, err := svc.UpdateOwnProfile(juliaCtx, juliaActor, domain.UserProfileUpdate{AvatarKey: &juliaAvatar}); err != nil {
+		return fmt.Errorf("sampledata: setting demo user avatar: %w", err)
 	}
 	roles, err := svc.ListRoles(ctx)
 	if err != nil {
@@ -69,7 +81,7 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err := svc.SetProjectMember(ctx, adminActor, p.ID, julia.ID, testerRole.ID); err != nil {
 		return fmt.Errorf("sampledata: adding demo project member: %w", err)
 	}
-	if err := svc.SetProjectMember(ctx, adminActor, p.ID, miguel.ID, testerRole.ID); err != nil {
+	if err := svc.SetProjectMember(ctx, adminActor, p.ID, sam.ID, testerRole.ID); err != nil {
 		return fmt.Errorf("sampledata: adding demo project member: %w", err)
 	}
 
@@ -172,7 +184,11 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	// Edited twice, reaching version 3 — second version-history example.
-	sessionTimeout, err = svc.EditCase(ctx, sessionTimeout.ID, domain.CaseContent{
+	// The first edit is by Julia rather than the Tenant Admin, so the
+	// Version History row demonstrates a real per-version actor (avatar +
+	// name) rather than always showing the same seeding admin
+	// (link-case-version-actor-to-identity).
+	sessionTimeout, err = svc.EditCase(juliaCtx, sessionTimeout.ID, domain.CaseContent{
 		Title:          sessionTimeout.Content.Title,
 		Steps:          sessionTimeout.Content.Steps,
 		ExpectedResult: "A warning appears 60 seconds before the session expires",
@@ -416,7 +432,7 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		case login.ID:
 			userID = julia.ID
 		case badPassword.ID:
-			userID = miguel.ID
+			userID = sam.ID
 		default:
 			continue
 		}

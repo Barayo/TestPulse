@@ -5,6 +5,7 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 )
 
@@ -64,7 +65,7 @@ func TestListTreeShowsAllFoldersAndCases(t *testing.T) {
 	root, _ := s.Folders.Root(ctx, p.ID)
 	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
 
-	c, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("Login works"))
+	c, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("Login works"), domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatalf("create case in subfolder: %v", err)
 	}
@@ -134,7 +135,7 @@ func TestDeleteFolderCascadesSoftDeleteToSubtree(t *testing.T) {
 	root, _ := s.Folders.Root(ctx, p.ID)
 	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
 	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login") // subfolder of auth
-	c, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("case in auth"))
+	c, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("case in auth"), domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -184,10 +185,10 @@ func TestSubtreeCountsForDeletePreview(t *testing.T) {
 	root, _ := s.Folders.Root(ctx, p.ID)
 	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
 	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login")
-	if _, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("case in auth")); err != nil {
+	if _, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("case in auth"), domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.Cases.Create(ctx, p.ID, login.ID, defaultContent("case in login")); err != nil {
+	if _, err := s.Cases.Create(ctx, p.ID, login.ID, defaultContent("case in login"), domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
 

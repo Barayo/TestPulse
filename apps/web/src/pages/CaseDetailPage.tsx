@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { Avatar } from '@/components/Avatar'
 import { PropertyRow } from '@/components/PropertyRow'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel } from '@/components/CaseResultsPanel'
@@ -27,6 +28,10 @@ type Project = components['schemas']['Project']
 type Folder = components['schemas']['Folder']
 type CaseVersion = components['schemas']['CaseVersion']
 type Suite = components['schemas']['Suite']
+
+function firstNameOf(displayName: string): string {
+  return displayName.split(' ')[0]
+}
 
 function tagsToText(tags: string[]): string {
   return tags.join(', ')
@@ -49,6 +54,12 @@ export default function CaseDetailPage() {
   const [versions, setVersions] = useState<CaseVersion[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [notFound, setNotFound] = useState(false)
+  // Resolves a version's actor to a display name + avatar (link-case-version-actor-to-identity)
+  // — actorRefId -> {displayName, avatarKey}, the same client-side lookup pattern
+  // RunItemDetailPage already uses for result history.
+  const [userIdentities, setUserIdentities] = useState<
+    Record<string, { displayName: string; avatarKey?: string | null }>
+  >({})
 
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
@@ -67,12 +78,13 @@ export default function CaseDetailPage() {
   const load = useCallback(async () => {
     if (!projectKey || !caseKey) return
     setNotFound(false)
-    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }] = await Promise.all([
+    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }] = await Promise.all([
       api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
       api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
       api.GET('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } }),
       api.GET('/api/v1/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
       api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/users'),
     ])
     if (!p || !c) {
       setNotFound(true)
@@ -83,6 +95,11 @@ export default function CaseDetailPage() {
     setTestCase(c)
     setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
     setSuites(s ?? [])
+    setUserIdentities(
+      Object.fromEntries(
+        (users ?? []).map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
+      ),
+    )
   }, [projectKey, caseKey])
 
   useEffect(() => {
@@ -324,6 +341,7 @@ export default function CaseDetailPage() {
                   const previous = versions.find((x) => x.version === v.version - 1)
                   const signal = previous ? diffSignal(diffContent(previous.content, v.content)) : 'Initial version'
                   const expanded = expandedVersion === v.version
+                  const author = v.actorKind === 'user' && v.actorRefId ? userIdentities[v.actorRefId] : undefined
                   return (
                     <li key={v.version}>
                       <button
@@ -336,7 +354,21 @@ export default function CaseDetailPage() {
                             <span>v{v.version}</span>
                             {v.version === testCase.currentVersion && <Badge variant="default">current</Badge>}
                           </span>
-                          <span className="text-xs text-muted-foreground">{signal}</span>
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            {author && (
+                              <Avatar
+                                seed={author.displayName}
+                                avatarKey={author.avatarKey}
+                                userId={v.actorRefId}
+                                className="size-4 rounded-full text-[8px]"
+                              />
+                            )}
+                            {author && (
+                              <span title={author.displayName}>{firstNameOf(author.displayName)}</span>
+                            )}
+                            {author && <span>·</span>}
+                            <span className="truncate">{signal}</span>
+                          </span>
                         </span>
                         <span className="text-xs text-muted-foreground">
                           {new Date(v.createdAt).toLocaleDateString()}

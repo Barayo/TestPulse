@@ -1299,11 +1299,15 @@ components:
           description: The current version's own createdAt — when the case was last edited, not when it was originally created. Equal to createdAt for a never-edited case.
     CaseVersion:
       type: object
-      required: [caseId, version, content, createdAt]
+      required: [caseId, version, content, actorKind, createdAt]
       properties:
         caseId: { type: string }
         version: { type: integer }
         content: { $ref: "#/components/schemas/CaseContent" }
+        actorKind: { $ref: "#/components/schemas/ResultActorKind" }
+        actorRefId:
+          type: string
+          description: The real user/agent id who created this version, when known.
         createdAt: { type: string, format: date-time }
     CaseExecution:
       type: object

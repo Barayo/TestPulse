@@ -124,7 +124,7 @@ func TestFlakyCasesResetsOnNewVersion(t *testing.T) {
 		t.Fatalf("expected flaky on v1, got %+v, err=%v", flaky, err)
 	}
 
-	if _, err := s.Cases.NewVersion(ctx, c.ID, defaultContent("Login works v2")); err != nil {
+	if _, err := s.Cases.NewVersion(ctx, c.ID, defaultContent("Login works v2"), domain.ResultActorUnknown, ""); err != nil {
 		t.Fatalf("new version: %v", err)
 	}
 

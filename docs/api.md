@@ -134,7 +134,7 @@ this capability shipped read back with `actorKind: "unknown"`.
 | DELETE | `/api/v1/users/me/avatar` | Remove the caller's custom photo avatar, reverting to the generated default |
 | GET | `/api/v1/users/{userId}/avatar` | The raw image bytes for a user's custom photo avatar (always JPEG), if they have one — cacheable via `ETag`/`Cache-Control` |
 | GET | `/api/v1/users` | List users |
-| POST | `/api/v1/users` | Create a user (`email`, `password`, `isTenantAdmin`) — Tenant Admin only |
+| POST | `/api/v1/users` | Create a user (`email`, `password`, `isTenantAdmin`) — Tenant Admin only; `displayName` defaults to a name derived from the email's local-part (`jane.doe@x.com` → "Jane Doe") rather than staying unset |
 | PATCH | `/api/v1/users/{userId}` | Change `isTenantAdmin` and/or `deactivate` — Tenant Admin only |
 | GET | `/api/v1/tokens` | List API tokens — own tokens, or `?userId=` for another user's (Tenant Admin only) |
 | POST | `/api/v1/tokens` | Create an API token (`name`) for an agent; the full value is returned once and never again |

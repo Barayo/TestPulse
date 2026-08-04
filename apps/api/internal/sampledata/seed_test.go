@@ -540,6 +540,70 @@ func TestSeedContentShowcasesResultActorLink(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesCaseVersionActorLink covers
+// link-case-version-actor-to-identity's showcase task: without this, every
+// seeded case version would attribute to the same Tenant Admin actor,
+// leaving the Version History row's "who made the change" avatar/name
+// permanently untested against a second real identity. Julia edits the
+// "Session expires after inactivity" case's second version so the row
+// shows a different actor (with a real preset avatar, not just an
+// initial) than the Admin-attributed first and third versions.
+func TestSeedContentShowcasesCaseVersionActorLink(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	users, err := svc.ListUsers(actorCtx)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	var julia domain.User
+	for _, u := range users {
+		if u.Email == "julia@example.com" {
+			julia = u
+		}
+	}
+	if julia.ID == "" {
+		t.Fatal("seeded demo user julia@example.com not found")
+	}
+	if julia.AvatarKey == nil || *julia.AvatarKey == "" {
+		t.Error("julia@example.com has no avatarKey set — Version History row would show a generated initial, not a real preset avatar")
+	}
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var sessionTimeoutID string
+	for _, c := range cases {
+		if c.Content.Title == "Session expires after inactivity" {
+			sessionTimeoutID = c.ID
+		}
+	}
+	if sessionTimeoutID == "" {
+		t.Fatal(`seeded case "Session expires after inactivity" not found`)
+	}
+
+	versions, err := svc.CaseVersions(actorCtx, sessionTimeoutID)
+	if err != nil {
+		t.Fatalf("CaseVersions: %v", err)
+	}
+	if len(versions) != 3 {
+		t.Fatalf("got %d versions, want 3", len(versions))
+	}
+	if versions[1].ActorKind != domain.ResultActorUser || versions[1].ActorRefID != julia.ID {
+		t.Errorf("version 2 actor = %+v, want user/%s (Julia)", versions[1], julia.ID)
+	}
+	if versions[0].ActorRefID != versions[2].ActorRefID {
+		t.Error("version 1 and version 3 should both attribute to the Tenant Admin, distinct from Julia's version 2")
+	}
+}
+
 // TestSeedContentShowcasesLibraryRichness covers rework-library-ux's showcase
 // task: a section with a double-digit direct case count (so the case-count/
 // automation-coverage-meter rendering has real scale to show), a genuinely

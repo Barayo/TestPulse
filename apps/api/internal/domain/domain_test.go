@@ -295,3 +295,22 @@ func TestDeriveProjectKeyIsAlwaysUppercaseAlphanumeric(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultDisplayName(t *testing.T) {
+	cases := []struct {
+		email string
+		want  string
+	}{
+		{"rgriffiths@example.com", "Rgriffiths"},
+		{"jane.doe@example.com", "Jane Doe"},
+		{"j_smith99@example.com", "J Smith99"},
+		{"ana-maria@example.com", "Ana Maria"},
+		{"jane+work@example.com", "Jane Work"},
+		{"admin@example.com", "Admin"},
+	}
+	for _, c := range cases {
+		if got := DefaultDisplayName(c.email); got != c.want {
+			t.Errorf("DefaultDisplayName(%q) = %q, want %q", c.email, got, c.want)
+		}
+	}
+}

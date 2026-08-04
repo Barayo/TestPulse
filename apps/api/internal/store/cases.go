@@ -58,7 +58,7 @@ func (r *CaseRepo) IDByKeyInProject(ctx context.Context, projectID, key string) 
 
 // Create inserts a case and its version 1 in one transaction. An empty
 // folderID resolves to the project's root folder (design D8).
-func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, content domain.CaseContent) (domain.TestCase, error) {
+func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, content domain.CaseContent, actorKind domain.ResultActorKind, actorRefID string) (domain.TestCase, error) {
 	steps, err := marshalSteps(content.Steps)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -82,6 +82,11 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 		return domain.TestCase{}, fmt.Errorf("claiming case key: %w", err)
 	}
 
+	var refID *string
+	if actorRefID != "" {
+		refID = &actorRefID
+	}
+
 	var c domain.TestCase
 	err = tx.QueryRow(ctx,
 		`INSERT INTO test_cases (key, project_id, folder_id) VALUES ($1, $2, $3)
@@ -91,12 +96,12 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 		return domain.TestCase{}, err
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated)
-		 VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated, actor_kind, actor_ref_id)
+		 VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		 RETURNING created_at`,
 		c.ID, content.Title, content.Description, steps, content.ExpectedResult,
 		defaultPriority(content.Priority), tagsOrEmpty(content.Tags),
-		content.Platform, content.TestType, content.Automated,
+		content.Platform, content.TestType, content.Automated, actorKind, refID,
 	).Scan(&c.UpdatedAt)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -109,7 +114,7 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 }
 
 // NewVersion appends an immutable version and bumps current_version.
-func (r *CaseRepo) NewVersion(ctx context.Context, caseID string, content domain.CaseContent) (domain.TestCase, error) {
+func (r *CaseRepo) NewVersion(ctx context.Context, caseID string, content domain.CaseContent, actorKind domain.ResultActorKind, actorRefID string) (domain.TestCase, error) {
 	steps, err := marshalSteps(content.Steps)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -119,6 +124,11 @@ func (r *CaseRepo) NewVersion(ctx context.Context, caseID string, content domain
 		return domain.TestCase{}, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
+
+	var refID *string
+	if actorRefID != "" {
+		refID = &actorRefID
+	}
 
 	var c domain.TestCase
 	err = tx.QueryRow(ctx,
@@ -133,12 +143,12 @@ func (r *CaseRepo) NewVersion(ctx context.Context, caseID string, content domain
 		return domain.TestCase{}, err
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated, actor_kind, actor_ref_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		 RETURNING created_at`,
 		c.ID, c.CurrentVersion, content.Title, content.Description, steps,
 		content.ExpectedResult, defaultPriority(content.Priority), tagsOrEmpty(content.Tags),
-		content.Platform, content.TestType, content.Automated,
+		content.Platform, content.TestType, content.Automated, actorKind, refID,
 	).Scan(&c.UpdatedAt)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -222,7 +232,7 @@ func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCas
 
 func (r *CaseRepo) Versions(ctx context.Context, caseID string) ([]domain.CaseVersion, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT case_id, version, created_at, `+contentColumns+`
+		`SELECT case_id, version, created_at, actor_kind, actor_ref_id, `+contentColumns+`
 		 FROM test_case_versions WHERE case_id = $1 ORDER BY version`, caseID)
 	if err != nil {
 		return nil, err
@@ -233,6 +243,7 @@ func (r *CaseRepo) Versions(ctx context.Context, caseID string) ([]domain.CaseVe
 	for rows.Next() {
 		var (
 			v                            domain.CaseVersion
+			refID                        *string
 			title, description, expected string
 			priority                     string
 			stepsJSON                    []byte
@@ -240,9 +251,12 @@ func (r *CaseRepo) Versions(ctx context.Context, caseID string) ([]domain.CaseVe
 			platform, testType           string
 			automated                    bool
 		)
-		if err := rows.Scan(&v.CaseID, &v.Version, &v.CreatedAt,
+		if err := rows.Scan(&v.CaseID, &v.Version, &v.CreatedAt, &v.ActorKind, &refID,
 			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
 			return nil, err
+		}
+		if refID != nil {
+			v.ActorRefID = *refID
 		}
 		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
 		if err != nil {

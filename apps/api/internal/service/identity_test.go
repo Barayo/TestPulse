@@ -269,6 +269,14 @@ func TestCreateUserRecordsAuditEntryWhenActorPresent(t *testing.T) {
 	}
 }
 
+func TestCreateUserDefaultsDisplayNameFromEmail(t *testing.T) {
+	s := testService(t)
+	created := mustCreateUser(t, s, "jane.doe@example.com", "correcthorse", false)
+	if created.DisplayName == nil || *created.DisplayName != "Jane Doe" {
+		t.Errorf("DisplayName = %v, want \"Jane Doe\"", created.DisplayName)
+	}
+}
+
 // --- Bootstrap admin ---
 
 func TestBootstrapAdminSeedsOnEmptyTable(t *testing.T) {

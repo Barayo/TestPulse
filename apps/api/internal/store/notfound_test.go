@@ -24,7 +24,7 @@ func TestNotFoundPaths(t *testing.T) {
 
 	_, err = s.Cases.Get(ctx, missingID)
 	checks["Cases.Get"] = err
-	_, err = s.Cases.NewVersion(ctx, missingID, domain.CaseContent{Title: "t"})
+	_, err = s.Cases.NewVersion(ctx, missingID, domain.CaseContent{Title: "t"}, domain.ResultActorUnknown, "")
 	checks["Cases.NewVersion"] = err
 	checks["Cases.SoftDelete"] = s.Cases.SoftDelete(ctx, missingID)
 

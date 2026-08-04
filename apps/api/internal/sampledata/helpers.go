@@ -78,7 +78,7 @@ func Suite(ctx context.Context, svc *service.Service, projectID, name string, ca
 // An empty entry means "no override": RecordResult defaults the result's
 // actor to the seeding caller (link-result-actor-to-identity), so both the
 // default and override paths show up in the seeded data.
-var Actors = []string{"", "Julia López", "Miguel Alonso", "agent:qa-bot"}
+var Actors = []string{"", "Julia López", "Sam Okafor", "agent:qa-bot"}
 
 // RunWithVerdicts creates a run over caseIDs and immediately records one
 // result per item, cycling verdicts in order (e.g. mostly pass, a couple of

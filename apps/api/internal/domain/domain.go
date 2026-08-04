@@ -159,6 +159,30 @@ func ValidateProjectName(name string) error {
 // any run of non-letters/digits is a word boundary.
 var nonAlphanumeric = regexp.MustCompile(`[^A-Za-z0-9]+`)
 
+// emailSeparators splits an email's local-part into words for default
+// display name derivation — the common separator characters, not any
+// non-alphanumeric run (an email local-part's alphanumeric characters
+// themselves are the words, unlike a free-text project name).
+var emailSeparators = regexp.MustCompile(`[._\-+]+`)
+
+// DefaultDisplayName derives a starting display name from an email address
+// for an account that hasn't set one (link-case-version-actor-to-identity
+// design.md) — the local-part split on ./_/-/+ , each word title-cased.
+// "jane.doe@x.com" -> "Jane Doe". A default, not a locked-in value: the
+// account can change it later via self-service profile settings.
+func DefaultDisplayName(email string) string {
+	local, _, _ := strings.Cut(email, "@")
+	words := emailSeparators.Split(local, -1)
+	tokens := make([]string, 0, len(words))
+	for _, w := range words {
+		if w == "" {
+			continue
+		}
+		tokens = append(tokens, strings.ToUpper(w[:1])+w[1:])
+	}
+	return strings.Join(tokens, " ")
+}
+
 // DeriveProjectKey computes a project's auto-generated key candidate from
 // its name (add-human-readable-keys design.md D1): multi-word names take
 // the initial letter of each word (capped at 5); a single word takes its
@@ -262,11 +286,18 @@ type Folder struct {
 	CreatedAt      time.Time `json:"createdAt"`
 }
 
+// ActorKind/ActorRefID mirror test_run_results' identical columns
+// (link-case-version-actor-to-identity design.md) — same reasoning, same
+// shape: no FK, so a version's attribution survives that actor being
+// deleted later, and ActorKind is "unknown" for versions predating this
+// capability rather than a fabricated identity.
 type CaseVersion struct {
-	CaseID    string      `json:"caseId"`
-	Version   int         `json:"version"`
-	Content   CaseContent `json:"content"`
-	CreatedAt time.Time   `json:"createdAt"`
+	CaseID     string          `json:"caseId"`
+	Version    int             `json:"version"`
+	Content    CaseContent     `json:"content"`
+	ActorKind  ResultActorKind `json:"actorKind"`
+	ActorRefID string          `json:"actorRefId,omitempty"`
+	CreatedAt  time.Time       `json:"createdAt"`
 }
 
 type Suite struct {

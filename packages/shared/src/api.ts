@@ -1040,6 +1040,9 @@ export interface components {
             caseId: string;
             version: number;
             content: components["schemas"]["CaseContent"];
+            actorKind: components["schemas"]["ResultActorKind"];
+            /** @description The real user/agent id who created this version, when known. */
+            actorRefId?: string;
             /** Format: date-time */
             createdAt: string;
         };

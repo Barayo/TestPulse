@@ -38,7 +38,7 @@ func defaultContent(title string) domain.CaseContent {
 // exercises the "defaults to the project's root folder" behavior for free.
 func mustCase(t *testing.T, s *store.Store, projectID, title string) domain.TestCase {
 	t.Helper()
-	c, err := s.Cases.Create(context.Background(), projectID, "", defaultContent(title))
+	c, err := s.Cases.Create(context.Background(), projectID, "", defaultContent(title), domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatalf("create case: %v", err)
 	}
@@ -97,7 +97,7 @@ func TestConcurrentCaseCreationYieldsDistinctKeys(t *testing.T) {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			c, err := s.Cases.Create(ctx, p.ID, "", defaultContent("concurrent case"))
+			c, err := s.Cases.Create(ctx, p.ID, "", defaultContent("concurrent case"), domain.ResultActorUnknown, "")
 			if err != nil {
 				errs <- err
 				return
@@ -257,7 +257,7 @@ func TestEditingCreatesNewVersionAndPreservesOld(t *testing.T) {
 
 	edited := c.Content
 	edited.Steps = []domain.Step{{Action: "changed step"}}
-	c2, err := s.Cases.NewVersion(ctx, c.ID, edited)
+	c2, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatalf("NewVersion: %v", err)
 	}
@@ -274,6 +274,34 @@ func TestEditingCreatesNewVersionAndPreservesOld(t *testing.T) {
 	}
 	if versions[1].Content.Steps[0].Action != "changed step" {
 		t.Errorf("v2 content wrong: %+v", versions[1].Content.Steps)
+	}
+}
+
+func TestCaseVersionsRecordTheirActor(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	c, err := s.Cases.Create(ctx, p.ID, "", defaultContent("Login works"), domain.ResultActorUser, "u1")
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	edited := c.Content
+	edited.Steps = []domain.Step{{Action: "changed step"}}
+	if _, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorAgent, "tok1"); err != nil {
+		t.Fatalf("NewVersion: %v", err)
+	}
+
+	versions, err := s.Cases.Versions(ctx, c.ID)
+	if err != nil || len(versions) != 2 {
+		t.Fatalf("Versions = %d entries, %v; want 2", len(versions), err)
+	}
+	if versions[0].ActorKind != domain.ResultActorUser || versions[0].ActorRefID != "u1" {
+		t.Errorf("v1 actor = %+v, want user/u1", versions[0])
+	}
+	if versions[1].ActorKind != domain.ResultActorAgent || versions[1].ActorRefID != "tok1" {
+		t.Errorf("v2 actor = %+v, want agent/tok1", versions[1])
 	}
 }
 
@@ -296,7 +324,7 @@ func TestCaseClassificationFieldsRoundTripOnCreateAndUpdate(t *testing.T) {
 	content.Platform = "web"
 	content.TestType = "e2e"
 	content.Automated = true
-	c, err := s.Cases.Create(ctx, p.ID, "", content)
+	c, err := s.Cases.Create(ctx, p.ID, "", content, domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatalf("create case: %v", err)
 	}
@@ -316,7 +344,7 @@ func TestCaseClassificationFieldsRoundTripOnCreateAndUpdate(t *testing.T) {
 	edited.Platform = "iOS"
 	edited.TestType = "unit"
 	edited.Automated = false
-	c2, err := s.Cases.NewVersion(ctx, c.ID, edited)
+	c2, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatalf("new version: %v", err)
 	}
@@ -595,7 +623,7 @@ func TestRunPinsVersionAtCreation(t *testing.T) {
 	// Edit the case after run creation → run item must stay pinned to v1.
 	edited := c.Content
 	edited.Title = "Login works (edited)"
-	if _, err := s.Cases.NewVersion(ctx, c.ID, edited); err != nil {
+	if _, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatalf("NewVersion: %v", err)
 	}
 
@@ -856,7 +884,7 @@ func TestAddItemToOpenRunPinsThenCurrentVersion(t *testing.T) {
 
 	edited := c.Content
 	edited.Title = "v2 title"
-	if _, err := s.Cases.NewVersion(ctx, c.ID, edited); err != nil {
+	if _, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Runs.AddItem(ctx, run.ID, c.ID, ""); err != nil {
@@ -1361,7 +1389,7 @@ func TestExecutionsByCaseGroupedByVersion(t *testing.T) {
 
 	edited := c.Content
 	edited.Title = "Login works (edited)"
-	if _, err := s.Cases.NewVersion(ctx, c.ID, edited); err != nil {
+	if _, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := s.Runs.Create(ctx, p.ID, "run 3", []string{c.ID}); err != nil {

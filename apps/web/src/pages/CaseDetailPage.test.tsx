@@ -34,7 +34,11 @@ const limitCase = {
   createdAt: '',
 }
 
-function mockDetailAPI(options?: { v1Content?: typeof limitCase.content }) {
+function mockDetailAPI(options?: {
+  v1Content?: typeof limitCase.content
+  versions?: unknown[]
+  users?: unknown[]
+}) {
   mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
@@ -44,9 +48,9 @@ function mockDetailAPI(options?: { v1Content?: typeof limitCase.content }) {
       return Promise.resolve({ data: limitCase, response: { ok: true } })
     if (path === '/api/v1/cases/{caseKey}/versions' && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
-        data: [
-          { caseId: 'c1', version: 1, content: options?.v1Content ?? limitCase.content, createdAt: '2026-01-01T00:00:00Z' },
-          { caseId: 'c1', version: 2, content: limitCase.content, createdAt: '2026-02-01T00:00:00Z' },
+        data: options?.versions ?? [
+          { caseId: 'c1', version: 1, content: options?.v1Content ?? limitCase.content, actorKind: 'unknown', createdAt: '2026-01-01T00:00:00Z' },
+          { caseId: 'c1', version: 2, content: limitCase.content, actorKind: 'unknown', createdAt: '2026-02-01T00:00:00Z' },
         ],
         response: { ok: true },
       })
@@ -56,6 +60,7 @@ function mockDetailAPI(options?: { v1Content?: typeof limitCase.content }) {
         response: { ok: true },
       })
     if (path === '/api/v1/cases/{caseKey}/executions') return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === '/api/v1/users') return Promise.resolve({ data: options?.users ?? [], response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -288,6 +293,69 @@ describe('CaseDetailPage', () => {
     await userEvent.click(await within(history).findByRole('button', { name: /view executions/i }))
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(within(screen.getByRole('dialog')).getByText('Version 1')).toBeInTheDocument()
+  })
+
+  it("folds the version author's avatar and first name into the signal line", async () => {
+    mockDetailAPI({
+      versions: [
+        { caseId: 'c1', version: 1, content: limitCase.content, actorKind: 'unknown', createdAt: '2026-01-01T00:00:00Z' },
+        {
+          caseId: 'c1',
+          version: 2,
+          content: limitCase.content,
+          actorKind: 'user',
+          actorRefId: 'u1',
+          createdAt: '2026-02-01T00:00:00Z',
+        },
+      ],
+      users: [
+        { id: 'u1', email: 'jane.doe@example.com', isTenantAdmin: false, displayName: 'Jane Doe', avatarKey: null, createdAt: '' },
+      ],
+    })
+    renderDetail()
+    const history = await screen.findByRole('list', { name: /version history/i })
+    const v2Row = within(history).getByText('v2').closest('button')
+    expect(v2Row).not.toBeNull()
+    expect(within(v2Row!).getByText('Jane')).toBeInTheDocument()
+    expect(within(v2Row!).getByText('Jane')).toHaveAttribute('title', 'Jane Doe')
+    expect(v2Row!.querySelector('.size-4')).not.toBeNull()
+    const v1Row = within(history).getByText('v1').closest('button')
+    expect(v1Row).not.toBeNull()
+    expect(within(v1Row!).queryByText('Jane')).not.toBeInTheDocument()
+  })
+
+  it('shows no avatar for a version with an unknown actor', async () => {
+    mockDetailAPI()
+    renderDetail()
+    const history = await screen.findByRole('list', { name: /version history/i })
+    const v1Row = within(history).getByText('v1').closest('button')
+    expect(v1Row).not.toBeNull()
+    expect(v1Row!.querySelector('.size-4')).toBeNull()
+  })
+
+  it('does not repeat the version author in the expanded diff panel', async () => {
+    mockDetailAPI({
+      versions: [
+        { caseId: 'c1', version: 1, content: limitCase.content, actorKind: 'unknown', createdAt: '2026-01-01T00:00:00Z' },
+        {
+          caseId: 'c1',
+          version: 2,
+          content: { ...limitCase.content, title: 'Daily transfer limit (v2)' },
+          actorKind: 'user',
+          actorRefId: 'u1',
+          createdAt: '2026-02-01T00:00:00Z',
+        },
+      ],
+      users: [
+        { id: 'u1', email: 'jane.doe@example.com', isTenantAdmin: false, displayName: 'Jane Doe', avatarKey: null, createdAt: '' },
+      ],
+    })
+    renderDetail()
+    const history = await screen.findByRole('list', { name: /version history/i })
+    await userEvent.click(within(history).getByText('v2'))
+    await within(history).findByText('Daily transfer limit (v2)')
+    const v2Row = within(history).getByText('v2').closest('li')!
+    expect(within(v2Row).getAllByText('Jane')).toHaveLength(1)
   })
 
   it('renders priority, platform, test type, and automated status as pills', async () => {
