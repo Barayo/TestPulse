@@ -6,13 +6,14 @@ Establishing *who* is making a request: local user accounts (bcrypt),
 session-based login for the web UI, and scoped API tokens for agents — so
 every request resolves to exactly one authenticated actor (human or agent)
 before any domain route runs.
-
 ## Requirements
-
 ### Requirement: Local user accounts
 The system SHALL support local user accounts identified by email, with a
 bcrypt-hashed password. There is no public self-registration — only a
-Tenant Admin (see `authorization`) can create a new account.
+Tenant Admin (see `authorization`) can create a new account. A newly
+created account's `displayName` SHALL default to a name derived from
+the email's local-part (separators `.`/`_`/`-`/`+` become spaces, each
+resulting word title-cased) rather than staying unset.
 
 #### Scenario: Create a user
 - **WHEN** a Tenant Admin submits a new account with an email and password
@@ -31,6 +32,10 @@ Tenant Admin (see `authorization`) can create a new account.
 #### Scenario: Non-Tenant-Admin cannot create a user
 - **WHEN** a non-Tenant-Admin authenticated user submits a new account
 - **THEN** the request is rejected with `403`
+
+#### Scenario: New account gets a default display name from its email
+- **WHEN** a Tenant Admin creates an account for `jane.doe@example.com`
+- **THEN** the account's `displayName` is "Jane Doe" rather than unset
 
 ### Requirement: Session-based login
 The system SHALL authenticate a user's email and password against the
@@ -130,3 +135,4 @@ status.
 #### Scenario: A user cannot edit another user's profile
 - **WHEN** a user attempts to update display name, avatar, or timezone for an account that is not their own
 - **THEN** the request is rejected — self-service profile editing is scoped to the authenticated user's own account only
+
