@@ -628,7 +628,6 @@ var AvatarPresetKeys = map[string]bool{
 	"mary-anning":         true,
 	"john-von-neumann":    true,
 	"severo-ochoa":        true,
-	"barbara-mcclintock":  true,
 	"richard-feynman":     true,
 	"leonardo-da-vinci":   true,
 	"archimedes":          true,

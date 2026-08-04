@@ -16,7 +16,6 @@ import maryAnning from '@/assets/avatars/mary-anning.jpg'
 import johnVonNeumann from '@/assets/avatars/john-von-neumann.jpg'
 import emmyNoether from '@/assets/avatars/emmy-noether.jpg'
 import severoOchoa from '@/assets/avatars/severo-ochoa.jpg'
-import barbaraMcclintock from '@/assets/avatars/barbara-mcclintock.jpg'
 import richardFeynman from '@/assets/avatars/richard-feynman.jpg'
 import leonardoDaVinci from '@/assets/avatars/leonardo-da-vinci.jpg'
 import archimedes from '@/assets/avatars/archimedes.jpg'
@@ -41,7 +40,6 @@ export type AvatarPresetKey =
   | 'john-von-neumann'
   | 'emmy-noether'
   | 'severo-ochoa'
-  | 'barbara-mcclintock'
   | 'richard-feynman'
   | 'leonardo-da-vinci'
   | 'archimedes'
@@ -66,7 +64,6 @@ export const AVATAR_PRESETS: { key: AvatarPresetKey; name: string; image: string
   { key: 'john-von-neumann', name: 'John von Neumann', image: johnVonNeumann },
   { key: 'emmy-noether', name: 'Emmy Noether', image: emmyNoether },
   { key: 'severo-ochoa', name: 'Severo Ochoa', image: severoOchoa },
-  { key: 'barbara-mcclintock', name: 'Barbara McClintock', image: barbaraMcclintock },
   { key: 'richard-feynman', name: 'Richard Feynman', image: richardFeynman },
   { key: 'leonardo-da-vinci', name: 'Leonardo da Vinci', image: leonardoDaVinci },
   { key: 'archimedes', name: 'Archimedes', image: archimedes },
