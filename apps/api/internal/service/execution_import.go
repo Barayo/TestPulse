@@ -7,6 +7,7 @@ import (
 
 	"context"
 
+	"github.com/Barayo/TestPulse/apps/api/internal/attachmentimage"
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/junitxml"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
@@ -17,6 +18,13 @@ type ImportInput struct {
 	Format string
 	Name   string
 	Report string
+	// Attachments carries images alongside the report, each keyed by the
+	// case key of the test it belongs to — the JUnit report itself is never
+	// parsed for embedded attachments (add-run-item-screenshot-attachments
+	// design.md). An attachment whose case key doesn't match any test that
+	// was successfully matched to a case is dropped, not stored, the same
+	// as the rest of that unmatched test's data.
+	Attachments []domain.NewAttachment
 }
 
 // UnmatchedTest is one reported test whose case key had no matching case in
@@ -52,6 +60,16 @@ func (s *Service) Import(ctx context.Context, projectID string, in ImportInput) 
 		return ImportResult{}, invalid("%s", err)
 	}
 
+	attachmentsByCaseKey := map[string][]domain.NewAttachment{}
+	for _, a := range in.Attachments {
+		contentType, verr := attachmentimage.ValidateUpload(a.Data)
+		if verr != nil {
+			return ImportResult{}, invalid("%s", verr)
+		}
+		a.ContentType = contentType
+		attachmentsByCaseKey[a.CaseKey] = append(attachmentsByCaseKey[a.CaseKey], a)
+	}
+
 	name := in.Name
 	if name == "" {
 		if parsed.SuiteName != "" {
@@ -76,13 +94,14 @@ func (s *Service) Import(ctx context.Context, projectID string, in ImportInput) 
 			CaseID:   caseID,
 			TestName: tc.Name,
 			Result: domain.NewResult{
-				Actor:     actor.DisplayName,
-				Verdict:   tc.Verdict,
-				StartTime: tc.StartTime,
-				EndTime:   tc.EndTime,
-				Platform:  tc.Platform,
-				Version:   tc.Version,
-				Tags:      tc.Tags,
+				Actor:       actor.DisplayName,
+				Verdict:     tc.Verdict,
+				StartTime:   tc.StartTime,
+				EndTime:     tc.EndTime,
+				Platform:    tc.Platform,
+				Version:     tc.Version,
+				Tags:        tc.Tags,
+				Attachments: attachmentsByCaseKey[tc.CaseKey],
 			},
 		})
 	}

@@ -87,6 +87,16 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/results", h.listResults)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Post("/results", h.recordResult)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Put("/status", h.updateItem)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/attachments", h.listStagedAttachments)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Post("/attachments", h.stageAttachment)
+	})
+	r.Route("/results/{resultID}", func(r chi.Router) {
+		r.With(h.requirePermission(domain.PermRead, projectIDFromResult)).Get("/attachments", h.listResultAttachments)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromResult)).Post("/attachments", h.attachToResult)
+	})
+	r.Route("/attachments/{attachmentID}", func(r chi.Router) {
+		r.With(h.requirePermission(domain.PermRead, projectIDFromAttachment)).Get("/", h.getAttachment)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromAttachment)).Delete("/", h.deleteAttachment)
 	})
 }
 
@@ -446,16 +456,17 @@ type importResultJSON struct {
 
 func (h *api) importResults(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Format string `json:"format"`
-		Name   string `json:"name"`
-		Report string `json:"report"`
+		Format      string                 `json:"format"`
+		Name        string                 `json:"name"`
+		Report      string                 `json:"report"`
+		Attachments []domain.NewAttachment `json:"attachments"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
 		return
 	}
 	result, err := h.svc.Import(r.Context(), resolvedID(r, "projectKey"), service.ImportInput{
-		Format: body.Format, Name: body.Name, Report: body.Report,
+		Format: body.Format, Name: body.Name, Report: body.Report, Attachments: body.Attachments,
 	})
 	if err != nil {
 		h.respond(w, 0, nil, err)

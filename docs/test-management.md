@@ -216,6 +216,45 @@ result. Before any verdict has ever been recorded, no button is shown; a
 hint explains the comment is saved together with whichever verdict you
 record below instead.
 
+### Screenshot attachments
+
+A result can carry image evidence, attached independently of writing a
+comment — evidence and annotation are two different things, and neither
+requires the other. On an open item's page, the **Attachments** field sits
+above Comment with its own drop zone: click it to browse, drag an image
+onto it, or paste (⌘V) while it has focus. It uploads immediately and shows
+as a thumbnail, with an "N attached — attach another" hint that updates as
+you go. Hovering a staged thumbnail reveals a small × to remove it before
+it's linked to anything.
+
+Pasting or dragging an image directly onto the **Comment** field also
+works, as a shortcut for anyone already typing a comment — it uploads
+through the same path and lands in the same Attachments strip above, with
+a brief "✓ Added to Attachments" confirmation so it's clear the image
+didn't become part of the comment text. Comment's placeholder mentions
+this ("...screenshots paste here too") only while the field is empty.
+Either way, a screenshot isn't linked to anything until a verdict is
+actually recorded (there's no result yet to attach it to) — recording one
+links every staged thumbnail to that result in the same action. An
+already-recorded result in **History** carries its own persistently-visible
+paperclip icon for attaching evidence after the fact, without recording a
+new verdict.
+
+A rejected upload (wrong type, too large, or a failed request) shows as a
+red-bordered tile in the strip alongside any successful ones, plus a
+callout naming the specific reason. Thumbnails show up to three per result
+plus a "+N" tile for the rest; clicking any of them opens a full-size view
+with previous/next navigation across that result's attachments. Accepted
+formats are PNG, JPEG, and WebP, up to 5MB each.
+
+A screenshot imported alongside a JUnit report reads no differently from a
+manually-attached one — same thumbnails, same full-size view. Plain JUnit
+XML has no attachment convention of its own, so imports carry screenshots as
+a separate field on the import request rather than embedded in the report
+(see [Importing results](importing-results.md)); an import with no
+screenshots — the common case today — looks exactly as it did before this
+capability existed, not broken or incomplete.
+
 ### Keyboard shortcuts
 
 Both the board and an item's own page support keyboard-driven triage, with a

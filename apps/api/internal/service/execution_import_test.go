@@ -159,3 +159,66 @@ func TestImportRejectsUnsupportedFormat(t *testing.T) {
 		t.Errorf("Import(unsupported format) error = %v, want a ValidationError", err)
 	}
 }
+
+func TestImportAttachesScreenshotsKeyedByCaseKey(t *testing.T) {
+	s := importTestService(t)
+	p := mustImportProject(t, s, "Screenshots")
+	c1 := mustImportCase(t, s, p.ID, "case one")
+	c2 := mustImportCase(t, s, p.ID, "case two")
+
+	result, err := s.Import(importCtx(), p.ID, service.ImportInput{
+		Format: "junit-xml",
+		Report: junitReport(c1.Key, c2.Key),
+		Attachments: []domain.NewAttachment{
+			{CaseKey: c1.Key, Filename: "failure.png", ContentType: "application/octet-stream", Data: tinyPNG(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+
+	items, err := s.RunItems(context.Background(), result.Run.ID, "")
+	if err != nil || len(items) != 2 {
+		t.Fatalf("RunItems = %d, %v; want 2", len(items), err)
+	}
+	var withAttachment, without domain.RunItem
+	for _, it := range items {
+		if it.CaseKey == c1.Key {
+			withAttachment = it
+		} else {
+			without = it
+		}
+	}
+
+	results1, err := s.Results(context.Background(), withAttachment.ID)
+	if err != nil || len(results1) != 1 || len(results1[0].Attachments) != 1 {
+		t.Fatalf("Results(c1) = %+v, %v; want 1 result with 1 attachment", results1, err)
+	}
+	if results1[0].Attachments[0].ContentType != "image/png" {
+		t.Errorf("ContentType = %q, want image/png (sniffed, not client-declared)", results1[0].Attachments[0].ContentType)
+	}
+
+	results2, err := s.Results(context.Background(), without.ID)
+	if err != nil || len(results2) != 1 || len(results2[0].Attachments) != 0 {
+		t.Fatalf("Results(c2) = %+v, %v; want 1 result with no attachments", results2, err)
+	}
+}
+
+func TestImportDropsAttachmentsForUnmatchedCaseKeys(t *testing.T) {
+	s := importTestService(t)
+	p := mustImportProject(t, s, "Unmatched Screenshots")
+
+	result, err := s.Import(importCtx(), p.ID, service.ImportInput{
+		Format: "junit-xml",
+		Report: junitReport("GHOST-1"),
+		Attachments: []domain.NewAttachment{
+			{CaseKey: "GHOST-1", Filename: "failure.png", ContentType: "image/png", Data: tinyPNG(t)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if result.Matched != 0 || len(result.Unmatched) != 1 {
+		t.Fatalf("Matched = %d, Unmatched = %v; want the report's one case to be unmatched", result.Matched, result.Unmatched)
+	}
+}

@@ -27,6 +27,7 @@ type Store struct {
 	Teams          *TeamRepo
 	ProjectMembers *ProjectMemberRepo
 	Roles          *RoleRepo
+	Attachments    *AttachmentRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -44,6 +45,7 @@ func New(pool *pgxpool.Pool) *Store {
 		Teams:          &TeamRepo{pool: pool},
 		ProjectMembers: &ProjectMemberRepo{pool: pool},
 		Roles:          &RoleRepo{pool: pool},
+		Attachments:    &AttachmentRepo{pool: pool},
 	}
 }
 

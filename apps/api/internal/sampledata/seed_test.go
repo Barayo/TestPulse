@@ -689,3 +689,51 @@ func TestSeedContentShowcasesLibraryRichness(t *testing.T) {
 		t.Error("no single section's direct cases alone span every priority level plus both automated and manual")
 	}
 }
+
+// TestSeedContentShowcasesScreenshotAttachment covers
+// add-run-item-screenshot-attachments' Sample-Project-showcase task: without
+// this, a fresh instance would never show a run item result with an
+// attached screenshot, leaving the thumbnail strip / lightbox entirely
+// untested against real seeded content.
+func TestSeedContentShowcasesScreenshotAttachment(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+
+	var sawAttachment bool
+	for _, r := range runs {
+		items, err := svc.RunItems(actorCtx, r.ID, "")
+		if err != nil {
+			t.Fatalf("RunItems: %v", err)
+		}
+		for _, item := range items {
+			results, err := svc.Results(actorCtx, item.ID)
+			if err != nil {
+				t.Fatalf("Results: %v", err)
+			}
+			for _, res := range results {
+				if len(res.Attachments) == 0 {
+					continue
+				}
+				sawAttachment = true
+				att := res.Attachments[0]
+				if att.ContentType != "image/png" || att.Filename == "" {
+					t.Errorf("seeded attachment = %+v, want a named PNG", att)
+				}
+			}
+		}
+	}
+	if !sawAttachment {
+		t.Error("no seeded run item result carries a screenshot attachment")
+	}
+}

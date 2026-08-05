@@ -92,6 +92,14 @@ func projectIDFromItem(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForItem(r.Context(), chi.URLParam(r, "itemID"))
 }
 
+func projectIDFromResult(h *api, r *http.Request) (string, error) {
+	return h.svc.ProjectIDForResult(r.Context(), chi.URLParam(r, "resultID"))
+}
+
+func projectIDFromAttachment(h *api, r *http.Request) (string, error) {
+	return h.svc.ProjectIDForAttachment(r.Context(), chi.URLParam(r, "attachmentID"))
+}
+
 // --- Human-readable key resolution (add-human-readable-keys D4) ---
 //
 // resolveKey returns middleware that resolves a key-shaped path param

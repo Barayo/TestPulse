@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Barayo/TestPulse/apps/api/internal/attachmentimage"
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 )
@@ -517,6 +518,15 @@ func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.Ne
 	if err := res.Validate(); err != nil {
 		return domain.Result{}, invalid("%s", err)
 	}
+	for i, a := range res.Attachments {
+		contentType, err := attachmentimage.ValidateUpload(a.Data)
+		if err != nil {
+			return domain.Result{}, invalid("%s", err)
+		}
+		// The client-declared content type is untrusted — store what was
+		// actually sniffed from the bytes, never what the caller claimed.
+		res.Attachments[i].ContentType = contentType
+	}
 
 	actorKind := domain.ResultActorUnknown
 	actorRefID := ""
@@ -532,7 +542,7 @@ func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.Ne
 
 	result, err := s.store.Runs.AppendResult(ctx, itemID, res, actorKind, actorRefID)
 	if err != nil {
-		return domain.Result{}, runClosedAsConflict(err)
+		return domain.Result{}, attachmentErrorAsInvalid(err)
 	}
 	s.audit(ctx, "record_result", "run_item", itemID)
 	return result, nil

@@ -161,6 +161,14 @@ func (s *Service) ProjectIDForItem(ctx context.Context, itemID string) (string, 
 	return s.store.Runs.ItemProjectID(ctx, itemID)
 }
 
+func (s *Service) ProjectIDForResult(ctx context.Context, resultID string) (string, error) {
+	return s.store.Runs.ResultProjectID(ctx, resultID)
+}
+
+func (s *Service) ProjectIDForAttachment(ctx context.Context, attachmentID string) (string, error) {
+	return s.store.Attachments.ProjectID(ctx, attachmentID)
+}
+
 // --- Human-readable key resolution (add-human-readable-keys D4) ---
 // Resolves a client-supplied key to its internal id, once, at the API
 // boundary — everything below this point (RBAC resolvers, other service

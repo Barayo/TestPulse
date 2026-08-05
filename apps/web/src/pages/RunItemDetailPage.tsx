@@ -1,9 +1,21 @@
-import { useCallback, useEffect, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type ClipboardEvent as ReactClipboardEvent,
+  type DragEvent as ReactDragEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { UserPlusIcon } from 'lucide-react'
+import { PaperclipIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
+import { AttachmentStrip } from '@/components/AttachmentStrip'
+import { AttachmentField, type FailedUpload } from '@/components/AttachmentField'
+import { Lightbox } from '@/components/Lightbox'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Button } from '@/components/ui/button'
@@ -26,10 +38,18 @@ type RunItem = components['schemas']['RunItem']
 type Verdict = components['schemas']['Verdict']
 type Result = components['schemas']['Result']
 type Project = components['schemas']['Project']
+type Attachment = components['schemas']['Attachment']
 
 function isValidDate(iso: string): boolean {
   return iso !== '' && !Number.isNaN(new Date(iso).getTime())
 }
+
+// Mirrors attachmentimage.MaxUploadBytes / the format allowlist on the
+// server (add-run-item-screenshot-attachments design.md) — a client-side
+// precheck is a convenience that avoids a round trip, not a security
+// boundary; the server re-validates regardless.
+const MAX_ATTACHMENT_UPLOAD_BYTES = 5 * 1024 * 1024
+const ACCEPTED_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 
 export default function RunItemDetailPage() {
   const { runKey, caseKey } = useParams<{ runKey: string; caseKey: string }>()
@@ -51,6 +71,16 @@ export default function RunItemDetailPage() {
   const [comment, setComment] = useState('')
   const [isRecording, setIsRecording] = useState(false)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
+  const [stagedAttachments, setStagedAttachments] = useState<Attachment[]>([])
+  const [failedUploads, setFailedUploads] = useState<FailedUpload[]>([])
+  const [lastAttachError, setLastAttachError] = useState<{ filename: string; reason: string } | null>(null)
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false)
+  const [stagedLightboxIndex, setStagedLightboxIndex] = useState<number | null>(null)
+  const [historyLightbox, setHistoryLightbox] = useState<{ resultId: string; index: number } | null>(null)
+  const [pendingAttachResultId, setPendingAttachResultId] = useState<string | null>(null)
+  const [justAddedAttachmentId, setJustAddedAttachmentId] = useState<string | null>(null)
+  const [showCommentAttachToast, setShowCommentAttachToast] = useState(false)
+  const historyFileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
     if (!runKey || !caseKey) return
@@ -86,6 +116,120 @@ export default function RunItemDetailPage() {
       .catch(() => setProject(undefined))
   }, [projectKey])
 
+  function rejectAttachment(file: File): string | null {
+    if (!ACCEPTED_ATTACHMENT_TYPES.includes(file.type)) {
+      return "isn't a PNG, JPEG, or WebP image. Try a different file."
+    }
+    if (file.size > MAX_ATTACHMENT_UPLOAD_BYTES) {
+      return `is ${(file.size / (1024 * 1024)).toFixed(1)}MB — the limit is 5MB. Try a smaller image.`
+    }
+    return null
+  }
+
+  // Both the independent Attachments field and pasting/dropping directly
+  // onto Comment funnel through here into the same staged list — Comment is
+  // a convenience for someone already typing, never a requirement for
+  // attaching evidence (follow-up to add-run-item-screenshot-attachments).
+  async function uploadAttachment(file: File, source: 'field' | 'comment' = 'field') {
+    if (!item) return
+    const reason = rejectAttachment(file)
+    if (reason) {
+      setLastAttachError({ filename: file.name, reason })
+      setFailedUploads((prev) => [...prev, { id: `${file.name}-${Date.now()}`, filename: file.name }])
+      return
+    }
+    setLastAttachError(null)
+
+    setIsUploadingAttachment(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      // openapi-fetch's generated body type expects the schema's object
+      // shape, not a FormData instance — use fetch directly for this one
+      // multipart request, the same pattern ProfilePage's avatar upload
+      // uses (fetch passes FormData through unchanged at runtime, but its
+      // generated types don't model that).
+      const res = await fetch(`/api/v1/items/${item.id}/attachments`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setLastAttachError({ filename: file.name, reason: 'failed to upload. Try again.' })
+        setFailedUploads((prev) => [...prev, { id: `${file.name}-${Date.now()}`, filename: file.name }])
+        return
+      }
+      const created = (await res.json()) as Attachment
+      setStagedAttachments((prev) => [...prev, created])
+      setJustAddedAttachmentId(created.id)
+      setTimeout(() => setJustAddedAttachmentId((cur) => (cur === created.id ? null : cur)), 1200)
+      if (source === 'comment') {
+        setShowCommentAttachToast(true)
+        setTimeout(() => setShowCommentAttachToast(false), 1800)
+      }
+    } finally {
+      setIsUploadingAttachment(false)
+    }
+  }
+
+  async function removeStagedAttachment(id: string) {
+    setStagedAttachments((prev) => prev.filter((a) => a.id !== id))
+    await fetch(`/api/v1/attachments/${id}`, { method: 'DELETE', credentials: 'include' })
+  }
+
+  function handleCommentPaste(e: ReactClipboardEvent<HTMLTextAreaElement>) {
+    const imageItem = Array.from(e.clipboardData.items).find((i) => i.kind === 'file' && i.type.startsWith('image/'))
+    const file = imageItem?.getAsFile()
+    if (file) void uploadAttachment(file, 'comment')
+  }
+
+  function handleCommentDragOver(e: ReactDragEvent<HTMLTextAreaElement>) {
+    e.preventDefault()
+  }
+
+  function handleCommentDrop(e: ReactDragEvent<HTMLTextAreaElement>) {
+    e.preventDefault()
+    const file = Array.from(e.dataTransfer.files).find((f) => f.type.startsWith('image/'))
+    if (file) void uploadAttachment(file, 'comment')
+  }
+
+  async function attachToResult(resultId: string, file: File) {
+    const reason = rejectAttachment(file)
+    if (reason) {
+      setLastAttachError({ filename: file.name, reason })
+      return
+    }
+    setLastAttachError(null)
+
+    setIsUploadingAttachment(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/v1/results/${resultId}/attachments`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setLastAttachError({ filename: file.name, reason: 'failed to upload. Try again.' })
+        return
+      }
+      const created = (await res.json()) as Attachment
+      setResults((prev) =>
+        prev.map((r) => (r.id === resultId ? { ...r, attachments: [...(r.attachments ?? []), created] } : r)),
+      )
+    } finally {
+      setIsUploadingAttachment(false)
+    }
+  }
+
+  function handleHistoryFileSelected(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file && pendingAttachResultId) void attachToResult(pendingAttachResultId, file)
+    setPendingAttachResultId(null)
+  }
+
   async function recordVerdict(verdict: Verdict, options?: { advance?: boolean }) {
     if (!item || isRecording) return
     setIsRecording(true)
@@ -93,8 +237,16 @@ export default function RunItemDetailPage() {
       const override = actorOverride.trim()
       await api.POST('/api/v1/items/{itemId}/results', {
         params: { path: { itemId: item.id } },
-        body: { verdict, comment, ...(override ? { actor: override } : {}) },
+        body: {
+          verdict,
+          comment,
+          ...(override ? { actor: override } : {}),
+          ...(stagedAttachments.length > 0 ? { attachmentIds: stagedAttachments.map((a) => a.id) } : {}),
+        },
       })
+      setStagedAttachments([])
+      setFailedUploads([])
+      setLastAttachError(null)
       if (options?.advance) {
         const currentIndex = items.findIndex((it) => it.id === item.id)
         const next = items.slice(currentIndex + 1).find((it) => it.currentStatus === 'pending')
@@ -240,14 +392,34 @@ export default function RunItemDetailPage() {
               </p>
             ) : (
               <>
+                <AttachmentField
+                  attachments={stagedAttachments}
+                  failed={failedUploads}
+                  highlightId={justAddedAttachmentId}
+                  lastError={lastAttachError}
+                  uploading={isUploadingAttachment}
+                  onSelectFile={(file) => void uploadAttachment(file, 'field')}
+                  onRemove={(id) => void removeStagedAttachment(id)}
+                  onOpenLightbox={setStagedLightboxIndex}
+                />
+
                 <div className="space-y-1">
                   <Label htmlFor="comment">Comment</Label>
                   <Textarea
                     id="comment"
+                    placeholder="Add context for this result… (screenshots paste here too)"
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     onKeyDown={handleCommentKeyDown}
+                    onPaste={handleCommentPaste}
+                    onDragOver={handleCommentDragOver}
+                    onDrop={handleCommentDrop}
                   />
+                  {showCommentAttachToast && (
+                    <p className="text-xs text-primary" aria-live="polite">
+                      ✓ Added to Attachments
+                    </p>
+                  )}
                   {lastVerdict ? (
                     <Button
                       size="sm"
@@ -375,31 +547,60 @@ export default function RunItemDetailPage() {
             {results.length > 0 ? (
               <ul className="space-y-2 text-sm" aria-label="Result history">
                 {results.map((r) => (
-                  <li key={r.id} className="space-y-0.5">
+                  <li key={r.id} className="space-y-1">
                     <div className="flex items-center gap-2">
                       <StatusBadge status={r.verdict} />
                       {isValidDate(r.createdAt) && (
                         <span className="text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
                       )}
                     </div>
-                    <p className="flex items-center gap-1.5 text-muted-foreground">
-                      {r.actorKind === 'user' && r.actorRefId && (
-                        <Avatar
-                          seed={r.actor}
-                          avatarKey={userAvatars[r.actorRefId]}
-                          userId={r.actorRefId}
-                          className="size-4 rounded-full text-[9px]"
-                        />
+                    <div className="flex items-start justify-between gap-1.5">
+                      <p className="flex items-center gap-1.5 text-muted-foreground">
+                        {r.actorKind === 'user' && r.actorRefId && (
+                          <Avatar
+                            seed={r.actor}
+                            avatarKey={userAvatars[r.actorRefId]}
+                            userId={r.actorRefId}
+                            className="size-4 rounded-full text-[9px]"
+                          />
+                        )}
+                        {r.actor}
+                        {r.comment && ` — ${r.comment}`}
+                      </p>
+                      {!isClosed && (
+                        <button
+                          type="button"
+                          aria-label="Attach screenshot"
+                          title="Attach screenshot"
+                          className="shrink-0 text-muted-foreground hover:text-foreground"
+                          onClick={() => {
+                            setPendingAttachResultId(r.id)
+                            historyFileInputRef.current?.click()
+                          }}
+                        >
+                          <PaperclipIcon className="size-3.5" aria-hidden="true" />
+                        </button>
                       )}
-                      {r.actor}
-                      {r.comment && ` — ${r.comment}`}
-                    </p>
+                    </div>
+                    {r.attachments && r.attachments.length > 0 && (
+                      <AttachmentStrip
+                        attachments={r.attachments}
+                        onSelect={(index) => setHistoryLightbox({ resultId: r.id, index })}
+                      />
+                    )}
                   </li>
                 ))}
               </ul>
             ) : (
               <p className="text-sm text-muted-foreground">No results recorded yet.</p>
             )}
+            <input
+              ref={historyFileInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="hidden"
+              onChange={handleHistoryFileSelected}
+            />
           </CaseSidebarSection>
         </div>
       </div>
@@ -412,6 +613,29 @@ export default function RunItemDetailPage() {
           onAssign={(assignee) => void handleAssign(assignee)}
         />
       )}
+
+      {stagedLightboxIndex !== null && (
+        <Lightbox
+          attachments={stagedAttachments}
+          index={stagedLightboxIndex}
+          onNavigate={setStagedLightboxIndex}
+          onClose={() => setStagedLightboxIndex(null)}
+        />
+      )}
+      {historyLightbox &&
+        (() => {
+          const r = results.find((res) => res.id === historyLightbox.resultId)
+          if (!r || !r.attachments) return null
+          return (
+            <Lightbox
+              attachments={r.attachments}
+              index={historyLightbox.index}
+              onNavigate={(index) => setHistoryLightbox({ resultId: historyLightbox.resultId, index })}
+              onClose={() => setHistoryLightbox(null)}
+              captionExtra={`${r.actor}${isValidDate(r.createdAt) ? ` · ${r.verdict} · ${timeAgo(r.createdAt)}` : ` · ${r.verdict}`}`}
+            />
+          )
+        })()}
 
       <RunShortcutsHint shortcuts={shortcuts} />
       <RunShortcutsOverlay shortcuts={shortcuts} />

@@ -54,6 +54,32 @@ These same fields are available on a manually-recorded result too (the
 existing "record a verdict" UI action) — an import isn't a special path,
 it's the same result shape produced automatically.
 
+## Screenshot attachments
+
+An import request can carry screenshots alongside the report, keyed by the
+case key of the test each one belongs to — the report's XML itself is
+never parsed for embedded images (no shared convention exists across JUnit
+tooling for that). Add an `attachments` array to the same request body:
+
+```json
+{
+  "format": "junit-xml",
+  "report": "<the XML>",
+  "attachments": [
+    { "caseKey": "LOGIN-42", "filename": "failure.png", "contentType": "image/png", "data": "<base64>" }
+  ]
+}
+```
+
+Each attachment is created in the same transaction as the import — a CI
+pipeline never needs a second request to attach evidence, and never ends up
+with a result that exists without the screenshot it was submitted with. An
+attachment whose `caseKey` doesn't match a test that was actually matched to
+a case is dropped along with the rest of that unmatched test's data, the
+same "no partial artifacts for unmatched tests" rule the rest of the import
+follows. See [Test management](test-management.md#screenshot-attachments)
+for how attachments render once imported.
+
 ## Verdict mapping
 
 | JUnit XML | TestPulse verdict |

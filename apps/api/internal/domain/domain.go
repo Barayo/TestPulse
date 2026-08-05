@@ -139,6 +139,13 @@ type NewResult struct {
 	Platform  string     `json:"platform,omitempty"`
 	Version   string     `json:"version,omitempty"`
 	Tags      []string   `json:"tags,omitempty"`
+	// AttachmentIDs links previously staged attachments (uploaded before this
+	// verdict existed) to the result being created here, in the same
+	// transaction. Attachments carries inline base64 image data instead, for
+	// a client that already has the bytes and wants a single atomic call
+	// (add-run-item-screenshot-attachments design.md).
+	AttachmentIDs []string        `json:"attachmentIds,omitempty"`
+	Attachments   []NewAttachment `json:"attachments,omitempty"`
 }
 
 func (r NewResult) Validate() error {
@@ -399,19 +406,46 @@ type CaseExecution struct {
 }
 
 type Result struct {
-	ID         string          `json:"id"`
-	RunItemID  string          `json:"runItemId"`
-	Actor      string          `json:"actor"`
-	ActorKind  ResultActorKind `json:"actorKind"`
-	ActorRefID string          `json:"actorRefId,omitempty"`
-	Verdict    Verdict         `json:"verdict"`
-	Comment    string          `json:"comment"`
-	StartTime  *time.Time      `json:"startTime,omitempty"`
-	EndTime    *time.Time      `json:"endTime,omitempty"`
-	Platform   string          `json:"platform,omitempty"`
-	Version    string          `json:"version,omitempty"`
-	Tags       []string        `json:"tags,omitempty"`
-	CreatedAt  time.Time       `json:"createdAt"`
+	ID          string          `json:"id"`
+	RunItemID   string          `json:"runItemId"`
+	Actor       string          `json:"actor"`
+	ActorKind   ResultActorKind `json:"actorKind"`
+	ActorRefID  string          `json:"actorRefId,omitempty"`
+	Verdict     Verdict         `json:"verdict"`
+	Comment     string          `json:"comment"`
+	StartTime   *time.Time      `json:"startTime,omitempty"`
+	EndTime     *time.Time      `json:"endTime,omitempty"`
+	Platform    string          `json:"platform,omitempty"`
+	Version     string          `json:"version,omitempty"`
+	Tags        []string        `json:"tags,omitempty"`
+	Attachments []Attachment    `json:"attachments,omitempty"`
+	CreatedAt   time.Time       `json:"createdAt"`
+}
+
+// Attachment is an image (screenshot) evidencing a run item result
+// (add-run-item-screenshot-attachments). Bytes are never inlined here —
+// they are fetched separately via the attachment's own serving endpoint,
+// the same shape as a user's avatar.
+type Attachment struct {
+	ID          string    `json:"id"`
+	RunItemID   string    `json:"runItemId"`
+	ResultID    string    `json:"resultId,omitempty"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"contentType"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+// NewAttachment is an inline, base64-encoded attachment submitted alongside
+// a NewResult or an import request, created atomically with the result(s)
+// it belongs to (add-run-item-screenshot-attachments design.md).
+type NewAttachment struct {
+	// CaseKey scopes this attachment to a specific matched test within a
+	// bulk import request; empty when submitted directly on a single
+	// NewResult, which has no ambiguity about which result it belongs to.
+	CaseKey     string `json:"caseKey,omitempty"`
+	Filename    string `json:"filename"`
+	ContentType string `json:"contentType"`
+	Data        []byte `json:"data"`
 }
 
 // RunSummary is the per-run status breakdown.

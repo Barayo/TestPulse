@@ -15,6 +15,18 @@ import (
 // something real to look at (add-sample-project, enrich-sample-project-content).
 // It attributes the seeded content to the instance's Tenant Admin, the one
 // user guaranteed to exist by the time this runs (called after BootstrapAdmin).
+// samplePlaceholderPNG is a minimal, valid 1x1 PNG — a small bundled
+// placeholder, not a network fetch, used to showcase a run item result's
+// screenshot attachment (add-run-item-screenshot-attachments).
+var samplePlaceholderPNG = []byte{
+	0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
+	0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
+	0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00,
+	0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
+	0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49,
+	0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
+}
+
 func Seed(ctx context.Context, svc *service.Service) error {
 	admin, err := tenantAdmin(ctx, svc)
 	if err != nil {
@@ -438,6 +450,26 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		}
 		if err := svc.UpdateItem(ctx, item.ID, service.ItemUpdate{AssigneeUserID: &userID}); err != nil {
 			return fmt.Errorf("sampledata: assigning sprint item: %w", err)
+		}
+	}
+
+	// The failed "Login with bad password" result gets a screenshot —
+	// showcases the attachment thumbnail strip/lightbox on real seeded
+	// content (add-run-item-screenshot-attachments), a small bundled
+	// placeholder image rather than a network fetch.
+	for _, item := range sprintItems {
+		if item.CaseID != badPassword.ID {
+			continue
+		}
+		results, err := svc.Results(ctx, item.ID)
+		if err != nil {
+			return fmt.Errorf("sampledata: fetching results for screenshot attachment: %w", err)
+		}
+		if len(results) == 0 {
+			break
+		}
+		if _, err := svc.AttachToResult(ctx, results[len(results)-1].ID, "login-failure.png", samplePlaceholderPNG); err != nil {
+			return fmt.Errorf("sampledata: attaching screenshot: %w", err)
 		}
 	}
 

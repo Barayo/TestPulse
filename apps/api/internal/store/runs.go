@@ -90,6 +90,24 @@ func (r *RunRepo) ItemProjectID(ctx context.Context, itemID string) (string, err
 	return projectID, err
 }
 
+// ResultProjectID resolves the project a result belongs to, via its item and
+// run — used by requirePermission's per-resource resolver for the
+// /results/{resultId}/attachments routes (add-run-item-screenshot-
+// attachments).
+func (r *RunRepo) ResultProjectID(ctx context.Context, resultID string) (string, error) {
+	var projectID string
+	err := r.pool.QueryRow(ctx,
+		`SELECT tr.project_id FROM test_run_results trr
+		 JOIN test_run_items tri ON tri.id = trr.run_item_id
+		 JOIN test_runs tr ON tr.id = tri.run_id
+		 WHERE trr.id = $1`, resultID,
+	).Scan(&projectID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
+	return projectID, err
+}
+
 // Create inserts a run and pins each case to its current version (D2), all
 // in one transaction.
 func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []string) (domain.Run, error) {
@@ -195,16 +213,21 @@ func (r *RunRepo) Import(ctx context.Context, projectID, name string, items []Im
 			return domain.Run{}, err
 		}
 		res := item.Result
-		if _, err := tx.Exec(ctx,
+		var resultID string
+		if err := tx.QueryRow(ctx,
 			`INSERT INTO test_run_results (run_item_id, actor, verdict, comment, start_time, end_time, platform, version, tags)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'))`,
+			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::text[], '{}'))
+			 RETURNING id`,
 			itemID, res.Actor, res.Verdict, res.Comment, res.StartTime, res.EndTime, res.Platform, res.Version, res.Tags,
-		); err != nil {
+		).Scan(&resultID); err != nil {
 			return domain.Run{}, err
 		}
 		if _, err := tx.Exec(ctx,
 			`UPDATE test_run_items SET current_status = $2 WHERE id = $1`,
 			itemID, res.Verdict.Status()); err != nil {
+			return domain.Run{}, err
+		}
+		if _, err := insertInlineAttachments(ctx, tx, itemID, resultID, res.Attachments); err != nil {
 			return domain.Run{}, err
 		}
 	}
@@ -472,6 +495,35 @@ func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.Ne
 	if tag.RowsAffected() == 0 {
 		return domain.Result{}, ErrNotFound
 	}
+
+	if err := linkStagedAttachments(ctx, tx, itemID, out.ID, res.AttachmentIDs); err != nil {
+		return domain.Result{}, err
+	}
+	if _, err := insertInlineAttachments(ctx, tx, itemID, out.ID, res.Attachments); err != nil {
+		return domain.Result{}, err
+	}
+	if len(res.AttachmentIDs) > 0 || len(res.Attachments) > 0 {
+		// Read back within the same transaction — a separate pool
+		// connection would not yet see these uncommitted inserts/updates.
+		rows, err := tx.Query(ctx, `SELECT `+attachmentColumns+` FROM result_attachments WHERE result_id = $1 ORDER BY created_at, id`, out.ID)
+		if err != nil {
+			return domain.Result{}, err
+		}
+		for rows.Next() {
+			att, err := scanAttachment(rows)
+			if err != nil {
+				rows.Close()
+				return domain.Result{}, err
+			}
+			out.Attachments = append(out.Attachments, att)
+		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return domain.Result{}, err
+		}
+		rows.Close()
+	}
+
 	return out, tx.Commit(ctx)
 }
 
@@ -497,7 +549,22 @@ func (r *RunRepo) Results(ctx context.Context, itemID string) ([]domain.Result, 
 		}
 		results = append(results, res)
 	}
-	return results, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, len(results))
+	for i, res := range results {
+		ids[i] = res.ID
+	}
+	byResult, err := attachmentsByResults(ctx, r.pool, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i, res := range results {
+		results[i].Attachments = byResult[res.ID]
+	}
+	return results, nil
 }
 
 func (r *RunRepo) SetItemStatus(ctx context.Context, itemID string, status domain.Status) error {

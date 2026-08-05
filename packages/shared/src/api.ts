@@ -490,6 +490,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{itemId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /** Attachments uploaded against this item before a verdict exists */
+        get: operations["listStagedAttachments"];
+        put?: never;
+        /** Upload a screenshot against this item before a verdict exists (PNG/JPEG/WebP, max 5MB) — link it to a result later via NewResult's attachmentIds */
+        post: operations["stageAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/results/{resultId}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resultId: string;
+            };
+            cookie?: never;
+        };
+        /** A result's attachments, oldest first */
+        get: operations["listResultAttachments"];
+        put?: never;
+        /** Upload a screenshot directly against an already-recorded result (PNG/JPEG/WebP, max 5MB) — the after-the-fact attach path from History */
+        post: operations["attachToResult"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /** The raw image bytes for an attachment */
+        get: operations["getAttachment"];
+        put?: never;
+        post?: never;
+        /** Delete an attachment */
+        delete: operations["deleteAttachment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{itemId}/status": {
         parameters: {
             query?: never;
@@ -1143,6 +1203,31 @@ export interface components {
             platform?: string;
             version?: string;
             tags?: string[];
+            /** @description Ids of attachments previously staged against this item (POST .../items/{itemId}/attachments before this verdict existed), linked to this result in the same request. */
+            attachmentIds?: string[];
+            /** @description Inline image attachments, created in the same transaction as this result — for a client that already has the bytes and wants a single atomic call. */
+            attachments?: components["schemas"]["NewAttachment"][];
+        };
+        NewAttachment: {
+            /** @description Scopes this attachment to one matched test within a bulk import request. Omit when submitting directly on a NewResult, which has no ambiguity about which result it belongs to. */
+            caseKey?: string;
+            filename: string;
+            contentType: string;
+            /**
+             * Format: byte
+             * @description Base64-encoded image bytes (PNG, JPEG, or WebP, max 5MB).
+             */
+            data: string;
+        };
+        Attachment: {
+            id: string;
+            runItemId: string;
+            /** @description Absent when staged but not yet linked to a result. */
+            resultId?: string;
+            filename: string;
+            contentType: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         /** @enum {string} */
         ResultActorKind: "user" | "agent" | "unknown";
@@ -1162,6 +1247,7 @@ export interface components {
             platform?: string;
             version?: string;
             tags?: string[];
+            attachments?: components["schemas"]["Attachment"][];
             /** Format: date-time */
             createdAt: string;
         };
@@ -1172,6 +1258,8 @@ export interface components {
             name?: string;
             /** @description The raw report content (JUnit XML). */
             report: string;
+            /** @description Screenshots to attach to specific matched tests, each keyed by its caseKey — the JUnit report itself is never parsed for embedded attachments. */
+            attachments?: components["schemas"]["NewAttachment"][];
         };
         ImportResult: {
             run: components["schemas"]["Run"];
@@ -2338,6 +2426,168 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listStagedAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Staged attachments (not yet linked to a result), oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"][];
+                };
+            };
+        };
+    };
+    stageAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Staged attachment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    listResultAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resultId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attachments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"][];
+                };
+            };
+        };
+    };
+    attachToResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                resultId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created attachment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Attachment"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    getAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attachment image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                };
+            };
+            /** @description Not modified (matched If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     updateItemStatus: {

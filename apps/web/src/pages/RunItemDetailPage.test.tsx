@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import RunItemDetailPage from './RunItemDetailPage'
@@ -631,5 +631,255 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
     })
     const sidebar = screen.getByTestId('run-item-sidebar')
     expect(await within(sidebar).findByText('ana@example.com')).toBeInTheDocument()
+  })
+})
+
+describe('screenshot attachments (add-run-item-screenshot-attachments)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  function pngFile(name = 'shot.png') {
+    return new File(['fake-png-bytes'], name, { type: 'image/png' })
+  }
+
+  function mockUploadOnce(overrides: Record<string, unknown> = {}) {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          id: 'att1',
+          runItemId: 'i1',
+          filename: 'shot.png',
+          contentType: 'image/png',
+          createdAt: '',
+          ...overrides,
+        }),
+    } as Response)
+  }
+
+  it('the Attachments field is independent of Comment: selecting a file there stages it', async () => {
+    mockItemAPI()
+    mockUploadOnce()
+    renderPage()
+    await screen.findByLabelText(/comment/i)
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, pngFile())
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/items/i1/attachments',
+        expect.objectContaining({ method: 'POST', credentials: 'include' }),
+      )
+    })
+    expect(await screen.findByRole('button', { name: /open attachment shot\.png/i })).toBeInTheDocument()
+    // Comment stayed empty — nothing about attaching required typing anything.
+    expect(screen.getByLabelText(/comment/i)).toHaveValue('')
+  })
+
+  it('dragging an image onto the Attachments field stages it', async () => {
+    mockItemAPI()
+    mockUploadOnce()
+    renderPage()
+    await screen.findByLabelText(/comment/i)
+
+    const zone = screen.getByRole('group', { name: /^attachments$/i })
+    fireEvent.drop(zone, { dataTransfer: { files: [pngFile()] } })
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(await screen.findByRole('button', { name: /open attachment shot\.png/i })).toBeInTheDocument()
+  })
+
+  it('Comment shows a placeholder mentioning the paste shortcut, only while empty', async () => {
+    mockItemAPI()
+    renderPage()
+    const textarea = (await screen.findByLabelText(/comment/i)) as HTMLTextAreaElement
+    expect(textarea.placeholder).toMatch(/screenshots paste here too/i)
+  })
+
+  it('pasting an image into Comment also stages it, and confirms it landed in Attachments', async () => {
+    mockItemAPI()
+    mockUploadOnce()
+    renderPage()
+    const textarea = await screen.findByLabelText(/comment/i)
+
+    const file = pngFile()
+    fireEvent.paste(textarea, {
+      clipboardData: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => file }] },
+    })
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/items/i1/attachments',
+        expect.objectContaining({ method: 'POST', credentials: 'include' }),
+      )
+    })
+    expect(await screen.findByRole('button', { name: /open attachment shot\.png/i })).toBeInTheDocument()
+    expect(await screen.findByText(/added to attachments/i)).toBeInTheDocument()
+    // The image did not get typed into the comment text itself.
+    expect(screen.getByLabelText(/comment/i)).toHaveValue('')
+  })
+
+  it('dropping an image onto Comment also stages it (same single list as the Attachments field)', async () => {
+    mockItemAPI()
+    mockUploadOnce()
+    renderPage()
+    const textarea = await screen.findByLabelText(/comment/i)
+
+    fireEvent.drop(textarea, { dataTransfer: { files: [pngFile()] } })
+
+    await waitFor(() => expect(fetch).toHaveBeenCalled())
+    expect(await screen.findByRole('button', { name: /open attachment shot\.png/i })).toBeInTheDocument()
+  })
+
+  it('removing a staged attachment deletes it and clears it from the strip', async () => {
+    mockItemAPI()
+    vi.mocked(fetch).mockImplementation((_url, opts) => {
+      if (opts?.method === 'DELETE') return Promise.resolve({ ok: true } as Response)
+      return Promise.resolve({
+        ok: true,
+        json: () =>
+          Promise.resolve({ id: 'att1', runItemId: 'i1', filename: 'shot.png', contentType: 'image/png', createdAt: '' }),
+      } as Response)
+    })
+    renderPage()
+    await screen.findByLabelText(/comment/i)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, pngFile())
+    await screen.findByRole('button', { name: /open attachment shot\.png/i })
+
+    await userEvent.click(screen.getByRole('button', { name: /remove shot\.png/i }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith('/api/v1/attachments/att1', expect.objectContaining({ method: 'DELETE' }))
+    })
+    expect(screen.queryByRole('button', { name: /open attachment shot\.png/i })).not.toBeInTheDocument()
+  })
+
+  it('a rejected file shows a failed tile and adaptive count alongside a later success', async () => {
+    mockItemAPI()
+    mockUploadOnce()
+    renderPage()
+    await screen.findByLabelText(/comment/i)
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+
+    await userEvent.upload(input, new File(['x'], 'diagram.gif', { type: 'image/gif' }), { applyAccept: false })
+    expect(await screen.findByLabelText(/diagram\.gif failed to attach/i)).toBeInTheDocument()
+
+    await userEvent.upload(input, pngFile())
+    expect(await screen.findByText(/1 attached, 1 failed/i)).toBeInTheDocument()
+  })
+
+  it('rejects an unsupported file type client-side without calling the endpoint', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByLabelText(/comment/i)
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['x'], 'notes.txt', { type: 'text/plain' })
+    await userEvent.upload(input, file, { applyAccept: false })
+
+    expect(await screen.findByText(/png, jpeg, or webp/i)).toBeInTheDocument()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('rejects an oversized file client-side without calling the endpoint', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByLabelText(/comment/i)
+
+    const file = pngFile()
+    Object.defineProperty(file, 'size', { value: 6 * 1024 * 1024 })
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, file)
+
+    expect(await screen.findByText(/5 ?MB/i)).toBeInTheDocument()
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('recording a verdict includes staged attachment ids and clears the staged preview', async () => {
+    mockItemAPI()
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ id: 'att1', runItemId: 'i1', filename: 'shot.png', contentType: 'image/png', createdAt: '' }),
+    } as Response)
+    mockPOST.mockResolvedValue({
+      data: { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: '', createdAt: '' },
+      response: { ok: true },
+    })
+    renderPage()
+    const textarea = await screen.findByLabelText(/comment/i)
+    fireEvent.paste(textarea, {
+      clipboardData: { items: [{ kind: 'file', type: 'image/png', getAsFile: () => pngFile() }] },
+    })
+    await screen.findByRole('button', { name: /open attachment shot\.png/i })
+
+    await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({
+          params: { path: { itemId: 'i1' } },
+          body: { verdict: 'pass', comment: '', attachmentIds: ['att1'] },
+        }),
+      )
+    })
+  })
+
+  it('a History entry with attachments shows a thumbnail strip', async () => {
+    mockItemAPI(undefined, undefined, [
+      {
+        id: 'res1',
+        runItemId: 'i1',
+        actor: 'ana',
+        actorKind: 'unknown',
+        verdict: 'failed',
+        comment: '',
+        createdAt: '2026-08-05T00:00:00Z',
+        attachments: [{ id: 'att1', runItemId: 'i1', resultId: 'res1', filename: 'shot.png', contentType: 'image/png', createdAt: '' }],
+      },
+    ])
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    expect(await screen.findByRole('button', { name: /open attachment shot\.png/i })).toBeInTheDocument()
+  })
+
+  it('clicking a History entry\'s paperclip attaches a screenshot to that result', async () => {
+    mockItemAPI(undefined, undefined, [
+      { id: 'res1', runItemId: 'i1', actor: 'ana', actorKind: 'unknown', verdict: 'failed', comment: '', createdAt: '' },
+    ])
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({ id: 'att1', runItemId: 'i1', resultId: 'res1', filename: 'shot.png', contentType: 'image/png', createdAt: '' }),
+    } as Response)
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.click(screen.getByRole('button', { name: /attach screenshot/i }))
+    const input = document.querySelectorAll('input[type="file"]')[1] as HTMLInputElement
+    await userEvent.upload(input, pngFile())
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/results/res1/attachments',
+        expect.objectContaining({ method: 'POST', credentials: 'include' }),
+      )
+    })
+    expect(await screen.findByRole('button', { name: /open attachment shot\.png/i })).toBeInTheDocument()
+  })
+
+  it('does not show the attach-screenshot affordance on a closed run', async () => {
+    mockItemAPI(undefined, { id: 'r1', key: 'r1', projectId: 'p1', projectKey: 'p1', name: 'Sprint 1', status: 'closed', createdAt: '' }, [
+      { id: 'res1', runItemId: 'i1', actor: 'ana', actorKind: 'unknown', verdict: 'failed', comment: '', createdAt: '' },
+    ])
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    expect(screen.queryByRole('button', { name: /attach screenshot/i })).not.toBeInTheDocument()
   })
 })

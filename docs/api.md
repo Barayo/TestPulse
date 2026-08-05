@@ -105,6 +105,9 @@ exactly one folder, defaulting to the project's root; see
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or assign to a real project member: `assigneeUserId` or `assigneeTeamId` (mutually exclusive; the id must belong to the project's membership) |
 | GET | `/api/v1/runs/{runKey}/summary` | Item counts by current status |
 | POST | `/api/v1/projects/{projectKey}/imports` | Bulk-import a JUnit XML report: matches each `<testcase>` to an existing case by its `key`, creates one run with items/results for every match. `201` if every test matched; `207` if some/all didn't (see [Importing results](importing-results.md)) |
+| GET / POST | `/api/v1/items/{itemId}/attachments` | List / stage a screenshot attachment (`multipart/form-data`, field `file`; PNG/JPEG/WebP, max 5MB) against an item before a verdict exists — `result_id` unset until linked via `recordResult`'s `attachmentIds` |
+| GET / POST | `/api/v1/results/{resultId}/attachments` | List a result's attachments / attach a screenshot directly to an already-recorded result (after-the-fact attach from History) |
+| GET / DELETE | `/api/v1/attachments/{attachmentId}` | The raw image bytes for an attachment, cacheable via `ETag`/`Cache-Control` — Read+ / delete an attachment — requires `runRecordResult` |
 
 Validation errors return `400 {"error": "..."}` naming the offending field;
 missing entities return `404 {"error": "not found"}`. Unauthenticated
@@ -121,6 +124,21 @@ actor behind it. A client may still pass `actor` explicitly to override the
 tester) — the real authenticated actor's `actorKind`/`actorRefId` are still
 recorded underneath the override, never spoofed. Results recorded before
 this capability shipped read back with `actorKind: "unknown"`.
+
+A result can carry image attachments (screenshots) two ways, both
+transactional — a client is never left with a result that exists without
+the evidence it was submitted with (`add-run-item-screenshot-attachments`):
+`recordResult` and `importResults` each accept an optional `attachments`
+array of inline, base64-encoded images (`filename`, `contentType`, `data`;
+`importResults`' entries additionally carry `caseKey` to target a specific
+matched test), created in the same transaction as the result(s). `recordResult`
+also accepts `attachmentIds`, linking attachments previously staged via
+`POST /api/v1/items/{itemId}/attachments` (the UI's paste/drag flow, which
+uploads immediately but has no result to attach to until a verdict is
+recorded). The JUnit XML report itself is never parsed for embedded
+attachments — there's no shared convention across tools for it — so
+importer authors send screenshots as the request's separate `attachments`
+field alongside the report text, not inside it.
 
 **Identity**
 

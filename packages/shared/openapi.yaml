@@ -567,6 +567,110 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/attachments:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listStagedAttachments
+      summary: Attachments uploaded against this item before a verdict exists
+      tags: [runs]
+      responses:
+        "200":
+          description: Staged attachments (not yet linked to a result), oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Attachment" }
+    post:
+      operationId: stageAttachment
+      summary: >-
+        Upload a screenshot against this item before a verdict exists
+        (PNG/JPEG/WebP, max 5MB) — link it to a result later via NewResult's
+        attachmentIds
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        "201":
+          description: Staged attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/results/{resultId}/attachments:
+    parameters:
+      - { name: resultId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listResultAttachments
+      summary: A result's attachments, oldest first
+      tags: [runs]
+      responses:
+        "200":
+          description: Attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Attachment" }
+    post:
+      operationId: attachToResult
+      summary: >-
+        Upload a screenshot directly against an already-recorded result
+        (PNG/JPEG/WebP, max 5MB) — the after-the-fact attach path from
+        History
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        "201":
+          description: Created attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getAttachment
+      summary: The raw image bytes for an attachment
+      tags: [runs]
+      responses:
+        "200":
+          description: Attachment image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        "304": { description: Not modified (matched If-None-Match) }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteAttachment
+      summary: Delete an attachment
+      tags: [runs]
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/items/{itemId}/status:
     parameters:
       - { name: itemId, in: path, required: true, schema: { type: string } }
@@ -1452,6 +1556,48 @@ components:
         tags:
           type: array
           items: { type: string }
+        attachmentIds:
+          type: array
+          items: { type: string }
+          description: >-
+            Ids of attachments previously staged against this item (POST
+            .../items/{itemId}/attachments before this verdict existed),
+            linked to this result in the same request.
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/NewAttachment" }
+          description: >-
+            Inline image attachments, created in the same transaction as
+            this result — for a client that already has the bytes and wants
+            a single atomic call.
+    NewAttachment:
+      type: object
+      required: [filename, contentType, data]
+      properties:
+        caseKey:
+          type: string
+          description: >-
+            Scopes this attachment to one matched test within a bulk import
+            request. Omit when submitting directly on a NewResult, which has
+            no ambiguity about which result it belongs to.
+        filename: { type: string }
+        contentType: { type: string }
+        data:
+          type: string
+          format: byte
+          description: Base64-encoded image bytes (PNG, JPEG, or WebP, max 5MB).
+    Attachment:
+      type: object
+      required: [id, runItemId, filename, contentType, createdAt]
+      properties:
+        id: { type: string }
+        runItemId: { type: string }
+        resultId:
+          type: string
+          description: Absent when staged but not yet linked to a result.
+        filename: { type: string }
+        contentType: { type: string }
+        createdAt: { type: string, format: date-time }
     ResultActorKind:
       type: string
       enum: [user, agent, unknown]
@@ -1475,6 +1621,9 @@ components:
         tags:
           type: array
           items: { type: string }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/Attachment" }
         createdAt: { type: string, format: date-time }
     ImportRequest:
       type: object
@@ -1491,6 +1640,13 @@ components:
         report:
           type: string
           description: The raw report content (JUnit XML).
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/NewAttachment" }
+          description: >-
+            Screenshots to attach to specific matched tests, each keyed by
+            its caseKey — the JUnit report itself is never parsed for
+            embedded attachments.
     ImportResult:
       type: object
       required: [run, message, matched, unmatched]
