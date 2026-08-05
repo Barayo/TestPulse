@@ -6,9 +6,7 @@ Bulk-importing test results reported by external test runners (pytest,
 Maven, Gradle, Jest — anything that can emit JUnit XML), matching each
 reported test to an existing case by its key, without ever auto-creating
 cases.
-
 ## Requirements
-
 ### Requirement: Bulk import of externally-run test results
 The system SHALL let an authenticated actor (human or agent) submit a JUnit XML test report for a project, matching each reported test to an existing case by the case's own `key` (see `resource-keys`) carried in the report, and creating one run with items and results for every match. The system SHALL NOT create new cases for unmatched tests, and SHALL NOT fail the import because some or all tests are unmatched.
 
@@ -47,3 +45,11 @@ The system SHALL let an authenticated actor (human or agent) submit a JUnit XML 
 #### Scenario: Execution metadata is captured when present in the report
 - **WHEN** a `<testcase>` carries `testpulse_platform`, `testpulse_version`, and/or `testpulse_tags` properties, and the report's timestamp/duration attributes are present
 - **THEN** the recorded result includes whichever of platform, version, tags, start time, and end time were available — fields the report didn't supply are simply omitted, not guessed
+
+### Requirement: Import request may carry attachments keyed by case key
+An import request MAY include image attachments alongside the JUnit XML report, each naming the case key of the test it belongs to (see `run-result-attachments`). The system SHALL NOT parse the JUnit XML report itself for embedded attachments — the report stays a plain text field, and attachments MUST travel as a separate field in the same request.
+
+#### Scenario: An import's attachments are not read from the report XML
+- **WHEN** a JUnit XML report contains data resembling an attachment convention from another tool (e.g. base64 image data in `<system-out>`)
+- **THEN** it is ignored — only the request's separate attachments field is used to create attachments
+
