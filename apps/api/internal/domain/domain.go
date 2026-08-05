@@ -346,7 +346,9 @@ type Run struct {
 
 // RunStatus is a run's open/closed lifecycle state (add-run-lifecycle-status).
 // A closed run's items become read-only: no new results, status/assignee
-// updates, or added items.
+// updates, or added items. Runs created explicitly start open; runs
+// created via bulk import start closed, since every item they contain
+// already has a final verdict at creation time (collapse-duplicate-ci-runs).
 type RunStatus string
 
 const (

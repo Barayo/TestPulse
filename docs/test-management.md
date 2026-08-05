@@ -283,7 +283,7 @@ persistent shortcuts legend at the bottom of the page and a full list via
 
 ## Closing and reopening a run
 
-A run is **open** or **closed**, shown as a badge next to its name. Runs are created open. Any actor who can record results (Record Result permission) can click **Close run** to seal it: once closed, its items become read-only — recording a verdict, marking retest, and adding an item are all rejected until it's reopened. This matters once results carry real authorship: a closed run is a stable, final record of who executed what.
+A run is **open** or **closed**, shown as a badge next to its name. Runs created explicitly (via **New run**) start open. Runs created by [importing results](importing-results.md) start closed — every item already has a final verdict at creation time, so there's nothing "in progress" to represent, and CI-imported runs land directly in the run list's Closed section rather than crowding Open. Any actor who can record results (Record Result permission) can click **Close run** to seal an open run: once closed, its items become read-only — recording a verdict, marking retest, and adding an item are all rejected until it's reopened. This matters once results carry real authorship: a closed run is a stable, final record of who executed what.
 
 Reopening is more privileged than closing — it requires **Manage Project** (the same permission that gates renaming or archiving the project itself), since undoing a seal should be rare and deliberate. Clicking **Reopen** without that permission shows an inline message pointing at asking a project admin instead of silently failing.
 

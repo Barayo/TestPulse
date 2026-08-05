@@ -525,7 +525,10 @@ func Seed(ctx context.Context, svc *service.Service) error {
 
 	// 5. Imported run: shows the JUnit-XML import feature, matching several
 	// cases and leaving one intentionally unmatched (the 207 partial-match
-	// behavior).
+	// behavior). Named like CI's dogfood report step names its own imports
+	// (collapse-duplicate-ci-runs) — the run is created closed, demonstrating
+	// the fixed import behavior rather than the old
+	// mislabeled-and-stuck-open bug.
 	report := fmt.Sprintf(`<testsuites><testsuite name="CI pipeline">`+
 		`<testcase name="test_login_valid_credentials" time="0.8">`+
 		`<properties>`+
@@ -554,7 +557,11 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		`</properties>`+
 		`</testcase>`+
 		`</testsuite></testsuites>`, login.Key, checkoutValid.Key, timezone.Key, p.Key)
-	if _, err := svc.Import(ctx, p.ID, service.ImportInput{Format: "junit-xml", Report: report}); err != nil {
+	if _, err := svc.Import(ctx, p.ID, service.ImportInput{
+		Format: "junit-xml",
+		Name:   "main @ a1b2c3d — fix(web): recenter the Confucius avatar crop for the circular mask",
+		Report: report,
+	}); err != nil {
 		return fmt.Errorf("sampledata: importing CI results: %w", err)
 	}
 

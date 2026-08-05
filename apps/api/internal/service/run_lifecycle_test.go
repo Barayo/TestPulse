@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -59,6 +60,37 @@ func TestCloseRunThenReopen(t *testing.T) {
 		t.Fatalf("ReopenRun: %v", err)
 	}
 	got, err = s.GetRun(ctx, run.ID)
+	if err != nil || got.Status != domain.RunStatusOpen {
+		t.Fatalf("after ReopenRun, status = %q, %v; want open", got.Status, err)
+	}
+}
+
+// An imported run is created closed (collapse-duplicate-ci-runs); confirm
+// the existing reopen capability generalizes to it unmodified.
+func TestReopenImportedRun(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	importActorCtx := domain.WithActor(ctx, domain.Actor{
+		ID: "agent-1", Kind: domain.ActorKindAgent, DisplayName: "ci-bot", EffectiveUserID: "agent-1",
+	})
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+
+	result, err := s.Import(importActorCtx, p.ID, service.ImportInput{
+		Format: "junit-xml",
+		Report: fmt.Sprintf(`<testsuites><testsuite name="pytest"><testcase name="test_it"><properties><property name="testpulse_case_key" value="%s"/></properties></testcase></testsuite></testsuites>`, c.Key),
+	})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if result.Run.Status != domain.RunStatusClosed {
+		t.Fatalf("Run.Status = %q, want closed", result.Run.Status)
+	}
+
+	if err := s.ReopenRun(ctx, result.Run.ID); err != nil {
+		t.Fatalf("ReopenRun: %v", err)
+	}
+	got, err := s.GetRun(ctx, result.Run.ID)
 	if err != nil || got.Status != domain.RunStatusOpen {
 		t.Fatalf("after ReopenRun, status = %q, %v; want open", got.Status, err)
 	}

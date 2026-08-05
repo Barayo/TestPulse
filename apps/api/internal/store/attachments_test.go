@@ -29,6 +29,23 @@ func TestStageForItem_CreatesUnlinkedAttachment(t *testing.T) {
 	}
 }
 
+func TestImport_CreatesClosedRun(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+
+	run, err := s.Runs.Import(ctx, p.ID, "ci run", []store.ImportItem{
+		{CaseID: c.ID, TestName: "tests/test_login.py::test_ok", Result: domain.NewResult{Actor: "ci", Verdict: domain.VerdictPass}},
+	})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if run.Status != domain.RunStatusClosed {
+		t.Errorf("Status = %q, want %q", run.Status, domain.RunStatusClosed)
+	}
+}
+
 func TestAttachToResult_LinksImmediately(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

@@ -190,10 +190,14 @@ func (r *RunRepo) Import(ctx context.Context, projectID, name string, items []Im
 		return domain.Run{}, fmt.Errorf("claiming run key: %w", err)
 	}
 
+	// An imported run is a finished snapshot: every item already carries a
+	// final verdict at creation time, unlike a manually-created run that's
+	// worked over time — so it's created closed, not left to the open
+	// default (collapse-duplicate-ci-runs).
 	var run domain.Run
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_runs (key, project_id, name) VALUES ($1, $2, $3)
-		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name,
+		`INSERT INTO test_runs (key, project_id, name, status) VALUES ($1, $2, $3, $4)
+		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name, domain.RunStatusClosed,
 	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.Status, &run.CreatedAt)
 	if err != nil {
 		return domain.Run{}, err
@@ -393,14 +397,14 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 	items := []domain.RunItem{}
 	for rows.Next() {
 		var (
-			it                                                                                 domain.RunItem
+			it                                                                                  domain.RunItem
 			assigneeUserID, assigneeTeamID, assigneeUserEmail, assigneeTeamName, assigneeAvatar *string
 			title, description, expected                                                        string
-			priority                                                                             string
-			stepsJSON                                                                            []byte
-			tags                                                                                  []string
-			platform, testType                                                                   string
-			automated                                                                             bool
+			priority                                                                            string
+			stepsJSON                                                                           []byte
+			tags                                                                                []string
+			platform, testType                                                                  string
+			automated                                                                           bool
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
 			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,

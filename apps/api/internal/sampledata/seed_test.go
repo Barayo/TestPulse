@@ -2,6 +2,7 @@ package sampledata_test
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -389,6 +390,38 @@ func TestSeedContentCoversRunLifecycleAndImport(t *testing.T) {
 	}
 	if !sawExecutionMetadata {
 		t.Error("no result carries platform/version — the import's execution metadata isn't visible")
+	}
+}
+
+// collapse-duplicate-ci-runs: the Sample Project should demonstrate the
+// fixed import behavior — a commit-style name, created closed — not the
+// old bug (mislabeled, stuck open).
+func TestSeedImportedRunIsClosedWithCommitStyleName(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var imported *domain.Run
+	for i, r := range runs {
+		if strings.HasPrefix(r.Name, "main @ ") {
+			imported = &runs[i]
+			break
+		}
+	}
+	if imported == nil {
+		t.Fatal("no seeded run has a commit-style name (\"main @ <sha> — ...\")")
+	}
+	if imported.Status != domain.RunStatusClosed {
+		t.Errorf("imported run status = %q, want closed", imported.Status)
 	}
 }
 

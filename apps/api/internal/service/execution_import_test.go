@@ -82,6 +82,23 @@ func TestImportMatchesCasesByKeyAndCreatesRun(t *testing.T) {
 	}
 }
 
+func TestImportCreatesClosedRun(t *testing.T) {
+	s := importTestService(t)
+	p := mustImportProject(t, s, "Login Service")
+	c := mustImportCase(t, s, p.ID, "case one")
+
+	result, err := s.Import(importCtx(), p.ID, service.ImportInput{
+		Format: "junit-xml",
+		Report: junitReport(c.Key),
+	})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if result.Run.Status != domain.RunStatusClosed {
+		t.Errorf("Run.Status = %q, want %q", result.Run.Status, domain.RunStatusClosed)
+	}
+}
+
 func TestImportReportsUnmatchedWithoutCreatingCases(t *testing.T) {
 	s := importTestService(t)
 	p := mustImportProject(t, s, "Payments")

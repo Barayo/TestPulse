@@ -112,11 +112,15 @@ jobs:
         # don't get repo secrets anyway. always() so real failures land
         # too, not just green runs.
         if: always() && github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
+          name="main @ ${COMMIT_SHA:0:7} — $(printf '%s' "$COMMIT_MSG" | head -1)"
           curl -sS -X POST https://testpulse.fly.dev/api/v1/projects/TD/imports \
             -H "Authorization: Bearer ${{ secrets.TESTPULSE_DOGFOOD_TOKEN }}" \
             -H 'Content-Type: application/json' \
-            -d "$(jq -n --rawfile report apps/web/e2e-results.xml '{format: "junit-xml", report: $report}')"
+            -d "$(jq -n --rawfile report apps/web/e2e-results.xml --arg name "$name" '{format: "junit-xml", report: $report, name: $name}')"
 
   helm:
     name: Helm chart

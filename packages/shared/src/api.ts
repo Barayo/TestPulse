@@ -1145,7 +1145,7 @@ export interface components {
             /** @description The owning project's key — a run's own route isn't nested under its project's, so this lets a client link back without a second lookup. */
             projectKey: string;
             name: string;
-            /** @description Runs are created open; a closed run's items become read-only until reopened. */
+            /** @description Runs created explicitly (POST /runs) start open; runs created via bulk import start closed, since every item they contain already has a final verdict. A closed run's items become read-only until reopened. */
             status: components["schemas"]["RunStatus"];
             /** @description The key of the suite this run was created from, if any. Absent (null) for a run created from an explicit case list, or via execution import. Set once at creation and never changes; unaffected by later deletion of the suite itself. */
             suiteKey?: string | null;

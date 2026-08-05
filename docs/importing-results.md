@@ -35,7 +35,17 @@ A `207` is still a success from the point of view of any tool that checks
 lists every case key that didn't, so nothing is silently dropped.
 
 The run's name defaults to the report's own `<testsuite name="...">` if
-present, otherwise a generated `Imported run — <timestamp>`.
+present, otherwise a generated `Imported run — <timestamp>`. This fallback
+is meant for a genuinely single-suite report — a caller that merges
+results from several suites into one report (as a CI job running multiple
+spec files typically does) should pass its own `name` explicitly, since
+the fallback only ever reflects the report's *first* `<testsuite>`.
+
+**Imported runs are created closed, not open.** Unlike a run created via
+`POST /runs` and worked over time, every item in an imported run already
+carries a final verdict the moment it's created — there's no "in progress"
+state to represent. An actor with `manageProject` permission can still
+reopen it via the existing reopen action if further work is needed.
 
 ## Execution metadata
 
