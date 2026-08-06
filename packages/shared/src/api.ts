@@ -61,6 +61,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/instance-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Update instance-wide settings (enable-public-project-access)
+         * @description Tenant-Admin-only. Currently one setting, publicProjectsEnabled.
+         */
+        patch: operations["updateInstanceSettings"];
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -628,6 +648,310 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/projects/{projectKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a project without authentication (enable-public-project-access). 404 whenever the project isn't public, doesn't exist, or the instance-wide publicProjectsEnabled kill switch is off — the same response in every case, so existence is never leaked. */
+        get: operations["getPublicProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List test cases in a public project */
+        get: operations["listPublicCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/folders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List all folders in a public project */
+        get: operations["listPublicFolders"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/flaky-cases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List every currently-flaky case in a public project */
+        get: operations["listPublicFlakyCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/suites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List suites in a public project */
+        get: operations["listPublicSuites"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List runs in a public project */
+        get: operations["listPublicRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/cases/{caseKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a case at its current version, from a public project */
+        get: operations["getPublicCase"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/cases/{caseKey}/versions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        /** Full version history of a case, from a public project */
+        get: operations["listPublicCaseVersions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/cases/{caseKey}/executions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        /** Every execution that has pinned this case, from a public project */
+        get: operations["listPublicCaseExecutions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/suites/{suiteKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a suite with its case membership, from a public project. 404 if the suite's own project isn't public — never trusts a {projectKey} URL segment, since this route has none. */
+        get: operations["getPublicSuite"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/suites/{suiteKey}/trend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        /** Pass-rate trend across a suite's closed runs, from a public project */
+        get: operations["getPublicSuiteTrend"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/runs/{runKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a run from a public project */
+        get: operations["getPublicRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/runs/{runKey}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        /** List run items with pinned content, from a public project */
+        get: operations["listPublicRunItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/runs/{runKey}/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        /** Item counts by status, from a public project */
+        get: operations["getPublicRunSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/items/{itemId}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        /** Append-only result log of a run item, from a public project */
+        get: operations["listPublicResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /** The raw image bytes for an attachment, from a public project */
+        get: operations["getPublicAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -1068,6 +1392,8 @@ export interface components {
             description: string;
             /** @description True for the single, automatically-seeded showroom project. False for every normally-created project. */
             isSample: boolean;
+            /** @description Opts this project into unauthenticated read-only access at its public URL (/api/v1/public/projects/{projectKey}/...). False by default. Also gated by the instance-wide Meta.publicProjectsEnabled kill switch — a project is only actually reachable anonymously when both are true. */
+            publicAccess: boolean;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1079,6 +1405,7 @@ export interface components {
             name?: string;
             description?: string;
             archived?: boolean;
+            publicAccess?: boolean;
         };
         TestCase: {
             id: string;
@@ -1331,6 +1658,16 @@ export interface components {
             name: string;
             /** @example 0.0.1 */
             version: string;
+            /** @description Instance-wide kill switch (enable-public-project-access), Tenant-Admin-controlled. When false, no project is reachable at its public URL regardless of that project's own publicAccess flag. Read here since this endpoint is unauthenticated and needed by both the anonymous public frontend and the authenticated Project Settings page. */
+            publicProjectsEnabled: boolean;
+        };
+        InstanceSettings: {
+            publicProjectsEnabled: boolean;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        InstanceSettingsUpdate: {
+            publicProjectsEnabled: boolean;
         };
         User: {
             id: string;
@@ -1590,7 +1927,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Service name and version */
+            /** @description Service name, version, and the publicProjectsEnabled kill switch */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -1599,6 +1936,31 @@ export interface operations {
                     "application/json": components["schemas"]["Meta"];
                 };
             };
+        };
+    };
+    updateInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstanceSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Updated instance settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
         };
     };
     listProjects: {
@@ -2730,6 +3092,376 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuiteTrend"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The project */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Project"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Cases with their current version content */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicFolders: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Folders, including the project's root folder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicFlakyCases: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Flaky cases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FlakyCase"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicSuites: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suites with case membership */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The case */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicCaseVersions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All versions, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseVersion"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicCaseExecutions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Executions ordered by pinned version, then by when they ran */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseExecution"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicSuite: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Suite */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Suite"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicSuiteTrend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                suiteKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Trend */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuiteTrend"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The run */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicRunItems: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Run items */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunItem"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicRunSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Results, oldest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Result"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Attachment image */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
                 };
             };
             404: components["responses"]["NotFound"];

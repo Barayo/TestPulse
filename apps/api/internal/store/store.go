@@ -14,38 +14,40 @@ import (
 )
 
 type Store struct {
-	Projects       *ProjectRepo
-	Folders        *FolderRepo
-	Cases          *CaseRepo
-	Suites         *SuiteRepo
-	Runs           *RunRepo
-	Users          *UserRepo
-	UserAvatars    *UserAvatarRepo
-	Sessions       *SessionRepo
-	ApiTokens      *ApiTokenRepo
-	Audit          *AuditRepo
-	Teams          *TeamRepo
-	ProjectMembers *ProjectMemberRepo
-	Roles          *RoleRepo
-	Attachments    *AttachmentRepo
+	Projects         *ProjectRepo
+	Folders          *FolderRepo
+	Cases            *CaseRepo
+	Suites           *SuiteRepo
+	Runs             *RunRepo
+	Users            *UserRepo
+	UserAvatars      *UserAvatarRepo
+	Sessions         *SessionRepo
+	ApiTokens        *ApiTokenRepo
+	Audit            *AuditRepo
+	Teams            *TeamRepo
+	ProjectMembers   *ProjectMemberRepo
+	Roles            *RoleRepo
+	Attachments      *AttachmentRepo
+	InstanceSettings *InstanceSettingsRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
 	return &Store{
-		Projects:       &ProjectRepo{pool: pool},
-		Folders:        &FolderRepo{pool: pool},
-		Cases:          &CaseRepo{pool: pool},
-		Suites:         &SuiteRepo{pool: pool},
-		Runs:           &RunRepo{pool: pool},
-		Users:          &UserRepo{pool: pool},
-		UserAvatars:    &UserAvatarRepo{pool: pool},
-		Sessions:       &SessionRepo{pool: pool},
-		ApiTokens:      &ApiTokenRepo{pool: pool},
-		Audit:          &AuditRepo{pool: pool},
-		Teams:          &TeamRepo{pool: pool},
-		ProjectMembers: &ProjectMemberRepo{pool: pool},
-		Roles:          &RoleRepo{pool: pool},
-		Attachments:    &AttachmentRepo{pool: pool},
+		Projects:         &ProjectRepo{pool: pool},
+		Folders:          &FolderRepo{pool: pool},
+		Cases:            &CaseRepo{pool: pool},
+		Suites:           &SuiteRepo{pool: pool},
+		Runs:             &RunRepo{pool: pool},
+		Users:            &UserRepo{pool: pool},
+		UserAvatars:      &UserAvatarRepo{pool: pool},
+		Sessions:         &SessionRepo{pool: pool},
+		ApiTokens:        &ApiTokenRepo{pool: pool},
+		Audit:            &AuditRepo{pool: pool},
+		Teams:            &TeamRepo{pool: pool},
+		ProjectMembers:   &ProjectMemberRepo{pool: pool},
+		Roles:            &RoleRepo{pool: pool},
+		Attachments:      &AttachmentRepo{pool: pool},
+		InstanceSettings: &InstanceSettingsRepo{pool: pool},
 	}
 }
 

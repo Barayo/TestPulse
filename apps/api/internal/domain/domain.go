@@ -265,8 +265,20 @@ type Project struct {
 	Description string `json:"description"`
 	// IsSample marks the single, automatically-seeded showroom project
 	// (add-sample-project); false for every normally-created project.
-	IsSample  bool      `json:"isSample"`
-	CreatedAt time.Time `json:"createdAt"`
+	IsSample bool `json:"isSample"`
+	// PublicAccess opts this project into unauthenticated read-only access
+	// at its public URL (enable-public-project-access); also gated by the
+	// instance-wide InstanceSettings.PublicProjectsEnabled kill switch.
+	PublicAccess bool      `json:"publicAccess"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+// InstanceSettings is the single, instance-wide configuration row
+// (enable-public-project-access) — a Tenant-Admin-only kill switch layered
+// above every project's own PublicAccess flag.
+type InstanceSettings struct {
+	PublicProjectsEnabled bool      `json:"publicProjectsEnabled"`
+	UpdatedAt             time.Time `json:"updatedAt"`
 }
 
 type TestCase struct {

@@ -14,7 +14,15 @@ cd TestPulse
 docker compose -f deploy/compose/docker-compose.yml up --build -d
 ```
 
-Then open **http://localhost:8080**.
+Then open **http://localhost:8080/public/SP** to browse the populated
+Sample Project immediately — no account needed (the Sample Project is
+public by default; see
+[Public project access](test-management.md#public-project-access)). To do
+anything beyond browsing (create a project, record a result, invite
+someone), sign in at **http://localhost:8080** with the bootstrap admin
+credentials from
+[Configuration reference](deployment.md#configuration-reference)
+(`TESTPULSE_ADMIN_EMAIL` / `TESTPULSE_ADMIN_PASSWORD`).
 
 - The UI, the REST API (`/api/v1`), and the health endpoints all serve from
   port 8080.

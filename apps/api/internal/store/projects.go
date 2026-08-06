@@ -31,8 +31,8 @@ func (r *ProjectRepo) Create(ctx context.Context, name, description string) (dom
 		var p domain.Project
 		err := r.pool.QueryRow(ctx,
 			`INSERT INTO projects (key, name, description) VALUES ($1, $2, $3)
-			 RETURNING id, key, name, archived, description, is_sample, created_at`, candidate, name, description,
-		).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.CreatedAt)
+			 RETURNING id, key, name, archived, description, is_sample, public_access, created_at`, candidate, name, description,
+		).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt)
 		if err == nil {
 			return p, nil
 		}
@@ -49,8 +49,8 @@ func (r *ProjectRepo) Create(ctx context.Context, name, description string) (dom
 func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, key, name, archived, description, is_sample, created_at FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.CreatedAt)
+		`SELECT id, key, name, archived, description, is_sample, public_access, created_at FROM projects WHERE id = $1`, id,
+	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt)
 	if err != nil {
 		return domain.Project{}, ErrNotFound
 	}
@@ -86,7 +86,7 @@ func (r *ProjectRepo) IDByKey(ctx context.Context, key string) (string, error) {
 
 func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, key, name, archived, description, is_sample, created_at FROM projects ORDER BY created_at`)
+		`SELECT id, key, name, archived, description, is_sample, public_access, created_at FROM projects ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -95,7 +95,7 @@ func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	projects := []domain.Project{}
 	for rows.Next() {
 		var p domain.Project
-		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)
@@ -109,7 +109,7 @@ func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 // instead (implicit access to everything).
 func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT DISTINCT p.id, p.key, p.name, p.archived, p.description, p.is_sample, p.created_at
+		`SELECT DISTINCT p.id, p.key, p.name, p.archived, p.description, p.is_sample, p.public_access, p.created_at
 		 FROM projects p
 		 WHERE p.id IN (SELECT project_id FROM project_members WHERE user_id = $1)
 		    OR p.id IN (
@@ -126,7 +126,7 @@ func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domai
 	projects := []domain.Project{}
 	for rows.Next() {
 		var p domain.Project
-		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.CreatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt); err != nil {
 			return nil, err
 		}
 		projects = append(projects, p)
@@ -147,6 +147,20 @@ func (r *ProjectRepo) Rename(ctx context.Context, id, name string) error {
 
 func (r *ProjectRepo) SetDescription(ctx context.Context, id, description string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE projects SET description = $2 WHERE id = $1`, id, description)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetPublicAccess toggles a project's opt-in unauthenticated read access
+// (enable-public-project-access). Also gated at request time by the
+// instance-wide InstanceSettings.PublicProjectsEnabled kill switch.
+func (r *ProjectRepo) SetPublicAccess(ctx context.Context, id string, public bool) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE projects SET public_access = $2 WHERE id = $1`, id, public)
 	if err != nil {
 		return err
 	}

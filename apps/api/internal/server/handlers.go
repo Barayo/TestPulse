@@ -184,9 +184,10 @@ func (h *api) getProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name        *string `json:"name"`
-		Description *string `json:"description"`
-		Archived    *bool   `json:"archived"`
+		Name         *string `json:"name"`
+		Description  *string `json:"description"`
+		Archived     *bool   `json:"archived"`
+		PublicAccess *bool   `json:"publicAccess"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
@@ -195,6 +196,7 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	p, err := h.svc.UpdateProject(r.Context(), resolvedID(r, "projectKey"),
 		service.ProjectUpdate{
 			Name: body.Name, Description: body.Description, Archived: body.Archived,
+			PublicAccess: body.PublicAccess,
 		})
 	h.respond(w, http.StatusOK, p, err)
 }

@@ -62,6 +62,14 @@ export function AdminMenu() {
           >
             Roles
           </Link>
+          <Link
+            role="menuitem"
+            to="/settings/instance"
+            className="block px-3 py-1.5 hover:bg-accent"
+            onClick={() => setOpen(false)}
+          >
+            Instance
+          </Link>
         </div>
       )}
     </div>

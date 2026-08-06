@@ -60,6 +60,9 @@ func TestSeedCreatesExactlyOneSampleProject(t *testing.T) {
 	if p.Name != "Sample Project" {
 		t.Errorf("seeded project Name = %q, want %q", p.Name, "Sample Project")
 	}
+	if !p.PublicAccess {
+		t.Error("seeded project PublicAccess = false, want true (enable-public-project-access showcase)")
+	}
 }
 
 func TestSeedContentCoversClassificationFieldsAndVersioning(t *testing.T) {

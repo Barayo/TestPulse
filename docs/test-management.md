@@ -63,6 +63,29 @@ A **Reset to defaults** button on the Roles page restores Tester/Contributor/Pro
 
 A user's effective permissions on a project are the **union** of every role granted to them — directly or via any team they belong to — not just the "highest" one; there's no ranking to pick a winner from once roles are fully custom. So a user holding two different roles on the same project (e.g. one direct, one via a team) gets every permission flag either role grants. Assigning project membership itself — deciding who holds which role on a given project — is Tenant-Admin-only; a role with Manage Project can administer the project's settings but not reassign who's on it. Users and teams are assigned per project at `/projects/{key}/members`. Deleting a role removes it from every project/team assignment that referenced it, immediately revoking any access that depended solely on it. An API token (agent) always acts at its creator's current permission level, resolved fresh on every request — never its own separate access.
 
+## Public project access
+
+A Project Admin (a role with **Manage Project**) can flip **Public access**
+on for a project at `/projects/{key}/settings`, making its cases, sections,
+suites, runs, and results readable at a stable, unauthenticated URL —
+`/public/{key}` — by anyone with the link, no account required. It's off by
+default for every project. Nothing anonymous can be created, edited, or
+run — the public view has no write controls at all, only read access to
+the same content a member with Read permission sees, minus the project's
+membership list (never exposed anonymously).
+
+A Tenant Admin can additionally disable the entire capability
+instance-wide at `/settings/instance` — a hard switch above every
+project's own setting, off by default only in the sense that flipping it
+off makes no project reachable anonymously regardless of that project's
+own flag, without touching or clearing any project's own setting (turning
+it back on restores exactly what was public before, with no extra step).
+This exists for future multi-tenant hosting, where an operator may want to
+guarantee no project is ever public. On a normal single-tenant instance
+there is usually no reason to touch it — it's on by default, which is
+exactly what makes the seeded Sample Project's `/public/{key}` link work
+immediately after install (see [Getting Started](getting-started.md)).
+
 ## Projects
 
 Everything lives inside a project. A Tenant Admin creates one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet — both are hidden for everyone else, since project creation is Tenant-Admin-only. Projects can be renamed and archived (a soft flag — archiving never deletes data) via the API (`PATCH /api/v1/projects/{key}`, Project Admin or above); the UI surfaces archived status but archiving itself is API-only in this release.

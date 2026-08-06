@@ -20,7 +20,8 @@ the root because infrastructure expects them there.
 |---|---|---|
 | GET | `/healthz` | Liveness: process health only; `200` even when the database is down |
 | GET | `/readyz` | Readiness: `200` when the database is reachable and migrations are current, `503 {"status":"unavailable","reason":"..."}` otherwise |
-| GET | `/api/v1/meta` | Service name and version |
+| GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` — the instance-wide public-project-access kill switch (see below) |
+| PATCH | `/api/v1/instance-settings` | Update instance-wide settings — currently just `publicProjectsEnabled` — Tenant Admin only |
 
 Everything else under `/` serves the embedded web UI (with SPA fallback).
 
@@ -56,7 +57,7 @@ internal `id` in paths — they aren't in scope for this scheme.
 | POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only; the response's `key` is auto-derived from `name`; `isSample` is always `false` for a project created this way |
 | GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), and whether the calling user has favorited it, for every non-archived project, in one request — computed server-side (4 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
 | GET | `/api/v1/projects/{projectKey}` | Get a project |
-| PATCH | `/api/v1/projects/{projectKey}` | Rename, describe, and/or archive — Project Admin+ (renaming never changes `key`) |
+| PATCH | `/api/v1/projects/{projectKey}` | Rename, describe, archive, and/or set `publicAccess` — Project Admin+ (renaming never changes `key`) |
 | POST | `/api/v1/projects/{projectKey}/favorite` | Star the project for the calling user (idempotent) |
 | DELETE | `/api/v1/projects/{projectKey}/favorite` | Unstar the project for the calling user (idempotent) |
 
@@ -108,6 +109,26 @@ exactly one folder, defaulting to the project's root; see
 | GET / POST | `/api/v1/items/{itemId}/attachments` | List / stage a screenshot attachment (`multipart/form-data`, field `file`; PNG/JPEG/WebP, max 5MB) against an item before a verdict exists — `result_id` unset until linked via `recordResult`'s `attachmentIds` |
 | GET / POST | `/api/v1/results/{resultId}/attachments` | List a result's attachments / attach a screenshot directly to an already-recorded result (after-the-fact attach from History) |
 | GET / DELETE | `/api/v1/attachments/{attachmentId}` | The raw image bytes for an attachment, cacheable via `ETag`/`Cache-Control` — Read+ / delete an attachment — requires `runRecordResult` |
+
+**Public project access** — unauthenticated, mirroring the shapes above
+under `/api/v1/public/...`; reachable only when both `publicAccess` (the
+project's own flag) and `publicProjectsEnabled` (the instance-wide switch)
+are true — `404` otherwise, the same response whether the project isn't
+public, doesn't exist, or the switch is off (see
+[Public project access](test-management.md#public-project-access)).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/public/projects/{projectKey}` | Get a public project |
+| GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` | List, same shapes as the authenticated equivalents |
+| GET | `/api/v1/public/cases/{caseKey}` \| `/versions` \| `/executions` | A case, its version history, its execution history |
+| GET | `/api/v1/public/suites/{suiteKey}` \| `/trend` | A suite, its pass-rate trend |
+| GET | `/api/v1/public/runs/{runKey}` \| `/items` \| `/summary` | A run, its items, its status counts |
+| GET | `/api/v1/public/items/{itemId}/results` | A run item's result log |
+| GET | `/api/v1/public/attachments/{attachmentId}` | The raw image bytes for an attachment |
+
+No public route ever exposes project membership or a caller's own
+permissions (there is no caller), and no public route accepts a write.
 
 Validation errors return `400 {"error": "..."}` naming the offending field;
 missing entities return `404 {"error": "not found"}`. Unauthenticated

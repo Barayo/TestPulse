@@ -27,6 +27,9 @@ import RolesPage from '@/pages/RolesPage'
 import TokensPage from '@/pages/TokensPage'
 import ProfilePage from '@/pages/ProfilePage'
 import ProjectMembersPage from '@/pages/ProjectMembersPage'
+import ProjectSettingsPage from '@/pages/ProjectSettingsPage'
+import PublicProjectPage from '@/pages/PublicProjectPage'
+import InstanceSettingsPage from '@/pages/InstanceSettingsPage'
 
 function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
@@ -49,7 +52,7 @@ function Layout({ children }: { children: React.ReactNode }) {
   // either, but "Select project" is actively wrong there — there's nothing
   // to select. /settings/tokens is deliberately excluded: it's personal
   // (every user's own API tokens), not an admin concern.
-  const isAdminSettingsPage = /^\/settings\/(people|roles)(\/|$)/.test(location.pathname)
+  const isAdminSettingsPage = /^\/settings\/(people|roles|instance)(\/|$)/.test(location.pathname)
 
   async function handleLogout() {
     await logout()
@@ -173,6 +176,7 @@ function App() {
             <SessionExpiredModal />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/public/:projectKey" element={<PublicProjectPage />} />
               <Route path="/" element={<RequireAuth><ProjectsPage /></RequireAuth>} />
               <Route
                 path="/projects/:projectKey"
@@ -247,6 +251,14 @@ function App() {
                 }
               />
               <Route
+                path="/projects/:projectKey/settings"
+                element={
+                  <RequireAuth>
+                    <ProjectSettingsPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
                 path="/runs/:runKey"
                 element={
                   <RequireAuth>
@@ -283,6 +295,14 @@ function App() {
                 element={
                   <RequireAuth>
                     <TokensPage />
+                  </RequireAuth>
+                }
+              />
+              <Route
+                path="/settings/instance"
+                element={
+                  <RequireAuth>
+                    <InstanceSettingsPage />
                   </RequireAuth>
                 }
               />

@@ -235,6 +235,40 @@ func TestProjectLifecycle(t *testing.T) {
 	}
 }
 
+// TestProjectPublicAccessDefaultsFalseAndCanBeToggled covers
+// enable-public-project-access's "Project Admin enables public access" /
+// "Disabling public access" scenarios at the store layer.
+func TestProjectPublicAccessDefaultsFalseAndCanBeToggled(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	if p.PublicAccess {
+		t.Errorf("PublicAccess on create = %v, want false", p.PublicAccess)
+	}
+
+	if err := s.Projects.SetPublicAccess(ctx, p.ID, true); err != nil {
+		t.Fatalf("SetPublicAccess(true): %v", err)
+	}
+	got, err := s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.PublicAccess {
+		t.Errorf("PublicAccess after enabling = %v, want true", got.PublicAccess)
+	}
+
+	if err := s.Projects.SetPublicAccess(ctx, p.ID, false); err != nil {
+		t.Fatalf("SetPublicAccess(false): %v", err)
+	}
+	got, err = s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.PublicAccess {
+		t.Errorf("PublicAccess after disabling = %v, want false", got.PublicAccess)
+	}
+}
+
 // --- Cases and versioning (task 2.2) ---
 
 func TestCaseCreateStartsAtVersionOne(t *testing.T) {

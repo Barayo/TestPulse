@@ -71,6 +71,8 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
         data: overrides.runSummary ?? { runId: 'r1', total: 2, counts: { pass: 2 } },
         response: { ok: true },
       })
+    if (path === '/api/v1/projects/{projectKey}/permissions')
+      return Promise.resolve({ data: overrides.permissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -151,6 +153,34 @@ describe('ProjectPage landing', () => {
     renderProject()
     await screen.findByRole('heading', { name: 'QA Platform' })
     expect(screen.queryByRole('link', { name: /members/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a Settings link to a user with manageProject permission (enable-public-project-access)', async () => {
+    mockProjectAPI({
+      me: { id: 'u1', email: 'member@example.com', isTenantAdmin: false },
+      permissions: {
+        read: true, caseCreate: false, caseEdit: false, caseDelete: false, sectionCreate: false,
+        sectionDelete: false, suiteCreate: false, suiteEditMembership: false, runCreate: false,
+        runRecordResult: false, manageProject: true,
+      },
+    })
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(await screen.findByRole('link', { name: /settings/i })).toHaveAttribute('href', '/projects/p1/settings')
+  })
+
+  it('hides the Settings link without manageProject permission', async () => {
+    mockProjectAPI({
+      me: { id: 'u1', email: 'member@example.com', isTenantAdmin: false },
+      permissions: {
+        read: true, caseCreate: false, caseEdit: false, caseDelete: false, sectionCreate: false,
+        sectionDelete: false, suiteCreate: false, suiteEditMembership: false, runCreate: false,
+        runRecordResult: false, manageProject: false,
+      },
+    })
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(screen.queryByRole('link', { name: /settings/i })).not.toBeInTheDocument()
   })
 
   it('shows the top-level folder with its total case count', async () => {

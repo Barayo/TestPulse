@@ -30,8 +30,9 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) 
 	h := &api{logger: logger, svc: svc}
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/meta", handleMeta)
+		r.Get("/meta", handleMeta(svc))
 		mountAuth(r, h)
+		mountPublicAPI(r, h)
 
 		r.Group(func(r chi.Router) {
 			r.Use(authenticate(svc))
@@ -39,6 +40,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) 
 			mountIdentity(r, h)
 			mountTeams(r, h)
 			mountRoles(r, h)
+			r.With(requireTenantAdmin).Patch("/instance-settings", h.updateInstanceSettings)
 		})
 	})
 
@@ -68,11 +70,24 @@ func handleReadiness(logger *slog.Logger, readiness ReadinessChecker) http.Handl
 	}
 }
 
-func handleMeta(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"name":    "TestPulse",
-		"version": "0.0.1",
-	})
+// handleMeta is unauthenticated and includes publicProjectsEnabled
+// (enable-public-project-access) — the instance-wide kill switch, read by
+// both the anonymous public frontend and the authenticated Project Settings
+// page (to decide whether to gray out its own "Public access" toggle).
+// Reveals nothing sensitive.
+func handleMeta(svc *service.Service) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		settings, err := svc.InstanceSettings(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{
+			"name":                  "TestPulse",
+			"version":               "0.0.1",
+			"publicProjectsEnabled": settings.PublicProjectsEnabled,
+		})
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, body any) {

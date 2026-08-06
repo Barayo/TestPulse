@@ -133,6 +133,33 @@ func (h *api) resolveKey(param string, lookup func(ctx context.Context, key stri
 	}
 }
 
+// requirePublicProject rejects the request with 404 unless resolve's project
+// is reachable anonymously: both the instance-wide kill switch
+// (InstanceSettings.PublicProjectsEnabled) and the project's own
+// PublicAccess flag must be true (enable-public-project-access). Unlike
+// requirePermission, no Actor is involved — this gates the unauthenticated
+// route group, mounted outside authenticate. 404, not 403, in every failure
+// case (disabled instance-wide, not public, or nonexistent project) so
+// existence is never leaked, matching the same "no membership → no access"
+// non-disclosure the authenticated RBAC model already uses.
+func (h *api) requirePublicProject(resolve projectIDResolver) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			projectID, err := resolve(h, r)
+			if err != nil {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+				return
+			}
+			ok, err := h.svc.IsProjectPubliclyAccessible(r.Context(), projectID)
+			if err != nil || !ok {
+				writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // requirePermission rejects the request with 403 unless the context's
 // Actor's effective permissions on the project resolve identifies include
 // perm — a Tenant Admin always passes (design.md D3/D6/D10). Replaces the

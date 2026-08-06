@@ -51,6 +51,15 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err := svc.MarkSample(ctx, p.ID); err != nil {
 		return fmt.Errorf("sampledata: marking project sample: %w", err)
 	}
+	// The Sample Project is the product's showroom (CLAUDE.md's standing
+	// rule) — marking it public (enable-public-project-access) makes it
+	// genuinely reachable at /public/{key} without an account, closing the
+	// gap where docs/getting-started.md's quickstart implied a fresh visit
+	// was browsable pre-login when RequireAuth actually blocked every route.
+	publicAccess := true
+	if _, err := svc.UpdateProject(ctx, p.ID, service.ProjectUpdate{PublicAccess: &publicAccess}); err != nil {
+		return fmt.Errorf("sampledata: marking project public: %w", err)
+	}
 
 	// Real project members (link-run-item-assignee-to-identity): assignment
 	// only accepts a real user or team now, so the Sample Project needs at

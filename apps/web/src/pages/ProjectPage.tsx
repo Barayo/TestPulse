@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon } from 'lucide-react'
+import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
 import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
+import { useProjectPermissions } from '@/lib/useProjectPermissions'
 import { useAuth } from '@/lib/useAuth'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
@@ -48,6 +49,7 @@ export default function ProjectPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const { user } = useAuth()
+  const permissions = useProjectPermissions(projectKey)
   const { canSwitch, openSwitcher } = useProjectSwitcher()
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
@@ -116,15 +118,26 @@ export default function ProjectPage() {
             <p className="text-sm text-muted-foreground">{project.key} · project overview</p>
           </div>
         )}
-        {user?.isTenantAdmin && (
-          <Link
-            to={`/projects/${projectKey}/members`}
-            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
-          >
-            <UsersIcon className="size-4" aria-hidden="true" />
-            Members
-          </Link>
-        )}
+        <div className="flex items-center gap-4">
+          {user?.isTenantAdmin && (
+            <Link
+              to={`/projects/${projectKey}/members`}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <UsersIcon className="size-4" aria-hidden="true" />
+              Members
+            </Link>
+          )}
+          {permissions?.manageProject && (
+            <Link
+              to={`/projects/${projectKey}/settings`}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <SettingsIcon className="size-4" aria-hidden="true" />
+              Settings
+            </Link>
+          )}
+        </div>
       </div>
 
       {summary && (

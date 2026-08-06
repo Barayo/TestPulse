@@ -146,14 +146,15 @@ func (s *Service) ProjectSummaries(ctx context.Context) ([]domain.ProjectSummary
 
 // ProjectUpdate carries optional changes; nil fields are left untouched.
 type ProjectUpdate struct {
-	Name        *string
-	Description *string
-	Archived    *bool
+	Name         *string
+	Description  *string
+	Archived     *bool
+	PublicAccess *bool
 }
 
 func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdate) (domain.Project, error) {
-	if upd.Name == nil && upd.Description == nil && upd.Archived == nil {
-		return domain.Project{}, invalid("nothing to update: provide name, description, and/or archived")
+	if upd.Name == nil && upd.Description == nil && upd.Archived == nil && upd.PublicAccess == nil {
+		return domain.Project{}, invalid("nothing to update: provide name, description, archived, and/or publicAccess")
 	}
 	if upd.Name != nil {
 		if err := domain.ValidateProjectName(*upd.Name); err != nil {
@@ -175,6 +176,12 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 			return domain.Project{}, err
 		}
 		s.audit(ctx, "archive", "project", id)
+	}
+	if upd.PublicAccess != nil {
+		if err := s.store.Projects.SetPublicAccess(ctx, id, *upd.PublicAccess); err != nil {
+			return domain.Project{}, err
+		}
+		s.audit(ctx, "update_public_access", "project", id)
 	}
 	return s.store.Projects.Get(ctx, id)
 }

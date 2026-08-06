@@ -54,11 +54,29 @@ paths:
       tags: [system]
       responses:
         "200":
-          description: Service name and version
+          description: Service name, version, and the publicProjectsEnabled kill switch
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/Meta"
+  /api/v1/instance-settings:
+    patch:
+      operationId: updateInstanceSettings
+      summary: Update instance-wide settings (enable-public-project-access)
+      description: Tenant-Admin-only. Currently one setting, publicProjectsEnabled.
+      tags: [system]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstanceSettingsUpdate" }
+      responses:
+        "200":
+          description: Updated instance settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstanceSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/projects:
     get:
       operationId: listProjects
@@ -754,6 +772,256 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SuiteTrend" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicProject
+      summary: >-
+        Get a project without authentication (enable-public-project-access).
+        404 whenever the project isn't public, doesn't exist, or the
+        instance-wide publicProjectsEnabled kill switch is off — the same
+        response in every case, so existence is never leaked.
+      tags: [public]
+      responses:
+        "200":
+          description: The project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/cases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCases
+      summary: List test cases in a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Cases with their current version content
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/folders:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicFolders
+      summary: List all folders in a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Folders, including the project's root folder
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Folder" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/flaky-cases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicFlakyCases
+      summary: List every currently-flaky case in a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Flaky cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FlakyCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/suites:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicSuites
+      summary: List suites in a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Suites with case membership
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Suite" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/runs:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicRuns
+      summary: List runs in a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Runs, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicCase
+      summary: Get a case at its current version, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: The case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}/versions:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCaseVersions
+      summary: Full version history of a case, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: All versions, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseVersion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}/executions:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCaseExecutions
+      summary: Every execution that has pinned this case, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Executions ordered by pinned version, then by when they ran
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseExecution" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/suites/{suiteKey}:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicSuite
+      summary: >-
+        Get a suite with its case membership, from a public project. 404 if
+        the suite's own project isn't public — never trusts a {projectKey}
+        URL segment, since this route has none.
+      tags: [public]
+      responses:
+        "200":
+          description: Suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/suites/{suiteKey}/trend:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicSuiteTrend
+      summary: Pass-rate trend across a suite's closed runs, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Trend
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuiteTrend" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/runs/{runKey}:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicRun
+      summary: Get a run from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/runs/{runKey}/items:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicRunItems
+      summary: List run items with pinned content, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Run items
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RunItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/runs/{runKey}/summary:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicRunSummary
+      summary: Item counts by status, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/items/{itemId}/results:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicResults
+      summary: Append-only result log of a run item, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Results, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Result" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicAttachment
+      summary: The raw image bytes for an attachment, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Attachment image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/auth/login:
     post:
       operationId: login
@@ -1359,7 +1627,7 @@ components:
           description: Required — only the root folder (auto-created with the project) may have no parent.
     Project:
       type: object
-      required: [id, key, name, archived, description, isSample, createdAt]
+      required: [id, key, name, archived, description, isSample, publicAccess, createdAt]
       properties:
         id: { type: string }
         key:
@@ -1371,6 +1639,14 @@ components:
         isSample:
           type: boolean
           description: True for the single, automatically-seeded showroom project. False for every normally-created project.
+        publicAccess:
+          type: boolean
+          description: >
+            Opts this project into unauthenticated read-only access at its
+            public URL (/api/v1/public/projects/{projectKey}/...). False by
+            default. Also gated by the instance-wide
+            Meta.publicProjectsEnabled kill switch — a project is only
+            actually reachable anonymously when both are true.
         createdAt: { type: string, format: date-time }
     ProjectInput:
       type: object
@@ -1384,6 +1660,7 @@ components:
         name: { type: string }
         description: { type: string }
         archived: { type: boolean }
+        publicAccess: { type: boolean }
     TestCase:
       type: object
       required: [id, key, projectId, folderId, currentVersion, content, createdAt, updatedAt]
@@ -1741,7 +2018,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version]
+      required: [name, version, publicProjectsEnabled]
       properties:
         name:
           type: string
@@ -1749,6 +2026,26 @@ components:
         version:
           type: string
           example: 0.0.1
+        publicProjectsEnabled:
+          type: boolean
+          description: >
+            Instance-wide kill switch (enable-public-project-access),
+            Tenant-Admin-controlled. When false, no project is reachable at
+            its public URL regardless of that project's own publicAccess
+            flag. Read here since this endpoint is unauthenticated and
+            needed by both the anonymous public frontend and the
+            authenticated Project Settings page.
+    InstanceSettings:
+      type: object
+      required: [publicProjectsEnabled, updatedAt]
+      properties:
+        publicProjectsEnabled: { type: boolean }
+        updatedAt: { type: string, format: date-time }
+    InstanceSettingsUpdate:
+      type: object
+      required: [publicProjectsEnabled]
+      properties:
+        publicProjectsEnabled: { type: boolean }
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt]

@@ -7,6 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/Barayo/TestPulse/apps/api/internal/service"
+	"github.com/Barayo/TestPulse/apps/api/internal/store"
+	"github.com/Barayo/TestPulse/apps/api/internal/testutil"
 )
 
 type stubReadiness struct{ err error }
@@ -47,7 +51,11 @@ func TestReadinessUnavailableWhenDependencyFails(t *testing.T) {
 }
 
 func TestMetaEndpoint(t *testing.T) {
-	h := newTestServer(nil)
+	// handleMeta reads the instance_settings row (enable-public-project-access),
+	// so this needs a real service backed by the test database, unlike the
+	// liveness/readiness tests above.
+	svc := service.New(store.New(testutil.Pool(t, "server_meta")))
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
 	if rec.Code != http.StatusOK {

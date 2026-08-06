@@ -15,7 +15,7 @@ describe('AdminMenu', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it('opens a menu with links to People and Roles', async () => {
+  it('opens a menu with links to People, Roles, and Instance', async () => {
     render(
       <MemoryRouter>
         <AdminMenu />
@@ -24,6 +24,7 @@ describe('AdminMenu', () => {
     await userEvent.click(screen.getByRole('button', { name: /admin/i }))
     expect(screen.getByRole('menuitem', { name: /^people$/i })).toHaveAttribute('href', '/settings/people')
     expect(screen.getByRole('menuitem', { name: /^roles$/i })).toHaveAttribute('href', '/settings/roles')
+    expect(screen.getByRole('menuitem', { name: /^instance$/i })).toHaveAttribute('href', '/settings/instance')
   })
 
   it('closes the menu after selecting an item', async () => {
