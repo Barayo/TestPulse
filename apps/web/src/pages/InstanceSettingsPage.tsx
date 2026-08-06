@@ -3,6 +3,7 @@ import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Switch } from '@/components/ui/switch'
 
 // Tenant-Admin-only instance-wide settings (enable-public-project-access).
 // Self-gates the same way RolesPage.tsx/PeoplePage.tsx do — a client-side
@@ -45,19 +46,15 @@ export default function InstanceSettingsPage() {
           </p>
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-medium">Public project access, instance-wide</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={publicProjectsEnabled ?? false}
-              aria-label="Public project access, instance-wide"
-              disabled={publicProjectsEnabled === undefined}
-              className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium ${
-                publicProjectsEnabled ? 'border-primary text-primary' : 'border-input text-muted-foreground'
-              }`}
-              onClick={() => void toggle()}
-            >
-              {publicProjectsEnabled ? 'On' : 'Off'}
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{publicProjectsEnabled ? 'On' : 'Off'}</span>
+              <Switch
+                aria-label="Public project access, instance-wide"
+                checked={publicProjectsEnabled ?? false}
+                disabled={publicProjectsEnabled === undefined}
+                onCheckedChange={() => void toggle()}
+              />
+            </div>
           </div>
           <p className="text-xs text-muted-foreground">
             When off: no project is reachable anonymously, even one with its own &quot;Public access&quot; left on —

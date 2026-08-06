@@ -5,6 +5,7 @@ import { useProjectPermissions } from '@/lib/useProjectPermissions'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Switch } from '@/components/ui/switch'
 
 // Project-level settings (enable-public-project-access) — currently just
 // the "Public access" toggle. Gated on manageProject (broader than
@@ -59,19 +60,15 @@ export default function ProjectSettingsPage() {
           </p>
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-medium">Public access</span>
-            <button
-              type="button"
-              role="switch"
-              aria-checked={publicAccess ?? false}
-              aria-label="Public access"
-              disabled={publicAccess === undefined || publicProjectsEnabled === false}
-              className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium disabled:opacity-50 ${
-                publicAccess ? 'border-primary text-primary' : 'border-input text-muted-foreground'
-              }`}
-              onClick={() => void toggle()}
-            >
-              {publicAccess ? 'On' : 'Off'}
-            </button>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{publicAccess ? 'On' : 'Off'}</span>
+              <Switch
+                aria-label="Public access"
+                checked={publicAccess ?? false}
+                disabled={publicAccess === undefined || publicProjectsEnabled === false}
+                onCheckedChange={() => void toggle()}
+              />
+            </div>
           </div>
           {publicProjectsEnabled === false && (
             <p className="text-xs text-muted-foreground">
