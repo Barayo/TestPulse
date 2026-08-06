@@ -26,7 +26,7 @@
       (`--arg name "$name"`, `name: $name`) alongside `format`/`report`.
       Use env-var indirection, not direct `${{ }}` interpolation into the
       shell script, to avoid a commit-message injection vector.
-- [ ] 2.2 Manual verification task (not automatable): after this merges to
+- [x] 2.2 Manual verification task (not automatable): after this merges to
       `main`, observe the next CI run's "Report results to dogfood
       instance" step and confirm the resulting run on
       `testpulse.fly.dev/projects/TD/runs` is named `main @ <sha> —
