@@ -583,3 +583,85 @@ describe('ProjectsPage', () => {
     })
   })
 })
+
+function publicProject(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'p1',
+    key: 'SP',
+    name: 'Sample Project',
+    archived: false,
+    description: '',
+    isSample: false,
+    createdAt: '',
+    ...overrides,
+  }
+}
+
+// anonymous discovery branch, ported from the now-retired
+// PublicProjectsIndexPage/usePublicProjects (unify-authenticated-and-public-views
+// tasks.md group 11, design.md D6).
+function mockAnonymousProjectsList(publicProjects: unknown[] | undefined) {
+  mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+    if (path === '/api/v1/public/projects')
+      return publicProjects === undefined
+        ? new Promise(() => {}) // never resolves — simulates still-loading
+        : Promise.resolve({ data: publicProjects, response: { ok: true } })
+    return Promise.resolve({ data: [], response: { ok: true } })
+  })
+}
+
+describe('anonymous / dual-mode', () => {
+  it('renders nothing extra in the body while the public-projects fetch is still in flight', async () => {
+    mockAnonymousProjectsList(undefined)
+    renderPage()
+    await screen.findByRole('heading', { name: 'Projects' })
+    expect(screen.queryByText(/no public projects/i)).not.toBeInTheDocument()
+  })
+
+  it('fires no request while the session check is still in flight', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderPage()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/projects', expect.anything())
+  })
+
+  it('shows an empty state, not an error, when no project is public', async () => {
+    mockAnonymousProjectsList([])
+    renderPage()
+    expect(await screen.findByText(/no public projects are available/i)).toBeInTheDocument()
+  })
+
+  it('renders a card per project — name, description, Sample badge — when multiple are public', async () => {
+    mockAnonymousProjectsList([
+      publicProject({ id: 'p1', key: 'SP', name: 'Sample Project', description: 'the showroom', isSample: true }),
+      publicProject({ id: 'p2', key: 'QA', name: 'QA Platform', description: 'real work' }),
+    ])
+    renderPage()
+    expect(await screen.findByText('Sample Project')).toBeInTheDocument()
+    expect(screen.getByText('the showroom')).toBeInTheDocument()
+    expect(screen.getByText('Sample')).toBeInTheDocument()
+    expect(screen.getByText('QA Platform')).toBeInTheDocument()
+    expect(screen.getByText('real work')).toBeInTheDocument()
+  })
+
+  it('links each card to the unified project route, not the old /public/{key} shape', async () => {
+    mockAnonymousProjectsList([
+      publicProject({ id: 'p1', key: 'SP', name: 'Sample Project' }),
+      publicProject({ id: 'p2', key: 'QA', name: 'QA Platform' }),
+    ])
+    renderPage()
+    const link = await screen.findByRole('link', { name: /sample project/i })
+    expect(link).toHaveAttribute('href', '/projects/SP')
+  })
+
+  it('redirects straight to the single public project without ever showing the grid', async () => {
+    mockAnonymousProjectsList([publicProject({ id: 'p1', key: 'SP', name: 'Sample Project' })])
+    renderPage()
+    await screen.findByText('Project page stub')
+    expect(screen.queryByText('Sample Project')).not.toBeInTheDocument()
+  })
+})

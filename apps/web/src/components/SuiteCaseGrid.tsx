@@ -24,6 +24,7 @@ export function SuiteCaseGrid({
   commitLabel,
   commitDisabled,
   onCommit,
+  readOnly = false,
 }: {
   cases: SuiteCaseGridCase[]
   folders: SuiteCaseGridFolder[]
@@ -32,19 +33,25 @@ export function SuiteCaseGrid({
   commitLabel: string
   commitDisabled: boolean
   onCommit: () => void
+  // Disables the picker's checkboxes and hides the selection-count/commit
+  // footer entirely — there's nothing to commit if the caller can't edit
+  // (unify-authenticated-and-public-views tasks.md 2.2).
+  readOnly?: boolean
 }) {
   return (
     <div className="space-y-3">
-      <CasePicker cases={cases} folders={folders} selected={selected} onToggle={onToggle} />
+      <CasePicker cases={cases} folders={folders} selected={selected} onToggle={onToggle} readOnly={readOnly} />
 
-      <div className="flex items-center justify-between rounded-md border bg-accent px-4 py-2.5">
-        <span className="text-sm font-medium">
-          {selected.size === 0 ? 'No cases selected' : `${selected.size} selected`}
-        </span>
-        <Button type="button" disabled={commitDisabled} onClick={onCommit}>
-          {commitLabel}
-        </Button>
-      </div>
+      {!readOnly && (
+        <div className="flex items-center justify-between rounded-md border bg-accent px-4 py-2.5">
+          <span className="text-sm font-medium">
+            {selected.size === 0 ? 'No cases selected' : `${selected.size} selected`}
+          </span>
+          <Button type="button" disabled={commitDisabled} onClick={onCommit}>
+            {commitLabel}
+          </Button>
+        </div>
+      )}
     </div>
   )
 }

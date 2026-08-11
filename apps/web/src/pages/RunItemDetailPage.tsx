@@ -31,6 +31,8 @@ import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
 import { assignRunItems } from '@/lib/assignRunItems'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { timeAgo } from '@/lib/timeAgo'
+import { useProjectPermissions } from '@/lib/useProjectPermissions'
+import { useAuth } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
 
 type Run = components['schemas']['Run']
@@ -54,6 +56,7 @@ const ACCEPTED_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 export default function RunItemDetailPage() {
   const { runKey, caseKey } = useParams<{ runKey: string; caseKey: string }>()
   const navigate = useNavigate()
+  const { user, loading: authLoading } = useAuth()
 
   const [run, setRun] = useState<Run>()
   const [project, setProject] = useState<Project>()
@@ -61,6 +64,11 @@ export default function RunItemDetailPage() {
   const [items, setItems] = useState<RunItem[]>([])
   const [results, setResults] = useState<Result[]>([])
   const [notFound, setNotFound] = useState(false)
+  // Resolved by load()'s own run fetch (design.md D11) — a signed-in
+  // non-member ends up 'public' here, same as an anonymous visitor,
+  // rather than a preemptive useProjectReadAccess check (projectKey isn't
+  // known until the run itself loads).
+  const [access, setAccess] = useState<'member' | 'public'>('public')
   // Resolves a user-attributed history entry's *current* avatar (add-user-profile)
   // — actorRefId -> avatarKey, fetched once, the same client-side lookup
   // pattern PeoplePage already uses.
@@ -83,12 +91,45 @@ export default function RunItemDetailPage() {
   const historyFileInputRef = useRef<HTMLInputElement>(null)
 
   const load = useCallback(async () => {
-    if (!runKey || !caseKey) return
+    // Waits for the session check before firing either branch (design.md
+    // D2, unify-authenticated-and-public-views).
+    if (!runKey || !caseKey || authLoading) return
     setNotFound(false)
-    const [{ data: r }, { data: runItems }] = await Promise.all([
-      api.GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } }),
-      api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
-    ])
+    let r, runItems
+    let resolvedAccess: 'member' | 'public' = 'public'
+    if (user) {
+      const [runRes, itemsRes] = await Promise.all([
+        api.GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } }),
+        api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
+      ])
+      if (runRes.data) {
+        r = runRes.data
+        runItems = itemsRes.data
+        resolvedAccess = 'member'
+      } else {
+        // Signed in but not a member (403) or the run doesn't exist (404)
+        // — retry via the public branch before giving up (design.md D11):
+        // a signed-in non-member must read a public project's run exactly
+        // like an anonymous visitor, not get 403-walled where a logged-out
+        // visitor to the same URL would succeed. projectKey isn't known
+        // until the run itself loads, so this page can't pre-check access
+        // the way useProjectReadAccess does for project-keyed pages.
+        const [pubRun, pubItems] = await Promise.all([
+          api.GET('/api/v1/public/runs/{runKey}', { params: { path: { runKey } } }),
+          api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey } } }),
+        ])
+        r = pubRun.data
+        runItems = pubItems.data
+      }
+    } else {
+      const [pubRun, pubItems] = await Promise.all([
+        api.GET('/api/v1/public/runs/{runKey}', { params: { path: { runKey } } }),
+        api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey } } }),
+      ])
+      r = pubRun.data
+      runItems = pubItems.data
+    }
+    setAccess(resolvedAccess)
     const match = (runItems ?? []).find((it) => it.caseKey === caseKey)
     if (!r || !match) {
       setNotFound(true)
@@ -97,24 +138,38 @@ export default function RunItemDetailPage() {
     setRun(r)
     setItem(match)
     setItems(runItems ?? [])
-    const { data: res } = await api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: match.id } } })
-    setResults(res ?? [])
-    const { data: allUsers } = await api.GET('/api/v1/users')
-    setUserAvatars(Object.fromEntries((allUsers ?? []).map((u) => [u.id, u.avatarKey])))
-  }, [runKey, caseKey])
+    if (resolvedAccess === 'member') {
+      const { data: res } = await api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: match.id } } })
+      setResults(res ?? [])
+      const { data: allUsers } = await api.GET('/api/v1/users')
+      setUserAvatars(Object.fromEntries((allUsers ?? []).map((u) => [u.id, u.avatarKey])))
+    } else {
+      // Anonymous, or a signed-in non-member (D11): GET /api/v1/users has
+      // no public equivalent and never gets one (design.md D1/D10) —
+      // result-history rows simply show no author avatar, since
+      // userAvatars stays empty here.
+      const { data: res } = await api.GET('/api/v1/public/items/{itemId}/results', {
+        params: { path: { itemId: match.id } },
+      })
+      setResults(res ?? [])
+      setUserAvatars({})
+    }
+  }, [runKey, caseKey, user, authLoading])
 
   useEffect(() => {
     void load()
   }, [load])
 
   const projectKey = run?.projectKey
+  const permissions = useProjectPermissions(projectKey)
+  const canRecord = Boolean(permissions?.runRecordResult)
   useEffect(() => {
-    if (!projectKey) return
-    api
-      .GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
-      .then(({ data }) => setProject(data))
-      .catch(() => setProject(undefined))
-  }, [projectKey])
+    if (!projectKey || authLoading) return
+    const request = access === 'member'
+      ? api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
+      : api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } })
+    request.then(({ data }) => setProject(data)).catch(() => setProject(undefined))
+  }, [projectKey, access, authLoading])
 
   function rejectAttachment(file: File): string | null {
     if (!ACCEPTED_ATTACHMENT_TYPES.includes(file.type)) {
@@ -307,7 +362,7 @@ export default function RunItemDetailPage() {
       if (!item || isEditableElementFocused()) return
       const key = e.key.toLowerCase()
       const isClosedNow = run?.status === 'closed'
-      if (!isClosedNow) {
+      if (!isClosedNow && canRecord) {
         if (key === 'p') return void recordVerdict('pass', { advance: true })
         if (key === 'f') return void recordVerdict('failed', { advance: true })
         if (key === 'b') return void recordVerdict('blocked', { advance: true })
@@ -320,13 +375,22 @@ export default function RunItemDetailPage() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, items, run?.status, runKey, actorOverride, comment, isRecording])
+  }, [item, items, run?.status, runKey, actorOverride, comment, isRecording, canRecord])
 
   if (!runKey || !caseKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
         Item not found. <Link to={`/runs/${runKey}`} className="underline">Go to run</Link>
+        {!user && !authLoading && (
+          <>
+            {' '}
+            ·{' '}
+            <Link to="/login" state={{ from: `/runs/${runKey}/items/${caseKey}` }} className="underline">
+              Log in
+            </Link>
+          </>
+        )}
       </p>
     )
   }
@@ -335,7 +399,7 @@ export default function RunItemDetailPage() {
   const isClosed = run.status === 'closed'
 
   const shortcuts: ShortcutEntry[] = [
-    ...(!isClosed
+    ...(!isClosed && canRecord
       ? [
           { keys: 'P', label: 'Pass' },
           { keys: 'F', label: 'Failed' },
@@ -390,7 +454,7 @@ export default function RunItemDetailPage() {
               <p className="text-sm text-muted-foreground">
                 This run is closed. Ask a project admin to reopen it to record new results.
               </p>
-            ) : (
+            ) : canRecord ? (
               <>
                 <AttachmentField
                   attachments={stagedAttachments}
@@ -481,7 +545,7 @@ export default function RunItemDetailPage() {
                   )}
                 </div>
               </>
-            )}
+            ) : null}
           </div>
         </div>
 
@@ -527,14 +591,16 @@ export default function RunItemDetailPage() {
                       Unassigned
                     </span>
                   )}
-                  <button
-                    type="button"
-                    aria-label="Assign to…"
-                    className="text-muted-foreground hover:text-foreground"
-                    onClick={() => setAssignDialogOpen(true)}
-                  >
-                    <UserPlusIcon className="size-3.5" aria-hidden="true" />
-                  </button>
+                  {canRecord && (
+                    <button
+                      type="button"
+                      aria-label="Assign to…"
+                      className="text-muted-foreground hover:text-foreground"
+                      onClick={() => setAssignDialogOpen(true)}
+                    >
+                      <UserPlusIcon className="size-3.5" aria-hidden="true" />
+                    </button>
+                  )}
                 </span>
               }
             />
@@ -567,7 +633,7 @@ export default function RunItemDetailPage() {
                         {r.actor}
                         {r.comment && ` — ${r.comment}`}
                       </p>
-                      {!isClosed && (
+                      {!isClosed && canRecord && (
                         <button
                           type="button"
                           aria-label="Attach screenshot"

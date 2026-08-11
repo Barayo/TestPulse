@@ -91,9 +91,11 @@ scoped API token (`docs/api.md#authentication`). **As of `add-project-rbac`,
 access to a project is opt-in**: one instance-wide Tenant Admin flag plus
 three project-scoped roles (Tester/Contributor/Project Admin), assignable
 directly or via a team — a non-Tenant-Admin has no access to any project
-until explicitly assigned one. **As of `enable-public-project-access`, a
-Project Admin may opt a specific project into anonymous, read-only access**
-at a stable `/public/{projectKey}` URL — an explicit, additive carve-out
+until explicitly assigned one. **As of `enable-public-project-access`
+(unified into the authenticated pages by `unify-authenticated-and-public-views`),
+a Project Admin may opt a specific project into anonymous, read-only
+access** at its normal `/projects/{projectKey}` URL, with write controls
+absent rather than a separate page — an explicit, additive carve-out
 alongside the opt-in-by-default rule above, not a reversal of it: every
 other project stays exactly as inaccessible to a non-member as before, and
 a Tenant Admin can disable the whole capability instance-wide (see

@@ -1,13 +1,13 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
-import { useProjectSummaries } from '@/lib/useProjectSummaries'
+import { useProjectSummaries, type ProjectSummary } from '@/lib/useProjectSummaries'
 import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
-import { useProjectPermissions } from '@/lib/useProjectPermissions'
+import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
 import { useAuth } from '@/lib/useAuth'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
@@ -48,39 +48,74 @@ function GettingStartedStep({
 export default function ProjectPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const permissions = useProjectPermissions(projectKey)
+  const access = useProjectReadAccess(projectKey, user, authLoading)
   const { canSwitch, openSwitcher } = useProjectSwitcher()
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
-  const landing = useProjectLanding(projectKey)
+  const landing = useProjectLanding(projectKey, access === 'member', access === 'loading')
   const summaries = useProjectSummaries()
-  const summary = summaries.find((s) => s.id === projectKey)
+  // No public equivalent exists for the batched /api/v1/projects/summaries
+  // aggregate (unify-authenticated-and-public-views design.md D2), so a
+  // non-member visitor's summary strip — anonymous, or signed-in but not a
+  // project member (D11) — is derived from `landing` instead — which
+  // already carries everything the strip needs (suite/case totals, the
+  // most recent run and its pass rate) once its own dual-mode fetch has
+  // settled.
+  const anonymousSummary: ProjectSummary | undefined =
+    access === 'public' && landing.loaded
+      ? {
+          id: projectKey ?? '',
+          name: project?.name ?? '',
+          description: project?.description ?? '',
+          createdAt: project?.createdAt ?? '',
+          isSample: project?.isSample ?? false,
+          suiteCount: landing.totalSuites,
+          caseCount: landing.totalCases,
+          passRate: landing.runs[0]?.passRate ?? null,
+          lastRunAt: landing.runs[0]?.createdAt ?? null,
+          isFavorite: false,
+        }
+      : undefined
+  const summary = access === 'member' ? summaries.find((s) => s.id === projectKey) : anonymousSummary
+
+  const load = useCallback(async () => {
+    // Waits for the session check and confirmed project read access before
+    // firing either branch (design.md D2/D11) — a signed-in non-member
+    // resolves to 'public' here, reading a public project like an
+    // anonymous visitor instead of hitting 403s.
+    if (!projectKey || access === 'loading') return
+    setNotFound(false)
+    try {
+      const { data } = access === 'member'
+        ? await api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
+        : await api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } })
+      if (data) setProject(data)
+      else setNotFound(true)
+    } catch {
+      setProject(undefined)
+    }
+  }, [projectKey, access])
 
   useEffect(() => {
-    if (!projectKey) return
-    let cancelled = false
-    setNotFound(false)
-    void api
-      .GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
-      .then(({ data }) => {
-        if (cancelled) return
-        if (data) setProject(data)
-        else setNotFound(true)
-      })
-      .catch(() => {
-        if (!cancelled) setProject(undefined)
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [projectKey])
+    void load()
+  }, [load])
 
   if (!projectKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
         Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {!user && !authLoading && (
+          <>
+            {' '}
+            ·{' '}
+            <Link to="/login" state={{ from: `/projects/${projectKey}` }} className="underline">
+              Log in
+            </Link>
+          </>
+        )}
       </p>
     )
   }

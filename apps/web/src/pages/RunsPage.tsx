@@ -8,6 +8,8 @@ import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { HealthBar } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
+import { useAuth } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
 
 type Run = components['schemas']['Run']
@@ -85,18 +87,30 @@ function RunSection({
 
 export default function RunsPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
+  const permissions = useProjectPermissions(projectKey)
+  const { user, loading: authLoading } = useAuth()
+  const access = useProjectReadAccess(projectKey, user, authLoading)
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const [runs, setRuns] = useState<Run[]>([])
 
   const load = useCallback(async () => {
-    if (!projectKey) return
+    // Waits for the session check and confirmed project read access before
+    // firing either branch (design.md D2/D11, unify-authenticated-and-public-views)
+    // — a signed-in non-member resolves to 'public' here, reading a public
+    // project like an anonymous visitor instead of hitting 403s.
+    if (!projectKey || access === 'loading') return
     setNotFound(false)
     try {
-      const [{ data: p }, { data: r }] = await Promise.all([
-        api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
-      ])
+      const [{ data: p }, { data: r }] = access === 'member'
+        ? await Promise.all([
+            api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+            api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
+          ])
+        : await Promise.all([
+            api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
+            api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
+          ])
       if (!p) {
         setNotFound(true)
         return
@@ -106,7 +120,7 @@ export default function RunsPage() {
     } catch {
       setRuns([])
     }
-  }, [projectKey])
+  }, [projectKey, access])
 
   useEffect(() => {
     void load()
@@ -117,6 +131,15 @@ export default function RunsPage() {
     return (
       <p className="text-sm text-muted-foreground">
         Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {!user && !authLoading && (
+          <>
+            {' '}
+            ·{' '}
+            <Link to="/login" state={{ from: `/projects/${projectKey}/runs` }} className="underline">
+              Log in
+            </Link>
+          </>
+        )}
       </p>
     )
   }
@@ -140,9 +163,11 @@ export default function RunsPage() {
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle className="tp-heading">Runs</CardTitle>
-          <Button type="button" asChild>
-            <Link to={`/projects/${projectKey}/runs/new`}>+ New run</Link>
-          </Button>
+          {permissions?.runCreate && (
+            <Button type="button" asChild>
+              <Link to={`/projects/${projectKey}/runs/new`}>+ New run</Link>
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {runs.length === 0 ? (
@@ -151,9 +176,11 @@ export default function RunsPage() {
               <p className="mb-4 text-sm text-muted-foreground">
                 Runs track execution of your cases. Start one from a suite, or build one from scratch.
               </p>
-              <Button asChild>
-                <Link to={`/projects/${projectKey}/runs/new`}>+ New run</Link>
-              </Button>
+              {permissions?.runCreate && (
+                <Button asChild>
+                  <Link to={`/projects/${projectKey}/runs/new`}>+ New run</Link>
+                </Button>
+              )}
             </div>
           ) : (
             <div className="space-y-5">

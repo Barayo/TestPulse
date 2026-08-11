@@ -69,4 +69,16 @@ describe('SuiteCaseGrid', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Save changes' }))
     expect(onCommit).toHaveBeenCalled()
   })
+
+  // Permission-gating retrofit (unify-authenticated-and-public-views
+  // tasks.md 2.2): SuiteDetailPage uses this grid as its case list, so a
+  // caller lacking suiteEditMembership must see the cases with no editing
+  // affordance at all — checkboxes disabled, no selection-count/commit
+  // footer (there's nothing to commit if you can't edit).
+  it('disables checkboxes and hides the selection/commit footer when readOnly', () => {
+    renderGrid({ readOnly: true, selected: new Set(['c1']) })
+    expect(screen.getByRole('checkbox', { name: /login succeeds/i })).toBeDisabled()
+    expect(screen.queryByText(/selected/)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create suite|save changes/i })).not.toBeInTheDocument()
+  })
 })

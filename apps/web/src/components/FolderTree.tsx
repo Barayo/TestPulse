@@ -24,6 +24,13 @@ type Props = {
   // design.md) — computed client-side by the caller from data already
   // fetched, keyed by folder id. A folder with no entry renders a 0 count.
   folderStats?: Record<string, FolderStats>
+  // Hides each row's "New section in…" trigger entirely for a caller
+  // lacking sectionCreate — the tree's own entry point into folder
+  // creation, alongside FolderExplorerPage's "+ New section" button
+  // (unify-authenticated-and-public-views tasks.md 2.9). Optional,
+  // defaulting to shown — FolderExplorerPage (the only real caller)
+  // always passes it explicitly either way.
+  canCreate?: boolean
 }
 
 // Shared with FolderExplorerPage's case rows and its inline subsection
@@ -94,6 +101,7 @@ function TreeNode({
   onCancelNewFolder,
   onDropCase,
   folderStats,
+  canCreate = true,
 }: {
   folder: TreeFolder
   depth: number
@@ -160,7 +168,7 @@ function TreeNode({
           )}
           <span className="shrink-0 text-xs text-muted-foreground">{folderStats?.[folder.id]?.count ?? 0}</span>
         </button>
-        <RowActionMenu ref={menuRef} label={`New section in ${folder.name}`} items={menuItems} />
+        {canCreate && <RowActionMenu ref={menuRef} label={`New section in ${folder.name}`} items={menuItems} />}
       </div>
       {isExpanded &&
         children.map((child) => (
@@ -181,6 +189,7 @@ function TreeNode({
             onCancelNewFolder={onCancelNewFolder}
             onDropCase={onDropCase}
             folderStats={folderStats}
+            canCreate={canCreate}
           />
         ))}
       {isExpanded && creatingIn === folder.id && (
@@ -211,6 +220,7 @@ export function FolderTree({
   onCancelNewFolder,
   onDropCase,
   folderStats,
+  canCreate = true,
 }: Props) {
   const topLevel = folders.filter((f) => f.parentFolderId === rootId)
   return (
@@ -233,6 +243,7 @@ export function FolderTree({
           onCancelNewFolder={onCancelNewFolder}
           onDropCase={onDropCase}
           folderStats={folderStats}
+          canCreate={canCreate}
         />
       ))}
     </nav>

@@ -19,6 +19,8 @@ import { assignRunItems } from '@/lib/assignRunItems'
 import { recordBulkVerdict } from '@/lib/recordBulkVerdict'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { useBumpDataRevision } from '@/lib/DataRevision'
+import { useProjectPermissions } from '@/lib/useProjectPermissions'
+import { useAuth } from '@/lib/useAuth'
 import {
   Card,
   CardContent,
@@ -47,6 +49,7 @@ function RunItemRow({
   onAssign,
   onAssignSelected,
   bulkVerdictItems,
+  canRecord,
 }: {
   item: RunItem
   projectKey?: string
@@ -59,6 +62,10 @@ function RunItemRow({
   onAssign: () => void
   onAssignSelected: () => void
   bulkVerdictItems: RowActionMenuItem[]
+  // Assign-to and bulk-verdict actions require runRecordResult; "Open
+  // execution"/"Go to case" are pure navigation, never gated
+  // (unify-authenticated-and-public-views tasks.md 2.5).
+  canRecord: boolean
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
   const shiftHeldRef = useRef(false)
@@ -71,17 +78,29 @@ function RunItemRow({
   const isBulkContext = selected && selectedCount > 1
   const menuItems: RowActionMenuItem[] = isBulkContext
     ? [
-        {
-          label: `Assign ${selectedCount} selected…`,
-          icon: <UserPlusIcon className="size-4" aria-hidden="true" />,
-          onSelect: onAssignSelected,
-        },
+        ...(canRecord
+          ? [
+              {
+                label: `Assign ${selectedCount} selected…`,
+                icon: <UserPlusIcon className="size-4" aria-hidden="true" />,
+                onSelect: onAssignSelected,
+              } satisfies RowActionMenuItem,
+            ]
+          : []),
         ...bulkVerdictItems.map((verdictItem, index) => (index === 0 ? { ...verdictItem, dividerBefore: true } : verdictItem)),
       ]
     : [
         { label: 'Open execution', icon: <ArrowRightIcon className="size-4" aria-hidden="true" />, onSelect: onOpenExecution },
         { label: 'Go to case in Library', icon: <ExternalLinkIcon className="size-4" aria-hidden="true" />, onSelect: onGoToCase },
-        { label: 'Assign to…', icon: <UserPlusIcon className="size-4" aria-hidden="true" />, onSelect: onAssign },
+        ...(canRecord
+          ? [
+              {
+                label: 'Assign to…',
+                icon: <UserPlusIcon className="size-4" aria-hidden="true" />,
+                onSelect: onAssign,
+              } satisfies RowActionMenuItem,
+            ]
+          : []),
       ]
 
   return (
@@ -166,8 +185,12 @@ export default function RunPage() {
   const { runKey } = useParams<{ runKey: string }>()
   const navigate = useNavigate()
   const location = useLocation()
+  const { user, loading: authLoading } = useAuth()
   const [run, setRun] = useState<Run>()
   const [notFound, setNotFound] = useState(false)
+  // Resolved by load()'s own run fetch (design.md D11) — a signed-in
+  // non-member ends up 'public' here, same as an anonymous visitor.
+  const [access, setAccess] = useState<'member' | 'public'>('public')
   const [project, setProject] = useState<Project>()
   const [suite, setSuite] = useState<Suite>()
   const [items, setItems] = useState<RunItem[]>([])
@@ -197,14 +220,50 @@ export default function RunPage() {
   }, [])
 
   const load = useCallback(async () => {
-    if (!runKey) return
+    // Waits for the session check before firing either branch (design.md
+    // D2, unify-authenticated-and-public-views).
+    if (!runKey || authLoading) return
     setNotFound(false)
     try {
-      const [{ data: r }, { data: i }, { data: s }] = await Promise.all([
-        api.GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } }),
-        api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
-        api.GET('/api/v1/runs/{runKey}/summary', { params: { path: { runKey } } }),
-      ])
+      let r, i, s
+      let resolvedAccess: 'member' | 'public' = 'public'
+      if (user) {
+        const [runRes, itemsRes, summaryRes] = await Promise.all([
+          api.GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } }),
+          api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
+          api.GET('/api/v1/runs/{runKey}/summary', { params: { path: { runKey } } }),
+        ])
+        if (runRes.data) {
+          r = runRes.data
+          i = itemsRes.data
+          s = summaryRes.data
+          resolvedAccess = 'member'
+        } else {
+          // Signed in but not a member (403) or the run doesn't exist
+          // (404) — retry via the public branch before giving up
+          // (design.md D11), the same fallback RunItemDetailPage uses:
+          // projectKey isn't known until the run itself loads, so this
+          // page can't pre-check access via useProjectReadAccess.
+          const [pubRun, pubItems, pubSummary] = await Promise.all([
+            api.GET('/api/v1/public/runs/{runKey}', { params: { path: { runKey } } }),
+            api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey } } }),
+            api.GET('/api/v1/public/runs/{runKey}/summary', { params: { path: { runKey } } }),
+          ])
+          r = pubRun.data
+          i = pubItems.data
+          s = pubSummary.data
+        }
+      } else {
+        const [pubRun, pubItems, pubSummary] = await Promise.all([
+          api.GET('/api/v1/public/runs/{runKey}', { params: { path: { runKey } } }),
+          api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey } } }),
+          api.GET('/api/v1/public/runs/{runKey}/summary', { params: { path: { runKey } } }),
+        ])
+        r = pubRun.data
+        i = pubItems.data
+        s = pubSummary.data
+      }
+      setAccess(resolvedAccess)
       if (!r) {
         setNotFound(true)
         return
@@ -215,28 +274,30 @@ export default function RunPage() {
     } catch {
       setItems([])
     }
-  }, [runKey])
+  }, [runKey, user, authLoading])
 
   const projectKey = run?.projectKey
+  const permissions = useProjectPermissions(projectKey)
+  const canRecord = Boolean(permissions?.runRecordResult)
   useEffect(() => {
-    if (!projectKey) return
-    api
-      .GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
-      .then(({ data }) => setProject(data))
-      .catch(() => setProject(undefined))
-  }, [projectKey])
+    if (!projectKey || authLoading) return
+    const request = access === 'member'
+      ? api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } })
+      : api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } })
+    request.then(({ data }) => setProject(data)).catch(() => setProject(undefined))
+  }, [projectKey, access, authLoading])
 
   const suiteKey = run?.suiteKey
   useEffect(() => {
-    if (!suiteKey) {
-      setSuite(undefined)
+    if (!suiteKey || authLoading) {
+      if (!suiteKey) setSuite(undefined)
       return
     }
-    api
-      .GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } })
-      .then(({ data }) => setSuite(data))
-      .catch(() => setSuite(undefined))
-  }, [suiteKey])
+    const request = access === 'member'
+      ? api.GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } })
+      : api.GET('/api/v1/public/suites/{suiteKey}', { params: { path: { suiteKey } } })
+    request.then(({ data }) => setSuite(data)).catch(() => setSuite(undefined))
+  }, [suiteKey, access, authLoading])
 
   useEffect(() => {
     void load()
@@ -384,7 +445,7 @@ export default function RunPage() {
   }
 
   const verdictMenuItems: RowActionMenuItem[] =
-    run?.status === 'open'
+    run?.status === 'open' && canRecord
       ? (['pass', 'failed', 'blocked', 'skipped'] as const).map((verdict) => ({
           label: STATUS_LABEL[verdict],
           icon: <span className={`size-2 rounded-full ${dotClass[verdict]}`} aria-hidden="true" />,
@@ -393,7 +454,7 @@ export default function RunPage() {
       : []
 
   const bulkActions: BulkAction[] = [
-    { kind: 'button', label: 'Assign selected…', onSelect: handleAssignSelected },
+    ...(canRecord ? ([{ kind: 'button', label: 'Assign selected…', onSelect: handleAssignSelected }] satisfies BulkAction[]) : []),
     ...(verdictMenuItems.length > 0 ? ([{ kind: 'menu', label: 'Mark as', items: verdictMenuItems }] satisfies BulkAction[]) : []),
   ]
 
@@ -401,6 +462,15 @@ export default function RunPage() {
     return (
       <p className="text-sm text-muted-foreground">
         Run not found. <Link to="/" className="underline">Go to Projects</Link>
+        {!user && !authLoading && (
+          <>
+            {' '}
+            ·{' '}
+            <Link to="/login" state={{ from: `/runs/${runKey}` }} className="underline">
+              Log in
+            </Link>
+          </>
+        )}
       </p>
     )
   }
@@ -427,15 +497,17 @@ export default function RunPage() {
             {run && (
               <div className="flex items-center gap-2">
                 <Badge variant={run.status === 'open' ? 'secondary' : 'outline'}>{run.status}</Badge>
-                {run.status === 'open' ? (
-                  <Button size="sm" variant="outline" disabled={isClosing} onClick={() => void closeRun()}>
-                    {isClosing ? 'Closing…' : 'Close run'}
-                  </Button>
-                ) : (
-                  <Button size="sm" variant="outline" disabled={isReopening} onClick={() => void reopenRun()}>
-                    {isReopening ? 'Reopening…' : 'Reopen'}
-                  </Button>
-                )}
+                {run.status === 'open'
+                  ? canRecord && (
+                      <Button size="sm" variant="outline" disabled={isClosing} onClick={() => void closeRun()}>
+                        {isClosing ? 'Closing…' : 'Close run'}
+                      </Button>
+                    )
+                  : permissions?.manageProject && (
+                      <Button size="sm" variant="outline" disabled={isReopening} onClick={() => void reopenRun()}>
+                        {isReopening ? 'Reopening…' : 'Reopen'}
+                      </Button>
+                    )}
               </div>
             )}
           </div>
@@ -573,6 +645,7 @@ export default function RunPage() {
                           onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                           onAssignSelected={handleAssignSelected}
                           bulkVerdictItems={verdictMenuItems}
+                          canRecord={canRecord}
                         />
                       ))}
                     </ul>
@@ -596,6 +669,7 @@ export default function RunPage() {
                   onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                   onAssignSelected={handleAssignSelected}
                   bulkVerdictItems={verdictMenuItems}
+                  canRecord={canRecord}
                 />
               ))}
             </ul>

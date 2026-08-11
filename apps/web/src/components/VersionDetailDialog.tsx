@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import { diffContent } from '@/lib/versionDiff'
 import { ContentDiffView } from '@/components/ContentDiffView'
+import type { ProjectReadAccess } from '@/lib/useProjectPermissions'
 import type { components } from '@testpulse/shared/api'
 
 type CaseVersion = components['schemas']['CaseVersion']
@@ -26,17 +27,29 @@ type Props = {
   caseKey: string
   version: number
   versions: CaseVersion[]
+  // The parent CaseDetailPage's own useProjectReadAccess result, passed
+  // down rather than re-derived here — avoids a second, redundant
+  // /permissions fetch for the same decision (design.md D11).
+  access: ProjectReadAccess
 }
 
-export function VersionDetailDialog({ open, onOpenChange, caseKey, version, versions }: Props) {
+export function VersionDetailDialog({ open, onOpenChange, caseKey, version, versions, access }: Props) {
   const [executions, setExecutions] = useState<CaseExecution[]>([])
 
   useEffect(() => {
-    if (!open) return
-    void api.GET('/api/v1/cases/{caseKey}/executions', { params: { path: { caseKey } } }).then(({ data }) => {
+    // Waits for the session check and confirmed project read access before
+    // firing either branch — see design.md D2/D11
+    // (unify-authenticated-and-public-views). A signed-in non-member reads
+    // the public endpoint here too, exactly like an anonymous visitor.
+    if (!open || access === 'loading') return
+    const request =
+      access === 'member'
+        ? api.GET('/api/v1/cases/{caseKey}/executions', { params: { path: { caseKey } } })
+        : api.GET('/api/v1/public/cases/{caseKey}/executions', { params: { path: { caseKey } } })
+    void request.then(({ data }) => {
       setExecutions(data ?? [])
     })
-  }, [open, caseKey])
+  }, [open, caseKey, access])
 
   const current = versions.find((v) => v.version === version)
   const previous = versions.find((v) => v.version === version - 1)

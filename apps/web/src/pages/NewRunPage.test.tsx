@@ -29,7 +29,28 @@ const folders = [{ id: 'root', name: 'Library', projectId: 'p1', parentFolderId:
 
 const smokeSuite = { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null, lastRunAt: null }
 
-function mockNewRunAPI(cases: unknown[] = [], suites: unknown[] = [], createdItems: unknown[] = []) {
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
+// permissions: pass `null` (not `undefined` — a default parameter value
+// would silently override it) to simulate no permissions data at all.
+function mockNewRunAPI(
+  cases: unknown[] = [],
+  suites: unknown[] = [],
+  createdItems: unknown[] = [],
+  permissions: unknown = fullPermissions,
+) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({
@@ -48,6 +69,8 @@ function mockNewRunAPI(cases: unknown[] = [], suites: unknown[] = [], createdIte
         response: { ok: true },
       })
     if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/permissions')
+      return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -257,5 +280,18 @@ describe('NewRunPage', () => {
 
     await screen.findByTestId('location-probe')
     expect(mockPUT).not.toHaveBeenCalled()
+  })
+
+  // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+  // tasks.md 2.8): this whole page is a create-run form — an authenticated
+  // user who navigates here directly without runCreate must see a
+  // permission-denied message instead of the form, not just a disabled
+  // submit button.
+  it('shows a permission-denied message instead of the form for a caller lacking runCreate', async () => {
+    mockNewRunAPI([caseA], [], [], { ...fullPermissions, runCreate: false })
+    renderNewRun()
+    expect(await screen.findByText(/don.t have permission/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create run/i })).not.toBeInTheDocument()
   })
 })

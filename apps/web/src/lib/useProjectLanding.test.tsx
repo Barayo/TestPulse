@@ -18,7 +18,7 @@ describe('useProjectLanding abort behaviour', () => {
       return new Promise(() => {}) // never resolves
     })
 
-    const { unmount } = renderHook(() => useProjectLanding('p1'))
+    const { unmount } = renderHook(() => useProjectLanding('p1', true, false))
 
     await waitFor(() => expect(abortedSignals.length).toBeGreaterThan(0))
     unmount()

@@ -26,53 +26,86 @@ const caseInOnboarding = {
   createdAt: '',
 }
 
-function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}) {
+const authenticatedUser = { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }
+
+// A Tenant Admin always passes requirePermission's bypass server-side
+// regardless of membership, so /permissions always succeeds for them in
+// practice — this default mirrors that for the mock, and matters now
+// that useProjectReadAccess (design.md D11) reads the same endpoint to
+// decide the dual-mode branch, not just optional UI-control gating.
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
+// anonymous: true simulates no session — reads from /api/v1/public/...
+// instead (unify-authenticated-and-public-views tasks.md 10.1). The
+// authenticated-only /api/v1/projects, /api/v1/projects/summaries, and
+// /permissions endpoints are never given anonymous branches (no public
+// equivalent exists / is needed — see design.md D2 note on
+// useProjectSummaries and D4 on useProjectPermissions); anonymous requests
+// simply fall through to the default `[]` stub below, same as every other
+// migrated page's test file.
+function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonymous = false) {
+  const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+  const foldersPath = anonymous ? '/api/v1/public/projects/{projectKey}/folders' : '/api/v1/projects/{projectKey}/folders'
+  const casesPath = anonymous ? '/api/v1/public/projects/{projectKey}/cases' : '/api/v1/projects/{projectKey}/cases'
+  const suitesPath = anonymous ? '/api/v1/public/projects/{projectKey}/suites' : '/api/v1/projects/{projectKey}/suites'
+  const runsPath = anonymous ? '/api/v1/public/projects/{projectKey}/runs' : '/api/v1/projects/{projectKey}/runs'
+  const runSummaryPath = anonymous ? '/api/v1/public/runs/{runKey}/summary' : '/api/v1/runs/{runKey}/summary'
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me')
-      return Promise.resolve({
-        data: overrides.me ?? { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true },
-        response: { ok: true },
-      })
-    if (path === '/api/v1/projects/{projectKey}')
+      return anonymous
+        ? Promise.resolve({ data: undefined, response: { ok: false } })
+        : Promise.resolve({ data: overrides.me ?? authenticatedUser, response: { ok: true } })
+    if (path === projectPath)
       return Promise.resolve({
         data: overrides.project ?? { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, description: '', createdAt: '' },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects')
+    if (!anonymous && path === '/api/v1/projects')
       return Promise.resolve({
         data: overrides.projects ?? [{ id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' }],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/summaries')
+    if (!anonymous && path === '/api/v1/projects/summaries')
       return Promise.resolve({
         data: overrides.summaries ?? [
           { projectId: 'p1', suiteCount: 1, caseCount: 1, passRate: 100, lastRunAt: '2026-01-01T00:00:00Z', isFavorite: false },
         ],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}/folders')
+    if (path === foldersPath)
       return Promise.resolve({ data: overrides.folders ?? [rootFolder, onboarding], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/cases')
-      return Promise.resolve({ data: overrides.cases ?? [caseInOnboarding], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/suites')
+    if (path === casesPath) return Promise.resolve({ data: overrides.cases ?? [caseInOnboarding], response: { ok: true } })
+    if (path === suitesPath)
       return Promise.resolve({
         data: overrides.suites ?? [
           { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null },
         ],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}/runs')
+    if (path === runsPath)
       return Promise.resolve({
         data: overrides.runs ?? [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z' }],
         response: { ok: true },
       })
-    if (path === '/api/v1/runs/{runKey}/summary')
+    if (path === runSummaryPath)
       return Promise.resolve({
         data: overrides.runSummary ?? { runId: 'r1', total: 2, counts: { pass: 2 } },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}/permissions')
-      return Promise.resolve({ data: overrides.permissions, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
+      return Promise.resolve({ data: overrides.permissions ?? fullPermissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -89,6 +122,7 @@ function renderWithRoutes(extraRoutes?: ReactNode, switcherProjects: SwitcherPro
           <ProjectSwitcherProvider projects={switcherProjects} onSelectProject={() => {}}>
             <Routes>
               <Route path="/projects/:projectKey" element={<ProjectPage />} />
+              <Route path="/login" element={<p>login stub</p>} />
               {extraRoutes}
             </Routes>
           </ProjectSwitcherProvider>
@@ -565,5 +599,152 @@ describe('ProjectPage landing', () => {
       await userEvent.click(await screen.findByText('Small'))
       expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
     })
+  })
+})
+
+// Dual-mode migration (unify-authenticated-and-public-views tasks.md
+// group 10).
+describe('anonymous / dual-mode', () => {
+  it('fetches project metadata and landing data from the public API when there is no session', async () => {
+    mockProjectAPI({}, true)
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    await screen.findByText('Onboarding')
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/folders', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/cases', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/suites', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/runs', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/runs/{runKey}/summary', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+  })
+
+  it('shows the identical summary strip and Library/Suites/Runs panels an authenticated member sees, with Members/Settings and the switcher chevron absent', async () => {
+    const secondCase = { ...caseInOnboarding, id: 'c2' }
+    mockProjectAPI({ cases: [caseInOnboarding, secondCase] }, true)
+    renderProject()
+    await screen.findByText('Healthy', { selector: 'span' })
+    const strip = within(screen.getByTestId('summary-strip'))
+    expect(strip.getByText('1')).toBeInTheDocument()
+    expect(strip.getByText('Suites')).toBeInTheDocument()
+    expect(strip.getByText('2')).toBeInTheDocument()
+    expect(strip.getByText('Cases')).toBeInTheDocument()
+    expect(await screen.findByText('Onboarding')).toBeInTheDocument()
+    expect(screen.getByText('Smoke')).toBeInTheDocument()
+    expect(screen.getByText('Sprint 1')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /members/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /settings/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /switch project/i })).not.toBeInTheDocument()
+  })
+
+  it('fires no request while the session check is still in flight', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderProject()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+  })
+
+  it('shows a "Log in" link on the not-found state for an anonymous visitor', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/projects/{projectKey}')
+        return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    renderProject()
+    expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
+    const loginLink = screen.getByRole('link', { name: /log in/i })
+    expect(loginLink).toHaveAttribute('href', '/login')
+  })
+})
+
+// design.md D11: a signed-in user with no membership on a public
+// project gets 403 from every authenticated route (including
+// /permissions, which useProjectReadAccess itself checks) — the page
+// must fall back to the public branch instead of showing "not found",
+// exactly like an anonymous visitor would see.
+describe('signed-in non-member (design.md D11)', () => {
+  it('falls back to the public API and renders the project instead of "not found"', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me')
+        return Promise.resolve({ data: { id: 'u1', email: 'member@example.com', isTenantAdmin: false }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/public/projects/{projectKey}/folders') return Promise.resolve({ data: [rootFolder, onboarding], response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/cases') return Promise.resolve({ data: [caseInOnboarding], response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/runs') return Promise.resolve({ data: [], response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderProject()
+    expect(await screen.findByRole('heading', { name: 'QA Platform' })).toBeInTheDocument()
+    expect(screen.queryByText(/project not found/i)).not.toBeInTheDocument()
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+  })
+
+  // The fallback's failure mode: a signed-in non-member on a project that
+  // is genuinely private (never public) must still see "not found" — the
+  // public-branch retry fails exactly like it would for an anonymous
+  // visitor, not silently granted access some other way.
+  it('shows "not found" for a signed-in non-member on a private project, the same as an anonymous visitor', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me')
+        return Promise.resolve({ data: { id: 'u1', email: 'member@example.com', isTenantAdmin: false }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/projects/{projectKey}')
+        return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderProject()
+    expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
+    // Already signed in — must not offer a redundant "Log in" link.
+    expect(screen.queryByRole('link', { name: /log in/i })).not.toBeInTheDocument()
+  })
+})
+
+// Regression check for the loading-race fix (unify-authenticated-and-public-views
+// design.md D2, tasks.md 15.3): before RequireAuth stopped wrapping this
+// route, its `if (loading) return null` guaranteed this page never even
+// mounted until the session check resolved. Once ProjectPage resolves its
+// own access (D3), a signed-in member hard-refreshing a private project's
+// URL must still never see a "not found" flash during the window where
+// `useAuth()`'s `loading` is still `true` — component-level here rather
+// than a full E2E run, since it exercises exactly the same race the unit
+// tests above already prove `load()` waits on, just asserted end-to-end
+// through a real render.
+describe('loading-race regression (D2)', () => {
+  it('never shows "Project not found" while the session check is still resolving, for a project the caller can actually read', async () => {
+    let resolveMe!: (v: { data: unknown; response: { ok: boolean } }) => void
+    const mePromise = new Promise((resolve) => {
+      resolveMe = resolve
+    })
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return mePromise
+      if (path === '/api/v1/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    renderProject()
+
+    // Still resolving — must not have jumped to "not found" in the meantime.
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(screen.queryByText(/project not found/i)).not.toBeInTheDocument()
+
+    resolveMe({ data: authenticatedUser, response: { ok: true } })
+    expect(await screen.findByRole('heading', { name: 'QA Platform' })).toBeInTheDocument()
+    expect(screen.queryByText(/project not found/i)).not.toBeInTheDocument()
   })
 })

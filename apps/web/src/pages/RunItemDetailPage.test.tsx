@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import RunItemDetailPage from './RunItemDetailPage'
 import { api } from '@/lib/api'
+import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
@@ -47,18 +48,53 @@ function RunProbe() {
   return <p data-testid="run-probe">run {runKey ?? ''}</p>
 }
 
-function mockItemAPI(itemOverride?: unknown, runOverride?: unknown, results: unknown[] = [], itemsOverride?: unknown[]) {
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
+const authenticatedUser = { id: 'u1', email: 'admin@example.com', isTenantAdmin: false }
+
+// permissions: pass `null` (not `undefined` — a default parameter value
+// would silently override it) to simulate no permissions data at all.
+// anonymous: true simulates no session — reads from /api/v1/public/...
+// instead (unify-authenticated-and-public-views tasks.md 5.1).
+function mockItemAPI(
+  itemOverride?: unknown,
+  runOverride?: unknown,
+  results: unknown[] = [],
+  itemsOverride?: unknown[],
+  permissions: unknown = fullPermissions,
+  anonymous = false,
+) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
-    if (path === '/api/v1/runs/{runKey}/items')
-      return Promise.resolve({ data: itemsOverride ?? [itemOverride ?? item], response: { ok: true } })
-    if (path === '/api/v1/items/{itemId}/results')
-      return Promise.resolve({ data: results, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}')
+    if (path === '/api/v1/users/me')
+      return anonymous
+        ? Promise.resolve({ data: undefined, response: { ok: false } })
+        : Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+    const runPath = anonymous ? '/api/v1/public/runs/{runKey}' : '/api/v1/runs/{runKey}'
+    const itemsPath = anonymous ? '/api/v1/public/runs/{runKey}/items' : '/api/v1/runs/{runKey}/items'
+    const resultsPath = anonymous ? '/api/v1/public/items/{itemId}/results' : '/api/v1/items/{itemId}/results'
+    const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+    if (path === runPath) return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
+    if (path === itemsPath) return Promise.resolve({ data: itemsOverride ?? [itemOverride ?? item], response: { ok: true } })
+    if (path === resultsPath) return Promise.resolve({ data: results, response: { ok: true } })
+    if (path === projectPath)
       return Promise.resolve({
         data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
+    if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
+      return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
   })
 }
@@ -66,10 +102,13 @@ function mockItemAPI(itemOverride?: unknown, runOverride?: unknown, results: unk
 function renderPage(path = '/runs/r1/items/c1') {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/runs/:runKey/items/:caseKey" element={<RunItemDetailPage />} />
-        <Route path="/runs/:runKey" element={<RunProbe />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/runs/:runKey/items/:caseKey" element={<RunItemDetailPage />} />
+          <Route path="/runs/:runKey" element={<RunProbe />} />
+          <Route path="/login" element={<p>login stub</p>} />
+        </Routes>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -232,6 +271,7 @@ describe('RunItemDetailPage', () => {
 
   it('shows an Avatar for a user-attributed history entry, resolving their current avatarKey (add-user-profile)', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: [item], response: { ok: true } })
       if (path === '/api/v1/items/{itemId}/results')
@@ -352,6 +392,7 @@ describe('RunItemDetailPage', () => {
 
   it('shows a not-found message when the item does not exist', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: [], response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -565,6 +606,7 @@ describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
 describe('Assignment (add-run-item-assignment-ui)', () => {
   function mockAssignmentAPI(itemOverride?: unknown) {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}/items')
         return Promise.resolve({ data: [itemOverride ?? item], response: { ok: true } })
@@ -582,6 +624,8 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
           response: { ok: true },
         })
       if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: fullPermissions, response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: true } })
     })
   }
@@ -881,5 +925,155 @@ describe('screenshot attachments (add-run-item-screenshot-attachments)', () => {
     await screen.findByRole('heading', { name: 'Login works' })
 
     expect(screen.queryByRole('button', { name: /attach screenshot/i })).not.toBeInTheDocument()
+  })
+})
+
+// Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+// tasks.md 2.4): a caller without runRecordResult must not see any of the
+// verdict/retest/assign/attachment controls — since this page will also
+// render for anonymous visitors on a public project.
+describe('permission gating', () => {
+  it('hides verdict buttons, comment, attachment field, and Retest when the caller lacks runRecordResult', async () => {
+    mockItemAPI({ ...item, currentStatus: 'failed' }, undefined, [], undefined, { ...fullPermissions, runRecordResult: false })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    expect(screen.queryByRole('button', { name: /^pass$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^failed$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^blocked$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^skipped$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^retest$/i })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/comment/i)).not.toBeInTheDocument()
+  })
+
+  it('hides the Assign to… affordance when the caller lacks runRecordResult', async () => {
+    mockItemAPI(undefined, undefined, [], undefined, { ...fullPermissions, runRecordResult: false })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    expect(screen.queryByRole('button', { name: /assign to/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the per-result attach-screenshot affordance when the caller lacks runRecordResult', async () => {
+    mockItemAPI(undefined, undefined, [
+      { id: 'res1', runItemId: 'i1', actor: 'ana', actorKind: 'unknown', verdict: 'pass', comment: '', createdAt: '' },
+    ], undefined, { ...fullPermissions, runRecordResult: false })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    expect(screen.queryByRole('button', { name: /attach screenshot/i })).not.toBeInTheDocument()
+  })
+
+  it('excludes verdict-recording shortcuts from the shortcuts list, and ignores the keypress, when the caller lacks runRecordResult', async () => {
+    mockItemAPI(undefined, undefined, [], undefined, { ...fullPermissions, runRecordResult: false })
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    await userEvent.keyboard('p')
+    expect(mockPOST).not.toHaveBeenCalled()
+  })
+
+  it('shows the item read-only with no controls at all when the caller has no permissions', async () => {
+    mockItemAPI(undefined, undefined, [], undefined, null)
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    expect(screen.queryByRole('button', { name: /^pass$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /assign to/i })).not.toBeInTheDocument()
+  })
+})
+
+// Dual-mode migration (unify-authenticated-and-public-views tasks.md
+// group 5).
+describe('anonymous / dual-mode', () => {
+  it('fetches from the public API when there is no session, including the satellite project fetch', async () => {
+    mockItemAPI(undefined, undefined, [], undefined, undefined, true)
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/runs/{runKey}', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/runs/{runKey}/items', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/items/{itemId}/results', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/runs/{runKey}', expect.anything())
+  })
+
+  it('renders the identical run-item detail a member sees, with zero write controls', async () => {
+    mockItemAPI(undefined, undefined, [], undefined, undefined, true)
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    expect(screen.queryByRole('button', { name: /^pass$/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /assign to/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /attach screenshot/i })).not.toBeInTheDocument()
+  })
+
+  // D10: GET /api/v1/users has no public equivalent — result-history rows
+  // show no author avatar when anonymous, rather than exposing it.
+  it('never calls GET /api/v1/users when anonymous', async () => {
+    mockItemAPI(
+      undefined,
+      undefined,
+      [{ id: 'res1', runItemId: 'i1', actor: 'ana@example.com', actorKind: 'user', actorRefId: 'u-ana', verdict: 'pass', comment: '', createdAt: '' }],
+      undefined,
+      undefined,
+      true,
+    )
+    renderPage()
+    await screen.findByText(/ana@example.com/i)
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/users')
+  })
+
+  it('fires no request while the session check is still in flight', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderPage()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/runs/{runKey}', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/runs/{runKey}', expect.anything())
+  })
+
+  it('shows a "Log in" link alongside "Go to run" when an item is not found anonymously', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/runs/{runKey}/items') return Promise.resolve({ data: [], response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderPage()
+    expect(await screen.findByText(/item not found/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
+  })
+})
+
+// design.md D11: a signed-in user with no membership on a public
+// project's run gets 403 from GET /api/v1/runs/{runKey} (PermRead-gated)
+// — the page must retry via the public branch instead of showing "not
+// found", exactly like an anonymous visitor would see. Unlike
+// SuiteDetailPage/CaseDetailPage, projectKey isn't known until after the
+// run itself loads, so this page can't pre-check access via
+// useProjectReadAccess — it resolves access from the run fetch's own
+// outcome instead.
+describe('signed-in non-member (design.md D11)', () => {
+  it('falls back to the public API and renders the item instead of "not found"', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}' || path === '/api/v1/runs/{runKey}/items')
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+      if (path === '/api/v1/public/runs/{runKey}/items') return Promise.resolve({ data: [item], response: { ok: true } })
+      if (path === '/api/v1/public/items/{itemId}/results') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+          response: { ok: true },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderPage()
+    expect(await screen.findByText('Sprint 1')).toBeInTheDocument()
+    expect(screen.queryByText(/item not found/i)).not.toBeInTheDocument()
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/items/{itemId}/results', expect.anything())
+    // D10 must hold for a signed-in non-member exactly as it does for an
+    // anonymous visitor — GET /api/v1/users (the unscoped identity
+    // directory) must never fire on the public/non-member branch.
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/users')
   })
 })

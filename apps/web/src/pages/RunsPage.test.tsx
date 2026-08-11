@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import RunsPage from './RunsPage'
 import { api } from '@/lib/api'
+import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
@@ -30,14 +31,47 @@ function run(overrides: Partial<RunFixture> & { name: string }): RunFixture {
   }
 }
 
-function mockRunsAPI(runs: RunFixture[] = []) {
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
+const authenticatedUser = { id: 'u1', email: 'admin@example.com', isTenantAdmin: false }
+
+// read: true, everything else false — a real member's most restrictive
+// possible role (add-project-rbac fully-custom roles), not `null`/no
+// membership at all (design.md D11 distinguishes the two).
+const noPermissions = { ...fullPermissions, ...Object.fromEntries(Object.keys(fullPermissions).map((k) => [k, false])), read: true }
+
+// permissions: pass `null` (not `undefined` — a default parameter value
+// would silently override it) to simulate no permissions data at all.
+// anonymous: true simulates no session — reads from /api/v1/public/...
+// instead (unify-authenticated-and-public-views tasks.md 8.1).
+function mockRunsAPI(runs: RunFixture[] = [], permissions: unknown = fullPermissions, anonymous = false) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/projects/{projectKey}')
+    if (path === '/api/v1/users/me')
+      return anonymous
+        ? Promise.resolve({ data: undefined, response: { ok: false } })
+        : Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+    const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+    const runsPath = anonymous ? '/api/v1/public/projects/{projectKey}/runs' : '/api/v1/projects/{projectKey}/runs'
+    if (path === projectPath)
       return Promise.resolve({
         data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}/runs') return Promise.resolve({ data: runs, response: { ok: true } })
+    if (path === runsPath) return Promise.resolve({ data: runs, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
+      return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -45,9 +79,12 @@ function mockRunsAPI(runs: RunFixture[] = []) {
 function renderRuns() {
   return render(
     <MemoryRouter initialEntries={['/projects/p1/runs']}>
-      <Routes>
-        <Route path="/projects/:projectKey/runs" element={<RunsPage />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/projects/:projectKey/runs" element={<RunsPage />} />
+          <Route path="/login" element={<p>login stub</p>} />
+        </Routes>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -146,11 +183,85 @@ describe('RunsPage', () => {
 
   it('shows a not-found message instead of an empty, interactive project when the project does not exist', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderRuns()
     expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
+  })
+
+  // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+  // tasks.md 2.7): a caller without runCreate must not see "+ New run" at
+  // all — not disabled, absent — since this page will also render for
+  // anonymous visitors on a public project.
+  it('hides "+ New run" (both the header and empty-state buttons) for a caller lacking runCreate', async () => {
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })], { ...fullPermissions, runCreate: false })
+    renderRuns()
+    await screen.findByRole('link', { name: /sprint 1/i })
+    expect(screen.queryByRole('link', { name: /\+ new run/i })).not.toBeInTheDocument()
+  })
+
+  it('hides the empty-state "+ New run" CTA for a caller with no permissions', async () => {
+    mockRunsAPI([], noPermissions)
+    renderRuns()
+    await screen.findByText(/no runs yet/i)
+    expect(screen.queryByRole('link', { name: /\+ new run/i })).not.toBeInTheDocument()
+  })
+})
+
+// Dual-mode migration (unify-authenticated-and-public-views tasks.md
+// group 8).
+describe('anonymous / dual-mode', () => {
+  it('fetches from the public API when there is no session', async () => {
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })], undefined, true)
+    renderRuns()
+    await screen.findByRole('link', { name: /sprint 1/i })
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/runs', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+  })
+
+  it('renders the full runs list with zero "+ New run" affordance', async () => {
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })], undefined, true)
+    renderRuns()
+    await screen.findByRole('link', { name: /sprint 1/i })
+    expect(screen.queryByRole('link', { name: /\+ new run/i })).not.toBeInTheDocument()
+  })
+
+  it('fires no request while the session check is still in flight', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderRuns()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+  })
+})
+
+// design.md D11: a signed-in user with no membership on a public
+// project gets 403 from every authenticated route (including
+// /permissions, which useProjectReadAccess itself checks) — the page
+// must fall back to the public branch instead of showing "not found",
+// exactly like an anonymous visitor would see.
+describe('signed-in non-member (design.md D11)', () => {
+  it('falls back to the public API and renders the runs instead of "not found"', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/projects/{projectKey}')
+        return Promise.resolve({ data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/runs')
+        return Promise.resolve({ data: [run({ name: 'Sprint 1', status: 'open' })], response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderRuns()
+    expect(await screen.findByRole('link', { name: /sprint 1/i })).toBeInTheDocument()
+    expect(screen.queryByText(/not found/i)).not.toBeInTheDocument()
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
   })
 })

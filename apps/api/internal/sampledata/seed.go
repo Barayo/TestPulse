@@ -53,9 +53,12 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	}
 	// The Sample Project is the product's showroom (CLAUDE.md's standing
 	// rule) — marking it public (enable-public-project-access) makes it
-	// genuinely reachable at /public/{key} without an account, closing the
-	// gap where docs/getting-started.md's quickstart implied a fresh visit
-	// was browsable pre-login when RequireAuth actually blocked every route.
+	// genuinely reachable at /projects/{key} without an account (unified
+	// with the authenticated view, unify-authenticated-and-public-views),
+	// and since it's the only public project on a fresh install, visiting
+	// `/` with no session redirects straight to it — closing the gap where
+	// docs/getting-started.md's quickstart implied a fresh visit was
+	// browsable pre-login when RequireAuth actually blocked every route.
 	publicAccess := true
 	if _, err := svc.UpdateProject(ctx, p.ID, service.ProjectUpdate{PublicAccess: &publicAccess}); err != nil {
 		return fmt.Errorf("sampledata: marking project public: %w", err)

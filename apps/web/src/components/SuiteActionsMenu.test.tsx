@@ -29,6 +29,20 @@ const smokeSuite = {
   lastRunAt: '2026-07-25T10:00:00Z',
 }
 
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
 function renderMenu(props: Partial<React.ComponentProps<typeof SuiteActionsMenu>> = {}) {
   return render(
     <MemoryRouter>
@@ -38,6 +52,7 @@ function renderMenu(props: Partial<React.ComponentProps<typeof SuiteActionsMenu>
         variant="buttons"
         navigate={navigate}
         onChanged={vi.fn()}
+        permissions={fullPermissions}
         {...props}
       />
     </MemoryRouter>,
@@ -183,12 +198,55 @@ describe('SuiteActionsMenu', () => {
             variant="menu"
             navigate={navigate}
             onChanged={vi.fn()}
+            permissions={fullPermissions}
           />
         </MemoryRouter>,
       )
       expect(screen.queryByRole('menuitem', { name: /rename/i })).not.toBeInTheDocument()
       ref.current?.openAt(100, 100)
       expect(await screen.findByRole('menuitem', { name: /rename/i })).toBeInTheDocument()
+    })
+  })
+
+  // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+  // tasks.md 2.1): Run suite/Rename/Delete must be hidden — not merely
+  // disabled — for a caller lacking the matching permission flag, since
+  // this component is shared by SuiteDetailPage and SuitesPage, both of
+  // which will render for anonymous visitors with no permissions at all.
+  describe('permission gating', () => {
+    it('hides Run suite when the caller lacks runCreate, in both variants', () => {
+      renderMenu({ variant: 'buttons', permissions: { ...fullPermissions, runCreate: false } })
+      expect(screen.queryByRole('button', { name: /run suite/i })).not.toBeInTheDocument()
+    })
+
+    it('hides Rename when the caller lacks suiteEditMembership', () => {
+      renderMenu({ variant: 'buttons', permissions: { ...fullPermissions, suiteEditMembership: false } })
+      expect(screen.queryByRole('button', { name: /rename/i })).not.toBeInTheDocument()
+    })
+
+    it('hides Delete when the caller lacks manageProject', () => {
+      renderMenu({ variant: 'buttons', permissions: { ...fullPermissions, manageProject: false } })
+      expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument()
+    })
+
+    it('renders no actions at all, and no "buttons" wrapper, when permissions is undefined', () => {
+      renderMenu({ variant: 'buttons', permissions: undefined })
+      expect(screen.queryByRole('button', { name: /run suite/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /rename/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument()
+    })
+
+    it('menu variant: omits the corresponding item when a flag is missing', async () => {
+      renderMenu({ variant: 'menu', permissions: { ...fullPermissions, manageProject: false } })
+      await userEvent.click(screen.getByRole('button', { name: /actions for smoke/i }))
+      expect(screen.getByRole('menuitem', { name: /run suite/i })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: /rename/i })).toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: /delete/i })).not.toBeInTheDocument()
+    })
+
+    it('menu variant: renders no trigger at all when every flag is missing', () => {
+      renderMenu({ variant: 'menu', permissions: undefined })
+      expect(screen.queryByRole('button', { name: /actions for smoke/i })).not.toBeInTheDocument()
     })
   })
 })

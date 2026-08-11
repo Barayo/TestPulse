@@ -23,6 +23,15 @@ import (
 // those excluded paths (or any typo) gets the same "doesn't exist" 404 as
 // a genuinely private or nonexistent project — not the SPA fallback the
 // top-level router otherwise serves for any unmatched path.
+// listPublicProjects backs the anonymous discovery index
+// (add-public-project-discovery): every project that is both
+// instance-enabled and individually public, or an empty list — the
+// service layer never distinguishes "switch off" from "nothing published".
+func (h *api) listPublicProjects(w http.ResponseWriter, r *http.Request) {
+	projects, err := h.svc.ListPublicProjects(r.Context())
+	h.respond(w, http.StatusOK, projects, err)
+}
+
 func mountPublicAPI(r chi.Router, h *api) {
 	r.Route("/public", func(r chi.Router) {
 		notFound := func(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +40,7 @@ func mountPublicAPI(r chi.Router, h *api) {
 		r.NotFound(notFound)
 		r.MethodNotAllowed(func(w http.ResponseWriter, r *http.Request) { notFound(w, r) })
 
+		r.Get("/projects", h.listPublicProjects)
 		r.Route("/projects/{projectKey}", func(r chi.Router) {
 			r.Use(h.resolveKey("projectKey", h.svc.ProjectIDByKey))
 			r.With(h.requirePublicProject(projectIDParam)).Get("/", h.getProject)

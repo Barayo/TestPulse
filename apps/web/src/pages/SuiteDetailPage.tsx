@@ -11,6 +11,8 @@ import { HealthBar } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { useBumpDataRevision } from '@/lib/DataRevision'
+import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
+import { useAuth } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
 
 type TestCase = components['schemas']['TestCase']
@@ -34,6 +36,9 @@ export default function SuiteDetailPage() {
   const { projectKey, suiteKey } = useParams<{ projectKey: string; suiteKey: string }>()
   const navigate = useNavigate()
   const bumpLanding = useBumpDataRevision()
+  const permissions = useProjectPermissions(projectKey)
+  const { user, loading: authLoading } = useAuth()
+  const access = useProjectReadAccess(projectKey, user, authLoading)
 
   const [project, setProject] = useState<Project>()
   const [suite, setSuite] = useState<Suite>()
@@ -45,14 +50,29 @@ export default function SuiteDetailPage() {
   const [createdRunKey, setCreatedRunKey] = useState<string>()
 
   const load = useCallback(async () => {
-    if (!projectKey || !suiteKey) return
+    // Waits for the session check (and, per design.md D11, for confirmed
+    // project read access) to resolve before firing either branch —
+    // otherwise an authenticated member deep-linking here would transiently
+    // fetch the public endpoint during that window and could see a false
+    // "not found" before auth resolves (design.md D2). A signed-in
+    // non-member resolves to 'public' here (D11), not `!authLoading` alone,
+    // so they read a public project exactly like an anonymous visitor
+    // instead of hitting 403s.
+    if (!projectKey || !suiteKey || access === 'loading') return
     setNotFound(false)
-    const [{ data: p }, { data: c }, { data: f }, { data: s }] = await Promise.all([
-      api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } }),
-    ])
+    const [{ data: p }, { data: c }, { data: f }, { data: s }] = access === 'member'
+      ? await Promise.all([
+          api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } }),
+        ])
+      : await Promise.all([
+          api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/public/suites/{suiteKey}', { params: { path: { suiteKey } } }),
+        ])
     if (!p || !s) {
       setNotFound(true)
       return
@@ -61,7 +81,7 @@ export default function SuiteDetailPage() {
     setCases(c ?? [])
     setFolders(f ?? [])
     setSuite(s)
-  }, [projectKey, suiteKey])
+  }, [projectKey, suiteKey, access])
 
   useEffect(() => {
     void load()
@@ -110,6 +130,15 @@ export default function SuiteDetailPage() {
     return (
       <p className="text-sm text-muted-foreground">
         Suite not found. <Link to={`/projects/${projectKey}/suites`} className="underline">Go to Suites</Link>
+        {!user && !authLoading && (
+          <>
+            {' '}
+            ·{' '}
+            <Link to="/login" state={{ from: `/projects/${projectKey}/suites/${suiteKey}` }} className="underline">
+              Log in
+            </Link>
+          </>
+        )}
       </p>
     )
   }
@@ -153,6 +182,7 @@ export default function SuiteDetailPage() {
           commitLabel="Save changes"
           commitDisabled={!isDirty}
           onCommit={() => void handleSaveEdit()}
+          readOnly={!permissions?.suiteEditMembership}
         />
 
         <div
@@ -177,6 +207,7 @@ export default function SuiteDetailPage() {
               navigate={navigate}
               onChanged={load}
               onRunCreated={setCreatedRunKey}
+              permissions={permissions}
             />
           </CaseSidebarSection>
         </div>

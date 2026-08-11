@@ -54,12 +54,31 @@ const empty: ProjectLanding = {
 // suites by creation order with their case count, and the most recent runs
 // with a pass rate — all computed client-side from already-fetched project
 // data (design.md D4), capped to TOP_N so the landing stays glanceable.
-export function useProjectLanding(projectKey: string | undefined): ProjectLanding {
+//
+// `isMember`/`accessLoading` are passed in explicitly (rather than calling
+// useAuth()/useProjectReadAccess internally) so this hook stays usable
+// from a bare renderHook() with no AuthProvider wrapper (see
+// useProjectLanding.test.tsx) and so the dual-mode branch
+// (unify-authenticated-and-public-views design.md D2) is a literal,
+// visible fact of the call site, matching every other page's pattern.
+// Every dual-mode fetch effect must wait on `!accessLoading` before
+// firing either branch — otherwise a caller's first paint (while the
+// session check, or D11's confirmed-read-access check, is still in
+// flight) would transiently fire the wrong branch instead. `isMember`
+// used to be the raw `AuthUser | null` — narrowed to a boolean per D11,
+// since a signed-in non-member must take the public branch exactly like
+// an anonymous visitor, which the caller (ProjectPage) now resolves via
+// useProjectReadAccess before calling in.
+export function useProjectLanding(
+  projectKey: string | undefined,
+  isMember: boolean,
+  accessLoading: boolean,
+): ProjectLanding {
   const dataRevision = useDataRevision()
   const [landing, setLanding] = useState<ProjectLanding>(empty)
 
   useEffect(() => {
-    if (!projectKey) {
+    if (!projectKey || accessLoading) {
       setLanding(empty)
       return
     }
@@ -67,12 +86,21 @@ export function useProjectLanding(projectKey: string | undefined): ProjectLandin
     const controller = new AbortController()
     const signal = controller.signal
 
-    void Promise.all([
-      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } }, signal }),
-      api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } }, signal }),
-      api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } }, signal }),
-      api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } }, signal }),
-    ])
+    void Promise.all(
+      isMember
+        ? [
+            api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } }, signal }),
+            api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } }, signal }),
+            api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } }, signal }),
+            api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } }, signal }),
+          ]
+        : [
+            api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } }, signal }),
+            api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey } }, signal }),
+            api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } }, signal }),
+            api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } }, signal }),
+          ],
+    )
       .then(async ([foldersRes, casesRes, suitesRes, runsRes]) => {
         const folders = foldersRes.data ?? []
         const cases = casesRes.data ?? []
@@ -127,10 +155,9 @@ export function useProjectLanding(projectKey: string | undefined): ProjectLandin
           .slice(0, TOP_N)
         const landingRuns: LandingRun[] = await Promise.all(
           recentRuns.map(async (r) => {
-            const { data: summary } = await api.GET('/api/v1/runs/{runKey}/summary', {
-              params: { path: { runKey: r.key } },
-              signal,
-            })
+            const { data: summary } = isMember
+              ? await api.GET('/api/v1/runs/{runKey}/summary', { params: { path: { runKey: r.key } }, signal })
+              : await api.GET('/api/v1/public/runs/{runKey}/summary', { params: { path: { runKey: r.key } }, signal })
             const total = summary?.total ?? 0
             const passCount = summary?.counts.pass ?? 0
             const passRate = total > 0 ? Math.round((passCount / total) * 100) : null
@@ -159,7 +186,7 @@ export function useProjectLanding(projectKey: string | undefined): ProjectLandin
       cancelled = true
       controller.abort()
     }
-  }, [projectKey, dataRevision])
+  }, [projectKey, dataRevision, isMember, accessLoading])
 
   return landing
 }

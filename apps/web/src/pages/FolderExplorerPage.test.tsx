@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import FolderExplorerPage from './FolderExplorerPage'
 import { api } from '@/lib/api'
+import { AuthProvider } from '@/lib/useAuth'
 
 // jsdom has no real drag-and-drop; the standard pattern is driving the
 // handlers directly with a minimal DataTransfer stub.
@@ -63,22 +64,37 @@ const limitCase = {
   createdAt: '',
 }
 
+const authenticatedUser = { id: 'u1', email: 'admin@example.com', isTenantAdmin: false }
+
+// overrides.anonymous: true simulates no session — reads from
+// /api/v1/public/... instead (unify-authenticated-and-public-views
+// tasks.md 9.1).
 function mockExplorerAPI(overrides: Partial<Record<string, unknown>> = {}) {
+  const anon = Boolean(overrides.anonymous)
   mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
-    if (path === '/api/v1/projects/{projectKey}')
+    if (path === '/api/v1/users/me')
+      return anon
+        ? Promise.resolve({ data: undefined, response: { ok: false } })
+        : Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+    const projectPath = anon ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+    const foldersPath = anon ? '/api/v1/public/projects/{projectKey}/folders' : '/api/v1/projects/{projectKey}/folders'
+    const casesPath = anon ? '/api/v1/public/projects/{projectKey}/cases' : '/api/v1/projects/{projectKey}/cases'
+    const suitesPath = anon ? '/api/v1/public/projects/{projectKey}/suites' : '/api/v1/projects/{projectKey}/suites'
+    const flakyPath = anon ? '/api/v1/public/projects/{projectKey}/flaky-cases' : '/api/v1/projects/{projectKey}/flaky-cases'
+    if (path === projectPath)
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/folders')
+    if (path === foldersPath)
       return Promise.resolve({ data: overrides.folders ?? [root, transferencias, nacionales], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/cases')
+    if (path === casesPath)
       return Promise.resolve({ data: overrides.cases ?? [limitCase], response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/suites')
+    if (path === suitesPath)
       return Promise.resolve({
         data: overrides.suites ?? [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}/permissions')
+    if (path === '/api/v1/projects/{projectKey}/permissions' && !anon)
       return Promise.resolve({ data: overrides.permissions ?? allPermissions, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/flaky-cases')
+    if (path === flakyPath)
       return Promise.resolve({ data: overrides.flakyCases ?? [], response: { ok: true } })
     if (path === '/api/v1/cases/{caseKey}/versions' && options?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
@@ -105,11 +121,14 @@ function CaseDetailProbe() {
 function renderExplorer(path = '/projects/p1/library/transferencias') {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
-        <Route path="/projects/:projectKey/library/:folderId" element={<FolderExplorerPage />} />
-        <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailProbe />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
+          <Route path="/projects/:projectKey/library/:folderId" element={<FolderExplorerPage />} />
+          <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailProbe />} />
+          <Route path="/login" element={<p>login stub</p>} />
+        </Routes>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -141,15 +160,18 @@ afterEach(() => {
 describe('FolderExplorerPage', () => {
   it('shows a not-found message instead of a blank/empty interactive page when the project does not exist or is not accessible', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     render(
       <MemoryRouter initialEntries={['/projects/p1/library']}>
-        <Routes>
-          <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
-        </Routes>
+        <AuthProvider>
+          <Routes>
+            <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
+          </Routes>
+        </AuthProvider>
       </MemoryRouter>,
     )
     expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
@@ -506,6 +528,38 @@ describe('FolderExplorerPage', () => {
       expect(within(folderRow).getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
     })
 
+    // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+    // tasks.md 2.9) — corrects an earlier false assumption that this page
+    // needed no retrofit: only Delete was actually gated.
+    it('hides "+ New section" without sectionCreate', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, sectionCreate: false } })
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('button', { name: /\+ new section/i })).not.toBeInTheDocument()
+    })
+
+    it('hides "+ New test case" without caseCreate', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, caseCreate: false } })
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('button', { name: /\+ new test case/i })).not.toBeInTheDocument()
+    })
+
+    it('omits "Move to…" from a case row\'s menu without caseEdit', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, caseEdit: false } })
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      expect(within(caseRow).queryByRole('menuitem', { name: /move to/i })).not.toBeInTheDocument()
+    })
+
+    it('hides the tree row\'s "New section in…" trigger without sectionCreate', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, sectionCreate: false } })
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('button', { name: /new section in nacionales/i })).not.toBeInTheDocument()
+    })
+
     it('deleting a case shows a confirmation naming it; canceling makes no request', async () => {
       mockExplorerAPI()
       renderExplorer()
@@ -841,6 +895,84 @@ describe('FolderExplorerPage', () => {
       ).closest('li') as HTMLElement
       await userEvent.pointer({ keys: '[MouseRight]', target: folderRow })
       expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+  })
+
+  // Dual-mode migration (unify-authenticated-and-public-views tasks.md
+  // group 9).
+  describe('anonymous / dual-mode', () => {
+    it('fetches from the public API when there is no session', async () => {
+      mockExplorerAPI({ anonymous: true })
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+      expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/folders', expect.anything())
+      expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/cases', expect.anything())
+      expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/suites', expect.anything())
+      expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/flaky-cases', expect.anything())
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+    })
+
+    it('renders the identical Library a member sees, with zero create/move/delete controls', async () => {
+      mockExplorerAPI({ anonymous: true })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      expect(screen.getByText('high')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /\+ new section/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /\+ new test case/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /new section in/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /actions for daily transfer limit/i })).not.toBeInTheDocument()
+    })
+
+    it('fires no request while the session check is still in flight', async () => {
+      mockGET.mockImplementation((path: string) => {
+        if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+        return Promise.resolve({ data: undefined, response: { ok: true } })
+      })
+      renderExplorer()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+    })
+
+    it('shows a "Log in" link alongside "Go to Projects" when a project is not found anonymously', async () => {
+      mockGET.mockImplementation((path: string) => {
+        if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+        if (path === '/api/v1/public/projects/{projectKey}')
+          return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+        return Promise.resolve({ data: undefined, response: { ok: true } })
+      })
+      renderExplorer()
+      expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
+    })
+  })
+
+  // design.md D11: a signed-in user with no membership on a public
+  // project gets 403 from every authenticated route (including
+  // /permissions, which useProjectReadAccess itself checks) — the page
+  // must fall back to the public branch instead of showing "not found",
+  // exactly like an anonymous visitor would see.
+  describe('signed-in non-member (design.md D11)', () => {
+    it('falls back to the public API and renders the Library instead of "not found"', async () => {
+      mockGET.mockImplementation((path: string) => {
+        if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+        if (path === '/api/v1/projects/{projectKey}/permissions')
+          return Promise.resolve({ data: undefined, response: { ok: false } })
+        if (path === '/api/v1/public/projects/{projectKey}')
+          return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/folders')
+          return Promise.resolve({ data: [root, transferencias, nacionales], response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/cases')
+          return Promise.resolve({ data: [limitCase], response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/flaky-cases') return Promise.resolve({ data: [], response: { ok: true } })
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      })
+      renderExplorer()
+      expect(await screen.findByText('Daily transfer limit')).toBeInTheDocument()
+      expect(screen.queryByText(/project not found/i)).not.toBeInTheDocument()
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
     })
   })
 })

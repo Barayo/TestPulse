@@ -67,12 +67,24 @@ A user's effective permissions on a project are the **union** of every role gran
 
 A Project Admin (a role with **Manage Project**) can flip **Public access**
 on for a project at `/projects/{key}/settings`, making its cases, sections,
-suites, runs, and results readable at a stable, unauthenticated URL —
-`/public/{key}` — by anyone with the link, no account required. It's off by
-default for every project. Nothing anonymous can be created, edited, or
-run — the public view has no write controls at all, only read access to
-the same content a member with Read permission sees, minus the project's
-membership list (never exposed anonymously).
+suites, runs, and results readable by anyone with the link, no account
+required. There's no separate public page or URL shape to know about: an
+anonymous visitor and a signed-in member browsing the same project see the
+same pages at the same URLs (`/projects/{key}`, its suites, runs, library,
+case, and run-item pages) — the only difference is that every write
+control (create, edit, delete, run, comment, assign) is simply absent for
+the anonymous visitor, the same way it's already absent for a member who
+lacks the matching permission. It's off by default for every project.
+Membership and everyone's exact identity stay hidden from anonymous
+visitors too: version and result history that would normally credit a
+specific person shows no name at all for them, rather than guessing or
+exposing one.
+
+Old `/public/{key}` links (from before this project's pages were unified)
+still work — they redirect straight to `/projects/{key}`, existence-blind:
+the redirect never checks whether the project exists or is public before
+firing, so it leaks nothing a direct visit to `/projects/{key}` wouldn't
+already reveal.
 
 A Tenant Admin can additionally disable the entire capability
 instance-wide at `/settings/instance` — a hard switch above every
@@ -83,8 +95,21 @@ it back on restores exactly what was public before, with no extra step).
 This exists for future multi-tenant hosting, where an operator may want to
 guarantee no project is ever public. On a normal single-tenant instance
 there is usually no reason to touch it — it's on by default, which is
-exactly what makes the seeded Sample Project's `/public/{key}` link work
-immediately after install (see [Getting Started](getting-started.md)).
+exactly what makes the seeded Sample Project reachable immediately after
+install (see [Getting Started](getting-started.md)).
+
+A visitor with no direct link finds every public project at the
+**root URL (`/`)** — the same page authenticated users land on after
+login, now also serving as the anonymous discovery surface, reachable
+from the login page's "Browse public projects without an account" link
+(shown only when the instance-wide switch above is on). With exactly one
+public project it redirects straight there; with several it shows a card
+per project (name, description, and a Sample badge where it applies);
+with none, a plain "no public projects" message, indistinguishable from
+the instance-wide switch being off — the same non-disclosure stance every
+individual project's page already takes. Logging in from any project page
+returns the visitor to that same page, now authenticated, instead of
+always landing on the projects root.
 
 ## Projects
 

@@ -14,7 +14,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useBumpDataRevision } from '@/lib/DataRevision'
-import { useProjectPermissions } from '@/lib/useProjectPermissions'
+import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
+import { useAuth } from '@/lib/useAuth'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
 
@@ -151,6 +152,7 @@ function CaseRow({
   onOpen,
   onDragStart,
   onMoveTo,
+  canMove,
   canDelete,
   onRequestDelete,
 }: {
@@ -165,12 +167,21 @@ function CaseRow({
   onOpen: () => void
   onDragStart: (e: DragEvent) => void
   onMoveTo: () => void
+  canMove: boolean
   canDelete: boolean
   onRequestDelete: () => void
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
   const items: RowActionMenuItem[] = [
-    { label: 'Move to…', icon: <FolderInputIcon className="size-4" aria-hidden="true" />, onSelect: onMoveTo },
+    ...(canMove
+      ? [
+          {
+            label: 'Move to…',
+            icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
+            onSelect: onMoveTo,
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
     ...(canDelete
       ? [
           {
@@ -219,7 +230,9 @@ function CaseRow({
       <span className="shrink-0 text-xs text-muted-foreground">
         {isStale(testCase.updatedAt) ? <StalePill /> : timeAgo(testCase.updatedAt)}
       </span>
-      <RowActionMenu ref={menuRef} label={`Actions for ${testCase.content.title}`} items={items} />
+      {items.length > 0 && (
+        <RowActionMenu ref={menuRef} label={`Actions for ${testCase.content.title}`} items={items} />
+      )}
     </li>
   )
 }
@@ -252,17 +265,31 @@ export default function FolderExplorerPage() {
   const [searchEntireLibrary, setSearchEntireLibrary] = useState(false)
 
   const permissions = useProjectPermissions(projectKey)
+  const { user, loading: authLoading } = useAuth()
+  const access = useProjectReadAccess(projectKey, user, authLoading)
 
   const load = useCallback(async () => {
-    if (!projectKey) return
+    // Waits for the session check and confirmed project read access before
+    // firing either branch (design.md D2/D11, unify-authenticated-and-public-views)
+    // — a signed-in non-member resolves to 'public' here, reading a public
+    // project like an anonymous visitor instead of hitting 403s.
+    if (!projectKey || access === 'loading') return
     setNotFound(false)
-    const [{ data: p }, { data: f }, { data: c }, { data: s }, { data: flaky }] = await Promise.all([
-      api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/flaky-cases', { params: { path: { projectKey } } }),
-    ])
+    const [{ data: p }, { data: f }, { data: c }, { data: s }, { data: flaky }] = access === 'member'
+      ? await Promise.all([
+          api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/projects/{projectKey}/flaky-cases', { params: { path: { projectKey } } }),
+        ])
+      : await Promise.all([
+          api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+          api.GET('/api/v1/public/projects/{projectKey}/flaky-cases', { params: { path: { projectKey } } }),
+        ])
     if (!p) {
       setNotFound(true)
       return
@@ -272,7 +299,7 @@ export default function FolderExplorerPage() {
     setCases(c ?? [])
     setSuites(s ?? [])
     setFlakyKeys(new Set((flaky ?? []).map((fc) => fc.caseKey)))
-  }, [projectKey])
+  }, [projectKey, access])
 
   useEffect(() => {
     void load()
@@ -293,6 +320,15 @@ export default function FolderExplorerPage() {
     return (
       <p className="text-sm text-muted-foreground">
         Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {!user && !authLoading && (
+          <>
+            {' '}
+            ·{' '}
+            <Link to="/login" state={{ from: `/projects/${projectKey}/library` }} className="underline">
+              Log in
+            </Link>
+          </>
+        )}
       </p>
     )
   }
@@ -471,6 +507,7 @@ export default function FolderExplorerPage() {
             }}
             onCancelNewFolder={() => setTreeCreatingIn(null)}
             onDropCase={(caseKey, folderId) => void moveCase(caseKey, folderId)}
+            canCreate={Boolean(permissions?.sectionCreate)}
           />
         )}
 
@@ -489,19 +526,23 @@ export default function FolderExplorerPage() {
                 Browse sections
               </Button>
             )}
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => {
-                setContentCreatingFolder(true)
-                setNewFolderName('')
-              }}
-            >
-              + New section
-            </Button>
-            <Button type="button" onClick={() => setDrawer({ mode: 'create' })}>
-              + New test case
-            </Button>
+            {permissions?.sectionCreate && (
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setContentCreatingFolder(true)
+                  setNewFolderName('')
+                }}
+              >
+                + New section
+              </Button>
+            )}
+            {permissions?.caseCreate && (
+              <Button type="button" onClick={() => setDrawer({ mode: 'create' })}>
+                + New test case
+              </Button>
+            )}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
@@ -642,6 +683,7 @@ export default function FolderExplorerPage() {
                           setMoveQuery('')
                           setMovingCaseKey(c.key)
                         }}
+                        canMove={Boolean(permissions?.caseEdit)}
                         canDelete={Boolean(permissions?.caseDelete)}
                         onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
                       />
@@ -685,6 +727,7 @@ export default function FolderExplorerPage() {
                         setMoveQuery('')
                         setMovingCaseKey(c.key)
                       }}
+                      canMove={Boolean(permissions?.caseEdit)}
                       canDelete={Boolean(permissions?.caseDelete)}
                       onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
                     />

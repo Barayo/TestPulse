@@ -10,6 +10,7 @@ import { assignRunItems } from '@/lib/assignRunItems'
 import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { CasePicker, type CasePickerCase } from '@/components/CasePicker'
+import { useProjectPermissions } from '@/lib/useProjectPermissions'
 import type { components } from '@testpulse/shared/api'
 
 type TestCase = components['schemas']['TestCase']
@@ -36,6 +37,7 @@ export default function NewRunPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const bumpLanding = useBumpDataRevision()
+  const permissions = useProjectPermissions(projectKey)
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const [cases, setCases] = useState<TestCase[]>([])
@@ -151,6 +153,14 @@ export default function NewRunPage() {
         Project not found. <Link to="/" className="underline">Go to Projects</Link>
       </p>
     )
+  }
+  // permissions !== undefined distinguishes "still loading" from "loaded
+  // and confirmed missing" — matching ProjectSettingsPage's identical
+  // whole-page gate — so a user who does have runCreate never sees a
+  // false "denied" flash before their permissions resolve
+  // (unify-authenticated-and-public-views tasks.md 2.8).
+  if (permissions !== undefined && !permissions.runCreate) {
+    return <p className="text-sm text-muted-foreground">You don&apos;t have permission to create a run in this project.</p>
   }
 
   const gridCases = cases.map(toGridCase)

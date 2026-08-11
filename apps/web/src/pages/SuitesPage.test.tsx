@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SuitesPage from './SuitesPage'
 import { api } from '@/lib/api'
+import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
@@ -22,10 +23,43 @@ vi.mock('react-router', async () => {
   }
 })
 
-function mockSuitesAPI(project: unknown, suites: unknown[] = []) {
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
+const authenticatedUser = { id: 'u1', email: 'admin@example.com', isTenantAdmin: false }
+
+// read: true, everything else false — a real member's most restrictive
+// possible role (add-project-rbac fully-custom roles), not `null`/no
+// membership at all (design.md D11 distinguishes the two).
+const noPermissions = { ...fullPermissions, ...Object.fromEntries(Object.keys(fullPermissions).map((k) => [k, false])), read: true }
+
+// permissions: pass `null` (not `undefined` — a default parameter value
+// would silently override it) to simulate no permissions data at all.
+// anonymous: true simulates no session — reads from /api/v1/public/...
+// instead (unify-authenticated-and-public-views tasks.md 7.1).
+function mockSuitesAPI(project: unknown, suites: unknown[] = [], permissions: unknown = fullPermissions, anonymous = false) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/projects/{projectKey}') return Promise.resolve({ data: project, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === '/api/v1/users/me')
+      return anonymous
+        ? Promise.resolve({ data: undefined, response: { ok: false } })
+        : Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+    const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+    const suitesPath = anonymous ? '/api/v1/public/projects/{projectKey}/suites' : '/api/v1/projects/{projectKey}/suites'
+    if (path === projectPath) return Promise.resolve({ data: project, response: { ok: true } })
+    if (path === suitesPath) return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
+      return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -35,9 +69,12 @@ const projectQA = { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, c
 function renderSuites() {
   return render(
     <MemoryRouter initialEntries={['/projects/p1/suites']}>
-      <Routes>
-        <Route path="/projects/:projectKey/suites" element={<SuitesPage />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/projects/:projectKey/suites" element={<SuitesPage />} />
+          <Route path="/login" element={<p>login stub</p>} />
+        </Routes>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -223,6 +260,7 @@ describe('SuitesPage', () => {
 
   it('shows a not-found message instead of an empty, interactive project when the project does not exist', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: [], response: { ok: true } })
@@ -230,5 +268,86 @@ describe('SuitesPage', () => {
     renderSuites()
     expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /new suite/i })).not.toBeInTheDocument()
+  })
+
+  // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+  // tasks.md 2.6): a caller without suiteCreate must not see "+ New suite"
+  // at all — not disabled, absent — since this page will also render for
+  // anonymous visitors on a public project.
+  it('hides "+ New suite" for a caller lacking suiteCreate', async () => {
+    mockSuitesAPI(projectQA, [], { ...fullPermissions, suiteCreate: false })
+    renderSuites()
+    await screen.findByText('Suites', { selector: '[data-slot="card-title"]' })
+    expect(screen.queryByRole('button', { name: /new suite/i })).not.toBeInTheDocument()
+  })
+
+  it('threads permissions through to each card\'s context menu, hiding gated items', async () => {
+    mockSuitesAPI(
+      projectQA,
+      [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null, lastRunAt: null }],
+      noPermissions,
+    )
+    renderSuites()
+
+    expect(await screen.findByText('Smoke')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /actions for smoke/i })).not.toBeInTheDocument()
+  })
+})
+
+// Dual-mode migration (unify-authenticated-and-public-views tasks.md
+// group 7).
+describe('anonymous / dual-mode', () => {
+  it('fetches from the public API when there is no session', async () => {
+    mockSuitesAPI(projectQA, [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null, lastRunAt: null }], undefined, true)
+    renderSuites()
+    await screen.findByText('Smoke')
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}/suites', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+  })
+
+  it('renders the full suites list with zero "+ New suite" affordance and no per-card menu', async () => {
+    mockSuitesAPI(projectQA, [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null, lastRunAt: null }], undefined, true)
+    renderSuites()
+    await screen.findByText('Smoke')
+    expect(screen.queryByRole('button', { name: /new suite/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /actions for smoke/i })).not.toBeInTheDocument()
+  })
+
+  it('fires no request while the session check is still in flight', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderSuites()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+  })
+})
+
+// design.md D11: a signed-in user with no membership on a public
+// project gets 403 from every authenticated route (including
+// /permissions, which useProjectReadAccess itself checks) — the page
+// must fall back to the public branch instead of showing "not found",
+// exactly like an anonymous visitor would see.
+describe('signed-in non-member (design.md D11)', () => {
+  it('falls back to the public API and renders the suites instead of "not found"', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/projects/{projectKey}') return Promise.resolve({ data: projectQA, response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/suites')
+        return Promise.resolve({
+          data: [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null, lastRunAt: null }],
+          response: { ok: true },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderSuites()
+    expect(await screen.findByText('Smoke')).toBeInTheDocument()
+    expect(screen.queryByText(/not found/i)).not.toBeInTheDocument()
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
   })
 })

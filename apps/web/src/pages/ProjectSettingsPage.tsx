@@ -43,7 +43,9 @@ export default function ProjectSettingsPage() {
     if (data) setPublicAccess(data.publicAccess)
   }
 
-  const publicUrl = projectKey ? `${window.location.origin}/public/${projectKey}` : ''
+  // The project's own unified URL (unify-authenticated-and-public-views) —
+  // the same page a signed-in member sees, read-only for anyone else.
+  const publicUrl = projectKey ? `${window.location.origin}/projects/${projectKey}` : ''
 
   return (
     <div className="space-y-6">

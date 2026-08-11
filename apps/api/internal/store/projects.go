@@ -134,6 +134,29 @@ func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domai
 	return projects, rows.Err()
 }
 
+// ListPublic returns every non-archived project with public_access = true —
+// the raw candidate set for the discovery index, before the instance-wide
+// switch is applied at the service layer (add-public-project-discovery D2).
+func (r *ProjectRepo) ListPublic(ctx context.Context) ([]domain.Project, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, key, name, archived, description, is_sample, public_access, created_at
+		 FROM projects WHERE public_access AND NOT archived ORDER BY created_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	projects := []domain.Project{}
+	for rows.Next() {
+		var p domain.Project
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
+}
+
 func (r *ProjectRepo) Rename(ctx context.Context, id, name string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE projects SET name = $2 WHERE id = $1`, id, name)
 	if err != nil {

@@ -21,6 +21,8 @@ import { StepEditor, type Step } from '@/components/StepEditor'
 import { VersionDetailDialog } from '@/components/VersionDetailDialog'
 import { ContentDiffView } from '@/components/ContentDiffView'
 import { diffContent, diffSignal } from '@/lib/versionDiff'
+import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
+import { useAuth } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
 
 type TestCase = components['schemas']['TestCase']
@@ -47,6 +49,9 @@ function textToTags(text: string): string[] {
 export default function CaseDetailPage() {
   const { projectKey, caseKey } = useParams<{ projectKey: string; caseKey: string }>()
   const navigate = useNavigate()
+  const permissions = useProjectPermissions(projectKey)
+  const { user, loading: authLoading } = useAuth()
+  const access = useProjectReadAccess(projectKey, user, authLoading)
 
   const [project, setProject] = useState<Project>()
   const [folders, setFolders] = useState<Folder[]>([])
@@ -76,15 +81,46 @@ export default function CaseDetailPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
 
   const load = useCallback(async () => {
-    if (!projectKey || !caseKey) return
+    // Waits for the session check and confirmed project read access before
+    // firing either branch (design.md D2/D11, unify-authenticated-and-public-views)
+    // — a signed-in non-member resolves to 'public' here, reading a public
+    // project like an anonymous visitor instead of hitting 403s.
+    if (!projectKey || !caseKey || access === 'loading') return
     setNotFound(false)
-    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }] = await Promise.all([
-      api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } }),
-      api.GET('/api/v1/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/users'),
+    if (access === 'member') {
+      const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }] = await Promise.all([
+        api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } }),
+        api.GET('/api/v1/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/users'),
+      ])
+      if (!p || !c) {
+        setNotFound(true)
+        return
+      }
+      setProject(p)
+      setFolders(f ?? [])
+      setTestCase(c)
+      setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
+      setSuites(s ?? [])
+      setUserIdentities(
+        Object.fromEntries(
+          (users ?? []).map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
+        ),
+      )
+      return
+    }
+    // Anonymous: GET /api/v1/users has no public equivalent and never
+    // gets one (design.md D1/D10) — version-history rows simply show no
+    // author name, since userIdentities stays empty here.
+    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }] = await Promise.all([
+      api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/public/cases/{caseKey}', { params: { path: { caseKey } } }),
+      api.GET('/api/v1/public/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
+      api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
     ])
     if (!p || !c) {
       setNotFound(true)
@@ -95,12 +131,8 @@ export default function CaseDetailPage() {
     setTestCase(c)
     setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
     setSuites(s ?? [])
-    setUserIdentities(
-      Object.fromEntries(
-        (users ?? []).map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
-      ),
-    )
-  }, [projectKey, caseKey])
+    setUserIdentities({})
+  }, [projectKey, caseKey, access])
 
   useEffect(() => {
     void load()
@@ -123,6 +155,15 @@ export default function CaseDetailPage() {
     return (
       <p className="text-sm text-muted-foreground">
         Case not found. <Link to={`/projects/${projectKey}/library`} className="underline">Go to Library</Link>
+        {!user && !authLoading && (
+          <>
+            {' '}
+            ·{' '}
+            <Link to="/login" state={{ from: `/projects/${projectKey}/cases/${caseKey}` }} className="underline">
+              Log in
+            </Link>
+          </>
+        )}
       </p>
     )
   }
@@ -168,19 +209,30 @@ export default function CaseDetailPage() {
     navigate(`/projects/${projectKey}/library`)
   }
 
+  const canEdit = Boolean(permissions?.caseEdit)
+  const canDelete = Boolean(permissions?.caseDelete)
+
   const actionMenuItems: RowActionMenuItem[] = [
-    {
-      label: 'Move to…',
-      icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
-      onSelect: () => setMoving(true),
-    },
-    {
-      label: 'Delete',
-      danger: true,
-      dividerBefore: true,
-      icon: <Trash2Icon className="size-4" aria-hidden="true" />,
-      onSelect: () => setConfirmingDelete(true),
-    },
+    ...(canEdit
+      ? [
+          {
+            label: 'Move to…',
+            icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
+            onSelect: () => setMoving(true),
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete',
+            danger: true,
+            dividerBefore: true,
+            icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+            onSelect: () => setConfirmingDelete(true),
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
   ]
 
   // Ends at the parent folder, not the case itself — the case's own <h1>
@@ -219,10 +271,12 @@ export default function CaseDetailPage() {
             <h1 className="tp-heading text-2xl">{testCase.content.title}</h1>
           </div>
         </div>
-        {!isEditing && (
+        {!isEditing && (canEdit || actionMenuItems.length > 0) && (
           <div className="flex items-center gap-1">
-            <Button onClick={() => setIsEditing(true)}>Edit</Button>
-            <RowActionMenu label={`Actions for ${testCase.content.title}`} items={actionMenuItems} />
+            {canEdit && <Button onClick={() => setIsEditing(true)}>Edit</Button>}
+            {actionMenuItems.length > 0 && (
+              <RowActionMenu label={`Actions for ${testCase.content.title}`} items={actionMenuItems} />
+            )}
           </div>
         )}
       </div>
@@ -256,7 +310,7 @@ export default function CaseDetailPage() {
               <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">Steps</p>
               <CaseStepsList
                 steps={testCase.content.steps}
-                emptyStateAction={<Button onClick={() => setIsEditing(true)}>+ Add steps</Button>}
+                emptyStateAction={canEdit ? <Button onClick={() => setIsEditing(true)}>+ Add steps</Button> : undefined}
               />
             </>
           )}
@@ -403,6 +457,7 @@ export default function CaseDetailPage() {
           caseKey={caseKey}
           version={viewingVersion}
           versions={versions}
+          access={access}
         />
       )}
 

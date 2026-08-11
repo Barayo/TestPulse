@@ -5,6 +5,7 @@ import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import RunPage from './RunPage'
 import { api } from '@/lib/api'
 import { useBumpDataRevision } from '@/lib/DataRevision'
+import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() } }))
 vi.mock('@/lib/DataRevision', () => ({ useBumpDataRevision: vi.fn() }))
@@ -45,33 +46,70 @@ const pendingItem = {
   },
 }
 
-function mockRunAPI(items: unknown[], summary?: unknown, runOverride?: unknown, suiteOverride?: unknown) {
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
+const authenticatedUser = { id: 'u1', email: 'admin@example.com', isTenantAdmin: false }
+
+// permissions: pass `null` (not `undefined` — a default parameter value
+// would silently override it) to simulate no permissions data at all.
+// anonymous: true simulates no session — reads from /api/v1/public/...
+// instead (unify-authenticated-and-public-views tasks.md 6.1).
+function mockRunAPI(
+  items: unknown[],
+  summary?: unknown,
+  runOverride?: unknown,
+  suiteOverride?: unknown,
+  permissions: unknown = fullPermissions,
+  anonymous = false,
+) {
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/runs/{runKey}')
-      return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
-    if (path === '/api/v1/runs/{runKey}/items')
-      return Promise.resolve({ data: items, response: { ok: true } })
-    if (path === '/api/v1/runs/{runKey}/summary')
+    if (path === '/api/v1/users/me')
+      return anonymous
+        ? Promise.resolve({ data: undefined, response: { ok: false } })
+        : Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+    const runPath = anonymous ? '/api/v1/public/runs/{runKey}' : '/api/v1/runs/{runKey}'
+    const itemsPath = anonymous ? '/api/v1/public/runs/{runKey}/items' : '/api/v1/runs/{runKey}/items'
+    const summaryPath = anonymous ? '/api/v1/public/runs/{runKey}/summary' : '/api/v1/runs/{runKey}/summary'
+    const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+    const suitePath = anonymous ? '/api/v1/public/suites/{suiteKey}' : '/api/v1/suites/{suiteKey}'
+    if (path === runPath) return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
+    if (path === itemsPath) return Promise.resolve({ data: items, response: { ok: true } })
+    if (path === summaryPath)
       return Promise.resolve({
         data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}')
+    if (path === projectPath)
       return Promise.resolve({
         data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
-    if (path === '/api/v1/suites/{suiteKey}')
+    if (path === suitePath)
       return Promise.resolve({
         data: suiteOverride ?? { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Regression', caseIds: [], createdAt: '', passRate: null, lastRunAt: null },
         response: { ok: true },
       })
+    if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
+      return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
   })
 }
 
 function mockAssignmentAPI(items: unknown[], summary?: unknown) {
   mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: items, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/summary')
@@ -104,6 +142,8 @@ function mockAssignmentAPI(items: unknown[], summary?: unknown) {
         response: { ok: true },
       })
     if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/permissions')
+      return Promise.resolve({ data: fullPermissions, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
   })
 }
@@ -121,11 +161,14 @@ function CaseLibraryProbe() {
 function renderRun(initialEntries: Parameters<typeof MemoryRouter>[0]['initialEntries'] = ['/runs/r1']) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
+      <AuthProvider>
       <Routes>
         <Route path="/runs/:runKey" element={<RunPage />} />
         <Route path="/runs/:runKey/items/:caseKey" element={<ItemPageProbe />} />
         <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseLibraryProbe />} />
+        <Route path="/login" element={<p>login stub</p>} />
       </Routes>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -220,6 +263,7 @@ describe('Run execution board', () => {
 
   it('shows a not-found message instead of an empty, interactive board when the run does not exist or is not accessible', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
       return Promise.resolve({ data: undefined, response: { ok: false } })
@@ -1017,5 +1061,136 @@ describe('Shift+click range-select (add-run-board-select-shortcuts)', () => {
 
     expect(screen.getByRole('checkbox', { name: /select checkout works/i })).not.toBeChecked()
     expect(screen.getByText('2 selected')).toBeInTheDocument()
+  })
+})
+
+// Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+// tasks.md 2.5): a caller without the matching permission must not see the
+// write controls at all — since this page will also render for anonymous
+// visitors on a public project.
+describe('permission gating', () => {
+  it('hides Close run when the caller lacks runRecordResult', async () => {
+    mockRunAPI([pendingItem], undefined, undefined, undefined, { ...fullPermissions, runRecordResult: false })
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('button', { name: /close run/i })).not.toBeInTheDocument()
+  })
+
+  it('hides Reopen when the caller lacks manageProject', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' }, undefined, { ...fullPermissions, manageProject: false })
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('button', { name: /reopen/i })).not.toBeInTheDocument()
+  })
+
+  it('omits "Assign to…" from a row\'s actions menu when the caller lacks runRecordResult', async () => {
+    mockRunAPI([pendingItem], undefined, undefined, undefined, { ...fullPermissions, runRecordResult: false })
+    renderRun()
+    await screen.findByText('Login works')
+    await userEvent.click(screen.getByRole('button', { name: /actions for login works/i }))
+    expect(screen.queryByRole('menuitem', { name: /assign to/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
+  })
+
+  it('hides bulk "Assign selected…" and "Mark as" when the caller lacks runRecordResult', async () => {
+    mockRunAPI([pendingItem], undefined, undefined, undefined, { ...fullPermissions, runRecordResult: false })
+    renderRun()
+    await screen.findByText('Login works')
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    expect(screen.queryByRole('button', { name: /assign selected/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^mark as$/i })).not.toBeInTheDocument()
+  })
+
+  it('shows the run read-only with no write controls when the caller has no permissions', async () => {
+    mockRunAPI([pendingItem], undefined, undefined, undefined, null)
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('button', { name: /close run/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /actions for login works/i })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /actions for login works/i }))
+    expect(screen.queryByRole('menuitem', { name: /assign to/i })).not.toBeInTheDocument()
+  })
+})
+
+// Dual-mode migration (unify-authenticated-and-public-views tasks.md
+// group 6).
+describe('anonymous / dual-mode', () => {
+  it('fetches from the public API when there is no session, including the satellite project/suite fetches', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, suiteKey: 'p1-S1' }, undefined, undefined, true)
+    renderRun()
+    await screen.findByText('Login works')
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/runs/{runKey}', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/runs/{runKey}/items', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/runs/{runKey}/summary', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/projects/{projectKey}', expect.anything())
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/suites/{suiteKey}', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/runs/{runKey}', expect.anything())
+  })
+
+  it('renders the identical run board a member sees, with zero write controls', async () => {
+    mockRunAPI([pendingItem], undefined, undefined, undefined, undefined, true)
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('button', { name: /close run/i })).not.toBeInTheDocument()
+    // The row's actions trigger stays present (it still offers "Open
+    // execution"/"Go to case", pure navigation) — only "Assign to…" is
+    // gated, already covered by the permission-gating tests above.
+    await userEvent.click(screen.getByRole('button', { name: /actions for login works/i }))
+    expect(screen.queryByRole('menuitem', { name: /assign to/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
+  })
+
+  it('fires no request while the session check is still in flight', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderRun()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/runs/{runKey}', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/runs/{runKey}', expect.anything())
+  })
+
+  it('shows a "Log in" link alongside "Go to Projects" when a run is not found anonymously', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/runs/{runKey}')
+        return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderRun()
+    expect(await screen.findByText(/run not found/i)).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
+  })
+})
+
+// design.md D11: a signed-in user with no membership on a public
+// project's run gets 403 from GET /api/v1/runs/{runKey} (PermRead-gated)
+// — the page must retry via the public branch instead of showing "not
+// found", exactly like an anonymous visitor would see. projectKey isn't
+// known until the run itself loads, so this page resolves access from
+// the run fetch's own outcome (same pattern as RunItemDetailPage), not a
+// preemptive useProjectReadAccess check.
+describe('signed-in non-member (design.md D11)', () => {
+  it('falls back to the public API and renders the run instead of "not found"', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}' || path === '/api/v1/runs/{runKey}/items' || path === '/api/v1/runs/{runKey}/summary')
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/public/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+      if (path === '/api/v1/public/runs/{runKey}/items') return Promise.resolve({ data: [pendingItem], response: { ok: true } })
+      if (path === '/api/v1/public/runs/{runKey}/summary')
+        return Promise.resolve({ data: { runId: 'r1', total: 1, counts: { pending: 1 } }, response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}')
+        return Promise.resolve({
+          data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
+          response: { ok: true },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderRun()
+    expect(await screen.findByText('Sprint 1')).toBeInTheDocument()
+    expect(screen.queryByText(/run not found/i)).not.toBeInTheDocument()
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/runs/{runKey}/summary', expect.anything())
   })
 })

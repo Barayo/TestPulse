@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import CaseDetailPage from './CaseDetailPage'
 import { api } from '@/lib/api'
+import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({
   api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() },
@@ -34,19 +35,62 @@ const limitCase = {
   createdAt: '',
 }
 
+const fullPermissions = {
+  read: true,
+  caseCreate: true,
+  caseEdit: true,
+  caseDelete: true,
+  sectionCreate: true,
+  sectionDelete: true,
+  suiteCreate: true,
+  suiteEditMembership: true,
+  runCreate: true,
+  runRecordResult: true,
+  manageProject: true,
+}
+
+const authenticatedUser = { id: 'u1', email: 'admin@example.com', isTenantAdmin: false }
+
+// read: true, everything else false — a real member's most restrictive
+// possible role (add-project-rbac fully-custom roles), not `null`/no
+// membership at all (design.md D11 distinguishes the two: a `null`/failed
+// permissions fetch now means "not a member", handled by its own branch).
+const noPermissions = { ...fullPermissions, ...Object.fromEntries(Object.keys(fullPermissions).map((k) => [k, false])), read: true }
+
 function mockDetailAPI(options?: {
   v1Content?: typeof limitCase.content
   versions?: unknown[]
   users?: unknown[]
+  // pass `null` (not `undefined` — a default parameter would silently
+  // override it) to simulate no permissions data at all.
+  permissions?: unknown
+  // No session — the dual-mode branch (unify-authenticated-and-public-views
+  // tasks.md 4.1) reads from /api/v1/public/... instead. A real anonymous
+  // request also has no permissions and never calls GET /api/v1/users
+  // (D10) — both are true automatically here since `permissions` isn't
+  // separately overridden and the public-branch paths below never include
+  // /api/v1/users.
+  anonymous?: boolean
 }) {
+  const anon = options?.anonymous ?? false
   mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
-    if (path === '/api/v1/projects/{projectKey}')
+    if (path === '/api/v1/users/me')
+      return anon
+        ? Promise.resolve({ data: undefined, response: { ok: false } })
+        : Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+    const projectPath = anon ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+    const foldersPath = anon ? '/api/v1/public/projects/{projectKey}/folders' : '/api/v1/projects/{projectKey}/folders'
+    const casePath = anon ? '/api/v1/public/cases/{caseKey}' : '/api/v1/cases/{caseKey}'
+    const versionsPath = anon ? '/api/v1/public/cases/{caseKey}/versions' : '/api/v1/cases/{caseKey}/versions'
+    const suitesPath = anon ? '/api/v1/public/projects/{projectKey}/suites' : '/api/v1/projects/{projectKey}/suites'
+    const executionsPath = anon ? '/api/v1/public/cases/{caseKey}/executions' : '/api/v1/cases/{caseKey}/executions'
+    if (path === projectPath)
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/folders')
+    if (path === foldersPath)
       return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
-    if (path === '/api/v1/cases/{caseKey}' && opts?.params?.path?.caseKey === 'c1')
+    if (path === casePath && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({ data: limitCase, response: { ok: true } })
-    if (path === '/api/v1/cases/{caseKey}/versions' && opts?.params?.path?.caseKey === 'c1')
+    if (path === versionsPath && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: options?.versions ?? [
           { caseId: 'c1', version: 1, content: options?.v1Content ?? limitCase.content, actorKind: 'unknown', createdAt: '2026-01-01T00:00:00Z' },
@@ -54,13 +98,17 @@ function mockDetailAPI(options?: {
         ],
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}/suites')
+    if (path === suitesPath)
       return Promise.resolve({
         data: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
       })
-    if (path === '/api/v1/cases/{caseKey}/executions') return Promise.resolve({ data: [], response: { ok: true } })
-    if (path === '/api/v1/users') return Promise.resolve({ data: options?.users ?? [], response: { ok: true } })
+    if (path === executionsPath) return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === '/api/v1/users' && !anon) return Promise.resolve({ data: options?.users ?? [], response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/permissions' && !anon) {
+      const permissions = options && 'permissions' in options ? options.permissions : fullPermissions
+      return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
+    }
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -73,11 +121,14 @@ function LibraryProbe() {
 function renderDetail(path = '/projects/p1/cases/c1') {
   return render(
     <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailPage />} />
-        <Route path="/projects/:projectKey/library" element={<LibraryProbe />} />
-        <Route path="/projects/:projectKey/library/:folderId" element={<LibraryProbe />} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailPage />} />
+          <Route path="/projects/:projectKey/library" element={<LibraryProbe />} />
+          <Route path="/projects/:projectKey/library/:folderId" element={<LibraryProbe />} />
+          <Route path="/login" element={<p>login stub</p>} />
+        </Routes>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -93,6 +144,7 @@ afterEach(() => {
 describe('CaseDetailPage', () => {
   it('shows a not-found message when the case does not exist or is not accessible', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/cases/{caseKey}')
@@ -229,6 +281,7 @@ describe('CaseDetailPage', () => {
 
   it('shows a real empty state with a call to action when a case has no steps', async () => {
     mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/folders')
@@ -243,6 +296,8 @@ describe('CaseDetailPage', () => {
           data: [{ caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' }],
           response: { ok: true },
         })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: fullPermissions, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderDetail()
@@ -505,6 +560,7 @@ describe('CaseDetailPage', () => {
   it('refreshes the version history after saving an edit', async () => {
     let saved = false
     mockGET.mockImplementation((path: string, options?: { params?: { path?: Record<string, string> } }) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/folders')
@@ -527,6 +583,8 @@ describe('CaseDetailPage', () => {
         })
       if (path === '/api/v1/projects/{projectKey}/suites')
         return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: fullPermissions, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     mockPUT.mockImplementation(() => {
@@ -541,5 +599,138 @@ describe('CaseDetailPage', () => {
 
     const history = await screen.findByRole('list', { name: /version history/i })
     expect(await within(history).findByText('v3')).toBeInTheDocument()
+  })
+
+  // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
+  // tasks.md 2.3): a caller without the matching permission must not see
+  // the write controls at all — since this page will also render for
+  // anonymous visitors on a public project.
+  describe('permission gating', () => {
+    it('hides Edit and "+ Add steps" when the caller lacks caseEdit', async () => {
+      mockDetailAPI({ permissions: { ...fullPermissions, caseEdit: false } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+    })
+
+    it('omits Move to… from the actions menu when the caller lacks caseEdit', async () => {
+      mockDetailAPI({ permissions: { ...fullPermissions, caseEdit: false } })
+      renderDetail()
+      await userEvent.click(await screen.findByRole('button', { name: /actions for daily transfer limit/i }))
+      expect(screen.queryByRole('menuitem', { name: /move to/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+    })
+
+    it('omits Delete from the actions menu when the caller lacks caseDelete', async () => {
+      mockDetailAPI({ permissions: { ...fullPermissions, caseDelete: false } })
+      renderDetail()
+      await userEvent.click(await screen.findByRole('button', { name: /actions for daily transfer limit/i }))
+      expect(screen.queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: /move to/i })).toBeInTheDocument()
+    })
+
+    it('renders no actions trigger at all, and no Edit button, when the caller has no permissions', async () => {
+      mockDetailAPI({ permissions: noPermissions })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      expect(screen.queryByRole('button', { name: /actions for daily transfer limit/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+    })
+  })
+
+  // Dual-mode migration (unify-authenticated-and-public-views tasks.md
+  // group 4).
+  describe('anonymous / dual-mode', () => {
+    it('fetches from the public API when there is no session', async () => {
+      mockDetailAPI({ anonymous: true })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      expect(mockGET).toHaveBeenCalledWith('/api/v1/public/cases/{caseKey}', expect.anything())
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/cases/{caseKey}', expect.anything())
+    })
+
+    it('renders the identical case detail a member sees, with zero write controls', async () => {
+      mockDetailAPI({ anonymous: true })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      expect(screen.getByText('high')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /^edit$/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /actions for daily transfer limit/i })).not.toBeInTheDocument()
+    })
+
+    // D10: GET /api/v1/users has no public equivalent and must never be
+    // called anonymously — version-history rows show no author name
+    // rather than exposing the instance's user directory.
+    it('never calls GET /api/v1/users, and omits the author name from version history, when anonymous', async () => {
+      mockDetailAPI({
+        anonymous: true,
+        versions: [
+          { caseId: 'c1', version: 1, content: limitCase.content, actorKind: 'user', actorRefId: 'u1', createdAt: '2026-01-01T00:00:00Z' },
+        ],
+      })
+      renderDetail()
+      await screen.findByRole('list', { name: /version history/i })
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/users')
+      expect(screen.queryByText('admin@example.com')).not.toBeInTheDocument()
+    })
+
+    it('fires no request while the session check is still in flight', async () => {
+      mockGET.mockImplementation((path: string) => {
+        if (path === '/api/v1/users/me') return new Promise(() => {}) // never resolves
+        return Promise.resolve({ data: undefined, response: { ok: true } })
+      })
+      renderDetail()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/cases/{caseKey}', expect.anything())
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/cases/{caseKey}', expect.anything())
+    })
+
+    it('shows a "Log in" link alongside "Go to Library" when a case is not found anonymously', async () => {
+      mockGET.mockImplementation((path: string) => {
+        if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+        if (path === '/api/v1/public/cases/{caseKey}')
+          return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+        return Promise.resolve({ data: undefined, response: { ok: true } })
+      })
+      renderDetail()
+      expect(await screen.findByText(/case not found/i)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /log in/i })).toBeInTheDocument()
+    })
+  })
+
+  // design.md D11: a signed-in user with no membership on a public
+  // project gets 403 from every authenticated route (including
+  // /permissions, which useProjectReadAccess itself checks) — the page
+  // must fall back to the public branch instead of showing "not found",
+  // exactly like an anonymous visitor would see.
+  describe('signed-in non-member (design.md D11)', () => {
+    it('falls back to the public API and renders the case instead of "not found"', async () => {
+      mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
+        if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+        if (path === '/api/v1/projects/{projectKey}/permissions')
+          return Promise.resolve({ data: undefined, response: { ok: false } })
+        if (path === '/api/v1/public/projects/{projectKey}')
+          return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/folders')
+          return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
+        if (path === '/api/v1/public/cases/{caseKey}' && opts?.params?.path?.caseKey === 'c1')
+          return Promise.resolve({ data: limitCase, response: { ok: true } })
+        if (path === '/api/v1/public/cases/{caseKey}/versions' && opts?.params?.path?.caseKey === 'c1')
+          return Promise.resolve({
+            data: [{ caseId: 'c1', version: 1, content: limitCase.content, actorKind: 'unknown', createdAt: '2026-01-01T00:00:00Z' }],
+            response: { ok: true },
+          })
+        if (path === '/api/v1/public/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
+        return Promise.resolve({ data: undefined, response: { ok: false } })
+      })
+      renderDetail()
+      expect(await screen.findByRole('heading', { name: 'Daily transfer limit' })).toBeInTheDocument()
+      expect(screen.queryByText(/case not found/i)).not.toBeInTheDocument()
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/cases/{caseKey}', expect.anything())
+      // D10 must hold for a signed-in non-member exactly as it does for an
+      // anonymous visitor — GET /api/v1/users (the unscoped identity
+      // directory) must never fire on the public/non-member branch.
+      expect(mockGET).not.toHaveBeenCalledWith('/api/v1/users')
+    })
   })
 })

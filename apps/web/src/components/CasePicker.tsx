@@ -163,11 +163,17 @@ export function CasePicker({
   folders,
   selected,
   onToggle,
+  readOnly = false,
 }: {
   cases: CasePickerCase[]
   folders: CasePickerFolder[]
   selected: Set<string>
   onToggle: (caseId: string) => void
+  // Genuinely disables the checkboxes (not just a visual affordance) for a
+  // caller who can't edit membership — e.g. an anonymous visitor on a
+  // public project, or a member without suiteEditMembership
+  // (unify-authenticated-and-public-views tasks.md 2.2).
+  readOnly?: boolean
 }) {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [search, setSearch] = useState('')
@@ -406,6 +412,7 @@ export function CasePicker({
                       className="mt-1"
                       checked={selected.has(c.id)}
                       onChange={() => onToggle(c.id)}
+                      disabled={readOnly}
                       aria-label={c.title}
                     />
                     <span className="min-w-0 space-y-1">

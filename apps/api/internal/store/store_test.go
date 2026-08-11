@@ -269,6 +269,43 @@ func TestProjectPublicAccessDefaultsFalseAndCanBeToggled(t *testing.T) {
 	}
 }
 
+// TestListPublicReturnsOnlyPublicNonArchivedProjects covers
+// add-public-project-discovery's ProjectRepo.ListPublic: only projects with
+// public_access = true and not archived are returned.
+func TestListPublicReturnsOnlyPublicNonArchivedProjects(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	priv := mustProject(t, s)
+
+	pub, err := s.Projects.Create(ctx, "Public Project", "")
+	if err != nil {
+		t.Fatalf("create public project: %v", err)
+	}
+	if err := s.Projects.SetPublicAccess(ctx, pub.ID, true); err != nil {
+		t.Fatalf("SetPublicAccess: %v", err)
+	}
+
+	archivedPub, err := s.Projects.Create(ctx, "Archived Public Project", "")
+	if err != nil {
+		t.Fatalf("create archived public project: %v", err)
+	}
+	if err := s.Projects.SetPublicAccess(ctx, archivedPub.ID, true); err != nil {
+		t.Fatalf("SetPublicAccess archived: %v", err)
+	}
+	if err := s.Projects.Archive(ctx, archivedPub.ID); err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+
+	list, err := s.Projects.ListPublic(ctx)
+	if err != nil {
+		t.Fatalf("ListPublic: %v", err)
+	}
+	if len(list) != 1 || list[0].ID != pub.ID {
+		t.Errorf("ListPublic = %+v, want only %q (private and archived-public excluded)", list, priv.ID)
+	}
+}
+
 // --- Cases and versioning (task 2.2) ---
 
 func TestCaseCreateStartsAtVersionOne(t *testing.T) {

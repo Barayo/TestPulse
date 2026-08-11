@@ -66,7 +66,7 @@ describe('ProjectSettingsPage', () => {
 
     const toggle = await screen.findByRole('switch', { name: /public access/i })
     expect(toggle).not.toBeChecked()
-    expect(screen.queryByText(/\/public\/QA/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/\/projects\/QA/)).not.toBeInTheDocument()
 
     await userEvent.click(toggle)
 
@@ -76,7 +76,10 @@ describe('ProjectSettingsPage', () => {
         body: { publicAccess: true },
       }),
     )
-    expect(await screen.findByText(/\/public\/QA/)).toBeInTheDocument()
+    // The shareable link is the project's own unified URL
+    // (unify-authenticated-and-public-views) — not the retired
+    // /public/{key} shape, which now only exists as a redirect.
+    expect(await screen.findByText(/\/projects\/QA/)).toBeInTheDocument()
   })
 
   it('shows the toggle grayed out with an explanation when the instance-wide switch is off', async () => {

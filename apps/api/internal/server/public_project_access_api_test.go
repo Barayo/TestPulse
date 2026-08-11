@@ -124,6 +124,39 @@ func TestPublicProject_ResourceScopedToItsOwnProjectNotURLProject(t *testing.T) 
 	callAs(t, handler, "", "GET", "/api/v1/public/suites/"+suiteKey, nil, 404, nil)
 }
 
+// TestListPublicProjects covers add-public-project-discovery: an
+// unauthenticated GET /api/v1/public/projects returns every public
+// project, an empty list when none are public, and an empty list when the
+// instance-wide switch is off even with a public project present.
+func TestListPublicProjects(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var empty []jmap
+	callAs(t, handler, "", "GET", "/api/v1/public/projects", nil, 200, &empty)
+	if len(empty) != 0 {
+		t.Errorf("with no public projects, list = %+v, want empty", empty)
+	}
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "Discoverable"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+	callAs(t, handler, admin, "PATCH", "/api/v1/projects/"+projectKey, jmap{"publicAccess": true}, 200, nil)
+
+	var list []jmap
+	callAs(t, handler, "", "GET", "/api/v1/public/projects", nil, 200, &list)
+	if len(list) != 1 || list[0]["key"] != projectKey {
+		t.Errorf("list = %+v, want only %q", list, projectKey)
+	}
+
+	callAs(t, handler, admin, "PATCH", "/api/v1/instance-settings", jmap{"publicProjectsEnabled": false}, 200, nil)
+	var off []jmap
+	callAs(t, handler, "", "GET", "/api/v1/public/projects", nil, 200, &off)
+	if len(off) != 0 {
+		t.Errorf("with instance switch off, list = %+v, want empty", off)
+	}
+}
+
 func TestMetaEndpoint_IncludesPublicProjectsEnabled(t *testing.T) {
 	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 

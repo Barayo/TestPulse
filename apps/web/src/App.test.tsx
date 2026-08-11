@@ -1,8 +1,27 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import App from './App'
+import App, { PROJECT_CONTENT_ROUTES, ACCOUNT_ONLY_ROUTES } from './App'
 import { api } from '@/lib/api'
+
+// Route-manifest test (design.md D9, unify-authenticated-and-public-views):
+// every route in the app is registered from exactly one of these two
+// arrays — App.tsx's <Routes> has no third source. This test fails if a
+// route is ever duplicated across the two lists or within one of them,
+// converting "someone must remember which list a new route belongs in"
+// into a structural check.
+describe('App route categorization', () => {
+  it('registers every project-content and account-only path exactly once, with no overlap between the two groups', () => {
+    const projectContentPaths = PROJECT_CONTENT_ROUTES.map((r) => r.path)
+    const accountOnlyPaths = ACCOUNT_ONLY_ROUTES.map((r) => r.path)
+
+    expect(new Set(projectContentPaths).size).toBe(projectContentPaths.length)
+    expect(new Set(accountOnlyPaths).size).toBe(accountOnlyPaths.length)
+
+    const overlap = projectContentPaths.filter((p) => accountOnlyPaths.includes(p))
+    expect(overlap).toEqual([])
+  })
+})
 
 vi.mock('@/lib/api', () => ({
   api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() },
@@ -395,5 +414,31 @@ describe('App shell', () => {
     expect(screen.queryByText('Select project')).not.toBeInTheDocument()
     expect(screen.queryByText('Administration')).not.toBeInTheDocument()
     window.history.pushState({}, '', '/')
+  })
+})
+
+// Old /public* URLs become plain redirects, not 404s (design.md D7,
+// unify-authenticated-and-public-views tasks.md 12.1/12.2) — someone who
+// already has a /public/{key} link (documented, potentially shared) should
+// land on the unified page, not break. The redirect itself must be
+// existence-blind: it never checks whether the project exists or is
+// public before firing — the destination page (already unwrapped, tasks
+// 1.3/10.4) owns that decision entirely. Proven here by mocking every GET
+// to hang forever: if the redirect waited on any network round-trip
+// first, the URL would never change.
+describe('legacy /public* redirects', () => {
+  it('redirects /public/:projectKey to /projects/:projectKey without waiting on any network request', async () => {
+    mockGET.mockReturnValue(new Promise(() => {}))
+    window.history.pushState({}, '', '/public/SP')
+    render(<App />)
+    await waitFor(() => expect(window.location.pathname).toBe('/projects/SP'))
+    window.history.pushState({}, '', '/')
+  })
+
+  it('redirects /public to / without waiting on any network request', async () => {
+    mockGET.mockReturnValue(new Promise(() => {}))
+    window.history.pushState({}, '', '/public')
+    render(<App />)
+    await waitFor(() => expect(window.location.pathname).toBe('/'))
   })
 })

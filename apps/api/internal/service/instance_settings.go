@@ -26,6 +26,23 @@ func (s *Service) SetPublicProjectsEnabled(ctx context.Context, enabled bool) er
 	return nil
 }
 
+// ListPublicProjects returns every project eligible for the anonymous
+// discovery index (add-public-project-discovery D2): reads the
+// instance-wide switch once and short-circuits to an empty slice when off,
+// before ever calling store.ListPublic — the handler never distinguishes
+// "switch off" from "nothing published", matching the same non-disclosure
+// posture IsProjectPubliclyAccessible's uniform 404 already established.
+func (s *Service) ListPublicProjects(ctx context.Context) ([]domain.Project, error) {
+	settings, err := s.store.InstanceSettings.Get(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if !settings.PublicProjectsEnabled {
+		return []domain.Project{}, nil
+	}
+	return s.store.Projects.ListPublic(ctx)
+}
+
 // IsProjectPubliclyAccessible is the two-flag AND used by requirePublicProject
 // (design.md): the instance-wide kill switch, checked first, then the
 // project's own PublicAccess flag. No Actor is involved — this backs

@@ -1,11 +1,23 @@
-import { useLocation, useNavigate } from 'react-router'
+import { useEffect, useState } from 'react'
+import { Link, useLocation, useNavigate } from 'react-router'
 import { LoginForm } from '@/components/LoginForm'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { HealthBadge } from '@/components/HealthBadge'
+import { api } from '@/lib/api'
 
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
+  const [publicProjectsEnabled, setPublicProjectsEnabled] = useState(false)
+
+  useEffect(() => {
+    void api
+      .GET('/api/v1/meta')
+      .then(({ data }) => {
+        if (data) setPublicProjectsEnabled(data.publicProjectsEnabled)
+      })
+      .catch(() => {})
+  }, [])
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center gap-6">
@@ -31,6 +43,11 @@ export default function LoginPage() {
           />
         </CardContent>
       </Card>
+      {publicProjectsEnabled && (
+        <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+          Browse public projects without an account
+        </Link>
+      )}
     </div>
   )
 }

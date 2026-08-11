@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { renderHook, waitFor } from '@testing-library/react'
-import { useProjectPermissions } from './useProjectPermissions'
+import { useProjectPermissions, useProjectReadAccess } from './useProjectPermissions'
 import { api } from '@/lib/api'
+import type { AuthUser } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
@@ -73,5 +74,48 @@ describe('useProjectPermissions', () => {
     unmount()
     reject(new Error('network down'))
     await Promise.resolve()
+  })
+})
+
+const user: AuthUser = { id: 'u1', email: 'u1@example.com', isTenantAdmin: false }
+
+describe('useProjectReadAccess (design.md D11)', () => {
+  it('stays loading while authLoading is true, firing no request', () => {
+    mockGET.mockImplementation(() => new Promise(() => {}))
+    const { result } = renderHook(() => useProjectReadAccess('p1', user, true))
+    expect(result.current).toBe('loading')
+    expect(mockGET).not.toHaveBeenCalled()
+  })
+
+  it('stays loading while projectKey is absent', () => {
+    mockGET.mockImplementation(() => new Promise(() => {}))
+    const { result } = renderHook(() => useProjectReadAccess(undefined, user, false))
+    expect(result.current).toBe('loading')
+    expect(mockGET).not.toHaveBeenCalled()
+  })
+
+  it('resolves to public immediately for an anonymous visitor, firing no request', () => {
+    mockGET.mockImplementation(() => new Promise(() => {}))
+    const { result } = renderHook(() => useProjectReadAccess('p1', null, false))
+    expect(result.current).toBe('public')
+    expect(mockGET).not.toHaveBeenCalled()
+  })
+
+  it('resolves to member when the permissions fetch succeeds', async () => {
+    mockGET.mockResolvedValue({ data: allTrue, response: { ok: true } })
+    const { result } = renderHook(() => useProjectReadAccess('p1', user, false))
+    await waitFor(() => expect(result.current).toBe('member'))
+  })
+
+  it('resolves to public — not stuck loading or denied — when the signed-in caller is not a project member (403)', async () => {
+    mockGET.mockResolvedValue({ data: undefined, error: { error: 'forbidden' }, response: { ok: false } })
+    const { result } = renderHook(() => useProjectReadAccess('p1', user, false))
+    await waitFor(() => expect(result.current).toBe('public'))
+  })
+
+  it('resolves to public when the request errors outright', async () => {
+    mockGET.mockRejectedValue(new Error('network down'))
+    const { result } = renderHook(() => useProjectReadAccess('p1', user, false))
+    await waitFor(() => expect(result.current).toBe('public'))
   })
 })

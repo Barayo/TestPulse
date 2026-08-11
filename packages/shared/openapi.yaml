@@ -772,6 +772,23 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/SuiteTrend" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects:
+    get:
+      operationId: listPublicProjects
+      summary: >-
+        List every public project without authentication
+        (add-public-project-discovery). Empty whenever the instance-wide
+        publicProjectsEnabled kill switch is off or no project is public —
+        the same response in either case, so which is true is never leaked.
+      tags: [public]
+      responses:
+        "200":
+          description: Public projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
   /api/v1/public/projects/{projectKey}:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }

@@ -344,4 +344,23 @@ describe('FolderTree', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Elsewhere' }))
     expect(screen.queryByRole('menuitem', { name: /new section/i })).not.toBeInTheDocument()
   })
+
+  // Permission-gating retrofit (unify-authenticated-and-public-views
+  // tasks.md 2.9): canCreate hides every row's "New section in…" trigger
+  // entirely, not just disables it.
+  it('hides every row\'s "New section in…" trigger when canCreate is false', () => {
+    render(
+      <FolderTree
+        folders={folders}
+        rootId="root"
+        selectedId="transferencias"
+        expanded={new Set()}
+        onSelect={vi.fn()}
+        onToggle={vi.fn()}
+        onNewSubfolder={vi.fn()}
+        canCreate={false}
+      />,
+    )
+    expect(screen.queryByRole('button', { name: /new section in transferencias/i })).not.toBeInTheDocument()
+  })
 })

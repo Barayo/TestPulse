@@ -88,6 +88,27 @@ describe('LoginPage', () => {
     expect(await screen.findByText('library stub')).toBeInTheDocument()
   })
 
+  it('shows a link to browse public projects when publicProjectsEnabled is true', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') return Promise.resolve({ data: { publicProjectsEnabled: true }, response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLogin()
+
+    expect(await screen.findByRole('link', { name: /browse public projects/i })).toHaveAttribute('href', '/')
+  })
+
+  it('hides the browse-public-projects link when publicProjectsEnabled is false', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') return Promise.resolve({ data: { publicProjectsEnabled: false }, response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLogin()
+
+    await screen.findByLabelText(/email/i)
+    expect(screen.queryByRole('link', { name: /browse public projects/i })).not.toBeInTheDocument()
+  })
+
   it('falls back to the projects root when there is no redirect-back location', async () => {
     mockPOST.mockResolvedValue({
       data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },

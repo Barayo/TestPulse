@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router'
+import { Link, Navigate, useNavigate } from 'react-router'
 import { StarIcon, Grid2x2, Grid3x3 } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -17,8 +17,11 @@ import { resolveViewMode } from '@/lib/viewMode'
 import { useSortOverride } from '@/lib/useSortOverride'
 import { sortProjects, DEFAULT_SORT_DIRECTION, type SortKey } from '@/lib/sortProjects'
 import { useBumpDataRevision } from '@/lib/DataRevision'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Pill } from '@/components/ui/Pill'
+import type { components } from '@testpulse/shared/api'
+
+type Project = components['schemas']['Project']
 
 type StatusFilter = 'Healthy' | 'In progress' | 'At risk' | 'No runs yet'
 const STATUS_FILTERS: StatusFilter[] = ['Healthy', 'In progress', 'At risk', 'No runs yet']
@@ -39,7 +42,7 @@ function statusOf(p: ProjectSummary): StatusFilter {
 // isTenantAdmin below, with no layout change from the always-shown version.
 export default function ProjectsPage() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const projects = useProjectSummaries()
   const bump = useBumpDataRevision()
   const isMobile = useIsMobile()
@@ -63,6 +66,37 @@ export default function ProjectsPage() {
   useEffect(() => {
     if (skipToSingleProject) navigate(`/projects/${projects[0].id}`, { replace: true })
   }, [skipToSingleProject, projects, navigate])
+
+  // `/` is the anonymous discovery surface (unify-authenticated-and-public-views
+  // design.md D6, replacing the retired standalone /public index). State
+  // stays `Project[] | undefined`, never defaulting to `[]` — the same
+  // loading-sentinel discipline the now-retired usePublicProjects()
+  // established — so "still loading" and "loaded, zero public projects"
+  // are distinguishable and the single-project redirect below never
+  // flashes an empty state first (D2's Open Question: this is a *new*,
+  // separate state, not a reuse of useProjectSummaries()'s `[]`-defaulting
+  // hook above, so its pre-existing loading-sentinel flash bug doesn't
+  // carry over here).
+  const [publicProjects, setPublicProjects] = useState<Project[] | undefined>(undefined)
+
+  useEffect(() => {
+    if (user || authLoading) {
+      setPublicProjects(undefined)
+      return
+    }
+    let cancelled = false
+    void api
+      .GET('/api/v1/public/projects')
+      .then(({ data }) => {
+        if (!cancelled) setPublicProjects(data ?? [])
+      })
+      .catch(() => {
+        if (!cancelled) setPublicProjects([])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [user, authLoading])
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
@@ -93,6 +127,37 @@ export default function ProjectsPage() {
       await api.POST('/api/v1/projects/{projectKey}/favorite', { params: { path: { projectKey: p.id } } })
     }
     bump()
+  }
+
+  if (!user && !authLoading) {
+    if (publicProjects && publicProjects.length === 1) {
+      return <Navigate to={`/projects/${publicProjects[0].key}`} replace />
+    }
+    return (
+      <div className="space-y-6">
+        <h1 className="tp-heading text-2xl">Projects</h1>
+        {publicProjects && publicProjects.length === 0 && (
+          <p className="text-sm text-muted-foreground">No public projects are available right now.</p>
+        )}
+        {publicProjects && publicProjects.length > 1 && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {publicProjects.map((p) => (
+              <Link key={p.id} to={`/projects/${p.key}`}>
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <CardTitle>{p.name}</CardTitle>
+                      {p.isSample && <Badge variant="secondary">Sample</Badge>}
+                    </div>
+                    {p.description && <CardDescription>{p.description}</CardDescription>}
+                  </CardHeader>
+                </Card>
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    )
   }
 
   if (skipToSingleProject) return null

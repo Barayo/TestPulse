@@ -41,6 +41,19 @@ describe('CasePicker', () => {
     expect(onToggle).toHaveBeenCalledWith('c3')
   })
 
+  // Permission-gating retrofit (unify-authenticated-and-public-views
+  // tasks.md 2.2): SuiteDetailPage reuses this same picker as its case
+  // list, so a caller lacking suiteEditMembership (including an anonymous
+  // visitor) must see genuinely disabled checkboxes, not just a UI that
+  // looks interactive and relies on the server 403.
+  it('disables every checkbox and ignores clicks when readOnly is set', async () => {
+    const { onToggle } = renderPicker({ readOnly: true })
+    const checkbox = screen.getByRole('checkbox', { name: /checkout completes/i })
+    expect(checkbox).toBeDisabled()
+    await userEvent.click(checkbox)
+    expect(onToggle).not.toHaveBeenCalled()
+  })
+
   it('filters rows by platform without changing the selection', async () => {
     const { onToggle } = renderPicker({ selected: new Set(['c1']) })
     expect(screen.getByRole('checkbox', { name: /login succeeds/i })).toBeChecked()

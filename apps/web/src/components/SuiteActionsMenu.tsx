@@ -11,6 +11,7 @@ import { useBumpDataRevision } from '@/lib/DataRevision'
 import type { components } from '@testpulse/shared/api'
 
 type Suite = components['schemas']['Suite']
+type Permissions = components['schemas']['Permissions']
 
 export type SuiteActionsMenuHandle = {
   openAt: (x: number, y: number) => void
@@ -28,6 +29,15 @@ type Props = {
   // that shows an inline "Run created" banner (SuiteDetailPage, SuitesPage)
   // can do so — optional since not every future caller needs it.
   onRunCreated?: (runKey: string) => void
+  // The caller's own effective permissions (useProjectPermissions) — hides
+  // (not disables) Run suite/Rename/Delete individually per flag, the same
+  // "hide entirely, don't rely on the server 403" rule the rest of the app
+  // already applies. `undefined` (no session, or the permissions request
+  // hasn't resolved/failed) is treated as zero permissions, which is also
+  // what an anonymous visitor on a public project always has — this
+  // component is shared by SuiteDetailPage and SuitesPage, both public-
+  // viewable (unify-authenticated-and-public-views tasks.md 2.1).
+  permissions: Permissions | undefined
 }
 
 // Extracted from SuiteDetailPage's Actions sidebar (add-suite-index-context-menu)
@@ -37,7 +47,7 @@ type Props = {
 // variant="menu" wraps the same handlers in a RowActionMenu, matching the
 // per-row menu pattern already used by FolderRow/CaseRow/RunItemRow.
 export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(function SuiteActionsMenu(
-  { suite, projectKey, variant, navigate, onChanged, onRunCreated },
+  { suite, projectKey, variant, navigate, onChanged, onRunCreated, permissions },
   ref,
 ) {
   const bumpLanding = useBumpDataRevision()
@@ -101,47 +111,67 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
     }
   }
 
+  const canRun = Boolean(permissions?.runCreate)
+  const canRename = Boolean(permissions?.suiteEditMembership)
+  const canDelete = Boolean(permissions?.manageProject)
+
   const menuItems: RowActionMenuItem[] = [
-    { label: 'Run suite', icon: <PlayIcon className="size-4" aria-hidden="true" />, onSelect: openRunSuite },
-    {
-      label: 'Rename',
-      icon: <PencilIcon className="size-4" aria-hidden="true" />,
-      onSelect: () => {
-        setRenameValue(suite.name)
-        setRenaming(true)
-      },
-    },
-    {
-      label: 'Delete',
-      icon: <Trash2Icon className="size-4" aria-hidden="true" />,
-      danger: true,
-      onSelect: () => setDeleting(true),
-    },
+    ...(canRun
+      ? [{ label: 'Run suite', icon: <PlayIcon className="size-4" aria-hidden="true" />, onSelect: openRunSuite } satisfies RowActionMenuItem]
+      : []),
+    ...(canRename
+      ? [
+          {
+            label: 'Rename',
+            icon: <PencilIcon className="size-4" aria-hidden="true" />,
+            onSelect: () => {
+              setRenameValue(suite.name)
+              setRenaming(true)
+            },
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete',
+            icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+            danger: true,
+            onSelect: () => setDeleting(true),
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
   ]
 
   return (
     <>
       {variant === 'buttons' ? (
         <div className="flex flex-col gap-2">
-          <Button type="button" onClick={openRunSuite}>
-            Run suite
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              setRenameValue(suite.name)
-              setRenaming(true)
-            }}
-          >
-            Rename
-          </Button>
-          <Button type="button" variant="destructive" onClick={() => setDeleting(true)}>
-            Delete
-          </Button>
+          {canRun && (
+            <Button type="button" onClick={openRunSuite}>
+              Run suite
+            </Button>
+          )}
+          {canRename && (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setRenameValue(suite.name)
+                setRenaming(true)
+              }}
+            >
+              Rename
+            </Button>
+          )}
+          {canDelete && (
+            <Button type="button" variant="destructive" onClick={() => setDeleting(true)}>
+              Delete
+            </Button>
+          )}
         </div>
       ) : (
-        <RowActionMenu ref={menuRef} label={`Actions for ${suite.name}`} items={menuItems} />
+        menuItems.length > 0 && <RowActionMenu ref={menuRef} label={`Actions for ${suite.name}`} items={menuItems} />
       )}
 
       <Dialog open={runningQuick} onOpenChange={setRunningQuick}>

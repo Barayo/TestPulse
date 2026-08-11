@@ -32,14 +32,24 @@ const v2 = {
   createdAt: '2026-02-01T00:00:00Z',
 }
 
-function mockExecutions(execs: unknown[] = []) {
-  mockGET.mockResolvedValue({ data: execs, response: { ok: true } })
+function mockExecutions(execs: unknown[] = [], anonymous = false) {
+  mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/cases/{caseKey}/executions' && !anonymous)
+      return Promise.resolve({ data: execs, response: { ok: true } })
+    if (path === '/api/v1/public/cases/{caseKey}/executions' && anonymous)
+      return Promise.resolve({ data: execs, response: { ok: true } })
+    return Promise.resolve({ data: undefined, response: { ok: true } })
+  })
 }
 
-function renderDialog(props: Omit<Parameters<typeof VersionDetailDialog>[0], 'onOpenChange'>) {
+function renderDialog(
+  props: Omit<Parameters<typeof VersionDetailDialog>[0], 'onOpenChange' | 'access'> & {
+    access?: Parameters<typeof VersionDetailDialog>[0]['access']
+  },
+) {
   return render(
     <MemoryRouter>
-      <VersionDetailDialog {...props} onOpenChange={() => {}} />
+      <VersionDetailDialog {...props} access={props.access ?? 'member'} onOpenChange={() => {}} />
     </MemoryRouter>,
   )
 }
@@ -101,5 +111,31 @@ describe('VersionDetailDialog', () => {
     renderDialog({ open: true, caseKey: 'c1', version: 2, versions: [v2, v1] })
     const link = await screen.findByRole('link', { name: /sprint 1/i })
     expect(link).toHaveAttribute('href', '/runs/r1/items/c1')
+  })
+
+  // Dual-mode migration (unify-authenticated-and-public-views tasks.md
+  // 4.1): a satellite fetch inside CaseDetailPage's "View executions"
+  // dialog, easy to miss since it's a separate component's own effect.
+  // The parent page now passes its own useProjectReadAccess result down
+  // as the `access` prop (design.md D11) rather than the dialog deriving
+  // its own from useAuth() — 'public' covers both anonymous visitors and
+  // signed-in non-members identically.
+  it('fetches from the public executions endpoint when access is public', async () => {
+    mockExecutions(
+      [{ runItemId: 'i1', runId: 'r1', runKey: 'r1', runName: 'Sprint 1', caseVersion: 2, status: 'pass', createdAt: '' }],
+      true,
+    )
+    renderDialog({ open: true, caseKey: 'c1', version: 2, versions: [v2, v1], access: 'public' })
+    await screen.findByText('Sprint 1')
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/public/cases/{caseKey}/executions', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/cases/{caseKey}/executions', expect.anything())
+  })
+
+  it('fires no executions request while access is still loading', async () => {
+    mockGET.mockImplementation(() => Promise.resolve({ data: undefined, response: { ok: true } }))
+    renderDialog({ open: true, caseKey: 'c1', version: 2, versions: [v2, v1], access: 'loading' })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/cases/{caseKey}/executions', expect.anything())
+    expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/cases/{caseKey}/executions', expect.anything())
   })
 })
