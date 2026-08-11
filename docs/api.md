@@ -165,7 +165,7 @@ field alongside the report text, not inside it.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/v1/auth/login` | Log in with `email`/`password`; sets an `HttpOnly` session cookie (30-day sliding expiry) |
+| POST | `/api/v1/auth/login` | Log in with `email`/`password`; sets an `HttpOnly` session cookie (30-day sliding expiry). Rate-limited per client IP (burst of 5, refilling at 5/minute) — returns `429` once exhausted |
 | POST | `/api/v1/auth/logout` | End the current session |
 | GET | `/api/v1/users/me` | The currently authenticated actor, as a user record |
 | PATCH | `/api/v1/users/me` | Update the caller's own `displayName`, `avatarKey`, and/or `timezone` — self-service only, no target-user parameter |

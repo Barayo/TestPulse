@@ -9,12 +9,23 @@ import (
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 )
 
+// loginRateLimit: burst of 5 quick attempts (a real user mistyping a
+// password shouldn't get blocked), refilling at 5/minute sustained —
+// enough to make network-speed brute-forcing impractical without being
+// punitive to normal use (backlog #113).
+const (
+	loginRateLimitPerMinute = 5.0
+	loginRateLimitBurst     = 5
+)
+
 // mountAuth registers the unauthenticated auth routes — login is how a
 // client obtains a session in the first place, so it cannot itself require
 // one (design D6); logout is likewise open, and reads whatever session
-// cookie is present (or none) rather than requiring a valid one.
+// cookie is present (or none) rather than requiring a valid one. login
+// alone is rate-limited (logout has nothing worth brute-forcing).
 func mountAuth(r chi.Router, h *api) {
-	r.Post("/auth/login", h.login)
+	limiter := newLoginRateLimiter(loginRateLimitPerMinute/60, loginRateLimitBurst)
+	r.With(limiter.middleware).Post("/auth/login", h.login)
 	r.Post("/auth/logout", h.logout)
 }
 
