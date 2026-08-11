@@ -43,6 +43,28 @@ func TestLoginSuccessCreatesSession(t *testing.T) {
 	}
 }
 
+// Sessions must be hashed at rest, exactly like api_tokens.token_hash
+// already is (backlog #116) — the raw secret (what's in the cookie) must
+// never be the value a database read could hand back. Proven by showing a
+// lookup using the raw cookie value directly against the store, bypassing
+// the service layer's hashing, finds nothing: if the raw secret were
+// stored as-is, this same lookup would succeed.
+func TestSessionIDIsHashedAtRest(t *testing.T) {
+	pool := testutil.Pool(t, "identity_session_hash")
+	st := store.New(pool)
+	s := service.New(st)
+	mustCreateUser(t, s, "a@example.com", "correcthorse", false)
+
+	sess, _, err := s.Login(context.Background(), "a@example.com", "correcthorse")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	if _, err := st.Sessions.Get(context.Background(), sess.ID); err != store.ErrNotFound {
+		t.Errorf("raw session id was directly usable as a store lookup key (err = %v) — it must be stored hashed, not in plaintext", err)
+	}
+}
+
 func TestLoginWrongPasswordRejected(t *testing.T) {
 	s := testService(t)
 	mustCreateUser(t, s, "a@example.com", "correcthorse", false)

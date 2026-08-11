@@ -164,6 +164,13 @@ func TestUserCreateDuplicateEmailRejected(t *testing.T) {
 }
 
 // --- Sessions (task 2.2) ---
+//
+// The store layer never hashes anything itself (backlog #116) — it treats
+// whatever string it's given as an opaque key and stores/looks up exactly
+// that. These literals ("sess-1", etc.) stand in for what would really be
+// a SHA-256 hash computed by the service layer (hashToken); the store's
+// own round-trip behavior is identical either way, which is what these
+// tests actually verify.
 
 func TestSessionCreateGetExtendDelete(t *testing.T) {
 	s := testStore(t)

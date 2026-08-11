@@ -63,15 +63,19 @@ func (s *Service) Login(ctx context.Context, email, password string) (domain.Ses
 	if err != nil {
 		return domain.Session{}, domain.User{}, err
 	}
-	sess, err := s.store.Sessions.Create(ctx, id, user.ID, time.Now().Add(sessionLifetime))
+	sess, err := s.store.Sessions.Create(ctx, hashToken(id), user.ID, time.Now().Add(sessionLifetime))
 	if err != nil {
 		return domain.Session{}, domain.User{}, err
 	}
+	// The store only ever sees/returns the hash (backlog #116) — id is the
+	// one place the raw secret is known, so it's set here for the caller
+	// to put in the cookie.
+	sess.ID = id
 	return sess, user, nil
 }
 
 func (s *Service) Logout(ctx context.Context, sessionID string) error {
-	return s.store.Sessions.Delete(ctx, sessionID)
+	return s.store.Sessions.Delete(ctx, hashToken(sessionID))
 }
 
 // CleanupExpiredSessions is run once at API startup so the sessions table
@@ -85,7 +89,7 @@ func (s *Service) CleanupExpiredSessions(ctx context.Context) error {
 // session stops authenticating immediately, without needing to delete the
 // session row.
 func (s *Service) AuthenticateSession(ctx context.Context, sessionID string) (domain.Actor, error) {
-	sess, err := s.store.Sessions.Get(ctx, sessionID)
+	sess, err := s.store.Sessions.Get(ctx, hashToken(sessionID))
 	if errors.Is(err, store.ErrNotFound) {
 		return domain.Actor{}, unauthorized("invalid or expired session")
 	}
@@ -99,7 +103,7 @@ func (s *Service) AuthenticateSession(ctx context.Context, sessionID string) (do
 	if user.DeactivatedAt != nil {
 		return domain.Actor{}, unauthorized("account deactivated")
 	}
-	if err := s.store.Sessions.Extend(ctx, sessionID, time.Now().Add(sessionLifetime)); err != nil {
+	if err := s.store.Sessions.Extend(ctx, hashToken(sessionID), time.Now().Add(sessionLifetime)); err != nil {
 		return domain.Actor{}, err
 	}
 	return domain.Actor{

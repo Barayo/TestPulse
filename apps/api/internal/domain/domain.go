@@ -760,7 +760,11 @@ func ValidateEmail(email string) error {
 }
 
 type Session struct {
-	ID        string    `json:"-"` // never serialized: it is the session secret itself
+	// Never serialized: it is the raw session secret (the cookie value),
+	// only ever populated by Service.Login — the store layer never stores
+	// or returns it in this form, only its hash (backlog #116). Empty on
+	// a Session returned from anywhere else (e.g. AuthenticateSession).
+	ID        string    `json:"-"`
 	UserID    string    `json:"userId"`
 	CreatedAt time.Time `json:"createdAt"`
 	ExpiresAt time.Time `json:"expiresAt"`
