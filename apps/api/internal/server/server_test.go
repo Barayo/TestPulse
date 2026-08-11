@@ -50,6 +50,49 @@ func TestReadinessUnavailableWhenDependencyFails(t *testing.T) {
 	}
 }
 
+// Every response — including the unauthenticated liveness probe, so the
+// check has no route-specific escape hatch — must carry basic
+// clickjacking/MIME-sniffing hardening (backlog #114). A full
+// Content-Security-Policy is a separate, bigger follow-up (needs an audit
+// of the embedded React bundle for inline scripts/styles first).
+func TestSecurityHeadersPresentOnEveryResponse(t *testing.T) {
+	h := newTestServer(nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+
+	if got := rec.Header().Get("X-Frame-Options"); got != "DENY" {
+		t.Errorf("X-Frame-Options = %q, want DENY", got)
+	}
+	if got := rec.Header().Get("X-Content-Type-Options"); got != "nosniff" {
+		t.Errorf("X-Content-Type-Options = %q, want nosniff", got)
+	}
+	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
+		t.Errorf("Referrer-Policy = %q, want strict-origin-when-cross-origin", got)
+	}
+}
+
+// HSTS only makes sense (and is only honored by browsers) over an actually
+// secure connection — sending it over what might be a genuine local/dev
+// plain-HTTP connection would be misleading, so it's gated the same way
+// the session cookie's Secure flag is (backlog #112's requestIsHTTPS).
+func TestHSTSOnlySentOverHTTPS(t *testing.T) {
+	h := newTestServer(nil)
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/healthz", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	h.ServeHTTP(rec, req)
+	if got := rec.Header().Get("Strict-Transport-Security"); got == "" {
+		t.Error("expected Strict-Transport-Security when the request is HTTPS")
+	}
+
+	recPlain := httptest.NewRecorder()
+	h.ServeHTTP(recPlain, httptest.NewRequest(http.MethodGet, "/healthz", nil))
+	if got := recPlain.Header().Get("Strict-Transport-Security"); got != "" {
+		t.Errorf("Strict-Transport-Security = %q, want empty over plain HTTP", got)
+	}
+}
+
 func TestMetaEndpoint(t *testing.T) {
 	// handleMeta reads the instance_settings row (enable-public-project-access),
 	// so this needs a real service backed by the test database, unlike the

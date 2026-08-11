@@ -23,6 +23,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) 
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
+	r.Use(securityHeaders)
 
 	r.Get("/healthz", handleLiveness)
 	r.Get("/readyz", handleReadiness(logger, readiness))

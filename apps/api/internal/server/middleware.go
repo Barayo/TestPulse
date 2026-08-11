@@ -15,6 +15,27 @@ import (
 // sessionCookieName is the cookie carrying the opaque session id (design D2).
 const sessionCookieName = "session"
 
+// securityHeaders sets baseline clickjacking/MIME-sniffing hardening on
+// every response — registered before routing so there's no route-specific
+// escape hatch (backlog #114). Not a full Content-Security-Policy: that
+// needs an audit of the embedded React bundle for inline scripts/styles
+// first, tracked as a separate follow-up. HSTS is only sent when the
+// request actually arrived over HTTPS (requestIsHTTPS, backlog #112's
+// helper) — sending it over a genuine plain-HTTP connection (local/dev)
+// would be misleading, and browsers ignore it there anyway per spec.
+func securityHeaders(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		h := w.Header()
+		h.Set("X-Frame-Options", "DENY")
+		h.Set("X-Content-Type-Options", "nosniff")
+		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		if requestIsHTTPS(r) {
+			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // authenticate resolves the request's Actor from a Bearer token or a session
 // cookie, in that order (design D6), and rejects the request with 401 if
 // neither resolves to a valid, non-revoked, non-expired actor.
