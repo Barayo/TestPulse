@@ -592,6 +592,25 @@ func (r Role) Has(perm Permission) bool {
 	}
 }
 
+// Permissions converts a role's flags to a Permissions set — used for a
+// scoped API token's granted set before it's intersected with its
+// creator's own current access (backlog #117, design.md D1/D3).
+func (r Role) Permissions() Permissions {
+	return Permissions{
+		Read:                r.CanRead,
+		CaseCreate:          r.CanCaseCreate,
+		CaseEdit:            r.CanCaseEdit,
+		CaseDelete:          r.CanCaseDelete,
+		SectionCreate:       r.CanSectionCreate,
+		SectionDelete:       r.CanSectionDelete,
+		SuiteCreate:         r.CanSuiteCreate,
+		SuiteEditMembership: r.CanSuiteEditMembership,
+		RunCreate:           r.CanRunCreate,
+		RunRecordResult:     r.CanRunRecordResult,
+		ManageProject:       r.CanManageProject,
+	}
+}
+
 func ValidateRoleName(name string) error {
 	if name == "" {
 		return fmt.Errorf("name is required")
@@ -642,6 +661,43 @@ func (p Permissions) Has(perm Permission) bool {
 		return p.ManageProject
 	default:
 		return false
+	}
+}
+
+// IsSubsetOf reports whether every permission p grants is also granted by
+// other — used to validate a scoped API token's requested role never
+// exceeds its creator's own current access (backlog #117, design.md D4).
+func (p Permissions) IsSubsetOf(other Permissions) bool {
+	return (!p.Read || other.Read) &&
+		(!p.CaseCreate || other.CaseCreate) &&
+		(!p.CaseEdit || other.CaseEdit) &&
+		(!p.CaseDelete || other.CaseDelete) &&
+		(!p.SectionCreate || other.SectionCreate) &&
+		(!p.SectionDelete || other.SectionDelete) &&
+		(!p.SuiteCreate || other.SuiteCreate) &&
+		(!p.SuiteEditMembership || other.SuiteEditMembership) &&
+		(!p.RunCreate || other.RunCreate) &&
+		(!p.RunRecordResult || other.RunRecordResult) &&
+		(!p.ManageProject || other.ManageProject)
+}
+
+// Intersect returns the permissions granted by both p and other — a
+// scoped API token's actual effective permissions, request-time-computed
+// from its role's flags ANDed with its creator's current access, never a
+// stale snapshot of either alone (backlog #117, design.md D3).
+func (p Permissions) Intersect(other Permissions) Permissions {
+	return Permissions{
+		Read:                p.Read && other.Read,
+		CaseCreate:          p.CaseCreate && other.CaseCreate,
+		CaseEdit:            p.CaseEdit && other.CaseEdit,
+		CaseDelete:          p.CaseDelete && other.CaseDelete,
+		SectionCreate:       p.SectionCreate && other.SectionCreate,
+		SectionDelete:       p.SectionDelete && other.SectionDelete,
+		SuiteCreate:         p.SuiteCreate && other.SuiteCreate,
+		SuiteEditMembership: p.SuiteEditMembership && other.SuiteEditMembership,
+		RunCreate:           p.RunCreate && other.RunCreate,
+		RunRecordResult:     p.RunRecordResult && other.RunRecordResult,
+		ManageProject:       p.ManageProject && other.ManageProject,
 	}
 }
 
@@ -770,14 +826,20 @@ type Session struct {
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-// ApiToken is a scoped credential an authenticated user issues for an agent.
-// Only Prefix is ever shown again after creation — the full token value is
+// ApiToken is a credential an authenticated user issues for an agent. Only
+// Prefix is ever shown again after creation — the full token value is
 // returned once by the service layer and never persisted (design D3).
+// ProjectID/RoleID are both nil for an unscoped token (full inheritance of
+// the creator's live permission level, the original/default behavior) or
+// both set for one scoped to a project + role (backlog #117, design.md
+// D1) — never independently nil, enforced by a DB CHECK constraint.
 type ApiToken struct {
 	ID        string     `json:"id"`
 	CreatedBy string     `json:"createdBy"`
 	Name      string     `json:"name"`
 	Prefix    string     `json:"prefix"`
+	ProjectID *string    `json:"projectId"`
+	RoleID    *string    `json:"roleId"`
 	RevokedAt *time.Time `json:"revokedAt"`
 	CreatedAt time.Time  `json:"createdAt"`
 }
@@ -812,6 +874,15 @@ type Actor struct {
 	DisplayName     string
 	EffectiveUserID string
 	IsTenantAdmin   bool
+	// ScopedProjectID/ScopedPermissions: both nil for a human actor or an
+	// unscoped agent token (full inheritance, unchanged default
+	// behavior). Both set for a token scoped to a project + role
+	// (backlog #117, design.md D3) — ScopedPermissions is already the
+	// *intersection* of the role's flags and the creator's current
+	// access at the time it was resolved (AuthenticateToken), not the
+	// raw role alone.
+	ScopedProjectID   *string
+	ScopedPermissions *Permissions
 }
 
 // AuditEntry records one write, denormalizing the actor's display name so

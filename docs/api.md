@@ -176,7 +176,7 @@ field alongside the report text, not inside it.
 | POST | `/api/v1/users` | Create a user (`email`, `password`, `isTenantAdmin`) — Tenant Admin only; `displayName` defaults to a name derived from the email's local-part (`jane.doe@x.com` → "Jane Doe") rather than staying unset |
 | PATCH | `/api/v1/users/{userId}` | Change `isTenantAdmin` and/or `deactivate` — Tenant Admin only |
 | GET | `/api/v1/tokens` | List API tokens — own tokens, or `?userId=` for another user's (Tenant Admin only) |
-| POST | `/api/v1/tokens` | Create an API token (`name`) for an agent; the full value is returned once and never again |
+| POST | `/api/v1/tokens` | Create an API token (`name`, optional `projectId`+`roleId`) for an agent; the full value is returned once and never again |
 | DELETE | `/api/v1/tokens/{tokenId}` | Revoke a token — its own creator, or a Tenant Admin |
 | GET | `/api/v1/audit?entityType=&entityId=` | Audit history for a specific entity, oldest first |
 
@@ -245,6 +245,22 @@ resolve to an authenticated actor:
   actor — distinct from, and never impersonating, the human who created it
   — at that human's *current* permission level, resolved fresh on every
   request (`add-project-rbac`).
+- **Scoped agent tokens** (`add-scoped-api-tokens`, backlog #117): creation
+  optionally accepts `projectId`+`roleId` to cap a token to a single
+  project and a single named role, instead of inheriting its creator's
+  full current access. The creator must currently hold every permission
+  the chosen role grants — a role broader than the creator's own access is
+  rejected at creation (`400`). Enforcement is request-time, not a
+  one-time snapshot: a scoped token's effective permissions are the
+  *intersection* of the role's flags and the creator's current permissions
+  on that project, recomputed on every request, so the token
+  automatically narrows if the creator's access later narrows, and stops
+  authenticating entirely (`401`) if its role is deleted. A scoped token
+  from a Tenant Admin creator is still capped to the scope — Tenant Admin
+  status never bypasses a token's own scope. A read-only `Viewer` role is
+  seeded by default for the common single-purpose integration case;
+  omitting `projectId`/`roleId` keeps today's unscoped, full-access
+  behavior.
 
 One instance-wide `Tenant Admin` flag (creates projects, manages user
 accounts, teams, and roles, assigns project membership, and has implicit

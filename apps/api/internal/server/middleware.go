@@ -204,6 +204,18 @@ func (h *api) requirePermission(perm domain.Permission, resolve projectIDResolve
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 				return
 			}
+			// A scoped agent token (backlog #117, design.md D3) is
+			// authorized only within its own granted project — never
+			// falls through to EffectivePermissions, which would
+			// resolve the *creator's* broader access instead.
+			if actor.ScopedProjectID != nil {
+				if *actor.ScopedProjectID != projectID || !actor.ScopedPermissions.Has(perm) {
+					writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+					return
+				}
+				next.ServeHTTP(w, r)
+				return
+			}
 			perms, err := h.svc.EffectivePermissions(r.Context(), actor, projectID)
 			if err != nil || !perms.Has(perm) {
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})

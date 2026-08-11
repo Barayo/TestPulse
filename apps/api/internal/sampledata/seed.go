@@ -109,6 +109,28 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: adding demo project member: %w", err)
 	}
 
+	// Two API tokens (add-scoped-api-tokens): a full-access one (today's
+	// default, unscoped) alongside one scoped to this project's read-only
+	// Viewer role — the token list has a real example of each, not just a
+	// theoretical scoping feature. The raw secret value is discarded; a
+	// demo token has nothing real to keep secret.
+	var viewerRole domain.Role
+	for _, role := range roles {
+		if role.Name == "Viewer" {
+			viewerRole = role
+			break
+		}
+	}
+	if viewerRole.ID == "" {
+		return fmt.Errorf("sampledata: default Viewer role not found")
+	}
+	if _, _, err := svc.CreateToken(ctx, adminActor, "ci-pipeline", nil, nil); err != nil {
+		return fmt.Errorf("sampledata: creating sample API token: %w", err)
+	}
+	if _, _, err := svc.CreateToken(ctx, adminActor, "status-dashboard", &p.ID, &viewerRole.ID); err != nil {
+		return fmt.Errorf("sampledata: creating scoped sample API token: %w", err)
+	}
+
 	root, err := RootFolder(ctx, svc, p.ID)
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)

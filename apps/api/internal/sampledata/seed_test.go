@@ -726,6 +726,53 @@ func TestSeedContentShowcasesLibraryRichness(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesScopedApiToken covers add-scoped-api-tokens'
+// Sample-Project-showcase task: without this, a fresh instance's token list
+// would only ever show unscoped tokens, leaving the project+role picker and
+// the "{project} · {role}" scoped display entirely untested against real
+// seeded content.
+func TestSeedContentShowcasesScopedApiToken(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	users, err := svc.ListUsers(actorCtx)
+	if err != nil || len(users) == 0 {
+		t.Fatalf("ListUsers: %v, %d users", err, len(users))
+	}
+	admin := users[0]
+	adminActor := domain.Actor{
+		ID: admin.ID, Kind: domain.ActorKindUser, DisplayName: admin.Email,
+		EffectiveUserID: admin.ID, IsTenantAdmin: admin.IsTenantAdmin,
+	}
+
+	tokens, err := svc.ListOwnTokens(actorCtx, adminActor)
+	if err != nil {
+		t.Fatalf("ListOwnTokens: %v", err)
+	}
+	var sawUnscoped, sawScoped bool
+	for _, tok := range tokens {
+		if tok.ProjectID == nil && tok.RoleID == nil {
+			sawUnscoped = true
+			continue
+		}
+		if tok.ProjectID != nil && *tok.ProjectID == p.ID {
+			sawScoped = true
+		}
+	}
+	if !sawUnscoped {
+		t.Error("no unscoped (full-access) token seeded — nothing shows \"Full access\" in the token list")
+	}
+	if !sawScoped {
+		t.Error("no token scoped to the Sample Project seeded — nothing shows the {project} · {role} display")
+	}
+}
+
 // TestSeedContentShowcasesScreenshotAttachment covers
 // add-run-item-screenshot-attachments' Sample-Project-showcase task: without
 // this, a fresh instance would never show a run item result with an

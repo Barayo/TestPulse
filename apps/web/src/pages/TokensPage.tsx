@@ -11,36 +11,63 @@ type Token = {
   id: string
   name: string
   prefix: string
+  projectId: string | null
+  roleId: string | null
   revokedAt: string | null
 }
+type ProjectOption = { id: string; name: string }
+type RoleOption = { id: string; name: string }
 
 export default function TokensPage() {
   const [tokens, setTokens] = useState<Token[]>([])
+  const [projects, setProjects] = useState<ProjectOption[]>([])
+  const [roles, setRoles] = useState<RoleOption[]>([])
   const [creating, setCreating] = useState(false)
   const [name, setName] = useState('')
+  // Collapsed by default (design.md D5) — leaving it collapsed creates an
+  // unscoped token, today's unchanged behavior (backlog #117).
+  const [scoping, setScoping] = useState(false)
+  const [scopeProjectId, setScopeProjectId] = useState('')
+  const [scopeRoleId, setScopeRoleId] = useState('')
   const [justCreated, setJustCreated] = useState<string>()
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
 
   async function load() {
-    const { data } = await api.GET('/api/v1/tokens')
-    if (data) setTokens(data as Token[])
+    const [{ data: t }, { data: p }, { data: r }] = await Promise.all([
+      api.GET('/api/v1/tokens'),
+      api.GET('/api/v1/projects'),
+      api.GET('/api/v1/roles'),
+    ])
+    if (t) setTokens(t as Token[])
+    if (p) setProjects(p as ProjectOption[])
+    if (r) setRoles(r as RoleOption[])
   }
 
   useEffect(() => {
     void load()
   }, [])
 
+  function resetCreateForm() {
+    setName('')
+    setCreating(false)
+    setScoping(false)
+    setScopeProjectId('')
+    setScopeRoleId('')
+  }
+
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
     setError(undefined)
-    const { data, error: apiError } = await api.POST('/api/v1/tokens', { body: { name } })
+    const scoped = scoping && scopeProjectId && scopeRoleId
+    const { data, error: apiError } = await api.POST('/api/v1/tokens', {
+      body: scoped ? { name, projectId: scopeProjectId, roleId: scopeRoleId } : { name },
+    })
     if (apiError) {
       setError((apiError as { error?: string }).error ?? 'failed to create token')
       return
     }
-    setName('')
-    setCreating(false)
+    resetCreateForm()
     const full = (data as { token?: string } | undefined)?.token
     if (full) setJustCreated(full)
     setCopied(false)
@@ -98,18 +125,84 @@ export default function TokensPage() {
           <CardHeader>
             <CardTitle className="tp-heading">New token</CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={handleCreate} className="flex items-end gap-3">
-              <div className="flex-1 space-y-1">
-                <Label htmlFor="new-token-name">Name</Label>
-                <Input
-                  id="new-token-name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="ci-agent"
-                />
+          <CardContent className="space-y-3">
+            <form onSubmit={handleCreate} className="space-y-3">
+              <div className="flex items-end gap-3">
+                <div className="flex-1 space-y-1">
+                  <Label htmlFor="new-token-name">Name</Label>
+                  <Input
+                    id="new-token-name"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="ci-agent"
+                  />
+                </div>
+                <Button type="submit">Create</Button>
               </div>
-              <Button type="submit">Create</Button>
+
+              {!scoping ? (
+                <button
+                  type="button"
+                  className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                  onClick={() => setScoping(true)}
+                >
+                  Scope to a project (optional)
+                </button>
+              ) : (
+                <div className="flex items-end gap-3 rounded-md border bg-muted/40 p-3">
+                  <div className="flex-1 space-y-1">
+                    <Label htmlFor="new-token-project">Project</Label>
+                    <select
+                      id="new-token-project"
+                      aria-label="Project"
+                      className="h-8 w-full rounded-md border bg-background px-2 text-sm"
+                      value={scopeProjectId}
+                      onChange={(e) => {
+                        setScopeProjectId(e.target.value)
+                        setScopeRoleId('')
+                      }}
+                    >
+                      <option value="">Select a project…</option>
+                      {projects.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {scopeProjectId && (
+                    <div className="flex-1 space-y-1">
+                      <Label htmlFor="new-token-role">Role</Label>
+                      <select
+                        id="new-token-role"
+                        aria-label="Role"
+                        className="h-8 w-full rounded-md border bg-background px-2 text-sm"
+                        value={scopeRoleId}
+                        onChange={(e) => setScopeRoleId(e.target.value)}
+                      >
+                        <option value="">Select a role…</option>
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>
+                            {r.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setScoping(false)
+                      setScopeProjectId('')
+                      setScopeRoleId('')
+                    }}
+                  >
+                    Remove scope
+                  </Button>
+                </div>
+              )}
             </form>
             {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
           </CardContent>
@@ -122,6 +215,17 @@ export default function TokensPage() {
             <div>
               <span className="font-medium">{t.name}</span>
               <span className="ml-2 font-mono text-sm text-muted-foreground">{t.prefix}…</span>
+              <div className="text-xs text-muted-foreground">
+                {t.projectId && t.roleId ? (
+                  <>
+                    {projects.find((p) => p.id === t.projectId)?.name ?? 'Unknown project'}
+                    {' · '}
+                    {roles.find((r) => r.id === t.roleId)?.name ?? 'Unknown role'}
+                  </>
+                ) : (
+                  'Full access'
+                )}
+              </div>
             </div>
             <Button variant="ghost" size="sm" onClick={() => void handleRevoke(t.id)}>
               Revoke

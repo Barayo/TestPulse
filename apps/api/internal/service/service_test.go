@@ -98,6 +98,6 @@ func TestCreateUserValidatesEmailPassword(t *testing.T) {
 
 func TestCreateTokenValidatesName(t *testing.T) {
 	s := nilService()
-	_, _, err := s.CreateToken(context.Background(), domain.Actor{ID: "u1", EffectiveUserID: "u1"}, "")
+	_, _, err := s.CreateToken(context.Background(), domain.Actor{ID: "u1", EffectiveUserID: "u1"}, "", nil, nil)
 	wantValidation(t, err, "name")
 }

@@ -2247,6 +2247,14 @@ components:
         prefix:
           type: string
           description: Short, non-secret prefix of the token, for identification only.
+        projectId:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
+        roleId:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
         revokedAt:
           type: string
           format: date-time
@@ -2266,6 +2274,15 @@ components:
       required: [name]
       properties:
         name: { type: string }
+        projectId:
+          type: string
+          description: >-
+            Omit alongside roleId for an unscoped token (inherits the
+            creator's full, live permission level — the default). Set
+            alongside roleId to scope the token to exactly that project and
+            role; rejected if the role grants more than the creator's own
+            current access.
+        roleId: { type: string }
     ActorKind:
       type: string
       enum: [user, agent]

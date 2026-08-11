@@ -165,6 +165,95 @@ func TestScenario_CreateAndAuthenticateTokenOverHTTP(t *testing.T) {
 	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects", nil, 401, &errBody)
 }
 
+// backlog #117 (design.md D3): a token scoped to a project + role is
+// authorized only for that role's permissions, only on that one project —
+// never the creator's broader access, never a different project.
+func TestScenario_ScopedTokenAuthorizedOnlyWithinItsProjectAndRole(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+	viewerRoleID := roleIDByName(t, h, admin, "Viewer")
+
+	var projectA, projectB jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "Scoped A"}, 201, &projectA)
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "Scoped B"}, 201, &projectB)
+	projectAID, _ := projectA["id"].(string)
+	projectAKey, _ := projectA["key"].(string)
+	projectBKey, _ := projectB["key"].(string)
+
+	var created jmap
+	callAs(t, h, admin, "POST", "/api/v1/tokens",
+		jmap{"name": "viewer-agent", "projectId": projectAID, "roleId": viewerRoleID}, 201, &created)
+	full, _ := created["token"].(string)
+
+	// Read access on the scoped project: granted.
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects/"+projectAKey, nil, 200, nil)
+
+	// Write access, even on the scoped project: denied (Viewer has no caseCreate).
+	var errBody jmap
+	callAs(t, h, "Bearer "+full, "POST", "/api/v1/projects/"+projectAKey+"/cases",
+		jmap{"title": "Login works"}, 403, &errBody)
+
+	// Any access to a different project: denied, even read.
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects/"+projectBKey, nil, 403, &errBody)
+}
+
+// The single most important invariant this feature exists for: a scoped
+// token created by a Tenant Admin must not bypass scoping via the
+// existing IsTenantAdmin shortcut requirePermission checks first.
+func TestScenario_ScopedTokenFromTenantAdminDoesNotBypassScoping(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+	viewerRoleID := roleIDByName(t, h, admin, "Viewer")
+
+	var project jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "Admin Scoped"}, 201, &project)
+	projectID, _ := project["id"].(string)
+	projectKey, _ := project["key"].(string)
+
+	var created jmap
+	callAs(t, h, admin, "POST", "/api/v1/tokens",
+		jmap{"name": "admin-viewer-agent", "projectId": projectID, "roleId": viewerRoleID}, 201, &created)
+	full, _ := created["token"].(string)
+
+	var errBody jmap
+	callAs(t, h, "Bearer "+full, "POST", "/api/v1/projects/"+projectKey+"/cases",
+		jmap{"title": "Should be denied"}, 403, &errBody)
+	// Read still works, proving the token authenticates at all — it's
+	// specifically write access that must be denied despite the creator
+	// being a Tenant Admin.
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects/"+projectKey, nil, 200, nil)
+}
+
+// Deleting a scoped token's role deletes the token itself (cascade) — it
+// stops authenticating entirely (401), never falls back to
+// unscoped/full access.
+func TestScenario_ScopedTokenDeletedWhenItsRoleIsDeleted(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var project jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "Role Deleted"}, 201, &project)
+	projectID, _ := project["id"].(string)
+	projectKey, _ := project["key"].(string)
+
+	var role jmap
+	callAs(t, h, admin, "POST", "/api/v1/roles",
+		jmap{"name": "Ephemeral Token Role (HTTP)", "canRead": true}, 201, &role)
+	roleID, _ := role["id"].(string)
+
+	var created jmap
+	callAs(t, h, admin, "POST", "/api/v1/tokens",
+		jmap{"name": "ephemeral-agent", "projectId": projectID, "roleId": roleID}, 201, &created)
+	full, _ := created["token"].(string)
+
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects/"+projectKey, nil, 200, nil)
+
+	callAs(t, h, admin, "DELETE", "/api/v1/roles/"+roleID, nil, 204, nil)
+
+	var errBody jmap
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects/"+projectKey, nil, 401, &errBody)
+}
+
 func TestScenario_DeactivateThenReactivateUser(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")

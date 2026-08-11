@@ -258,12 +258,15 @@ func TestApiTokenCreateGetByHashAndRevoke(t *testing.T) {
 	ctx := context.Background()
 	u := mustUser(t, s, "creator@example.com", false)
 
-	tok, err := s.ApiTokens.Create(ctx, u.ID, "ci-agent", "hash-abc", "tp_ab")
+	tok, err := s.ApiTokens.Create(ctx, u.ID, "ci-agent", "hash-abc", "tp_ab", nil, nil)
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
 	if tok.CreatedBy != u.ID || tok.Prefix != "tp_ab" {
 		t.Errorf("token = %+v", tok)
+	}
+	if tok.ProjectID != nil || tok.RoleID != nil {
+		t.Errorf("unscoped token = %+v, want nil ProjectID and RoleID", tok)
 	}
 
 	got, err := s.ApiTokens.GetByHash(ctx, "hash-abc")
@@ -279,16 +282,70 @@ func TestApiTokenCreateGetByHashAndRevoke(t *testing.T) {
 	}
 }
 
+// backlog #117 (design.md D1): a token MAY be scoped to a project + role,
+// reusing the exact same roles table project members already use — not a
+// bespoke per-token permission concept.
+func TestApiTokenCreateScopedToProjectAndRole(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "scoped-creator@example.com", false)
+	p := mustProject(t, s)
+	role := mustRole(t, s, domain.Role{Name: "Scoped Role", CanRead: true})
+
+	tok, err := s.ApiTokens.Create(ctx, u.ID, "scoped-agent", "hash-scoped", "tp_sc", &p.ID, &role.ID)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if tok.ProjectID == nil || *tok.ProjectID != p.ID {
+		t.Errorf("ProjectID = %v, want %q", tok.ProjectID, p.ID)
+	}
+	if tok.RoleID == nil || *tok.RoleID != role.ID {
+		t.Errorf("RoleID = %v, want %q", tok.RoleID, role.ID)
+	}
+
+	got, err := s.ApiTokens.GetByHash(ctx, "hash-scoped")
+	if err != nil {
+		t.Fatalf("GetByHash: %v", err)
+	}
+	if got.ProjectID == nil || *got.ProjectID != p.ID || got.RoleID == nil || *got.RoleID != role.ID {
+		t.Errorf("GetByHash scope = %+v, want project %q role %q", got, p.ID, role.ID)
+	}
+}
+
+// Deleting a role a token is scoped to deletes the token outright — fails
+// closed, mirrors project_members' existing, already-tested cascade
+// behavior (TestEffectivePermissionsLostWhenRoleDeleted) exactly, never
+// silently upgrading the token to unscoped/full access (design.md D1).
+func TestApiTokenDeletedWhenScopedRoleDeleted(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "cascade-creator@example.com", false)
+	p := mustProject(t, s)
+	role := mustRole(t, s, domain.Role{Name: "Ephemeral Token Role", CanRead: true})
+
+	if _, err := s.ApiTokens.Create(ctx, u.ID, "cascade-agent", "hash-cascade", "tp_cs", &p.ID, &role.ID); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if err := s.Roles.Delete(ctx, role.ID); err != nil {
+		t.Fatalf("Delete role: %v", err)
+	}
+
+	if _, err := s.ApiTokens.GetByHash(ctx, "hash-cascade"); err != store.ErrNotFound {
+		t.Errorf("GetByHash after role delete = %v, want ErrNotFound", err)
+	}
+}
+
 func TestApiTokenListByCreator(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	u1 := mustUser(t, s, "u1@example.com", false)
 	u2 := mustUser(t, s, "u2@example.com", false)
 
-	if _, err := s.ApiTokens.Create(ctx, u1.ID, "t1", "h1", "tp_1"); err != nil {
+	if _, err := s.ApiTokens.Create(ctx, u1.ID, "t1", "h1", "tp_1", nil, nil); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.ApiTokens.Create(ctx, u2.ID, "t2", "h2", "tp_2"); err != nil {
+	if _, err := s.ApiTokens.Create(ctx, u2.ID, "t2", "h2", "tp_2", nil, nil); err != nil {
 		t.Fatal(err)
 	}
 

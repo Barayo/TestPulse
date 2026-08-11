@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import TokensPage from './TokensPage'
@@ -11,6 +11,22 @@ const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 const mockDELETE = vi.mocked(api.DELETE)
 
+const unscopedToken = {
+  id: 't1',
+  createdBy: 'u1',
+  name: 'ci-agent',
+  prefix: 'tp_AbCd',
+  projectId: null,
+  roleId: null,
+  revokedAt: null,
+  createdAt: '',
+}
+const projects = [{ id: 'p1', key: 'QA', name: 'QA Platform', archived: false, createdAt: '' }]
+const roles = [
+  { id: 'r1', name: 'Viewer' },
+  { id: 'r2', name: 'Contributor' },
+]
+
 beforeEach(() => {
   vi.resetAllMocks()
   mockGET.mockImplementation((path: string) => {
@@ -21,12 +37,13 @@ beforeEach(() => {
       })
     }
     if (path === '/api/v1/tokens') {
-      return Promise.resolve({
-        data: [
-          { id: 't1', createdBy: 'u1', name: 'ci-agent', prefix: 'tp_AbCd', revokedAt: null, createdAt: '' },
-        ],
-        response: { ok: true },
-      })
+      return Promise.resolve({ data: [unscopedToken], response: { ok: true } })
+    }
+    if (path === '/api/v1/projects') {
+      return Promise.resolve({ data: projects, response: { ok: true } })
+    }
+    if (path === '/api/v1/roles') {
+      return Promise.resolve({ data: roles, response: { ok: true } })
     }
     return Promise.resolve({ data: [], response: { ok: true } })
   })
@@ -116,5 +133,94 @@ describe('TokensPage', () => {
         expect.objectContaining({ params: { path: { tokenId: 't1' } } }),
       ),
     )
+  })
+
+  it('shows "Full access" for an unscoped token', async () => {
+    renderPage()
+    expect(await screen.findByText('ci-agent')).toBeInTheDocument()
+    expect(screen.getByText(/full access/i)).toBeInTheDocument()
+  })
+
+  it('shows the project and role for a scoped token', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') {
+        return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: false }, response: { ok: true } })
+      }
+      if (path === '/api/v1/tokens') {
+        return Promise.resolve({
+          data: [{ ...unscopedToken, id: 't-scoped', name: 'viewer-agent', projectId: 'p1', roleId: 'r1' }],
+          response: { ok: true },
+        })
+      }
+      if (path === '/api/v1/projects') return Promise.resolve({ data: projects, response: { ok: true } })
+      if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    renderPage()
+    expect(await screen.findByText('viewer-agent')).toBeInTheDocument()
+    expect(screen.getByText(/QA Platform/)).toBeInTheDocument()
+    expect(screen.getByText(/Viewer/)).toBeInTheDocument()
+    expect(screen.queryByText(/full access/i)).not.toBeInTheDocument()
+  })
+
+  // Dual-mode migration precedent (backlog #117, design.md D5): the scope
+  // section is collapsed by default — leaving it collapsed must create an
+  // unscoped token, byte-for-byte identical to today's request body.
+  describe('scoping a new token (design.md D5)', () => {
+    it('creates an unscoped token when the scope section is left collapsed', async () => {
+      mockPOST.mockResolvedValue({
+        data: { ...unscopedToken, id: 't2', name: 'new-agent', token: 'tp_secret' },
+        response: { ok: true },
+      })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: /new token/i }))
+      await user.type(screen.getByLabelText(/^name$/i), 'new-agent')
+      await user.click(screen.getByRole('button', { name: /create/i }))
+
+      await waitFor(() =>
+        expect(mockPOST).toHaveBeenCalledWith('/api/v1/tokens', { body: { name: 'new-agent' } }),
+      )
+    })
+
+    it('expanding the scope section shows a project picker, then a role picker once a project is chosen', async () => {
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: /new token/i }))
+      expect(screen.queryByLabelText(/project/i)).not.toBeInTheDocument()
+
+      await user.click(screen.getByRole('button', { name: /scope to a project/i }))
+      const projectSelect = await screen.findByLabelText(/project/i)
+      expect(within(projectSelect).getByText('QA Platform')).toBeInTheDocument()
+
+      await user.selectOptions(projectSelect, 'p1')
+      const roleSelect = await screen.findByLabelText(/^role$/i)
+      expect(within(roleSelect).getByText('Viewer')).toBeInTheDocument()
+      expect(within(roleSelect).getByText('Contributor')).toBeInTheDocument()
+    })
+
+    it('submits projectId/roleId when a scope is picked', async () => {
+      mockPOST.mockResolvedValue({
+        data: { ...unscopedToken, id: 't3', name: 'scoped-agent', projectId: 'p1', roleId: 'r1', token: 'tp_secret' },
+        response: { ok: true },
+      })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: /new token/i }))
+      await user.type(screen.getByLabelText(/^name$/i), 'scoped-agent')
+      await user.click(screen.getByRole('button', { name: /scope to a project/i }))
+      await user.selectOptions(await screen.findByLabelText(/project/i), 'p1')
+      await user.selectOptions(await screen.findByLabelText(/^role$/i), 'r1')
+      await user.click(screen.getByRole('button', { name: /create/i }))
+
+      await waitFor(() =>
+        expect(mockPOST).toHaveBeenCalledWith('/api/v1/tokens', {
+          body: { name: 'scoped-agent', projectId: 'p1', roleId: 'r1' },
+        }),
+      )
+    })
   })
 })

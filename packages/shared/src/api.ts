@@ -1806,6 +1806,10 @@ export interface components {
             name: string;
             /** @description Short, non-secret prefix of the token, for identification only. */
             prefix: string;
+            /** @description Null for an unscoped (full-access) token. */
+            projectId?: string | null;
+            /** @description Null for an unscoped (full-access) token. */
+            roleId?: string | null;
             /** Format: date-time */
             revokedAt?: string | null;
             /** Format: date-time */
@@ -1817,6 +1821,9 @@ export interface components {
         };
         TokenInput: {
             name: string;
+            /** @description Omit alongside roleId for an unscoped token (inherits the creator's full, live permission level — the default). Set alongside roleId to scope the token to exactly that project and role; rejected if the role grants more than the creator's own current access. */
+            projectId?: string;
+            roleId?: string;
         };
         /** @enum {string} */
         ActorKind: "user" | "agent";

@@ -218,6 +218,11 @@ func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
 
 type tokenInput struct {
 	Name string `json:"name"`
+	// ProjectID/RoleID: both omitted creates an unscoped token (full
+	// inheritance, unchanged default behavior); both must be set together
+	// to scope the token to that project + role (backlog #117).
+	ProjectID *string `json:"projectId"`
+	RoleID    *string `json:"roleId"`
 }
 
 func (h *api) listTokens(w http.ResponseWriter, r *http.Request) {
@@ -239,7 +244,7 @@ func (h *api) createToken(w http.ResponseWriter, r *http.Request) {
 		badBody(h, w)
 		return
 	}
-	full, tok, err := h.svc.CreateToken(r.Context(), actor, in.Name)
+	full, tok, err := h.svc.CreateToken(r.Context(), actor, in.Name, in.ProjectID, in.RoleID)
 	if err != nil {
 		h.respond(w, 0, nil, err)
 		return

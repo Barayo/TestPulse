@@ -57,11 +57,45 @@ A **Reset to defaults** button on the Roles page restores Tester/Contributor/Pro
 
 | Seeded role | Flags |
 |---|---|
+| **Viewer** | Read only |
 | **Tester** | Read, Create Run, Record Result |
 | **Contributor** | Tester's flags + Create/Edit Case, Create Section, Create Suite, Edit Suite Membership |
 | **Project Admin** | Contributor's flags + Delete Case, Delete Section, Manage Project |
 
-A user's effective permissions on a project are the **union** of every role granted to them — directly or via any team they belong to — not just the "highest" one; there's no ranking to pick a winner from once roles are fully custom. So a user holding two different roles on the same project (e.g. one direct, one via a team) gets every permission flag either role grants. Assigning project membership itself — deciding who holds which role on a given project — is Tenant-Admin-only; a role with Manage Project can administer the project's settings but not reassign who's on it. Users and teams are assigned per project at `/projects/{key}/members`. Deleting a role removes it from every project/team assignment that referenced it, immediately revoking any access that depended solely on it. An API token (agent) always acts at its creator's current permission level, resolved fresh on every request — never its own separate access.
+A user's effective permissions on a project are the **union** of every role granted to them — directly or via any team they belong to — not just the "highest" one; there's no ranking to pick a winner from once roles are fully custom. So a user holding two different roles on the same project (e.g. one direct, one via a team) gets every permission flag either role grants. Assigning project membership itself — deciding who holds which role on a given project — is Tenant-Admin-only; a role with Manage Project can administer the project's settings but not reassign who's on it. Users and teams are assigned per project at `/projects/{key}/members`. Deleting a role removes it from every project/team assignment that referenced it, immediately revoking any access that depended solely on it. An API token (agent) by default acts at its creator's current permission level, resolved fresh on every request — never its own separate access — but can instead be **scoped** at creation to a single project and a single role (see [API tokens](#api-tokens) below), capping it below the creator's own access rather than inheriting all of it.
+
+## API tokens
+
+Any authenticated user can create an API token for an agent/integration
+from the account menu's **API tokens** link, or `POST /api/v1/tokens`. The full token
+value (`tp_<secret>`) is shown exactly once at creation time and never
+again — only its name and a short prefix are shown afterward.
+
+By default a token is **unscoped**: it acts as its creator's current
+permission level, resolved fresh on every request — a full-access
+credential for whatever the creator can currently do, everywhere they can
+do it.
+
+Creating a token can instead **scope** it to a single project and a
+single role, capping it well below the creator's own access:
+
+- Pick a project, then a role to grant on that project — typically the
+  seeded read-only **Viewer** role for a single-purpose integration (a CI
+  system polling results, a dashboard), or any other role for a narrower
+  write capability (e.g. only recording run results).
+- The role can't exceed what the creator currently holds on that
+  project — a role granting a permission the creator lacks is rejected at
+  creation time.
+- Enforcement happens on every request, not just at creation: the token's
+  effective permissions are the *intersection* of the role's flags and
+  the creator's *current* permissions on that project, so it automatically
+  narrows if the creator's own access is later reduced, and it stops
+  authenticating entirely if its role is deleted. A scoped token never
+  gets Tenant Admin's implicit all-project access, even if its creator is
+  a Tenant Admin.
+
+A token — scoped or not — is revoked from the same page, or by its
+creator or any Tenant Admin via `DELETE /api/v1/tokens/{tokenId}`.
 
 ## Public project access
 

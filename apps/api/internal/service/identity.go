@@ -129,10 +129,36 @@ func (s *Service) AuthenticateToken(ctx context.Context, rawToken string) (domai
 	if err != nil {
 		return domain.Actor{}, err
 	}
-	return domain.Actor{
+	actor := domain.Actor{
 		ID: tok.ID, Kind: domain.ActorKindAgent, DisplayName: tok.Name,
 		EffectiveUserID: creator.ID, IsTenantAdmin: creator.IsTenantAdmin,
-	}, nil
+	}
+	if tok.ProjectID != nil {
+		// A scoped token's actor must never report IsTenantAdmin=true,
+		// even if its creator is one — requirePermission checks that
+		// flag first and bypasses everything else, which would silently
+		// defeat scoping for exactly the highest-risk case (a leaked
+		// Tenant-Admin-minted token) that motivated this feature
+		// (backlog #117, design.md D3).
+		actor.IsTenantAdmin = false
+		role, err := s.store.Roles.Get(ctx, *tok.RoleID)
+		if err != nil {
+			return domain.Actor{}, err
+		}
+		// Fresh on every call — AuthenticateToken runs once per request
+		// (the authenticate middleware), so this is already "request
+		// time," never a value cached across requests. Reflects the
+		// creator's *current* access, same staleness guarantee the
+		// unscoped-inheritance path already has.
+		creatorPerms, err := s.MyPermissions(ctx, domain.Actor{EffectiveUserID: creator.ID, IsTenantAdmin: creator.IsTenantAdmin}, *tok.ProjectID)
+		if err != nil {
+			return domain.Actor{}, err
+		}
+		intersected := role.Permissions().Intersect(creatorPerms)
+		actor.ScopedProjectID = tok.ProjectID
+		actor.ScopedPermissions = &intersected
+	}
+	return actor, nil
 }
 
 // BootstrapAdmin creates the first user, as a Tenant Admin, from
@@ -257,9 +283,35 @@ func (s *Service) ReactivateUser(ctx context.Context, userID string) error {
 
 // CreateToken returns the full token value once — it is hashed before
 // storage and never retrievable again after this call returns (design D3).
-func (s *Service) CreateToken(ctx context.Context, actor domain.Actor, name string) (string, domain.ApiToken, error) {
+// projectID/roleID: both nil creates an unscoped token (full inheritance,
+// the original/default behavior); both set scopes it to that project +
+// role, only accepted if every permission the role grants is already
+// granted by the creating actor's own current access on that project
+// (backlog #117, design.md D4) — the real enforcement happens on every
+// request the token later makes (AuthenticateToken), this is a fail-fast
+// creation-time courtesy, not the security boundary itself.
+func (s *Service) CreateToken(ctx context.Context, actor domain.Actor, name string, projectID, roleID *string) (string, domain.ApiToken, error) {
 	if err := domain.ValidateTokenName(name); err != nil {
 		return "", domain.ApiToken{}, invalid("%s", err)
+	}
+	if (projectID == nil) != (roleID == nil) {
+		return "", domain.ApiToken{}, invalid("projectId and roleId must both be set or both omitted")
+	}
+	if projectID != nil {
+		role, err := s.store.Roles.Get(ctx, *roleID)
+		if errors.Is(err, store.ErrNotFound) {
+			return "", domain.ApiToken{}, invalid("role not found")
+		}
+		if err != nil {
+			return "", domain.ApiToken{}, err
+		}
+		creatorPerms, err := s.MyPermissions(ctx, actor, *projectID)
+		if err != nil {
+			return "", domain.ApiToken{}, err
+		}
+		if !role.Permissions().IsSubsetOf(creatorPerms) {
+			return "", domain.ApiToken{}, invalid("cannot scope a token to a role that grants more than your own current access on this project")
+		}
 	}
 	raw, err := randomSecret()
 	if err != nil {
@@ -270,7 +322,7 @@ func (s *Service) CreateToken(ctx context.Context, actor domain.Actor, name stri
 	if len(prefix) > 12 {
 		prefix = prefix[:12]
 	}
-	tok, err := s.store.ApiTokens.Create(ctx, actor.ID, name, hashToken(full), prefix)
+	tok, err := s.store.ApiTokens.Create(ctx, actor.ID, name, hashToken(full), prefix, projectID, roleID)
 	if err != nil {
 		return "", domain.ApiToken{}, err
 	}

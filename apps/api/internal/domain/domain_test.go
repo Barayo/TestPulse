@@ -183,6 +183,43 @@ func TestPermissionsUnionAcrossRoles(t *testing.T) {
 	}
 }
 
+// --- Scoped API tokens (backlog #117, design.md D1/D3) ---
+
+func TestRolePermissionsConvertsFlags(t *testing.T) {
+	r := Role{CanRead: true, CanCaseEdit: true, CanRunCreate: true}
+	p := r.Permissions()
+	if !p.Read || !p.CaseEdit || !p.RunCreate {
+		t.Errorf("Permissions() = %+v, want Read/CaseEdit/RunCreate true", p)
+	}
+	if p.CaseCreate || p.CaseDelete || p.ManageProject {
+		t.Errorf("Permissions() = %+v, want every unset role flag false", p)
+	}
+}
+
+func TestPermissionsIsSubsetOf(t *testing.T) {
+	broad := Permissions{Read: true, CaseCreate: true, CaseEdit: true, ManageProject: true}
+	narrow := Permissions{Read: true, CaseEdit: true}
+	if !narrow.IsSubsetOf(broad) {
+		t.Error("narrow should be a subset of broad")
+	}
+	if broad.IsSubsetOf(narrow) {
+		t.Error("broad should not be a subset of narrow — it grants CaseCreate/ManageProject narrow doesn't")
+	}
+	if !narrow.IsSubsetOf(narrow) {
+		t.Error("a set is always a subset of itself")
+	}
+}
+
+func TestPermissionsIntersect(t *testing.T) {
+	roleGrants := Permissions{Read: true, CaseCreate: true, CaseEdit: true, RunCreate: true}
+	creatorHas := Permissions{Read: true, CaseEdit: true, ManageProject: true}
+	got := roleGrants.Intersect(creatorHas)
+	want := Permissions{Read: true, CaseEdit: true} // only what's in both
+	if got != want {
+		t.Errorf("Intersect = %+v, want %+v", got, want)
+	}
+}
+
 func TestRoleNameRequired(t *testing.T) {
 	if err := ValidateRoleName("QA Reviewer"); err != nil {
 		t.Errorf("valid name rejected: %v", err)

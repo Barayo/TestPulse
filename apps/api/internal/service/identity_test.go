@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -164,7 +165,7 @@ func TestCreateAndAuthenticateToken(t *testing.T) {
 	u := mustCreateUser(t, s, "agent-owner@example.com", "correcthorse", false)
 	ownerActor := actorFor(u)
 
-	full, tok, err := s.CreateToken(context.Background(), ownerActor, "ci-agent")
+	full, tok, err := s.CreateToken(context.Background(), ownerActor, "ci-agent", nil, nil)
 	if err != nil {
 		t.Fatalf("CreateToken: %v", err)
 	}
@@ -179,6 +180,268 @@ func TestCreateAndAuthenticateToken(t *testing.T) {
 	if actor.Kind != domain.ActorKindAgent || actor.ID != tok.ID || actor.EffectiveUserID != u.ID || actor.IsTenantAdmin {
 		t.Errorf("actor = %+v, want agent acting at creator's (non-admin) permission level", actor)
 	}
+	if actor.ScopedProjectID != nil || actor.ScopedPermissions != nil {
+		t.Errorf("unscoped token actor = %+v, want nil ScopedProjectID/ScopedPermissions", actor)
+	}
+}
+
+// backlog #117 (design.md D3): AuthenticateToken resolves a scoped
+// token's ScopedPermissions as the intersection of its role's flags and
+// its creator's current access — computed fresh every call (this IS
+// "request time": authenticate middleware calls it on every request, no
+// caching across calls), never a stale snapshot.
+func TestAuthenticateScopedToken(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "scoped-auth-owner@example.com", "correcthorse", false)
+	actorU := actorFor(u)
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Scoped Auth Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	admin := actorFor(mustCreateUser(t, s, "admin-scoped-auth@example.com", "correcthorse", true))
+	// Creator has read+caseEdit+caseDelete; the role only grants read+caseEdit
+	// — the intersection must be read+caseEdit, not the broader creator set.
+	creatorRole, err := s.CreateRole(ctx, admin, domain.Role{Name: "Creator Role (scoped auth)", CanRead: true, CanCaseEdit: true, CanCaseDelete: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, project.ID, u.ID, creatorRole.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+	tokenRole, err := s.CreateRole(ctx, admin, domain.Role{Name: "Token Role (scoped auth)", CanRead: true, CanCaseEdit: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+
+	full, _, err := s.CreateToken(ctx, actorU, "scoped-auth-agent", &project.ID, &tokenRole.ID)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+
+	actor, err := s.AuthenticateToken(ctx, full)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	if actor.ScopedProjectID == nil || *actor.ScopedProjectID != project.ID {
+		t.Fatalf("ScopedProjectID = %v, want %q", actor.ScopedProjectID, project.ID)
+	}
+	if actor.ScopedPermissions == nil || !actor.ScopedPermissions.Read || !actor.ScopedPermissions.CaseEdit {
+		t.Errorf("ScopedPermissions = %+v, want read+caseEdit", actor.ScopedPermissions)
+	}
+	if actor.ScopedPermissions.CaseDelete {
+		t.Error("ScopedPermissions grants caseDelete — the role never granted it, only the creator's broader access did")
+	}
+}
+
+// The single most important invariant this whole feature exists for: a
+// scoped token created by a Tenant Admin must NOT bypass scoping via the
+// existing IsTenantAdmin shortcut requirePermission checks first — that
+// would silently defeat the entire feature for exactly the highest-risk
+// case (a leaked Tenant-Admin-minted token) that motivated it.
+func TestScopedTokenFromTenantAdminIsNotTenantAdmin(t *testing.T) {
+	s := testService(t)
+	admin := actorFor(mustCreateUser(t, s, "scoping-admin-auth@example.com", "correcthorse", true))
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Admin Scoped Auth Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Read Only (admin scoped auth)", CanRead: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+
+	full, _, err := s.CreateToken(ctx, admin, "admin-scoped-auth-agent", &project.ID, &role.ID)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+
+	actor, err := s.AuthenticateToken(ctx, full)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	if actor.IsTenantAdmin {
+		t.Fatal("a scoped token's actor must never report IsTenantAdmin=true, even if its creator is one — this would bypass all scoping via requirePermission's admin shortcut")
+	}
+	if actor.ScopedPermissions == nil || actor.ScopedPermissions.ManageProject {
+		t.Errorf("ScopedPermissions = %+v, want manageProject false (the role never granted it)", actor.ScopedPermissions)
+	}
+}
+
+// backlog #117 (design.md D3): a scoped token's permissions must reflect
+// the creator's *current* state, not a snapshot taken at token-creation
+// time — the same staleness guarantee TestTokenReflectsCreatorsCurrentState
+// already proves for unscoped tokens, applied here to the scoped case.
+func TestScopedTokenNarrowsIfCreatorAccessNarrows(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "narrowing-creator@example.com", "correcthorse", false)
+	actorU := actorFor(u)
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Narrowing Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	admin := actorFor(mustCreateUser(t, s, "admin-narrowing@example.com", "correcthorse", true))
+	broadRole, err := s.CreateRole(ctx, admin, domain.Role{Name: "Broad Role (narrowing)", CanRead: true, CanCaseEdit: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, project.ID, u.ID, broadRole.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+	// Token scoped to the same broad role — matches the creator's access
+	// exactly at creation time.
+	full, _, err := s.CreateToken(ctx, actorU, "narrowing-agent", &project.ID, &broadRole.ID)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+
+	actorBefore, err := s.AuthenticateToken(ctx, full)
+	if err != nil {
+		t.Fatalf("AuthenticateToken (before): %v", err)
+	}
+	if !actorBefore.ScopedPermissions.CaseEdit {
+		t.Fatalf("ScopedPermissions (before) = %+v, want caseEdit true", actorBefore.ScopedPermissions)
+	}
+
+	// The creator's own role on the project is downgraded to read-only —
+	// after this, the token (still nominally scoped to broadRole, which
+	// itself hasn't changed) must lose caseEdit too, because the
+	// intersection is computed fresh against the creator's *current* access.
+	narrowRole, err := s.CreateRole(ctx, admin, domain.Role{Name: "Narrow Role (narrowing)", CanRead: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, project.ID, u.ID, narrowRole.ID); err != nil {
+		t.Fatalf("SetProjectMember (downgrade): %v", err)
+	}
+
+	actorAfter, err := s.AuthenticateToken(ctx, full)
+	if err != nil {
+		t.Fatalf("AuthenticateToken (after): %v", err)
+	}
+	if actorAfter.ScopedPermissions.CaseEdit {
+		t.Error("token still grants caseEdit after the creator's own access was downgraded — scoping did not reflect current state")
+	}
+	if !actorAfter.ScopedPermissions.Read {
+		t.Error("token should still grant read — neither the role nor the creator's downgraded access lost it")
+	}
+}
+
+// backlog #117 (design.md D4): a token MAY be created scoped to a project
+// + role, but only if the creator currently holds every permission that
+// role grants — never more power than the creator's own current access.
+func TestCreateTokenScopedToProjectAndRole(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "scoped-owner@example.com", "correcthorse", false)
+	actor := actorFor(u)
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Scoped Token Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	admin := actorFor(mustCreateUser(t, s, "admin-for-scoped@example.com", "correcthorse", true))
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Scoped Token Role", CanRead: true, CanCaseEdit: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, project.ID, u.ID, role.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+
+	full, tok, err := s.CreateToken(ctx, actor, "scoped-agent", &project.ID, &role.ID)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	if tok.ProjectID == nil || *tok.ProjectID != project.ID || tok.RoleID == nil || *tok.RoleID != role.ID {
+		t.Errorf("token = %+v, want scoped to project %q role %q", tok, project.ID, role.ID)
+	}
+	if full == "" {
+		t.Error("expected a full token value")
+	}
+}
+
+func TestCreateTokenScopeRejectedWhenExceedsCreatorAccess(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "underpowered@example.com", "correcthorse", false)
+	actor := actorFor(u)
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Underpowered Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	admin := actorFor(mustCreateUser(t, s, "admin-for-underpowered@example.com", "correcthorse", true))
+	readOnly, err := s.CreateRole(ctx, admin, domain.Role{Name: "Read Only (underpowered test)", CanRead: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	broader, err := s.CreateRole(ctx, admin, domain.Role{Name: "Broader Role", CanRead: true, CanCaseDelete: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	// The creator only has read — not caseDelete, which broader grants.
+	if err := s.SetProjectMember(ctx, admin, project.ID, u.ID, readOnly.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+
+	_, _, err = s.CreateToken(ctx, actor, "over-scoped-agent", &project.ID, &broader.ID)
+	if err == nil {
+		t.Fatal("expected scoping to a more powerful role than the creator holds to be rejected")
+	}
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) {
+		t.Errorf("err = %v (%T), want a ValidationError (400)", err, err)
+	}
+}
+
+func TestCreateTokenUnscopedUnaffectedByScopeValidation(t *testing.T) {
+	// No projectID/roleID at all — must behave exactly as before this
+	// change, regardless of what projects/roles exist or don't.
+	s := testService(t)
+	u := mustCreateUser(t, s, "still-unscoped@example.com", "correcthorse", false)
+
+	full, tok, err := s.CreateToken(context.Background(), actorFor(u), "unscoped-agent", nil, nil)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	if tok.ProjectID != nil || tok.RoleID != nil {
+		t.Errorf("token = %+v, want unscoped", tok)
+	}
+	if full == "" {
+		t.Error("expected a full token value")
+	}
+}
+
+func TestCreateTokenAsTenantAdminCanScopeAnyProjectAndRole(t *testing.T) {
+	// A Tenant Admin's "current access" is universal (existing bypass) —
+	// they can scope a token to any project/role without first being an
+	// explicit member of that project.
+	s := testService(t)
+	admin := actorFor(mustCreateUser(t, s, "scoping-admin@example.com", "correcthorse", true))
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Admin Scoped Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Admin Scoped Role", CanRead: true, CanManageProject: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+
+	_, tok, err := s.CreateToken(ctx, admin, "admin-scoped-agent", &project.ID, &role.ID)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	if tok.ProjectID == nil || *tok.ProjectID != project.ID {
+		t.Errorf("token = %+v, want scoped to project %q", tok, project.ID)
+	}
 }
 
 // TestTokenReflectsCreatorsCurrentState covers design.md D4: an agent's
@@ -187,7 +450,7 @@ func TestCreateAndAuthenticateToken(t *testing.T) {
 func TestTokenReflectsCreatorsCurrentState(t *testing.T) {
 	s := testService(t)
 	u := mustCreateUser(t, s, "creator@example.com", "correcthorse", false)
-	full, _, err := s.CreateToken(context.Background(), actorFor(u), "ci-agent")
+	full, _, err := s.CreateToken(context.Background(), actorFor(u), "ci-agent", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -209,7 +472,7 @@ func TestRevokedTokenNoLongerAuthenticates(t *testing.T) {
 	s := testService(t)
 	u := mustCreateUser(t, s, "owner@example.com", "correcthorse", false)
 	actor := actorFor(u)
-	full, tok, err := s.CreateToken(context.Background(), actor, "ci-agent")
+	full, tok, err := s.CreateToken(context.Background(), actor, "ci-agent", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -229,7 +492,7 @@ func TestNonOwnerCannotRevokeAnothersToken(t *testing.T) {
 	ownerActor := actorFor(owner)
 	otherActor := actorFor(other)
 
-	_, tok, err := s.CreateToken(context.Background(), ownerActor, "ci-agent")
+	_, tok, err := s.CreateToken(context.Background(), ownerActor, "ci-agent", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -248,7 +511,7 @@ func TestAdminCanRevokeAnyonesToken(t *testing.T) {
 	ownerActor := actorFor(owner)
 	adminActor := actorFor(admin)
 
-	_, tok, err := s.CreateToken(context.Background(), ownerActor, "ci-agent")
+	_, tok, err := s.CreateToken(context.Background(), ownerActor, "ci-agent", nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
