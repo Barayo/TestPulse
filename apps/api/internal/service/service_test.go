@@ -89,11 +89,11 @@ func TestUpdateItemValidatesStatus(t *testing.T) {
 
 func TestCreateUserValidatesEmailPassword(t *testing.T) {
 	s := nilService()
-	_, err := s.CreateUser(context.Background(), "", "longenough", false)
+	_, err := s.CreateUser(context.Background(), "", "longenoughpassword", false)
 	wantValidation(t, err, "email")
 
 	_, err = s.CreateUser(context.Background(), "a@b.com", "short", false)
-	wantValidation(t, err, "8 characters")
+	wantValidation(t, err, "12 characters")
 }
 
 func TestCreateTokenValidatesName(t *testing.T) {

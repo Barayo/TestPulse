@@ -734,9 +734,12 @@ type ProjectMembership struct {
 	Teams []ProjectTeamRole `json:"teams"`
 }
 
+// 12 chars (backlog #118) — current NIST/OWASP guidance favors length over
+// forced complexity rules (required symbol/digit/etc.), which push users
+// toward predictable substitutions without meaningfully raising entropy.
 func ValidatePassword(password string) error {
-	if len(password) < 8 {
-		return fmt.Errorf("password must be at least 8 characters")
+	if len(password) < 12 {
+		return fmt.Errorf("password must be at least 12 characters")
 	}
 	return nil
 }

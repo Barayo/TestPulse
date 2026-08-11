@@ -210,14 +210,20 @@ func TestTeamNameRequired(t *testing.T) {
 }
 
 func TestPasswordValidation(t *testing.T) {
-	if err := ValidatePassword("longenough"); err != nil {
+	if err := ValidatePassword("longenoughpassword"); err != nil {
 		t.Errorf("valid password rejected: %v", err)
+	}
+	// Exactly at the boundary must pass (backlog #118 — length-based
+	// policy, NIST/OWASP current guidance favors length over forced
+	// complexity rules).
+	if err := ValidatePassword("twelvecharsx"); err != nil {
+		t.Errorf("12-character password rejected: %v", err)
 	}
 	err := ValidatePassword("short")
 	if err == nil {
-		t.Fatal("password under 8 characters accepted")
+		t.Fatal("password under 12 characters accepted")
 	}
-	if !strings.Contains(err.Error(), "8 characters") {
+	if !strings.Contains(err.Error(), "12 characters") {
 		t.Errorf("error %q does not explain the minimum length", err)
 	}
 }
