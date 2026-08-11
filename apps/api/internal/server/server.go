@@ -60,10 +60,13 @@ func handleLiveness(w http.ResponseWriter, r *http.Request) {
 func handleReadiness(logger *slog.Logger, readiness ReadinessChecker) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := readiness.Ready(r.Context()); err != nil {
+			// The detail (DB host/connection error, migration state) stays
+			// server-side only — /readyz is unauthenticated, probed by a
+			// load balancer before any session exists (backlog #115).
 			logger.Warn("readiness check failed", "error", err)
 			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 				"status": "unavailable",
-				"reason": err.Error(),
+				"reason": "not ready",
 			})
 			return
 		}

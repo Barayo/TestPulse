@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
@@ -47,6 +48,20 @@ func TestReadinessUnavailableWhenDependencyFails(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
 	if rec.Code != http.StatusServiceUnavailable {
 		t.Errorf("GET /readyz = %d, want 503", rec.Code)
+	}
+}
+
+// /readyz is unauthenticated by design (a load balancer probes it before
+// any session exists) — it must never leak the underlying error's raw
+// text (internal hostnames, connection details, migration state) to that
+// unauthenticated caller (backlog #115). The detail still belongs in the
+// server-side log, just not the response body.
+func TestReadinessDoesNotLeakUnderlyingErrorDetail(t *testing.T) {
+	h := newTestServer(errors.New("dial tcp 10.0.4.17:5432: connect: connection refused"))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/readyz", nil))
+	if strings.Contains(rec.Body.String(), "10.0.4.17") {
+		t.Errorf("response body leaked internal error detail: %s", rec.Body.String())
 	}
 }
 
