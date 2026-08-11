@@ -228,9 +228,11 @@ route (projects, cases, suites, runs, folders and their sub-resources) must
 resolve to an authenticated actor:
 
 - **Web UI**: session cookie set by `POST /api/v1/auth/login`. The cookie is
-  `HttpOnly`, `SameSite=Lax`, and `Secure` whenever the request itself
-  arrived over TLS — see [Deployment](deployment.md#security-status) for the
-  current HTTPS status. If the session goes invalid while the app is
+  `HttpOnly`, `SameSite=Lax`, and `Secure` whenever the request arrived over
+  HTTPS — either terminated by the app itself, or by a reverse proxy in
+  front that sets `X-Forwarded-Proto: https` — see
+  [Deployment](deployment.md#security-status) for the current HTTPS status.
+  If the session goes invalid while the app is
   already in use (cookie expiry, revocation), a `401` on any request opens
   a non-dismissable login modal over the current view rather than an empty
   page or a route change (`handle-session-expiry`) — the email of whoever

@@ -102,15 +102,25 @@ a Tenant Admin can disable the whole capability instance-wide (see
 [Public project access](test-management.md#public-project-access)). OIDC
 SSO is v0.2.
 
-**The connection itself is still plain HTTP — there is no TLS termination
-yet** (tracked as backlog: "Add HTTPS/TLS support"). The session cookie is
-`HttpOnly` and becomes `Secure` automatically once a request arrives over
-TLS, but without TLS in front of it, session cookies and credentials travel
-the network in clear text and are interceptable, exactly like any other
-auth mechanism would be on an unencrypted connection.
+**The app itself never terminates TLS** (tracked as backlog: "Add HTTPS/TLS
+support") — it always serves plain HTTP, per "Put TLS at the
+ingress/load balancer" above. The session cookie is `HttpOnly` and becomes
+`Secure` whenever the request reached the app over HTTPS, detected two
+ways: the app's own connection is TLS (only relevant if you terminate TLS
+in the Go process directly, which this project doesn't ship a way to do),
+or a reverse proxy in front sets `X-Forwarded-Proto: https` (the normal
+case — this is what a TLS-terminating ingress/load balancer/CDN is
+expected to set, and what `testpulse.fly.dev`'s own Fly.io deployment
+relies on). **If you put a reverse proxy in front of TestPulse that
+terminates TLS but does not set `X-Forwarded-Proto`, the session cookie
+silently loses `Secure`** — confirm your proxy sets this header (nginx,
+Caddy, Fly, and every common ingress controller do by default; a bespoke
+setup might not).
 
-**Do not expose a TestPulse instance beyond this stage to an untrusted
-network.** For local evaluation (docker-compose on localhost, or a Helm
-install behind a private network/VPN) this is fine; do not put it on the
-public internet or an untrusted shared network until TLS termination is in
-place.
+**Do not expose a TestPulse instance to an untrusted network without a
+TLS-terminating proxy in front of it that sets `X-Forwarded-Proto`.** For
+local evaluation (docker-compose on localhost, or a Helm install behind a
+private network/VPN) plain HTTP is fine; on the public internet or an
+untrusted shared network, session cookies and credentials travel in clear
+text and are interceptable without TLS in front, exactly like any other
+auth mechanism would be on an unencrypted connection.

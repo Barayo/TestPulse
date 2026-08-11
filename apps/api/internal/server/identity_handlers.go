@@ -68,17 +68,31 @@ func (h *api) logout(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// setSessionCookie marks the cookie Secure only when the request itself
-// arrived over TLS — so the cookie remains usable during local/dev HTTP
-// use today and becomes Secure automatically once TLS termination ships
-// (backlog: HTTPS/TLS support).
+// requestIsHTTPS reports whether the request reached the app over HTTPS —
+// either terminated by this process itself (r.TLS), or by a reverse proxy
+// in front of it that sets X-Forwarded-Proto (the real testpulse.fly.dev
+// deployment: fly.toml sets force_https with a plain-HTTP internal_port,
+// so r.TLS is always nil there and this header is the only signal
+// available; Fly's edge proxy sets it, so this is trustworthy in that
+// deployment. A self-hosted deployment behind a different proxy must set
+// the same header for this to hold — see docs/deployment.md).
+func requestIsHTTPS(r *http.Request) bool {
+	return r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https"
+}
+
+// setSessionCookie marks the cookie Secure whenever the request arrived
+// over HTTPS (backlog #112 — checking r.TLS alone silently dropped Secure
+// in production, since Fly terminates TLS at its edge proxy) — so the
+// cookie remains usable during local/dev plain-HTTP use, and is Secure
+// wherever the deployment is actually served over HTTPS, terminated
+// locally or by a proxy in front.
 func setSessionCookie(w http.ResponseWriter, r *http.Request, sess domain.Session) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    sess.ID,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  sess.ExpiresAt,
 	})
@@ -90,7 +104,7 @@ func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil,
+		Secure:   requestIsHTTPS(r),
 		SameSite: http.SameSiteLaxMode,
 		Expires:  time.Unix(0, 0),
 		MaxAge:   -1,
