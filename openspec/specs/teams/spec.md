@@ -8,7 +8,7 @@ roles to many people at once.
 ## Requirements
 
 ### Requirement: Team management
-The system SHALL let a Tenant Admin create, rename, and delete teams, where a team is a named group of users with no scope of its own — a team only gains meaning when assigned a role on one or more projects. Only a Tenant Admin SHALL manage teams and their membership.
+The system SHALL let a Tenant Admin create, rename, and delete teams, where a team is a named group of users with no scope of its own — a team only gains meaning when assigned a role on one or more projects. Only a Tenant Admin SHALL manage teams and their membership. Before deleting a team, the system SHALL let a Tenant Admin retrieve a preview of that team's current member count and the count of distinct projects it holds a role on.
 
 #### Scenario: Create a team
 - **WHEN** a Tenant Admin creates a team with a name
@@ -26,8 +26,12 @@ The system SHALL let a Tenant Admin create, rename, and delete teams, where a te
 - **WHEN** a Tenant Admin deletes a team
 - **THEN** the team no longer appears in the team list, its membership rows are removed, and its project role assignments are removed — any user whose effective role depended solely on that team loses that access
 
+#### Scenario: Tenant Admin views a team's deletion preview
+- **WHEN** a Tenant Admin requests the deletion preview for an existing team
+- **THEN** the response includes the team's current member count and the count of distinct projects it holds a role on
+
 #### Scenario: Non-Tenant-Admin cannot manage teams
-- **WHEN** a non-Tenant-Admin user attempts to create, rename, delete, or change the membership of a team
+- **WHEN** a non-Tenant-Admin user attempts to create, rename, delete, or change the membership of a team, or requests a team's deletion preview
 - **THEN** the request is rejected with `403`
 
 ### Requirement: Team membership
