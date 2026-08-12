@@ -376,7 +376,7 @@ describe('Run lifecycle (open/closed)', () => {
     mockRunAPI([pendingItem])
     renderRun()
     expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /close run/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /close run/i })).toBeInTheDocument()
   })
 
   it('closes the run', async () => {
@@ -399,7 +399,7 @@ describe('Run lifecycle (open/closed)', () => {
     await screen.findByText(/^open$/i)
     const getCallsBeforeClose = mockGET.mock.calls.length
 
-    await userEvent.click(screen.getByRole('button', { name: /close run/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /close run/i }))
 
     expect(await screen.findByText(/^closed$/i)).toBeInTheDocument()
     expect(mockGET.mock.calls.length).toBe(getCallsBeforeClose)
@@ -443,7 +443,7 @@ describe('Run lifecycle (open/closed)', () => {
     mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
     renderRun()
     expect(await screen.findByText(/^closed$/i)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /reopen/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /reopen/i })).toBeInTheDocument()
   })
 
   it('reopens the run', async () => {
@@ -484,7 +484,7 @@ describe('Run lifecycle (open/closed)', () => {
     await screen.findByText(/^closed$/i)
     const getCallsBeforeReopen = mockGET.mock.calls.length
 
-    await userEvent.click(screen.getByRole('button', { name: /reopen/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /reopen/i }))
 
     expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
     expect(mockGET.mock.calls.length).toBe(getCallsBeforeReopen)

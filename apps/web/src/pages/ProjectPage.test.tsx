@@ -495,7 +495,7 @@ describe('ProjectPage landing', () => {
       renderProject()
       await screen.findByText('Last run')
       const strip = within(screen.getByTestId('summary-strip'))
-      expect(strip.getByText(/Sprint 1/)).toBeInTheDocument()
+      expect(await strip.findByText(/Sprint 1/)).toBeInTheDocument()
       expect(strip.getByText(/· 100%/)).toBeInTheDocument()
     })
 

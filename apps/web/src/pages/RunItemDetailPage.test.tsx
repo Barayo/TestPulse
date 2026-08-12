@@ -176,8 +176,8 @@ describe('RunItemDetailPage', () => {
     })
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
-    await userEvent.type(screen.getByLabelText(/comment/i), 'all good')
-    await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
+    await userEvent.type(await screen.findByLabelText(/comment/i), 'all good')
+    await userEvent.click(await screen.findByRole('button', { name: /^pass$/i }))
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
@@ -324,8 +324,8 @@ describe('RunItemDetailPage', () => {
     mockPOST.mockResolvedValue({ response: { ok: true } })
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
-    await userEvent.type(screen.getByLabelText(/comment/i), 'still failing after retry')
-    await userEvent.click(screen.getByRole('button', { name: /save comment/i }))
+    await userEvent.type(await screen.findByLabelText(/comment/i), 'still failing after retry')
+    await userEvent.click(await screen.findByRole('button', { name: /save comment/i }))
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
@@ -345,7 +345,7 @@ describe('RunItemDetailPage', () => {
     ])
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
-    expect(screen.getByRole('button', { name: /save comment/i })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /save comment/i })).toBeDisabled()
 
     await userEvent.type(screen.getByLabelText(/comment/i), 'a note')
     expect(screen.getByRole('button', { name: /save comment/i })).not.toBeDisabled()
@@ -355,8 +355,8 @@ describe('RunItemDetailPage', () => {
     mockItemAPI()
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
+    expect(await screen.findByText(/saved together with a verdict/i)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /save comment/i })).not.toBeInTheDocument()
-    expect(screen.getByText(/saved together with a verdict/i)).toBeInTheDocument()
   })
 
   it('Ctrl/Cmd+Enter in the comment field saves the comment when a prior verdict exists', async () => {
@@ -366,7 +366,7 @@ describe('RunItemDetailPage', () => {
     mockPOST.mockResolvedValue({ response: { ok: true } })
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
-    await userEvent.type(screen.getByLabelText(/comment/i), 'still failing after retry')
+    await userEvent.type(await screen.findByLabelText(/comment/i), 'still failing after retry')
     await userEvent.keyboard('{Control>}{Enter}{/Control}')
 
     await waitFor(() => {
@@ -384,7 +384,7 @@ describe('RunItemDetailPage', () => {
     mockItemAPI()
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
-    await userEvent.type(screen.getByLabelText(/comment/i), 'a note')
+    await userEvent.type(await screen.findByLabelText(/comment/i), 'a note')
     await userEvent.keyboard('{Control>}{Enter}{/Control}')
 
     expect(mockPOST).not.toHaveBeenCalled()
@@ -511,7 +511,7 @@ describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
 
-    await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /^pass$/i }))
 
     await waitFor(() => expect(mockPOST).toHaveBeenCalled())
     expect(screen.getByRole('heading', { name: 'Login works' })).toBeInTheDocument()
@@ -574,7 +574,7 @@ describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
 
-    await userEvent.type(screen.getByLabelText(/comment/i), 'f is for failed')
+    await userEvent.type(await screen.findByLabelText(/comment/i), 'f is for failed')
 
     expect(mockPOST).not.toHaveBeenCalled()
   })
@@ -860,7 +860,7 @@ describe('screenshot attachments (add-run-item-screenshot-attachments)', () => {
     })
     await screen.findByRole('button', { name: /open attachment shot\.png/i })
 
-    await userEvent.click(screen.getByRole('button', { name: /^pass$/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /^pass$/i }))
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
@@ -904,7 +904,7 @@ describe('screenshot attachments (add-run-item-screenshot-attachments)', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
 
-    await userEvent.click(screen.getByRole('button', { name: /attach screenshot/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /attach screenshot/i }))
     const input = document.querySelectorAll('input[type="file"]')[1] as HTMLInputElement
     await userEvent.upload(input, pngFile())
 
