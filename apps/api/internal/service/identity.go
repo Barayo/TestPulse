@@ -304,7 +304,10 @@ func (s *Service) DeleteUser(ctx context.Context, actor domain.Actor, userID str
 // UserDeletionPreview summarizes what deleting userID would remove — real
 // counts for the delete-confirmation dialog (design.md D5), computed
 // server-side rather than a client-side fan-out over every project.
-func (s *Service) UserDeletionPreview(ctx context.Context, userID string) (domain.UserDeletionPreview, error) {
+func (s *Service) UserDeletionPreview(ctx context.Context, actor domain.Actor, userID string) (domain.UserDeletionPreview, error) {
+	if !actor.IsTenantAdmin {
+		return domain.UserDeletionPreview{}, forbidden("only a Tenant Admin can view user deletion preview")
+	}
 	teamIDs, err := s.store.Teams.TeamIDsForUser(ctx, userID)
 	if err != nil {
 		return domain.UserDeletionPreview{}, err

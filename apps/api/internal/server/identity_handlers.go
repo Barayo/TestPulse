@@ -224,8 +224,9 @@ func (h *api) deleteUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *api) userDeletionPreview(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
 	userID := chi.URLParam(r, "userId")
-	preview, err := h.svc.UserDeletionPreview(r.Context(), userID)
+	preview, err := h.svc.UserDeletionPreview(r.Context(), actor, userID)
 	h.respond(w, http.StatusOK, preview, err)
 }
 

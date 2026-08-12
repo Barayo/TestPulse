@@ -205,7 +205,7 @@ func TestUserDeletionPreviewCountsTeamsProjectsAndLiveTokens(t *testing.T) {
 	admin := mustCreateUser(t, s, "admin3@example.com", "correcthorse", true)
 	target := mustCreateUser(t, s, "preview@example.com", "correcthorse", false)
 
-	empty, err := s.UserDeletionPreview(ctx, target.ID)
+	empty, err := s.UserDeletionPreview(ctx, actorFor(admin), target.ID)
 	if err != nil {
 		t.Fatalf("UserDeletionPreview (empty): %v", err)
 	}
@@ -231,7 +231,7 @@ func TestUserDeletionPreviewCountsTeamsProjectsAndLiveTokens(t *testing.T) {
 		t.Fatalf("RevokeToken: %v", err)
 	}
 
-	preview, err := s.UserDeletionPreview(ctx, target.ID)
+	preview, err := s.UserDeletionPreview(ctx, actorFor(admin), target.ID)
 	if err != nil {
 		t.Fatalf("UserDeletionPreview: %v", err)
 	}
@@ -240,6 +240,26 @@ func TestUserDeletionPreviewCountsTeamsProjectsAndLiveTokens(t *testing.T) {
 	}
 	if preview.TokenCount != 1 {
 		t.Errorf("TokenCount = %d, want 1 (revoked token excluded)", preview.TokenCount)
+	}
+}
+
+// TestNonTenantAdminCannotViewUserDeletionPreview covers a defense-in-depth
+// fix flagged by automated security review of the add-user-deletion commit:
+// UserDeletionPreview relied solely on route-level requireTenantAdmin
+// gating (verified not actually exploitable — an HTTP-level test already
+// asserts a non-admin caller gets 403), but every sibling deletion-preview
+// method (RoleDeletionPreview) checks actor.IsTenantAdmin in the service
+// layer too. This brings UserDeletionPreview in line with that pattern.
+func TestNonTenantAdminCannotViewUserDeletionPreview(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	target := mustCreateUser(t, s, "previewed2@example.com", "correcthorse", false)
+	nonAdmin := actorFor(mustCreateUser(t, s, "member3@example.com", "correcthorse", false))
+
+	_, err := s.UserDeletionPreview(ctx, nonAdmin, target.ID)
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
 	}
 }
 
