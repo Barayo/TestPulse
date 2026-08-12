@@ -32,9 +32,11 @@ async function gotoAuthenticated(page: Page) {
 // case this feature exists for. Clicking into People keeps AuthProvider
 // mounted with its already-authenticated `user`, then fires a new GET that
 // hits the corrupted cookie and 401s — the real scenario being tested.
+// AdminMenu is a single direct link to /settings/people (redesign-admin-shell
+// replaced its old button+dropdown with a persistent tab shell once inside),
+// not a button that opens a menu — one click, not two.
 async function triggerMidUseRequest(page: Page) {
-  await page.getByRole('button', { name: 'Admin', exact: true }).click()
-  await page.getByRole('menuitem', { name: /^people$/i }).click()
+  await page.getByRole('link', { name: 'Admin', exact: true }).click()
 }
 
 test.describe('Requirement: Session expiry mid-use prompts re-login without losing place', () => {
