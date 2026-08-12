@@ -274,6 +274,123 @@ func TestScenario_DeactivateThenReactivateUser(t *testing.T) {
 		jmap{"email": "member@example.com", "password": "correcthorse"}, 200, &loggedIn)
 }
 
+func TestScenario_DeleteUserRequiresDeactivationFirst(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "active@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+
+	callAs(t, h, adminCookie, "DELETE", "/api/v1/users/"+memberID, nil, 400, nil)
+
+	var users []jmap
+	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &users)
+	found := false
+	for _, u := range users {
+		if u["id"] == memberID {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("user should still exist after a rejected delete")
+	}
+}
+
+// Self-deletion is exercised via a bearer token minted before
+// self-deactivation, not the admin's own session cookie: deactivating an
+// account immediately invalidates its session on every subsequent request
+// (AuthenticateSession checks DeactivatedAt), a pre-existing, separate gap
+// noted in design.md's Risks — so a deactivated admin literally cannot
+// reach this handler via their own cookie at all. A token they created
+// while still active keeps authenticating after deactivation
+// (AuthenticateToken doesn't check the creator's DeactivatedAt), which is
+// what actually makes this guard reachable in practice.
+func TestScenario_DeleteUserRejectsSelfDelete(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var admin jmap
+	callAs(t, h, adminCookie, "GET", "/api/v1/users/me", nil, 200, &admin)
+	adminID, _ := admin["id"].(string)
+
+	var tokenResp jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/tokens", jmap{"name": "self-token"}, 201, &tokenResp)
+	token, _ := tokenResp["token"].(string)
+
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+adminID, jmap{"deactivate": true}, 204, nil)
+	callAs(t, h, "Bearer "+token, "DELETE", "/api/v1/users/"+adminID, nil, 403, nil)
+}
+
+func TestScenario_DeleteDeactivatedUserSucceeds(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "deletable@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"deactivate": true}, 204, nil)
+	callAs(t, h, adminCookie, "DELETE", "/api/v1/users/"+memberID, nil, 204, nil)
+
+	var users []jmap
+	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &users)
+	for _, u := range users {
+		if u["id"] == memberID {
+			t.Error("user should no longer exist after delete")
+		}
+	}
+}
+
+func TestScenario_NonTenantAdminCannotDeleteUser(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "other@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"deactivate": true}, 204, nil)
+
+	var target jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "notadmin@example.com", "password": "correcthorse"}, 201, &target)
+	nonAdminCookie := loginCookie(t, h, "notadmin@example.com", "correcthorse")
+
+	callAs(t, h, nonAdminCookie, "DELETE", "/api/v1/users/"+memberID, nil, 403, nil)
+}
+
+func TestScenario_UserDeletionPreviewReturnsRealCounts(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "previewed@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+
+	var preview jmap
+	callAs(t, h, adminCookie, "GET", "/api/v1/users/"+memberID+"/deletion-preview", nil, 200, &preview)
+	if preview["teamCount"] != float64(0) || preview["projectCount"] != float64(0) || preview["tokenCount"] != float64(0) {
+		t.Errorf("preview = %+v, want all zero for a fresh user", preview)
+	}
+}
+
+func TestScenario_NonTenantAdminCannotViewDeletionPreview(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "member2@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+	memberCookie := loginCookie(t, h, "member2@example.com", "correcthorse")
+
+	callAs(t, h, memberCookie, "GET", "/api/v1/users/"+memberID+"/deletion-preview", nil, 403, nil)
+}
+
 func TestScenario_AuditHistoryQueryableForAnEntity(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")

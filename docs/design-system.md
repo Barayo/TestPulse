@@ -186,6 +186,18 @@ Prefer filled panels over hairline dividers for structural boundaries in this de
 reserve borders for internal separators within an already-bounded container (e.g. the divider
 between Properties and Results inside the sidebar panel itself).
 
+## Tab strip: filled active segment, not an underline
+
+`AdminShell.tsx`'s People/Roles/Instance navigation is a small pill row
+(`rounded-2xl bg-muted p-1`) with the active tab a `bg-card text-foreground shadow-sm`
+segment against it — never a thin underline/border under the active label. Same
+reasoning as the filled-panel finding above: this palette's tokens are close-value
+soft near-whites, so a 1-2px active-state line would hit the identical
+near-invisible problem a hairline sidebar divider already did. Reach for this
+pattern for any small (3-5 item), persistent, single-active-selection navigation
+strip — not for a large tab set, and not for a one-off toggle (`Switch` already
+covers binary on/off).
+
 ## Diffing two versions of the same content: field-by-field, not text-diff
 
 `VersionDetailDialog` (`apps/web/src/components/VersionDetailDialog.tsx`) shows what changed

@@ -161,6 +161,43 @@ func TestTenantAdminUpdatesAndDeletesRole(t *testing.T) {
 	}
 }
 
+// TestRoleDeletionPreview covers redesign-admin-shell task 1.2.
+func TestRoleDeletionPreview(t *testing.T) {
+	s := testService(t)
+	admin := actorFor(mustCreateUser(t, s, "admin2@example.com", "correcthorse", true))
+	ctx := context.Background()
+
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Previewed Role", CanRead: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+
+	preview, err := s.RoleDeletionPreview(ctx, admin, role.ID)
+	if err != nil {
+		t.Fatalf("RoleDeletionPreview: %v", err)
+	}
+	if preview.DirectUserCount != 0 || preview.TeamCount != 0 || preview.ProjectCount != 0 {
+		t.Errorf("preview = %+v, want all zero for an unassigned role", preview)
+	}
+}
+
+func TestNonTenantAdminCannotViewRoleDeletionPreview(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin3@example.com", "correcthorse", true))
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Non-admin-viewed Role", CanRead: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	nonAdmin := actorFor(mustCreateUser(t, s, "member@example.com", "correcthorse", false))
+
+	_, err = s.RoleDeletionPreview(ctx, nonAdmin, role.ID)
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
+	}
+}
+
 func TestNonTenantAdminCannotUpdateOrDeleteRole(t *testing.T) {
 	s := testService(t)
 	admin := actorFor(mustCreateUser(t, s, "admin@example.com", "correcthorse", true))

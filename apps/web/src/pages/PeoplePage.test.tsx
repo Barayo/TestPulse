@@ -82,6 +82,49 @@ describe('PeoplePage', () => {
       expect(img.getAttribute('src')).toMatch(/ada-lovelace/)
     })
 
+    it('the Deactivate button on an active row is visible without hovering/focusing (redesign-admin-shell)', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      const row = (await screen.findByText('other@example.com')).closest('li') as HTMLElement
+      const deactivateBtn = within(row).getByRole('button', { name: /deactivate other@example.com/i })
+      expect(deactivateBtn.className).not.toMatch(/opacity-0/)
+      expect(deactivateBtn).toHaveAttribute('title', 'Deactivate other@example.com')
+    })
+
+    it('shows the display name (bold) with the email demoted below it, when they differ', async () => {
+      mockGET.mockImplementation((path: string) => {
+        if (path === '/api/v1/users/me') {
+          return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
+        }
+        if (path === '/api/v1/users') {
+          return Promise.resolve({
+            data: [{ id: 'u2', email: 'other@example.com', displayName: 'Other Person', isTenantAdmin: false, deactivatedAt: null, createdAt: '' }],
+            response: { ok: true },
+          })
+        }
+        return Promise.resolve({ data: [], response: { ok: true } })
+      })
+      renderPage()
+      expect(await screen.findByText('Other Person')).toBeInTheDocument()
+      expect(screen.getByText('other@example.com')).toBeInTheDocument()
+    })
+
+    it('shows just the email when there is no display name', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      const matches = await screen.findAllByText('other@example.com')
+      expect(matches).toHaveLength(1)
+    })
+
+    it('shows "Tenant Admin" as a pill and "Member" as plain text', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      const adminRow = (await screen.findByText('me@example.com')).closest('li') as HTMLElement
+      const memberRow = (await screen.findByText('other@example.com')).closest('li') as HTMLElement
+      expect(within(adminRow).getByText('Tenant Admin').className).toMatch(/rounded-full/)
+      expect(within(memberRow).getByText('Member').className).not.toMatch(/rounded-full/)
+    })
+
     it('filters the roster by email via a search box', async () => {
       mockAsTenantAdmin(true)
       const user = userEvent.setup()
@@ -280,6 +323,107 @@ describe('PeoplePage', () => {
             body: { reactivate: true },
           }),
         )
+      })
+    })
+
+    describe('delete (add-user-deletion)', () => {
+      const deactivatedUsers = [
+        { id: 'u1', email: 'me@example.com', isTenantAdmin: true, deactivatedAt: '2026-01-01T00:00:00Z', createdAt: '' },
+        { id: 'u2', email: 'other@example.com', isTenantAdmin: false, deactivatedAt: '2026-01-01T00:00:00Z', createdAt: '' },
+      ]
+
+      function mockDeactivated() {
+        mockGET.mockImplementation((path: string) => {
+          if (path === '/api/v1/users/me') {
+            return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
+          }
+          if (path === '/api/v1/users') return Promise.resolve({ data: deactivatedUsers, response: { ok: true } })
+          if (path === '/api/v1/users/{userId}/deletion-preview') {
+            return Promise.resolve({ data: { teamCount: 2, projectCount: 1, tokenCount: 3 }, response: { ok: true } })
+          }
+          return Promise.resolve({ data: [], response: { ok: true } })
+        })
+      }
+
+      it('shows a Delete action on a deactivated user\'s row, but not for the signed-in admin\'s own row', async () => {
+        mockDeactivated()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        expect(screen.getByRole('button', { name: /^delete other@example.com$/i })).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: /^delete me@example.com$/i })).not.toBeInTheDocument()
+      })
+
+      it('opens a confirmation dialog naming the account, disables confirm until real counts load', async () => {
+        let resolvePreview: (v: { data: { teamCount: number; projectCount: number; tokenCount: number } }) => void
+        const previewPromise = new Promise<{ data: { teamCount: number; projectCount: number; tokenCount: number } }>(
+          (resolve) => {
+            resolvePreview = resolve
+          },
+        )
+        mockGET.mockImplementation((path: string) => {
+          if (path === '/api/v1/users/me') {
+            return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
+          }
+          if (path === '/api/v1/users') return Promise.resolve({ data: deactivatedUsers, response: { ok: true } })
+          if (path === '/api/v1/users/{userId}/deletion-preview') return previewPromise as Promise<never>
+          return Promise.resolve({ data: [], response: { ok: true } })
+        })
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^delete other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        expect(dialog).toHaveTextContent(/other@example.com/i)
+
+        const confirmBtn = within(dialog).getByRole('button', { name: /^delete$/i })
+        expect(confirmBtn).toBeDisabled()
+        expect(mockGET).toHaveBeenCalledWith(
+          '/api/v1/users/{userId}/deletion-preview',
+          expect.objectContaining({ params: { path: { userId: 'u2' } } }),
+        )
+
+        resolvePreview!({ data: { teamCount: 2, projectCount: 1, tokenCount: 3 } })
+        await waitFor(() => expect(confirmBtn).toBeEnabled())
+        expect(dialog).toHaveTextContent(/2 teams/i)
+        expect(dialog).toHaveTextContent(/1 project/i)
+        expect(dialog).toHaveTextContent(/3 api tokens/i)
+      })
+
+      it('cancelling the dialog does not call DELETE', async () => {
+        mockDeactivated()
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^delete other@example.com$/i }))
+        await screen.findByRole('dialog')
+        await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        expect(mockDELETE).not.toHaveBeenCalled()
+      })
+
+      it('confirming deletes the user and reloads the list', async () => {
+        mockDeactivated()
+        mockDELETE.mockResolvedValue({ response: { ok: true } })
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^delete other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        const confirmBtn = within(dialog).getByRole('button', { name: /^delete$/i })
+        await waitFor(() => expect(confirmBtn).toBeEnabled())
+        await user.click(confirmBtn)
+
+        await waitFor(() =>
+          expect(mockDELETE).toHaveBeenCalledWith('/api/v1/users/{userId}', {
+            params: { path: { userId: 'u2' } },
+          }),
+        )
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       })
     })
   })

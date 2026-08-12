@@ -118,6 +118,131 @@ func TestReactivatedUserCanLoginAgain(t *testing.T) {
 	}
 }
 
+// --- User deletion (add-user-deletion) ---
+
+func TestDeleteUserRejectedWhileStillActive(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin@example.com", "correcthorse", true)
+	target := mustCreateUser(t, s, "active@example.com", "correcthorse", false)
+
+	err := s.DeleteUser(context.Background(), actorFor(admin), target.ID)
+	if err == nil {
+		t.Fatal("expected deleting an active (non-deactivated) user to be rejected")
+	}
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) {
+		t.Errorf("err = %v (%T), want a ValidationError (400)", err, err)
+	}
+
+	if _, getErr := s.GetUser(context.Background(), target.ID); getErr != nil {
+		t.Errorf("target user should still exist after a rejected delete, GetUser err = %v", getErr)
+	}
+}
+
+func TestDeleteUserRejectsSelfDeletionEvenIfDeactivated(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "self@example.com", "correcthorse", true)
+	ctx := context.Background()
+	if err := s.DeactivateUser(ctx, admin.ID); err != nil {
+		t.Fatalf("DeactivateUser: %v", err)
+	}
+
+	err := s.DeleteUser(ctx, actorFor(admin), admin.ID)
+	if err == nil {
+		t.Fatal("expected self-deletion to be rejected even when deactivated")
+	}
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v (%T), want ForbiddenError", err, err)
+	}
+}
+
+func TestDeleteUserRemovesDeactivatedUserAndCascades(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := mustCreateUser(t, s, "admin2@example.com", "correcthorse", true)
+	target := mustCreateUser(t, s, "gone@example.com", "correcthorse", false)
+
+	team, err := s.CreateTeam(ctx, actorFor(admin), "Deletable Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	if _, err := s.AddTeamMember(ctx, actorFor(admin), team.ID, target.ID); err != nil {
+		t.Fatalf("AddTeamMember: %v", err)
+	}
+	if _, _, err := s.CreateToken(ctx, actorFor(target), "target-token", nil, nil); err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	if _, _, err := s.Login(ctx, "gone@example.com", "correcthorse"); err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	if err := s.DeactivateUser(ctx, target.ID); err != nil {
+		t.Fatalf("DeactivateUser: %v", err)
+	}
+	if err := s.DeleteUser(ctx, actorFor(admin), target.ID); err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+
+	if _, err := s.GetUser(ctx, target.ID); err == nil {
+		t.Error("expected the deleted user to no longer be found")
+	}
+	tokens, err := s.ListTokensForUser(ctx, actorFor(admin), target.ID)
+	if err != nil {
+		t.Fatalf("ListTokensForUser: %v", err)
+	}
+	if len(tokens) != 0 {
+		t.Errorf("tokens after user delete = %v, want none (cascade)", tokens)
+	}
+}
+
+// TestUserDeletionPreviewCountsTeamsProjectsAndLiveTokens covers
+// add-user-deletion task 4.2 — the confirmation dialog's real-counts
+// requirement (design.md D5).
+func TestUserDeletionPreviewCountsTeamsProjectsAndLiveTokens(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := mustCreateUser(t, s, "admin3@example.com", "correcthorse", true)
+	target := mustCreateUser(t, s, "preview@example.com", "correcthorse", false)
+
+	empty, err := s.UserDeletionPreview(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("UserDeletionPreview (empty): %v", err)
+	}
+	if empty.TeamCount != 0 || empty.ProjectCount != 0 || empty.TokenCount != 0 {
+		t.Errorf("empty preview = %+v, want all zero", empty)
+	}
+
+	team, err := s.CreateTeam(ctx, actorFor(admin), "Preview Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	if _, err := s.AddTeamMember(ctx, actorFor(admin), team.ID, target.ID); err != nil {
+		t.Fatalf("AddTeamMember: %v", err)
+	}
+	if _, _, err := s.CreateToken(ctx, actorFor(target), "live-token", nil, nil); err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	_, revoked, err := s.CreateToken(ctx, actorFor(target), "revoked-token", nil, nil)
+	if err != nil {
+		t.Fatalf("CreateToken (to revoke): %v", err)
+	}
+	if err := s.RevokeToken(ctx, actorFor(target), revoked.ID); err != nil {
+		t.Fatalf("RevokeToken: %v", err)
+	}
+
+	preview, err := s.UserDeletionPreview(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("UserDeletionPreview: %v", err)
+	}
+	if preview.TeamCount != 1 {
+		t.Errorf("TeamCount = %d, want 1", preview.TeamCount)
+	}
+	if preview.TokenCount != 1 {
+		t.Errorf("TokenCount = %d, want 1 (revoked token excluded)", preview.TokenCount)
+	}
+}
+
 func TestLogoutInvalidatesSession(t *testing.T) {
 	s := testService(t)
 	mustCreateUser(t, s, "a@example.com", "correcthorse", false)

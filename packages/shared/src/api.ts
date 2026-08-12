@@ -1088,11 +1088,31 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
-        delete?: never;
+        /** Permanently delete a user (Tenant Admin only; the target must already be deactivated; self-deletion is rejected) */
+        delete: operations["deleteUser"];
         options?: never;
         head?: never;
         /** Change a user's Tenant Admin flag, deactivate, or reactivate them (Tenant Admin only) */
         patch: operations["updateUser"];
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        /** Real counts of what deleting this user would remove (Tenant Admin only) — teams, direct project memberships, and live API tokens */
+        get: operations["userDeletionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/tokens": {
@@ -1261,6 +1281,25 @@ export interface paths {
         head?: never;
         /** Update a role's name, rank, or permission flags (Tenant Admin only) */
         patch: operations["updateRole"];
+        trace?: never;
+    };
+    "/api/v1/roles/{roleId}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roleId: string;
+            };
+            cookie?: never;
+        };
+        /** Real counts of what deleting this role would affect (Tenant Admin only) — direct user assignments, team assignments, and distinct projects touched */
+        get: operations["roleDeletionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/projects/{projectKey}/members": {
@@ -1718,6 +1757,23 @@ export interface components {
             deactivate?: boolean;
             /** @description Set true to reactivate a previously-deactivated user. */
             reactivate?: boolean;
+        };
+        /** @description Real counts of what deleting a user would remove (add-user-deletion design.md D5) — server-computed, not a client-side fan-out. */
+        UserDeletionPreview: {
+            teamCount: number;
+            /** @description Direct project memberships only, not team-derived access. */
+            projectCount: number;
+            /** @description Live (non-revoked) API tokens created by this user. */
+            tokenCount: number;
+        };
+        /** @description Real counts of what deleting a role would affect (redesign-admin-shell) — server-computed, mirroring UserDeletionPreview's pattern. */
+        RoleDeletionPreview: {
+            /** @description Users holding this role via direct project membership. */
+            directUserCount: number;
+            /** @description Teams holding this role. */
+            teamCount: number;
+            /** @description Distinct projects touched by either direct or team assignment. */
+            projectCount: number;
         };
         /** @description A resolved, unioned set of permission flags — the caller's own effective permissions on one project (add-delete-mode), not a role definition. */
         Permissions: {
@@ -3730,6 +3786,30 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    deleteUser: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     updateUser: {
         parameters: {
             query?: never;
@@ -3753,6 +3833,31 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    userDeletionPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deletion preview counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserDeletionPreview"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
@@ -4128,6 +4233,31 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    roleDeletionPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                roleId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deletion preview counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RoleDeletionPreview"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

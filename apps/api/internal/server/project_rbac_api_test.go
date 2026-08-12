@@ -213,6 +213,39 @@ func TestScenario_TenantAdminManagesRolesOverHTTP(t *testing.T) {
 	}
 }
 
+func TestScenario_RoleDeletionPreviewOverHTTP(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var created jmap
+	callAs(t, handler, admin, "POST", "/api/v1/roles",
+		jmap{"name": "Previewed Role (http-test)", "rank": 9, "canRead": true}, 201, &created)
+	roleID, _ := created["id"].(string)
+
+	var preview jmap
+	callAs(t, handler, admin, "GET", "/api/v1/roles/"+roleID+"/deletion-preview", nil, 200, &preview)
+	if preview["directUserCount"] != float64(0) || preview["teamCount"] != float64(0) || preview["projectCount"] != float64(0) {
+		t.Errorf("preview = %+v, want all zero for an unassigned role", preview)
+	}
+}
+
+func TestScenario_NonTenantAdminCannotViewRoleDeletionPreviewOverHTTP(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var created jmap
+	callAs(t, handler, admin, "POST", "/api/v1/roles",
+		jmap{"name": "Guarded Role (http-test)", "rank": 9, "canRead": true}, 201, &created)
+	roleID, _ := created["id"].(string)
+
+	var member jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "roleview@example.com", "password": "correcthorse"}, 201, &member)
+	memberCookie := loginCookie(t, handler, "roleview@example.com", "correcthorse")
+
+	callAs(t, handler, memberCookie, "GET", "/api/v1/roles/"+roleID+"/deletion-preview", nil, 403, nil)
+}
+
 func TestScenario_ResetRolesToDefaultsOverHTTP(t *testing.T) {
 	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")

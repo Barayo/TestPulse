@@ -42,6 +42,8 @@ func mountIdentity(r chi.Router, h *api) {
 		r.Get("/{userId}/avatar", h.getUserAvatar)
 		r.With(requireTenantAdmin).Post("/", h.createUser)
 		r.With(requireTenantAdmin).Patch("/{userId}", h.updateUser)
+		r.With(requireTenantAdmin).Delete("/{userId}", h.deleteUser)
+		r.With(requireTenantAdmin).Get("/{userId}/deletion-preview", h.userDeletionPreview)
 	})
 	r.Route("/tokens", func(r chi.Router) {
 		r.Get("/", h.listTokens)
@@ -212,6 +214,19 @@ func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	h.respond(w, http.StatusNoContent, nil, nil)
+}
+
+func (h *api) deleteUser(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	userID := chi.URLParam(r, "userId")
+	err := h.svc.DeleteUser(r.Context(), actor, userID)
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) userDeletionPreview(w http.ResponseWriter, r *http.Request) {
+	userID := chi.URLParam(r, "userId")
+	preview, err := h.svc.UserDeletionPreview(r.Context(), userID)
+	h.respond(w, http.StatusOK, preview, err)
 }
 
 // --- API tokens ---

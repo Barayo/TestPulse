@@ -126,6 +126,86 @@ func TestRoleList(t *testing.T) {
 	}
 }
 
+// TestDirectProjectCountForUser covers add-user-deletion task 4.1: the
+// deletion-preview endpoint needs a cheap, DB-side count of a user's direct
+// project memberships (never a client-side fan-out over every project).
+func TestDirectProjectCountForUser(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "counted@example.com", false)
+	role := mustRole(t, s, domain.Role{Name: "Counter Role", CanRead: true})
+
+	count, err := s.ProjectMembers.DirectProjectCountForUser(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("DirectProjectCountForUser (none yet): %v", err)
+	}
+	if count != 0 {
+		t.Errorf("count = %d, want 0 before any membership", count)
+	}
+
+	p1 := mustProject(t, s)
+	p2 := mustProject(t, s)
+	if err := s.ProjectMembers.SetMember(ctx, p1.ID, u.ID, role.ID); err != nil {
+		t.Fatalf("SetMember p1: %v", err)
+	}
+	if err := s.ProjectMembers.SetMember(ctx, p2.ID, u.ID, role.ID); err != nil {
+		t.Fatalf("SetMember p2: %v", err)
+	}
+
+	count, err = s.ProjectMembers.DirectProjectCountForUser(ctx, u.ID)
+	if err != nil {
+		t.Fatalf("DirectProjectCountForUser: %v", err)
+	}
+	if count != 2 {
+		t.Errorf("count = %d, want 2", count)
+	}
+}
+
+// TestRoleReferenceCounts covers redesign-admin-shell task 1.1: the
+// deletion-preview endpoint needs a cheap, DB-side count of a role's direct
+// user assignments, team assignments, and distinct projects touched.
+func TestRoleReferenceCounts(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	role := mustRole(t, s, domain.Role{Name: "Counted Role", CanRead: true})
+
+	directUsers, teams, projects, err := s.Roles.ReferenceCounts(ctx, role.ID)
+	if err != nil {
+		t.Fatalf("ReferenceCounts (none yet): %v", err)
+	}
+	if directUsers != 0 || teams != 0 || projects != 0 {
+		t.Errorf("counts = %d/%d/%d, want all zero before any assignment", directUsers, teams, projects)
+	}
+
+	u := mustUser(t, s, "role-ref-user@example.com", false)
+	p1 := mustProject(t, s)
+	p2 := mustProject(t, s)
+	if err := s.ProjectMembers.SetMember(ctx, p1.ID, u.ID, role.ID); err != nil {
+		t.Fatalf("SetMember: %v", err)
+	}
+	team, err := s.Teams.Create(ctx, "Ref Team")
+	if err != nil {
+		t.Fatalf("Teams.Create: %v", err)
+	}
+	if err := s.ProjectMembers.SetTeamRole(ctx, p2.ID, team.ID, role.ID); err != nil {
+		t.Fatalf("SetTeamRole: %v", err)
+	}
+
+	directUsers, teams, projects, err = s.Roles.ReferenceCounts(ctx, role.ID)
+	if err != nil {
+		t.Fatalf("ReferenceCounts: %v", err)
+	}
+	if directUsers != 1 {
+		t.Errorf("directUsers = %d, want 1", directUsers)
+	}
+	if teams != 1 {
+		t.Errorf("teams = %d, want 1", teams)
+	}
+	if projects != 2 {
+		t.Errorf("projects = %d, want 2 (one via direct membership, one via team)", projects)
+	}
+}
+
 // --- Project members / effective permission resolution ---
 
 func TestEffectivePermissionsNoMembershipIsNotFound(t *testing.T) {

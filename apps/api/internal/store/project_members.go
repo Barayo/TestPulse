@@ -79,6 +79,19 @@ func (r *ProjectMemberRepo) Membership(ctx context.Context, projectID string) (d
 	return m, teamRows.Err()
 }
 
+// DirectProjectCountForUser counts a user's direct project memberships —
+// used by the user-deletion confirmation preview (add-user-deletion). Team-
+// derived project access isn't counted: deleting a user never touches team
+// membership rows for anyone else, so it isn't part of "what deleting this
+// account removes."
+func (r *ProjectMemberRepo) DirectProjectCountForUser(ctx context.Context, userID string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx,
+		`SELECT count(*) FROM project_members WHERE user_id = $1`, userID,
+	).Scan(&count)
+	return count, err
+}
+
 // EffectivePermissions resolves userID's effective permissions on
 // projectID: the union (OR) of every role's flags reachable via direct
 // assignment and/or team membership (design.md D3/D10). Returns

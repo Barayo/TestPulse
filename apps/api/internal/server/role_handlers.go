@@ -18,6 +18,7 @@ func mountRoles(r chi.Router, h *api) {
 		r.Post("/reset", h.resetRoles)
 		r.Patch("/{roleID}", h.updateRole)
 		r.Delete("/{roleID}", h.deleteRole)
+		r.Get("/{roleID}/deletion-preview", h.roleDeletionPreview)
 	})
 }
 
@@ -83,6 +84,12 @@ func (h *api) deleteRole(w http.ResponseWriter, r *http.Request) {
 	actor, _ := domain.ActorFromContext(r.Context())
 	err := h.svc.DeleteRole(r.Context(), actor, chi.URLParam(r, "roleID"))
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) roleDeletionPreview(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	preview, err := h.svc.RoleDeletionPreview(r.Context(), actor, chi.URLParam(r, "roleID"))
+	h.respond(w, http.StatusOK, preview, err)
 }
 
 // resetRoles restores Tester/Contributor/Project Admin to their factory

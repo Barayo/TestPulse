@@ -1191,6 +1191,32 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteUser
+      summary: Permanently delete a user (Tenant Admin only; the target must already be deactivated; self-deletion is rejected)
+      tags: [users]
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/users/{userId}/deletion-preview:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: userDeletionPreview
+      summary: Real counts of what deleting this user would remove (Tenant Admin only) — teams, direct project memberships, and live API tokens
+      tags: [users]
+      responses:
+        "200":
+          description: Deletion preview counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDeletionPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/tokens:
     get:
       operationId: listTokens
@@ -1435,6 +1461,22 @@ paths:
       tags: [roles]
       responses:
         "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/roles/{roleId}/deletion-preview:
+    parameters:
+      - { name: roleId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: roleDeletionPreview
+      summary: Real counts of what deleting this role would affect (Tenant Admin only) — direct user assignments, team assignments, and distinct projects touched
+      tags: [roles]
+      responses:
+        "200":
+          description: Deletion preview counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleDeletionPreview" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -2114,6 +2156,36 @@ components:
         reactivate:
           type: boolean
           description: Set true to reactivate a previously-deactivated user.
+    UserDeletionPreview:
+      type: object
+      description: >-
+        Real counts of what deleting a user would remove (add-user-deletion
+        design.md D5) — server-computed, not a client-side fan-out.
+      required: [teamCount, projectCount, tokenCount]
+      properties:
+        teamCount: { type: integer }
+        projectCount:
+          type: integer
+          description: Direct project memberships only, not team-derived access.
+        tokenCount:
+          type: integer
+          description: Live (non-revoked) API tokens created by this user.
+    RoleDeletionPreview:
+      type: object
+      description: >-
+        Real counts of what deleting a role would affect (redesign-admin-shell)
+        — server-computed, mirroring UserDeletionPreview's pattern.
+      required: [directUserCount, teamCount, projectCount]
+      properties:
+        directUserCount:
+          type: integer
+          description: Users holding this role via direct project membership.
+        teamCount:
+          type: integer
+          description: Teams holding this role.
+        projectCount:
+          type: integer
+          description: Distinct projects touched by either direct or team assignment.
     Permissions:
       type: object
       description: >-

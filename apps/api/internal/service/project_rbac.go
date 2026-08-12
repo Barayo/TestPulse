@@ -85,6 +85,20 @@ func (s *Service) DeleteRole(ctx context.Context, actor domain.Actor, roleID str
 	return nil
 }
 
+// RoleDeletionPreview returns real reference counts for the delete-role
+// confirmation dialog (redesign-admin-shell), mirroring the pattern
+// UserDeletionPreview already established.
+func (s *Service) RoleDeletionPreview(ctx context.Context, actor domain.Actor, roleID string) (domain.RoleDeletionPreview, error) {
+	if !actor.IsTenantAdmin {
+		return domain.RoleDeletionPreview{}, forbidden("only a Tenant Admin can manage roles")
+	}
+	directUsers, teams, projects, err := s.store.Roles.ReferenceCounts(ctx, roleID)
+	if err != nil {
+		return domain.RoleDeletionPreview{}, err
+	}
+	return domain.RoleDeletionPreview{DirectUserCount: directUsers, TeamCount: teams, ProjectCount: projects}, nil
+}
+
 // defaultRoles mirrors the seed data in migration 00003_identity.sql exactly
 // — keep both in sync. Used by ResetRolesToDefaults below.
 var defaultRoles = []domain.Role{

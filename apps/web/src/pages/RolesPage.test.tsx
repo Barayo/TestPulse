@@ -240,6 +240,40 @@ describe('RolesPage', () => {
       expect(dialog).toHaveTextContent(/cannot be undone/i)
     })
 
+    it('opens instantly, disables Delete role until real counts load, then shows them', async () => {
+      let resolvePreview: (v: { data: { directUserCount: number; teamCount: number; projectCount: number } }) => void
+      const previewPromise = new Promise<{ data: { directUserCount: number; teamCount: number; projectCount: number } }>(
+        (resolve) => {
+          resolvePreview = resolve
+        },
+      )
+      mockGET.mockImplementation((path: string) => {
+        if (path === '/api/v1/users/me') {
+          return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }, response: { ok: true } })
+        }
+        if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+        if (path === '/api/v1/roles/{roleId}/deletion-preview') return previewPromise as Promise<never>
+        return Promise.resolve({ data: [], response: { ok: true } })
+      })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await waitForLoaded())
+      const dialog = await screen.findByRole('dialog')
+      const confirmBtn = within(dialog).getByRole('button', { name: /delete role/i })
+      expect(confirmBtn).toBeDisabled()
+      expect(mockGET).toHaveBeenCalledWith(
+        '/api/v1/roles/{roleId}/deletion-preview',
+        expect.objectContaining({ params: { path: { roleId: 'r1' } } }),
+      )
+
+      resolvePreview!({ data: { directUserCount: 4, teamCount: 1, projectCount: 2 } })
+      await waitFor(() => expect(confirmBtn).toBeEnabled())
+      expect(dialog).toHaveTextContent(/4 users/i)
+      expect(dialog).toHaveTextContent(/1 team/i)
+      expect(dialog).toHaveTextContent(/2 projects/i)
+    })
+
     it('cancelling the dialog does not call the delete endpoint', async () => {
       mockAsTenantAdmin(true)
       const user = userEvent.setup()

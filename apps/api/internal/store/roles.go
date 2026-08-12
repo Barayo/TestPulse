@@ -95,6 +95,26 @@ func (r *RoleRepo) Update(ctx context.Context, role domain.Role) (domain.Role, e
 	return scanRole(row)
 }
 
+// ReferenceCounts returns how many users hold this role directly
+// (project_members), how many teams hold it (project_team_roles), and how
+// many distinct projects either touches — the real numbers shown by the
+// delete-role confirmation dialog (redesign-admin-shell), mirroring the
+// pattern add-user-deletion already established for deleting a user.
+func (r *RoleRepo) ReferenceCounts(ctx context.Context, roleID string) (directUsers, teams, projects int, err error) {
+	err = r.pool.QueryRow(ctx,
+		`SELECT
+		   (SELECT count(*) FROM project_members WHERE role_id = $1),
+		   (SELECT count(*) FROM project_team_roles WHERE role_id = $1),
+		   (SELECT count(*) FROM (
+		      SELECT project_id FROM project_members WHERE role_id = $1
+		      UNION
+		      SELECT project_id FROM project_team_roles WHERE role_id = $1
+		    ) p)`,
+		roleID,
+	).Scan(&directUsers, &teams, &projects)
+	return directUsers, teams, projects, err
+}
+
 // Delete removes the role; project_members/project_team_roles rows
 // referencing it CASCADE (design.md D10), so any user whose access
 // depended solely on this role loses it.

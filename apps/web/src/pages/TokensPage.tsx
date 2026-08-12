@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 
 type Token = {
@@ -32,6 +33,7 @@ export default function TokensPage() {
   const [justCreated, setJustCreated] = useState<string>()
   const [error, setError] = useState<string>()
   const [copied, setCopied] = useState(false)
+  const [revokeTarget, setRevokeTarget] = useState<Token | null>(null)
 
   async function load() {
     const [{ data: t }, { data: p }, { data: r }] = await Promise.all([
@@ -74,8 +76,10 @@ export default function TokensPage() {
     await load()
   }
 
-  async function handleRevoke(tokenId: string) {
-    await api.DELETE('/api/v1/tokens/{tokenId}', { params: { path: { tokenId } } })
+  async function handleRevoke() {
+    if (!revokeTarget) return
+    await api.DELETE('/api/v1/tokens/{tokenId}', { params: { path: { tokenId: revokeTarget.id } } })
+    setRevokeTarget(null)
     await load()
   }
 
@@ -94,7 +98,7 @@ export default function TokensPage() {
       </div>
 
       {justCreated && (
-        <Card className="border-amber-500">
+        <Card className="border-secondary">
           <CardContent className="space-y-2 pt-6">
             <p className="text-sm font-medium">Copy this token now — it won&apos;t be shown again.</p>
             <div className="flex items-center gap-2">
@@ -227,12 +231,36 @@ export default function TokensPage() {
                 )}
               </div>
             </div>
-            <Button variant="ghost" size="sm" onClick={() => void handleRevoke(t.id)}>
-              Revoke
-            </Button>
+            {t.revokedAt ? (
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="size-1.5 rounded-full bg-border" />
+                Revoked
+              </div>
+            ) : (
+              <Button variant="ghost" size="sm" onClick={() => setRevokeTarget(t)}>
+                Revoke
+              </Button>
+            )}
           </li>
         ))}
       </ul>
+
+      <Dialog open={revokeTarget !== null} onOpenChange={(open) => !open && setRevokeTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Revoke "{revokeTarget?.name}"?</DialogTitle>
+          <DialogDescription>
+            Any CI/agent using it immediately loses access. This cannot be undone.
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRevokeTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void handleRevoke()}>
+              Revoke
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

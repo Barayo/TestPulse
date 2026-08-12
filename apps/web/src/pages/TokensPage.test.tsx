@@ -120,12 +120,37 @@ describe('TokensPage', () => {
     expect(await screen.findByRole('button', { name: /copied/i })).toBeInTheDocument()
   })
 
-  it('revokes a token', async () => {
+  it('does not revoke immediately — opens a confirmation dialog naming the token first (redesign-admin-shell)', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: /revoke/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent(/ci-agent/i)
+    expect(mockDELETE).not.toHaveBeenCalled()
+  })
+
+  it('cancelling the revoke dialog does not call the API', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: /revoke/i }))
+    await screen.findByRole('dialog')
+    await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(mockDELETE).not.toHaveBeenCalled()
+  })
+
+  it('confirming the dialog revokes a token', async () => {
     mockDELETE.mockResolvedValue({ data: undefined, response: { ok: true } })
     const user = userEvent.setup()
     renderPage()
 
     await user.click(await screen.findByRole('button', { name: /revoke/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: /^revoke$/i }))
 
     await waitFor(() =>
       expect(mockDELETE).toHaveBeenCalledWith(
@@ -133,6 +158,31 @@ describe('TokensPage', () => {
         expect.objectContaining({ params: { path: { tokenId: 't1' } } }),
       ),
     )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows a revoked token as "Revoked" instead of an active Revoke button', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') {
+        return Promise.resolve({
+          data: { id: 'u1', email: 'me@example.com', isTenantAdmin: false },
+          response: { ok: true },
+        })
+      }
+      if (path === '/api/v1/tokens') {
+        return Promise.resolve({
+          data: [{ ...unscopedToken, id: 't-revoked', name: 'old-agent', revokedAt: '2026-01-01T00:00:00Z' }],
+          response: { ok: true },
+        })
+      }
+      if (path === '/api/v1/projects') return Promise.resolve({ data: projects, response: { ok: true } })
+      if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    renderPage()
+    expect(await screen.findByText('old-agent')).toBeInTheDocument()
+    expect(screen.getByText(/revoked/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /revoke/i })).not.toBeInTheDocument()
   })
 
   it('shows "Full access" for an unscoped token', async () => {

@@ -199,6 +199,7 @@ field alongside the report text, not inside it.
 | POST | `/api/v1/roles` | Create a role (`name`, `rank`, and the ten `can*` permission flags below) |
 | PATCH | `/api/v1/roles/{roleId}` | Update a role's name, rank, or permission flags |
 | DELETE | `/api/v1/roles/{roleId}` | Delete a role — cascades any project membership/team role assignment referencing it |
+| GET | `/api/v1/roles/{roleId}/deletion-preview` | Real reference counts for the delete-role confirmation dialog — direct user assignments, team assignments, and distinct projects touched (`redesign-admin-shell`) |
 | POST | `/api/v1/roles/reset` | Restore Tester/Contributor/Project Admin to their factory permission flags, in place — an existing one of the three keeps its `id` (so assignments referencing it stay valid), a missing one is recreated. Every other role, and every assignment, is untouched — not a wipe (design.md D12) |
 
 Each role carries ten independent boolean flags (design.md D11 — concrete,

@@ -49,7 +49,14 @@ Every other project-scoped page (Library, Suites, a case or run) shows a breadcr
 
 ## Project roles and teams
 
-Access to a project is opt-in. A **Tenant Admin** (instance-wide) creates projects, manages user accounts, teams, and roles, and assigns project membership — with implicit access to every project regardless of membership. Everyone else needs an explicit role on a project, assigned directly or via a **team** (a named group managed at `/settings/teams`); a user with neither has no access to that project at all, not even read.
+Access to a project is opt-in. A **Tenant Admin** (instance-wide) creates projects, manages user accounts, teams, and roles, and assigns project membership — with implicit access to every project regardless of membership. Everyone else needs an explicit role on a project, assigned directly or via a **team** (a named group managed alongside Users on the People page, `/settings/people`); a user with neither has no access to that project at all, not even read.
+
+A Tenant Admin reaches Administration via the header's **Admin** link — a direct door
+into `/settings/people`, not a menu to pick from. Once inside, a persistent
+**People / Roles / Instance** tab strip stays visible across all three pages, so moving
+between them never requires going back out. API tokens (below) stay outside this
+shell: a token page only ever shows its own creator's tokens, so it's reached from
+the account menu (Profile) instead, not treated as instance administration.
 
 Roles are fully custom and instance-wide, managed by the Tenant Admin at `/settings/roles`: create, rename, or delete a role, and toggle ten independent, concrete permission flags on it — **Read**; **Create/Edit/Delete Case**; **Create/Delete Section**; **Create Suite**; **Edit Suite Membership** (add/remove a case from a suite); **Create Run**; **Record Result** (log a verdict or mark retest); and **Manage Project** (edit the project's own settings — rename, description, archive). Each flag names one concrete action rather than a broad bucket, so a role can (for example) create cases without being able to delete them, or run tests without being able to author suites. A `rank` field is a display/sort order only; there is no fixed hierarchy between roles. A fresh instance is seeded with three default roles that reproduce the previous fixed model's net behavior exactly, so an instance that never visits `/settings/roles` sees no behavior change:
 

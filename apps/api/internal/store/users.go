@@ -152,3 +152,17 @@ func (r *UserRepo) Reactivate(ctx context.Context, id string) error {
 	}
 	return nil
 }
+
+// Delete permanently removes the user row. Sessions and API tokens the user
+// owns cascade with it (00014_cascade_user_deletion.sql); team/project
+// membership and favorites already cascaded before this change.
+func (r *UserRepo) Delete(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM users WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}

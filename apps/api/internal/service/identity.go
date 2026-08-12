@@ -279,6 +279,57 @@ func (s *Service) ReactivateUser(ctx context.Context, userID string) error {
 	return nil
 }
 
+// DeleteUser permanently removes a user account. It requires the target to
+// already be deactivated (design.md D2 — never trust client-side hiding
+// alone for anything irreversible) and rejects self-deletion server-side
+// (design.md D3), even if the caller is a Tenant Admin.
+func (s *Service) DeleteUser(ctx context.Context, actor domain.Actor, userID string) error {
+	if actor.EffectiveUserID == userID {
+		return forbidden("cannot delete your own account")
+	}
+	target, err := s.store.Users.Get(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if target.DeactivatedAt == nil {
+		return invalid("user must be deactivated before it can be deleted")
+	}
+	if err := s.store.Users.Delete(ctx, userID); err != nil {
+		return err
+	}
+	s.audit(ctx, "delete", "user", userID)
+	return nil
+}
+
+// UserDeletionPreview summarizes what deleting userID would remove — real
+// counts for the delete-confirmation dialog (design.md D5), computed
+// server-side rather than a client-side fan-out over every project.
+func (s *Service) UserDeletionPreview(ctx context.Context, userID string) (domain.UserDeletionPreview, error) {
+	teamIDs, err := s.store.Teams.TeamIDsForUser(ctx, userID)
+	if err != nil {
+		return domain.UserDeletionPreview{}, err
+	}
+	projectCount, err := s.store.ProjectMembers.DirectProjectCountForUser(ctx, userID)
+	if err != nil {
+		return domain.UserDeletionPreview{}, err
+	}
+	tokens, err := s.store.ApiTokens.ListByCreator(ctx, userID)
+	if err != nil {
+		return domain.UserDeletionPreview{}, err
+	}
+	liveTokens := 0
+	for _, tok := range tokens {
+		if tok.RevokedAt == nil {
+			liveTokens++
+		}
+	}
+	return domain.UserDeletionPreview{
+		TeamCount:    len(teamIDs),
+		ProjectCount: projectCount,
+		TokenCount:   liveTokens,
+	}, nil
+}
+
 // --- API tokens ---
 
 // CreateToken returns the full token value once — it is hashed before

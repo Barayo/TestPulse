@@ -1,40 +1,36 @@
 import { describe, expect, it } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import { AdminMenu } from './AdminMenu'
 
 describe('AdminMenu', () => {
-  it('shows an "Admin" trigger and no menu until opened', () => {
+  it('renders a single direct link to People, not a dropdown menu', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/']}>
         <AdminMenu />
       </MemoryRouter>,
     )
-    expect(screen.getByRole('button', { name: /admin/i })).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /admin/i })
+    expect(link).toHaveAttribute('href', '/settings/people')
+    expect(link).not.toHaveAttribute('aria-haspopup')
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
-  it('opens a menu with links to People, Roles, and Instance', async () => {
+  it('is not marked current when outside the admin section', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/']}>
         <AdminMenu />
       </MemoryRouter>,
     )
-    await userEvent.click(screen.getByRole('button', { name: /admin/i }))
-    expect(screen.getByRole('menuitem', { name: /^people$/i })).toHaveAttribute('href', '/settings/people')
-    expect(screen.getByRole('menuitem', { name: /^roles$/i })).toHaveAttribute('href', '/settings/roles')
-    expect(screen.getByRole('menuitem', { name: /^instance$/i })).toHaveAttribute('href', '/settings/instance')
+    expect(screen.getByRole('link', { name: /admin/i })).toHaveAttribute('aria-current', 'false')
   })
 
-  it('closes the menu after selecting an item', async () => {
+  it('is marked current when inside any admin page', () => {
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={['/settings/roles']}>
         <AdminMenu />
       </MemoryRouter>,
     )
-    await userEvent.click(screen.getByRole('button', { name: /admin/i }))
-    await userEvent.click(screen.getByRole('menuitem', { name: /^people$/i }))
-    expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /admin/i })).toHaveAttribute('aria-current', 'true')
   })
 })

@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -160,6 +161,56 @@ func TestUserCreateDuplicateEmailRejected(t *testing.T) {
 	mustUser(t, s, "dup@example.com", false)
 	if _, err := s.Users.Create(context.Background(), "dup@example.com", "hash", false); err == nil {
 		t.Error("duplicate email accepted, want error")
+	}
+}
+
+// TestUserDelete covers add-user-deletion task 2.1's store layer.
+func TestUserDelete(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "delete-me@example.com", false)
+
+	if err := s.Users.Delete(ctx, u.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+	if _, err := s.Users.Get(ctx, u.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Get after Delete err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestUserDeleteNonexistentReturnsNotFound(t *testing.T) {
+	s := testStore(t)
+	if err := s.Users.Delete(context.Background(), "00000000-0000-0000-0000-000000000000"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Delete nonexistent err = %v, want ErrNotFound", err)
+	}
+}
+
+// TestUserDeleteCascadesSessionsAndTokens covers add-user-deletion task 1.2:
+// sessions.user_id and api_tokens.created_by gained ON DELETE CASCADE
+// (00014_cascade_user_deletion.sql) — deleting a user must not fail with a
+// foreign-key violation, and both rows must be gone afterward.
+func TestUserDeleteCascadesSessionsAndTokens(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "cascade@example.com", false)
+
+	if _, err := s.Sessions.Create(ctx, "sess-cascade", u.ID, time.Now().Add(24*time.Hour)); err != nil {
+		t.Fatalf("Sessions.Create: %v", err)
+	}
+	tok, err := s.ApiTokens.Create(ctx, u.ID, "cascade-token", "hash-cascade", "tp_casc", nil, nil)
+	if err != nil {
+		t.Fatalf("ApiTokens.Create: %v", err)
+	}
+
+	if err := s.Users.Delete(ctx, u.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if _, err := s.Sessions.Get(ctx, "sess-cascade"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Sessions.Get after user Delete err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.ApiTokens.Get(ctx, tok.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("ApiTokens.Get after user Delete err = %v, want ErrNotFound", err)
 	}
 }
 

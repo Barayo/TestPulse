@@ -54,6 +54,22 @@ describe('InstanceSettingsPage', () => {
     expect(toggle).toBeChecked()
   })
 
+  it('groups the public-access toggle under an "Access" section label', async () => {
+    mockAsTenantAdmin(true, true)
+    renderPage()
+    await screen.findByRole('switch', { name: /public project access/i })
+    expect(screen.getByText('Access')).toBeInTheDocument()
+  })
+
+  it('shows an "Authentication" section with a disabled, coming-soon SSO row', async () => {
+    mockAsTenantAdmin(true, true)
+    renderPage()
+    await screen.findByRole('switch', { name: /public project access/i })
+    expect(screen.getByText('Authentication')).toBeInTheDocument()
+    expect(screen.getByText(/require sso sign-in/i)).toBeInTheDocument()
+    expect(screen.getByText(/coming with sso/i)).toBeInTheDocument()
+  })
+
   it('toggling it off calls PATCH /instance-settings and reflects the new state', async () => {
     mockAsTenantAdmin(true, true)
     mockPATCH.mockResolvedValue({

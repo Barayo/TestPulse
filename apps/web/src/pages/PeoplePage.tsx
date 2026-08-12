@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Trash2Icon } from 'lucide-react'
+import { Trash2Icon, Loader2Icon, PowerIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { isValidEmail } from '@/lib/email'
@@ -10,11 +10,12 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
-import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { AdminShell } from '@/components/AdminShell'
 
 type User = {
   id: string
   email: string
+  displayName?: string | null
   isTenantAdmin: boolean
   avatarKey?: string | null
   deactivatedAt: string | null
@@ -54,6 +55,8 @@ export default function PeoplePage() {
   const [isTenantAdmin, setIsTenantAdmin] = useState(false)
   const [createUserError, setCreateUserError] = useState<string>()
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
+  const [deletePreview, setDeletePreview] = useState<{ teamCount: number; projectCount: number; tokenCount: number }>()
 
   const [teamFormOpen, setTeamFormOpen] = useState(false)
   const [teamName, setTeamName] = useState('')
@@ -120,6 +123,20 @@ export default function PeoplePage() {
     await load()
   }
 
+  async function openDeleteDialog(u: User) {
+    setDeleteTarget(u)
+    setDeletePreview(undefined)
+    const { data } = await api.GET('/api/v1/users/{userId}/deletion-preview', { params: { path: { userId: u.id } } })
+    if (data) setDeletePreview(data)
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return
+    await api.DELETE('/api/v1/users/{userId}', { params: { path: { userId: deleteTarget.id } } })
+    setDeleteTarget(null)
+    await load()
+  }
+
   async function handleCreateTeam(e: FormEvent) {
     e.preventDefault()
     if (!teamName.trim()) return
@@ -157,9 +174,7 @@ export default function PeoplePage() {
   }
 
   return (
-    <div className="space-y-6">
-      <Breadcrumbs segments={[{ label: 'People' }]} />
-
+    <AdminShell>
       {/* Teams before Users: fewer teams than users in the common case, so
           the shorter list is what you see first, with no scrolling past
           a long roster to reach it. */}
@@ -410,10 +425,26 @@ export default function PeoplePage() {
           }}
         />
 
+        {/* Actions column is a fixed 150px on every breakpoint (mobile's
+            2-col template included) — not the auto/content-sized width a
+            grid item defaults to. A deactivated, non-self row renders two
+            actions ("Reactivate · Delete", ~115px wide at real render —
+            measured directly, not guessed), and a plain grid item's
+            default min-width is `auto` (its own content's min-content
+            size), not 0: give that content a track narrower than its
+            content (the old fixed 36px, sized for a single icon button)
+            and the item doesn't shrink to fit — it overflows the track
+            and bleeds into whichever column sits to its left, which is
+            exactly what produced the reported "DeacReactivatvatedte"
+            collision with the Status column's text. 150px is the
+            measured content width plus a real safety margin, kept
+            identical across the header and every row so columns still
+            line up even though each `<li>` is its own independent grid,
+            not one shared table grid. */}
         <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[1fr_36px] items-center gap-3 border-b px-4 py-2 sm:grid-cols-[1fr_140px_120px_36px]">
+          <div className="grid grid-cols-[1fr_150px] items-center gap-3 border-b px-4 py-2 sm:grid-cols-[1fr_140px_120px_150px]">
             <span className="tp-label">Person</span>
-            <span className="tp-label hidden sm:block">Role</span>
+            <span className="tp-label hidden sm:block">Access</span>
             <span className="tp-label hidden sm:block">Status</span>
             <span />
           </div>
@@ -424,35 +455,70 @@ export default function PeoplePage() {
             {visibleUsers.map((u) => (
               <li
                 key={u.id}
-                className="group grid grid-cols-[1fr_36px] items-center gap-3 border-b px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_140px_120px_36px]"
+                className="group grid grid-cols-[1fr_150px] items-center gap-3 border-b px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_140px_120px_150px]"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <Avatar seed={u.email} avatarKey={u.avatarKey} userId={u.id} className="size-7 rounded-full text-xs" />
-                  <span className="truncate font-semibold">{u.email}</span>
+                  <div className="min-w-0 leading-tight">
+                    {u.displayName && u.displayName !== u.email ? (
+                      <>
+                        <div className="truncate text-sm font-semibold">{u.displayName}</div>
+                        <div className="truncate text-xs text-muted-foreground">{u.email}</div>
+                      </>
+                    ) : (
+                      <div className="truncate text-sm font-semibold">{u.email}</div>
+                    )}
+                  </div>
                 </div>
-                <div className="hidden text-muted-foreground sm:block">{u.isTenantAdmin ? 'Tenant Admin' : 'Member'}</div>
+                <div className="hidden text-muted-foreground sm:block">
+                  {u.isTenantAdmin ? (
+                    <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+                      Tenant Admin
+                    </span>
+                  ) : (
+                    'Member'
+                  )}
+                </div>
                 <div className="hidden items-center gap-1.5 text-muted-foreground sm:flex">
                   <span className={`size-1.5 rounded-full ${u.deactivatedAt ? 'bg-border' : 'bg-primary'}`} />
                   {u.deactivatedAt ? 'Deactivated' : 'Active'}
                 </div>
                 <div className="flex justify-end">
                   {u.deactivatedAt ? (
-                    <button
-                      type="button"
-                      className="text-xs font-bold text-primary"
-                      onClick={() => void handleReactivate(u.id)}
-                    >
-                      Reactivate
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-primary"
+                        onClick={() => void handleReactivate(u.id)}
+                      >
+                        Reactivate
+                      </button>
+                      {u.id !== me.id && (
+                        <>
+                          <span className="text-muted-foreground" aria-hidden="true">
+                            &middot;
+                          </span>
+                          <button
+                            type="button"
+                            aria-label={`Delete ${u.email}`}
+                            className="text-xs font-bold text-destructive hover:underline"
+                            onClick={() => void openDeleteDialog(u)}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </div>
                   ) : (
                     u.id !== me.id && (
                       <button
                         type="button"
                         aria-label={`Deactivate ${u.email}`}
-                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+                        title={`Deactivate ${u.email}`}
+                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                         onClick={() => setDeactivateTarget(u)}
                       >
-                        <PowerIcon />
+                        <PowerIcon className="size-3.5" aria-hidden="true" />
                       </button>
                     )
                   )}
@@ -492,6 +558,32 @@ export default function PeoplePage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Delete "{deleteTarget?.email}"?</DialogTitle>
+          <DialogDescription>
+            Removes them from {deletePreview?.teamCount ?? 0} team{deletePreview?.teamCount === 1 ? '' : 's'},{' '}
+            {deletePreview?.projectCount ?? 0} project{deletePreview?.projectCount === 1 ? '' : 's'}, and revokes{' '}
+            {deletePreview === undefined ? (
+              <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
+            ) : (
+              <>
+                {deletePreview.tokenCount} API token{deletePreview.tokenCount === 1 ? '' : 's'}
+              </>
+            )}
+            . This cannot be undone.
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" disabled={deletePreview === undefined} onClick={() => void handleDelete()}>
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={removeTarget !== null} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>Remove {removeTarget?.user.email}?</DialogTitle>
@@ -508,15 +600,6 @@ export default function PeoplePage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  )
-}
-
-function PowerIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-      <path d="M18.36 6.64a9 9 0 1 1-12.73 0" />
-      <line x1="12" y1="2" x2="12" y2="12" />
-    </svg>
+    </AdminShell>
   )
 }

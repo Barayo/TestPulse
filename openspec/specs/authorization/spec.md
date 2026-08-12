@@ -145,3 +145,42 @@ The system SHALL let a user list and revoke only the API tokens they created; a 
 #### Scenario: Non-Tenant-Admin cannot list another user's tokens
 - **WHEN** a non-Tenant-Admin user requests the token list for a different user
 - **THEN** the request is rejected with `403`
+
+### Requirement: User deletion is Tenant-Admin-gated and requires deactivation first
+The system SHALL let a Tenant Admin permanently delete a user account, gated by Tenant Admin status alone (the same instance-wide gate as creating, deactivating, or reactivating a user, or changing a user's Tenant Admin flag) — not a project-scoped permission flag, since a user account is not scoped to any single project. Deletion SHALL only be permitted once the target account is already deactivated, and a Tenant Admin SHALL NOT be able to delete their own account, even if it is deactivated.
+
+#### Scenario: Tenant Admin deletes a deactivated user
+- **WHEN** a Tenant Admin deletes a user account that is already deactivated
+- **THEN** the account and every row that cascades from it (team memberships, project memberships, sessions, API tokens) are permanently removed
+
+#### Scenario: Cannot delete an active user
+- **WHEN** a Tenant Admin attempts to delete a user account that is not deactivated
+- **THEN** the request is rejected with a validation error, and the account is untouched — a user must be deactivated first
+
+#### Scenario: Cannot delete your own account
+- **WHEN** a Tenant Admin attempts to delete their own user account, whether or not it is deactivated
+- **THEN** the request is rejected, enforced server-side, regardless of what the UI shows
+
+#### Scenario: Non-Tenant-Admin cannot delete a user
+- **WHEN** a user without Tenant Admin status attempts to delete any user account, including their own
+- **THEN** the request is rejected and no account is deleted
+
+#### Scenario: Deleting a user does not affect the audit log or run results
+- **WHEN** a user account is deleted
+- **THEN** every audit log entry and test run result that recorded that user as an actor is untouched — both store actor identity as free text, not a reference to the user account
+
+### Requirement: Role deletion-preview counts are Tenant-Admin-gated
+The system SHALL let a Tenant Admin retrieve real reference counts for a role before
+deleting it — how many users hold it directly, how many teams hold it, and how many
+distinct projects either touches — gated by Tenant Admin status alone, the same
+instance-wide gate as the rest of role management. This is a read-only preview; it
+does not itself change anything.
+
+#### Scenario: Tenant Admin views a role's deletion preview
+- **WHEN** a Tenant Admin requests the deletion preview for an existing role
+- **THEN** the response includes the count of users directly assigned the role, the
+  count of teams assigned the role, and the count of distinct projects either touches
+
+#### Scenario: Non-Tenant-Admin cannot view a role's deletion preview
+- **WHEN** a user without Tenant Admin status requests a role's deletion preview
+- **THEN** the request is rejected

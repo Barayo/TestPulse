@@ -715,6 +715,25 @@ type User struct {
 	CreatedAt     time.Time  `json:"createdAt"`
 }
 
+// UserDeletionPreview is the "what does deleting this account remove"
+// summary shown by the delete-confirmation dialog (add-user-deletion
+// design.md D5) — server-computed so the numbers are authoritative, not a
+// client-side fan-out over every project.
+type UserDeletionPreview struct {
+	TeamCount    int `json:"teamCount"`
+	ProjectCount int `json:"projectCount"`
+	TokenCount   int `json:"tokenCount"`
+}
+
+// RoleDeletionPreview is the "what does deleting this role affect" summary
+// shown by the delete-role confirmation dialog (redesign-admin-shell),
+// mirroring UserDeletionPreview's pattern.
+type RoleDeletionPreview struct {
+	DirectUserCount int `json:"directUserCount"`
+	TeamCount       int `json:"teamCount"`
+	ProjectCount    int `json:"projectCount"`
+}
+
 // AvatarPresetKeys is the fixed, curated set of avatar preset keys
 // (add-user-profile design.md) — static bundled assets, not database rows.
 // A nil/absent AvatarKey renders as a generated initial-on-color instead.

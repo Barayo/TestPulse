@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
-import { EyeIcon, FileTextIcon, FolderIcon, LayersIcon, CirclePlayIcon, SettingsIcon, Trash2Icon } from 'lucide-react'
+import { EyeIcon, FileTextIcon, FolderIcon, LayersIcon, CirclePlayIcon, SettingsIcon, Trash2Icon, Loader2Icon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -7,7 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
-import { Breadcrumbs } from '@/components/Breadcrumbs'
+import { AdminShell } from '@/components/AdminShell'
 
 type Role = {
   id: string
@@ -182,6 +182,7 @@ export default function RolesPage() {
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
   const [createFormOpen, setCreateFormOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<Role | null>(null)
+  const [deletePreview, setDeletePreview] = useState<{ directUserCount: number; teamCount: number; projectCount: number }>()
 
   async function load() {
     const { data } = await api.GET('/api/v1/roles')
@@ -225,6 +226,13 @@ export default function RolesPage() {
     await load()
   }
 
+  async function openDeleteDialog(role: Role) {
+    setDeleteTarget(role)
+    setDeletePreview(undefined)
+    const { data } = await api.GET('/api/v1/roles/{roleId}/deletion-preview', { params: { path: { roleId: role.id } } })
+    if (data) setDeletePreview(data)
+  }
+
   async function handleDelete() {
     if (!deleteTarget) return
     await api.DELETE('/api/v1/roles/{roleId}', { params: { path: { roleId: deleteTarget.id } } })
@@ -239,9 +247,7 @@ export default function RolesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <Breadcrumbs segments={[{ label: 'Roles' }]} />
-
+    <AdminShell>
       {createFormOpen && (
         <Card>
           <CardHeader>
@@ -269,72 +275,77 @@ export default function RolesPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="tp-heading">Roles</CardTitle>
-          <div className="flex gap-2">
-            <Button size="sm" onClick={() => setCreateFormOpen((open) => !open)}>
-              New role
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => setResetDialogOpen(true)}>
-              Reset to defaults
-            </Button>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {roles.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No roles yet.</p>
-          ) : (
-            <ul className="space-y-3">
-              {sortedRoles.map((r) => (
-                <li key={r.id} className="overflow-hidden rounded-lg border">
-                  {/* The color lives on the name itself (a small pill), not
-                      a full-width fill — a filled band per row reads fine
-                      once, but stacked across several roles it's a wall of
-                      green with nothing else on the page to break it up.
-                      The pill still outweighs the lighter section tints
-                      below it without covering the whole row. */}
-                  <div className="flex items-center justify-between gap-4 border-b px-3 py-2">
-                    <span className="min-w-0 truncate rounded-md bg-primary/15 px-2 py-0.5 text-base font-semibold text-primary">
-                      {r.name}
-                    </span>
-                    {/* Deleting a role cascades through every project/team
-                        assignment of it (FK ON DELETE CASCADE) — irreversible
-                        and far-reaching, so it's deliberately not a
-                        dismissible-looking control: a trash icon gated behind
-                        a confirmation dialog naming the role, not a single
-                        click. */}
-                    <button
-                      type="button"
-                      aria-label={`Delete ${r.name}`}
-                      className="text-muted-foreground hover:text-destructive"
-                      onClick={() => setDeleteTarget(r)}
-                    >
-                      <Trash2Icon className="size-4" aria-hidden="true" />
-                    </button>
-                  </div>
-                  <div className="p-3">
-                    <PermissionSections ariaPrefix={r.name} values={r} onToggle={(key) => void toggleFlag(r, key)} />
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-between">
+        <h1 className="tp-heading text-xl">Roles</h1>
+        <div className="flex gap-2">
+          <Button size="sm" onClick={() => setCreateFormOpen((open) => !open)}>
+            + New role
+          </Button>
+          <Button variant="destructive" size="sm" onClick={() => setResetDialogOpen(true)}>
+            Reset to defaults
+          </Button>
+        </div>
+      </div>
+      {roles.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No roles yet.</p>
+      ) : (
+        <ul className="space-y-3">
+          {sortedRoles.map((r) => (
+            <li key={r.id} className="overflow-hidden rounded-lg border">
+              {/* The color lives on the name itself (a small pill), not
+                  a full-width fill — a filled band per row reads fine
+                  once, but stacked across several roles it's a wall of
+                  green with nothing else on the page to break it up.
+                  The pill still outweighs the lighter section tints
+                  below it without covering the whole row. */}
+              <div className="flex items-center justify-between gap-4 border-b px-3 py-2">
+                <span className="min-w-0 truncate rounded-md bg-primary/15 px-2 py-0.5 text-base font-semibold text-primary">
+                  {r.name}
+                </span>
+                {/* Deleting a role cascades through every project/team
+                    assignment of it (FK ON DELETE CASCADE) — irreversible
+                    and far-reaching, so it's deliberately not a
+                    dismissible-looking control: a trash icon gated behind
+                    a confirmation dialog naming the role, not a single
+                    click. */}
+                <button
+                  type="button"
+                  aria-label={`Delete ${r.name}`}
+                  className="text-muted-foreground hover:text-destructive"
+                  onClick={() => void openDeleteDialog(r)}
+                >
+                  <Trash2Icon className="size-4" aria-hidden="true" />
+                </button>
+              </div>
+              <div className="p-3">
+                <PermissionSections ariaPrefix={r.name} values={r} onToggle={(key) => void toggleFlag(r, key)} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>Delete "{deleteTarget?.name}"?</DialogTitle>
           <DialogDescription>
-            This role may be assigned to users or teams across multiple projects — deleting it removes those
-            assignments too, not just the role itself. This cannot be undone.
+            Currently assigned to{' '}
+            {deletePreview === undefined ? (
+              <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
+            ) : (
+              <>
+                {deletePreview.directUserCount} user{deletePreview.directUserCount === 1 ? '' : 's'} and{' '}
+                {deletePreview.teamCount} team{deletePreview.teamCount === 1 ? '' : 's'}, across{' '}
+                {deletePreview.projectCount} project{deletePreview.projectCount === 1 ? '' : 's'}
+              </>
+            )}
+            . Deleting it removes those assignments too, not just the role itself. This cannot be undone.
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={() => void handleDelete()}>
+            <Button variant="destructive" disabled={deletePreview === undefined} onClick={() => void handleDelete()}>
               Delete role
             </Button>
           </DialogFooter>
@@ -360,6 +371,6 @@ export default function RolesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminShell>
   )
 }
