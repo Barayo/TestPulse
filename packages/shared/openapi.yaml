@@ -1178,7 +1178,7 @@ paths:
       - { name: userId, in: path, required: true, schema: { type: string } }
     patch:
       operationId: updateUser
-      summary: Change a user's Tenant Admin flag, deactivate, or reactivate them (Tenant Admin only)
+      summary: Change a user's Tenant Admin flag, deactivate/reactivate them, or update their email/password (Tenant Admin only)
       tags: [users]
       requestBody:
         required: true
@@ -2172,6 +2172,14 @@ components:
         reactivate:
           type: boolean
           description: Set true to reactivate a previously-deactivated user.
+        email:
+          type: string
+          description: Change the account's email (add-update-user).
+        password:
+          type: string
+          description: >-
+            Set a new password directly (add-update-user, Tenant Admin
+            only) — revokes every existing session for the account.
     UserDeletionPreview:
       type: object
       description: >-

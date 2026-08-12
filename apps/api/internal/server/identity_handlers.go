@@ -183,9 +183,11 @@ func (h *api) createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 type userUpdate struct {
-	IsTenantAdmin *bool `json:"isTenantAdmin"`
-	Deactivate    bool  `json:"deactivate"`
-	Reactivate    bool  `json:"reactivate"`
+	IsTenantAdmin *bool   `json:"isTenantAdmin"`
+	Deactivate    bool    `json:"deactivate"`
+	Reactivate    bool    `json:"reactivate"`
+	Email         *string `json:"email"`
+	Password      *string `json:"password"`
 }
 
 func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +196,19 @@ func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		badBody(h, w)
 		return
+	}
+	actor, _ := domain.ActorFromContext(r.Context())
+	if in.Email != nil {
+		if _, err := h.svc.UpdateUserEmail(r.Context(), actor, userID, *in.Email); err != nil {
+			h.respond(w, 0, nil, err)
+			return
+		}
+	}
+	if in.Password != nil {
+		if err := h.svc.SetUserPassword(r.Context(), actor, userID, *in.Password); err != nil {
+			h.respond(w, 0, nil, err)
+			return
+		}
 	}
 	if in.IsTenantAdmin != nil {
 		if err := h.svc.SetTenantAdmin(r.Context(), userID, *in.IsTenantAdmin); err != nil {

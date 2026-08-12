@@ -68,6 +68,14 @@ func (r *SessionRepo) Delete(ctx context.Context, sessionHash string) error {
 	return err
 }
 
+// DeleteByUser revokes every session belonging to a user (add-update-user)
+// — called when that user's password changes, since a session's validity
+// is never re-derived from the password hash otherwise.
+func (r *SessionRepo) DeleteByUser(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM sessions WHERE user_id = $1`, userID)
+	return err
+}
+
 // DeleteExpired is run at API startup so the sessions table does not grow
 // unbounded (design.md's mitigation for the session-growth risk).
 func (r *SessionRepo) DeleteExpired(ctx context.Context) error {

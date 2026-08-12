@@ -255,6 +255,52 @@ func (s *Service) UpdateOwnProfile(ctx context.Context, actor domain.Actor, upda
 	return user, nil
 }
 
+// UpdateUserEmail changes a target user's email (add-update-user),
+// Tenant-Admin-gated at the service layer, matching DeleteUser/DeleteTeam's
+// pattern rather than relying on route middleware alone.
+func (s *Service) UpdateUserEmail(ctx context.Context, actor domain.Actor, userID, email string) (domain.User, error) {
+	if !actor.IsTenantAdmin {
+		return domain.User{}, forbidden("only a Tenant Admin can update another user's account")
+	}
+	if err := domain.ValidateEmail(email); err != nil {
+		return domain.User{}, invalid("%s", err)
+	}
+	user, err := s.store.Users.UpdateEmail(ctx, userID, email)
+	if isUniqueViolation(err) {
+		return domain.User{}, invalid("email already in use")
+	}
+	if err != nil {
+		return domain.User{}, err
+	}
+	s.audit(ctx, "update_email", "user", userID)
+	return user, nil
+}
+
+// SetUserPassword sets a new password for a target user (add-update-user)
+// and revokes every existing session for that account — a session's
+// validity is never re-derived from the password hash, so nothing else
+// invalidates a session left over from before the reset.
+func (s *Service) SetUserPassword(ctx context.Context, actor domain.Actor, userID, password string) error {
+	if !actor.IsTenantAdmin {
+		return forbidden("only a Tenant Admin can update another user's account")
+	}
+	if err := domain.ValidatePassword(password); err != nil {
+		return invalid("%s", err)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if err := s.store.Users.UpdatePasswordHash(ctx, userID, string(hash)); err != nil {
+		return err
+	}
+	if err := s.store.Sessions.DeleteByUser(ctx, userID); err != nil {
+		return err
+	}
+	s.audit(ctx, "update_password", "user", userID)
+	return nil
+}
+
 func (s *Service) SetTenantAdmin(ctx context.Context, userID string, isTenantAdmin bool) error {
 	if err := s.store.Users.SetTenantAdmin(ctx, userID, isTenantAdmin); err != nil {
 		return err

@@ -214,6 +214,59 @@ func TestUserDeleteCascadesSessionsAndTokens(t *testing.T) {
 	}
 }
 
+// TestUserUpdateEmail covers add-update-user task 1.1.
+func TestUserUpdateEmail(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "old@example.com", false)
+
+	updated, err := s.Users.UpdateEmail(ctx, u.ID, "new@example.com")
+	if err != nil {
+		t.Fatalf("UpdateEmail: %v", err)
+	}
+	if updated.Email != "new@example.com" {
+		t.Errorf("Email = %q, want %q", updated.Email, "new@example.com")
+	}
+
+	got, err := s.Users.Get(ctx, u.ID)
+	if err != nil || got.Email != "new@example.com" {
+		t.Fatalf("Get after UpdateEmail = %+v, %v", got, err)
+	}
+}
+
+func TestUserUpdateEmailRejectsDuplicate(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	mustUser(t, s, "taken@example.com", false)
+	u := mustUser(t, s, "mine@example.com", false)
+
+	if _, err := s.Users.UpdateEmail(ctx, u.ID, "taken@example.com"); err == nil {
+		t.Error("duplicate email accepted, want error")
+	}
+}
+
+func TestUserUpdatePasswordHash(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "pwchange@example.com", false)
+
+	if err := s.Users.UpdatePasswordHash(ctx, u.ID, "new-bcrypt-hash"); err != nil {
+		t.Fatalf("UpdatePasswordHash: %v", err)
+	}
+	_, hash, err := s.Users.GetByEmailWithHash(ctx, "pwchange@example.com")
+	if err != nil || hash != "new-bcrypt-hash" {
+		t.Fatalf("GetByEmailWithHash after UpdatePasswordHash = %q, %v", hash, err)
+	}
+}
+
+func TestUserUpdatePasswordHashUnknownIDNotFound(t *testing.T) {
+	s := testStore(t)
+	err := s.Users.UpdatePasswordHash(context.Background(), "00000000-0000-0000-0000-000000000000", "hash")
+	if !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
 // --- Sessions (task 2.2) ---
 //
 // The store layer never hashes anything itself (backlog #116) — it treats
@@ -299,6 +352,41 @@ func TestSessionDeleteExpiredCleansUpOnlyExpired(t *testing.T) {
 	countAfter, err := s.Sessions.CountAll(ctx)
 	if err != nil || countAfter != 1 {
 		t.Errorf("CountAll after DeleteExpired = %d, %v; want 1 (only the valid session's row)", countAfter, err)
+	}
+}
+
+// TestSessionDeleteByUser covers add-update-user task 1.1: setting a new
+// password revokes every existing session for that account, and only that
+// account's sessions.
+func TestSessionDeleteByUser(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	target := mustUser(t, s, "target@example.com", false)
+	other := mustUser(t, s, "other@example.com", false)
+
+	expires := time.Now().Add(time.Hour)
+	if _, err := s.Sessions.Create(ctx, "target-sess-1", target.ID, expires); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Sessions.Create(ctx, "target-sess-2", target.ID, expires); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Sessions.Create(ctx, "other-sess", other.ID, expires); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Sessions.DeleteByUser(ctx, target.ID); err != nil {
+		t.Fatalf("DeleteByUser: %v", err)
+	}
+
+	if _, err := s.Sessions.Get(ctx, "target-sess-1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("target-sess-1 after DeleteByUser err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Sessions.Get(ctx, "target-sess-2"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("target-sess-2 after DeleteByUser err = %v, want ErrNotFound", err)
+	}
+	if _, err := s.Sessions.Get(ctx, "other-sess"); err != nil {
+		t.Errorf("other user's session was deleted too: %v", err)
 	}
 }
 

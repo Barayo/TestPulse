@@ -274,6 +274,76 @@ func TestScenario_DeactivateThenReactivateUser(t *testing.T) {
 		jmap{"email": "member@example.com", "password": "correcthorse"}, 200, &loggedIn)
 }
 
+// TestScenario_TenantAdminUpdatesUserEmailOverHTTP covers add-update-user.
+func TestScenario_TenantAdminUpdatesUserEmailOverHTTP(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "typo@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"email": "fixed@example.com"}, 204, nil)
+
+	var users []jmap
+	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &users)
+	found := false
+	for _, u := range users {
+		if u["id"] == memberID {
+			found = true
+			if u["email"] != "fixed@example.com" {
+				t.Errorf("email = %v, want fixed@example.com", u["email"])
+			}
+		}
+	}
+	if !found {
+		t.Fatal("member not found after email update")
+	}
+}
+
+// TestScenario_TenantAdminSetsNewPasswordOverHTTP covers add-update-user: a
+// session created before the password change stops authenticating.
+func TestScenario_TenantAdminSetsNewPasswordOverHTTP(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "resettarget@example.com", "password": "correcthorse-old"}, 201, &member)
+	memberID, _ := member["id"].(string)
+	memberCookie := loginCookie(t, h, "resettarget@example.com", "correcthorse-old")
+
+	var me jmap
+	callAs(t, h, memberCookie, "GET", "/api/v1/users/me", nil, 200, &me)
+
+	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"password": "correcthorse-new"}, 204, nil)
+
+	callAs(t, h, memberCookie, "GET", "/api/v1/users/me", nil, 401, nil)
+
+	var loggedIn jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": "resettarget@example.com", "password": "correcthorse-new"}, 200, &loggedIn)
+}
+
+func TestScenario_NonTenantAdminCannotUpdateAnotherUsersEmailOrPasswordOverHTTP(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var attacker jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "attacker@example.com", "password": "correcthorse"}, 201, &attacker)
+	attackerCookie := loginCookie(t, h, "attacker@example.com", "correcthorse")
+
+	var victim jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "victim@example.com", "password": "correcthorse"}, 201, &victim)
+	victimID, _ := victim["id"].(string)
+
+	callAs(t, h, attackerCookie, "PATCH", "/api/v1/users/"+victimID, jmap{"email": "hijacked@example.com"}, 403, nil)
+	callAs(t, h, attackerCookie, "PATCH", "/api/v1/users/"+victimID, jmap{"password": "correcthorse-new"}, 403, nil)
+}
+
 func TestScenario_DeleteUserRequiresDeactivationFirst(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")

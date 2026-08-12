@@ -254,6 +254,225 @@ describe('PeoplePage', () => {
       expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
     })
 
+    it('offers a Generate action for the new user\'s password, with reveal + copy', async () => {
+      mockAsTenantAdmin(true)
+      const user = userEvent.setup()
+      const writeText = vi.fn().mockResolvedValue(undefined)
+      renderPage()
+      await screen.findByText('other@example.com')
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+      await user.click(screen.getByRole('button', { name: /new user/i }))
+      await user.click(screen.getByRole('button', { name: /^generate$/i }))
+
+      const passwordField = screen.getByLabelText(/password/i) as HTMLInputElement
+      expect(passwordField.value).toHaveLength(20)
+      await user.click(screen.getByRole('button', { name: /^copy$/i }))
+      expect(writeText).toHaveBeenCalledWith(passwordField.value)
+    })
+
+    describe('edit (add-update-user)', () => {
+      it('shows an Edit icon action on an active row', async () => {
+        mockAsTenantAdmin(true)
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        expect(screen.getByRole('button', { name: /^edit other@example.com$/i })).toBeInTheDocument()
+      })
+
+      it('shows an Edit text link alongside Reactivate/Delete on a deactivated row', async () => {
+        mockGET.mockImplementation((path: string) => {
+          if (path === '/api/v1/users/me') {
+            return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
+          }
+          if (path === '/api/v1/users') {
+            return Promise.resolve({
+              data: [
+                { id: 'u1', email: 'me@example.com', isTenantAdmin: true, deactivatedAt: null, createdAt: '' },
+                { id: 'u2', email: 'other@example.com', isTenantAdmin: false, deactivatedAt: '2026-01-01T00:00:00Z', createdAt: '' },
+              ],
+              response: { ok: true },
+            })
+          }
+          return Promise.resolve({ data: [], response: { ok: true } })
+        })
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        expect(screen.getByRole('button', { name: /^edit$/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^reactivate$/i })).toBeInTheDocument()
+      })
+
+      it('opens a dialog pre-filled with the current email and a blank password field', async () => {
+        mockAsTenantAdmin(true)
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        expect(within(dialog).getByLabelText(/^email$/i)).toHaveValue('other@example.com')
+        expect(within(dialog).getByLabelText(/new password/i)).toHaveValue('')
+        expect(mockPATCH).not.toHaveBeenCalled()
+      })
+
+      it('shows a caution notice the instant a new password is typed, not just on submit', async () => {
+        mockAsTenantAdmin(true)
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        expect(dialog).not.toHaveTextContent(/signs them out everywhere/i)
+
+        await user.type(within(dialog).getByLabelText(/new password/i), 'correcthorse-new')
+        expect(dialog).toHaveTextContent(/signs them out everywhere/i)
+      })
+
+      it('submitting an email-only change sends only the email field', async () => {
+        mockAsTenantAdmin(true)
+        mockPATCH.mockResolvedValue({ response: { ok: true } })
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        const emailField = within(dialog).getByLabelText(/^email$/i)
+        await user.clear(emailField)
+        await user.type(emailField, 'fixed@example.com')
+        await user.click(within(dialog).getByRole('button', { name: /^save$/i }))
+
+        await waitFor(() =>
+          expect(mockPATCH).toHaveBeenCalledWith('/api/v1/users/{userId}', {
+            params: { path: { userId: 'u2' } },
+            body: { email: 'fixed@example.com' },
+          }),
+        )
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      })
+
+      it('submitting a password-only change sends only the password field', async () => {
+        mockAsTenantAdmin(true)
+        mockPATCH.mockResolvedValue({ response: { ok: true } })
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        await user.type(within(dialog).getByLabelText(/new password/i), 'correcthorse-new')
+        await user.click(within(dialog).getByRole('button', { name: /^save$/i }))
+
+        await waitFor(() =>
+          expect(mockPATCH).toHaveBeenCalledWith('/api/v1/users/{userId}', {
+            params: { path: { userId: 'u2' } },
+            body: { password: 'correcthorse-new' },
+          }),
+        )
+      })
+
+      it('rejects an invalid email inline without calling the API', async () => {
+        mockAsTenantAdmin(true)
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        const emailField = within(dialog).getByLabelText(/^email$/i)
+        await user.clear(emailField)
+        await user.type(emailField, 'not-an-email')
+        await user.click(within(dialog).getByRole('button', { name: /^save$/i }))
+
+        expect(await within(dialog).findByText(/enter a valid email/i)).toBeInTheDocument()
+        expect(mockPATCH).not.toHaveBeenCalled()
+      })
+
+      it('surfaces a server error inline, e.g. a duplicate email', async () => {
+        mockAsTenantAdmin(true)
+        mockPATCH.mockResolvedValue({ error: { error: 'email already in use' } })
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+        const dialog = await screen.findByRole('dialog')
+        const emailField = within(dialog).getByLabelText(/^email$/i)
+        await user.clear(emailField)
+        await user.type(emailField, 'taken@example.com')
+        await user.click(within(dialog).getByRole('button', { name: /^save$/i }))
+
+        expect(await within(dialog).findByText(/email already in use/i)).toBeInTheDocument()
+      })
+
+      it('cancelling the dialog does not call the API', async () => {
+        mockAsTenantAdmin(true)
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('other@example.com')
+
+        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+        await screen.findByRole('dialog')
+        await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        expect(mockPATCH).not.toHaveBeenCalled()
+      })
+
+      describe('Generate password', () => {
+        it('clicking Generate fills the field and reveals the plaintext with a Copy button', async () => {
+          mockAsTenantAdmin(true)
+          const user = userEvent.setup()
+          renderPage()
+          await screen.findByText('other@example.com')
+
+          await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+          const dialog = await screen.findByRole('dialog')
+          await user.click(within(dialog).getByRole('button', { name: /^generate$/i }))
+
+          const passwordField = within(dialog).getByLabelText(/new password/i) as HTMLInputElement
+          expect(passwordField.value).toHaveLength(20)
+          const copyBtn = within(dialog).getByRole('button', { name: /^copy$/i })
+          expect(dialog).toHaveTextContent(passwordField.value)
+          expect(copyBtn).toBeInTheDocument()
+        })
+
+        it('copies the generated password to the clipboard', async () => {
+          mockAsTenantAdmin(true)
+          const user = userEvent.setup()
+          const writeText = vi.fn().mockResolvedValue(undefined)
+          renderPage()
+          await screen.findByText('other@example.com')
+          Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+          await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+          const dialog = await screen.findByRole('dialog')
+          await user.click(within(dialog).getByRole('button', { name: /^generate$/i }))
+          const passwordField = within(dialog).getByLabelText(/new password/i) as HTMLInputElement
+          await user.click(within(dialog).getByRole('button', { name: /^copy$/i }))
+
+          expect(writeText).toHaveBeenCalledWith(passwordField.value)
+        })
+
+        it('manually editing the field after Generate clears the reveal', async () => {
+          mockAsTenantAdmin(true)
+          const user = userEvent.setup()
+          renderPage()
+          await screen.findByText('other@example.com')
+
+          await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+          const dialog = await screen.findByRole('dialog')
+          await user.click(within(dialog).getByRole('button', { name: /^generate$/i }))
+          expect(within(dialog).getByRole('button', { name: /^copy$/i })).toBeInTheDocument()
+
+          await user.type(within(dialog).getByLabelText(/new password/i), 'x')
+          expect(within(dialog).queryByRole('button', { name: /^copy$/i })).not.toBeInTheDocument()
+        })
+      })
+    })
+
     describe('deactivate', () => {
       it('does not deactivate immediately — opens a confirmation dialog naming the user first', async () => {
         mockAsTenantAdmin(true)

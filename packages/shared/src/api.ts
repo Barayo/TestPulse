@@ -1092,7 +1092,7 @@ export interface paths {
         delete: operations["deleteUser"];
         options?: never;
         head?: never;
-        /** Change a user's Tenant Admin flag, deactivate, or reactivate them (Tenant Admin only) */
+        /** Change a user's Tenant Admin flag, deactivate/reactivate them, or update their email/password (Tenant Admin only) */
         patch: operations["updateUser"];
         trace?: never;
     };
@@ -1776,6 +1776,10 @@ export interface components {
             deactivate?: boolean;
             /** @description Set true to reactivate a previously-deactivated user. */
             reactivate?: boolean;
+            /** @description Change the account's email (add-update-user). */
+            email?: string;
+            /** @description Set a new password directly (add-update-user, Tenant Admin only) — revokes every existing session for the account. */
+            password?: string;
         };
         /** @description Real counts of what deleting a user would remove (add-user-deletion design.md D5) — server-computed, not a client-side fan-out. */
         UserDeletionPreview: {

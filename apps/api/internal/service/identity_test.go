@@ -263,6 +263,112 @@ func TestNonTenantAdminCannotViewUserDeletionPreview(t *testing.T) {
 	}
 }
 
+// TestUpdateUserEmail covers add-update-user task 2.1.
+func TestUpdateUserEmail(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-email@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "old-email@example.com", "correcthorse", false)
+
+	updated, err := s.UpdateUserEmail(ctx, admin, target.ID, "new-email@example.com")
+	if err != nil {
+		t.Fatalf("UpdateUserEmail: %v", err)
+	}
+	if updated.Email != "new-email@example.com" {
+		t.Errorf("Email = %q, want %q", updated.Email, "new-email@example.com")
+	}
+}
+
+func TestUpdateUserEmailRejectsDuplicate(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-dup@example.com", "correcthorse", true))
+	mustCreateUser(t, s, "taken2@example.com", "correcthorse", false)
+	target := mustCreateUser(t, s, "mine2@example.com", "correcthorse", false)
+
+	_, err := s.UpdateUserEmail(ctx, admin, target.ID, "taken2@example.com")
+	if err == nil {
+		t.Error("duplicate email accepted, want error")
+	}
+}
+
+func TestUpdateUserEmailRejectsInvalid(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-invalid@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "valid-email@example.com", "correcthorse", false)
+
+	_, err := s.UpdateUserEmail(ctx, admin, target.ID, "not-an-email")
+	if err == nil {
+		t.Error("invalid email accepted, want error")
+	}
+}
+
+func TestNonTenantAdminCannotUpdateAnotherUsersEmail(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	nonAdmin := actorFor(mustCreateUser(t, s, "not-admin-email@example.com", "correcthorse", false))
+	target := mustCreateUser(t, s, "victim-email@example.com", "correcthorse", false)
+
+	_, err := s.UpdateUserEmail(ctx, nonAdmin, target.ID, "hijacked@example.com")
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
+	}
+}
+
+// TestSetUserPasswordRevokesSessions covers add-update-user task 2.1: a
+// session created before the password change must not authenticate after.
+func TestSetUserPasswordRevokesSessions(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-pw@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "pwtarget@example.com", "correcthorse-old", false)
+
+	sess, _, err := s.Login(ctx, "pwtarget@example.com", "correcthorse-old")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if _, err := s.AuthenticateSession(ctx, sess.ID); err != nil {
+		t.Fatalf("session should authenticate before password change: %v", err)
+	}
+
+	if err := s.SetUserPassword(ctx, admin, target.ID, "correcthorse-new"); err != nil {
+		t.Fatalf("SetUserPassword: %v", err)
+	}
+
+	if _, err := s.AuthenticateSession(ctx, sess.ID); err == nil {
+		t.Error("session still authenticates after password change, want revoked")
+	}
+	if _, _, err := s.Login(ctx, "pwtarget@example.com", "correcthorse-new"); err != nil {
+		t.Errorf("login with new password failed: %v", err)
+	}
+}
+
+func TestSetUserPasswordRejectsWeak(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-weak@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "weaktarget@example.com", "correcthorse", false)
+
+	if err := s.SetUserPassword(ctx, admin, target.ID, "short"); err == nil {
+		t.Error("weak password accepted, want error")
+	}
+}
+
+func TestNonTenantAdminCannotUpdateAnotherUsersPassword(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	nonAdmin := actorFor(mustCreateUser(t, s, "not-admin-pw@example.com", "correcthorse", false))
+	target := mustCreateUser(t, s, "victim-pw@example.com", "correcthorse", false)
+
+	err := s.SetUserPassword(ctx, nonAdmin, target.ID, "correcthorse-new")
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
+	}
+}
+
 func TestLogoutInvalidatesSession(t *testing.T) {
 	s := testService(t)
 	mustCreateUser(t, s, "a@example.com", "correcthorse", false)

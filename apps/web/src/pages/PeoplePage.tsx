@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Trash2Icon, Loader2Icon, PowerIcon } from 'lucide-react'
+import { Trash2Icon, Loader2Icon, PowerIcon, PencilIcon, TriangleAlertIcon, CopyIcon, CheckIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { isValidEmail } from '@/lib/email'
+import { generateSecurePassword } from '@/lib/generatePassword'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
@@ -41,6 +42,35 @@ const USER_BATCH_SIZE = 10
 // inline results list from ever dumping an unbounded list into the page.
 const ADD_RESULTS_CAP = 8
 
+// Shared "here's a secret, shown once — copy it" chip, reused for both the
+// New-user form and the Edit-user dialog's Generate action (matches
+// TokensPage's identical idiom for a newly-created API token).
+function GeneratedPasswordChip({ value }: { value: string }) {
+  const [copied, setCopied] = useState(false)
+  async function handleCopy() {
+    await navigator.clipboard.writeText(value)
+    setCopied(true)
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <code className="block flex-1 rounded bg-muted p-1.5 text-xs break-all">{value}</code>
+      <Button type="button" variant="outline" size="sm" onClick={() => void handleCopy()}>
+        {copied ? (
+          <>
+            <CheckIcon className="size-3.5" aria-hidden="true" />
+            Copied
+          </>
+        ) : (
+          <>
+            <CopyIcon className="size-3.5" aria-hidden="true" />
+            Copy
+          </>
+        )}
+      </Button>
+    </div>
+  )
+}
+
 export default function PeoplePage() {
   const { user: me } = useAuth()
 
@@ -52,8 +82,14 @@ export default function PeoplePage() {
   const [visibleUserCount, setVisibleUserCount] = useState(USER_BATCH_SIZE)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [revealedPassword, setRevealedPassword] = useState<string>()
   const [isTenantAdmin, setIsTenantAdmin] = useState(false)
   const [createUserError, setCreateUserError] = useState<string>()
+  const [editTarget, setEditTarget] = useState<User | null>(null)
+  const [editEmail, setEditEmail] = useState('')
+  const [editPassword, setEditPassword] = useState('')
+  const [editRevealedPassword, setEditRevealedPassword] = useState<string>()
+  const [editError, setEditError] = useState<string>()
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
   const [deletePreview, setDeletePreview] = useState<{ teamCount: number; projectCount: number; tokenCount: number }>()
@@ -105,8 +141,66 @@ export default function PeoplePage() {
     }
     setEmail('')
     setPassword('')
+    setRevealedPassword(undefined)
     setIsTenantAdmin(false)
     setUserFormOpen(false)
+    await load()
+  }
+
+  function openEditDialog(u: User) {
+    setEditTarget(u)
+    setEditEmail(u.email)
+    setEditPassword('')
+    setEditRevealedPassword(undefined)
+    setEditError(undefined)
+  }
+
+  function handleGenerateEditPassword() {
+    const generated = generateSecurePassword()
+    setEditPassword(generated)
+    setEditRevealedPassword(generated)
+  }
+
+  function handleEditPasswordChange(value: string) {
+    setEditPassword(value)
+    if (value !== editRevealedPassword) setEditRevealedPassword(undefined)
+  }
+
+  function handleGeneratePassword() {
+    const generated = generateSecurePassword()
+    setPassword(generated)
+    setRevealedPassword(generated)
+  }
+
+  function handlePasswordChange(value: string) {
+    setPassword(value)
+    if (value !== revealedPassword) setRevealedPassword(undefined)
+  }
+
+  async function handleEditUser(e: FormEvent) {
+    e.preventDefault()
+    if (!editTarget) return
+    setEditError(undefined)
+    if (!isValidEmail(editEmail)) {
+      setEditError('Enter a valid email address')
+      return
+    }
+    const body: { email?: string; password?: string } = {}
+    if (editEmail !== editTarget.email) body.email = editEmail
+    if (editPassword) body.password = editPassword
+    if (Object.keys(body).length === 0) {
+      setEditTarget(null)
+      return
+    }
+    const { error: apiError } = await api.PATCH('/api/v1/users/{userId}', {
+      params: { path: { userId: editTarget.id } },
+      body,
+    })
+    if (apiError) {
+      setEditError((apiError as { error?: string }).error ?? 'failed to update user')
+      return
+    }
+    setEditTarget(null)
     await load()
   }
 
@@ -411,31 +505,46 @@ export default function PeoplePage() {
               <CardTitle className="tp-heading">New user</CardTitle>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleCreateUser} className="flex items-end gap-3">
-                <div className="space-y-1">
-                  <Label htmlFor="new-user-email">Email</Label>
-                  <Input id="new-user-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+              <form onSubmit={handleCreateUser} className="space-y-3">
+                <div className="flex items-end gap-3">
+                  <div className="space-y-1">
+                    <Label htmlFor="new-user-email">Email</Label>
+                    <Input id="new-user-email" value={email} onChange={(e) => setEmail(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="new-user-password">Password</Label>
+                      <button
+                        type="button"
+                        className="text-xs font-bold text-primary"
+                        onClick={handleGeneratePassword}
+                      >
+                        Generate
+                      </button>
+                    </div>
+                    <Input
+                      id="new-user-password"
+                      type="password"
+                      autoComplete="new-password"
+                      value={password}
+                      onChange={(e) => handlePasswordChange(e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pb-2">
+                    <input
+                      id="new-user-tenant-admin"
+                      type="checkbox"
+                      checked={isTenantAdmin}
+                      onChange={(e) => setIsTenantAdmin(e.target.checked)}
+                      className="size-4"
+                    />
+                    <Label htmlFor="new-user-tenant-admin">Tenant Admin</Label>
+                  </div>
+                  <Button type="submit">Create</Button>
                 </div>
-                <div className="space-y-1">
-                  <Label htmlFor="new-user-password">Password</Label>
-                  <Input
-                    id="new-user-password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </div>
-                <div className="flex items-center gap-2 pb-2">
-                  <input
-                    id="new-user-tenant-admin"
-                    type="checkbox"
-                    checked={isTenantAdmin}
-                    onChange={(e) => setIsTenantAdmin(e.target.checked)}
-                    className="size-4"
-                  />
-                  <Label htmlFor="new-user-tenant-admin">Tenant Admin</Label>
-                </div>
-                <Button type="submit">Create</Button>
+                {revealedPassword && password === revealedPassword && (
+                  <GeneratedPasswordChip value={revealedPassword} />
+                )}
               </form>
               {createUserError && <p className="mt-2 text-sm text-destructive">{createUserError}</p>}
             </CardContent>
@@ -451,24 +560,24 @@ export default function PeoplePage() {
           }}
         />
 
-        {/* Actions column is a fixed 150px on every breakpoint (mobile's
+        {/* Actions column is a fixed 200px on every breakpoint (mobile's
             2-col template included) — not the auto/content-sized width a
-            grid item defaults to. A deactivated, non-self row renders two
-            actions ("Reactivate · Delete", ~115px wide at real render —
-            measured directly, not guessed), and a plain grid item's
-            default min-width is `auto` (its own content's min-content
-            size), not 0: give that content a track narrower than its
-            content (the old fixed 36px, sized for a single icon button)
-            and the item doesn't shrink to fit — it overflows the track
-            and bleeds into whichever column sits to its left, which is
-            exactly what produced the reported "DeacReactivatvatedte"
-            collision with the Status column's text. 150px is the
-            measured content width plus a real safety margin, kept
-            identical across the header and every row so columns still
-            line up even though each `<li>` is its own independent grid,
-            not one shared table grid. */}
+            grid item defaults to. A deactivated, non-self row renders three
+            actions ("Edit · Reactivate · Delete", ~163px wide at real
+            render — measured directly, not guessed), and a plain grid
+            item's default min-width is `auto` (its own content's
+            min-content size), not 0: give that content a track narrower
+            than its content and the item doesn't shrink to fit — it
+            overflows the track and bleeds into whichever column sits to
+            its left, which is exactly what produced the original reported
+            "DeacReactivatvatedte" collision with the Status column's text
+            (back when the track was a fixed 36px for a single icon
+            button). 200px is the measured content width plus a real
+            safety margin, kept identical across the header and every row
+            so columns still line up even though each `<li>` is its own
+            independent grid, not one shared table grid. */}
         <div className="overflow-hidden rounded-lg border">
-          <div className="grid grid-cols-[1fr_150px] items-center gap-3 border-b px-4 py-2 sm:grid-cols-[1fr_140px_120px_150px]">
+          <div className="grid grid-cols-[1fr_200px] items-center gap-3 border-b px-4 py-2 sm:grid-cols-[1fr_140px_120px_200px]">
             <span className="tp-label">Person</span>
             <span className="tp-label hidden sm:block">Access</span>
             <span className="tp-label hidden sm:block">Status</span>
@@ -481,7 +590,7 @@ export default function PeoplePage() {
             {visibleUsers.map((u) => (
               <li
                 key={u.id}
-                className="group grid grid-cols-[1fr_150px] items-center gap-3 border-b px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_140px_120px_150px]"
+                className="group grid grid-cols-[1fr_200px] items-center gap-3 border-b px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_140px_120px_200px]"
               >
                 <div className="flex min-w-0 items-center gap-2.5">
                   <Avatar seed={u.email} avatarKey={u.avatarKey} userId={u.id} className="size-7 rounded-full text-xs" />
@@ -514,6 +623,16 @@ export default function PeoplePage() {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        className="text-xs font-bold text-foreground hover:underline"
+                        onClick={() => openEditDialog(u)}
+                      >
+                        Edit
+                      </button>
+                      <span className="text-muted-foreground" aria-hidden="true">
+                        &middot;
+                      </span>
+                      <button
+                        type="button"
                         className="text-xs font-bold text-primary"
                         onClick={() => void handleReactivate(u.id)}
                       >
@@ -536,17 +655,28 @@ export default function PeoplePage() {
                       )}
                     </div>
                   ) : (
-                    u.id !== me.id && (
+                    <div className="flex justify-end gap-1">
                       <button
                         type="button"
-                        aria-label={`Deactivate ${u.email}`}
-                        title={`Deactivate ${u.email}`}
-                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
-                        onClick={() => setDeactivateTarget(u)}
+                        aria-label={`Edit ${u.email}`}
+                        title={`Edit ${u.email}`}
+                        className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                        onClick={() => openEditDialog(u)}
                       >
-                        <PowerIcon className="size-3.5" aria-hidden="true" />
+                        <PencilIcon className="size-3.5" aria-hidden="true" />
                       </button>
-                    )
+                      {u.id !== me.id && (
+                        <button
+                          type="button"
+                          aria-label={`Deactivate ${u.email}`}
+                          title={`Deactivate ${u.email}`}
+                          className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                          onClick={() => setDeactivateTarget(u)}
+                        >
+                          <PowerIcon className="size-3.5" aria-hidden="true" />
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
               </li>
@@ -565,6 +695,64 @@ export default function PeoplePage() {
           </Button>
         )}
       </section>
+
+      <Dialog open={editTarget !== null} onOpenChange={(open) => !open && setEditTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Edit user</DialogTitle>
+          <DialogDescription>
+            Change this account's email, password, or both — leave either field as-is to keep it unchanged.
+          </DialogDescription>
+          <form onSubmit={handleEditUser} className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="edit-user-email">Email</Label>
+              <Input id="edit-user-email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label htmlFor="edit-user-password">New password</Label>
+                <button type="button" className="text-xs font-bold text-primary" onClick={handleGenerateEditPassword}>
+                  Generate
+                </button>
+              </div>
+              <Input
+                id="edit-user-password"
+                type="password"
+                autoComplete="new-password"
+                value={editPassword}
+                onChange={(e) => handleEditPasswordChange(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Leave blank to keep the current password.</p>
+            </div>
+            {editPassword && (
+              <div className="space-y-2 rounded-lg border border-secondary/30 bg-secondary/10 p-2.5">
+                {editRevealedPassword && editPassword === editRevealedPassword && (
+                  <GeneratedPasswordChip value={editRevealedPassword} />
+                )}
+                <div className="flex items-start gap-2">
+                  <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
+                  <div>
+                    <p className="text-sm font-medium">
+                      {editTarget?.id === me.id ? 'This signs you out everywhere' : 'This signs them out everywhere'}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {editTarget?.id === me.id
+                        ? "Every active session for your account ends the moment you save, including this one — you'll need to log in again."
+                        : "Every active session for this account ends the moment you save — they'll need to log in again."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+            {editError && <p className="text-sm text-destructive">{editError}</p>}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>
+                Cancel
+              </Button>
+              <Button type="submit">Save</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={deactivateTarget !== null} onOpenChange={(open) => !open && setDeactivateTarget(null)}>
         <DialogContent className="sm:max-w-md">
