@@ -66,6 +66,8 @@ export default function PeoplePage() {
   const [addMemberOpen, setAddMemberOpen] = useState(false)
   const [addSearch, setAddSearch] = useState('')
   const [removeTarget, setRemoveTarget] = useState<{ teamId: string; user: UserOption } | null>(null)
+  const [deleteTeamTarget, setDeleteTeamTarget] = useState<Team | null>(null)
+  const [teamDeletePreview, setTeamDeletePreview] = useState<{ memberCount: number; projectCount: number }>()
 
   async function load() {
     const [{ data: u }, { data: t }] = await Promise.all([api.GET('/api/v1/users'), api.GET('/api/v1/teams')])
@@ -173,6 +175,20 @@ export default function PeoplePage() {
     await load()
   }
 
+  async function openDeleteTeamDialog(t: Team) {
+    setDeleteTeamTarget(t)
+    setTeamDeletePreview(undefined)
+    const { data } = await api.GET('/api/v1/teams/{teamId}/deletion-preview', { params: { path: { teamId: t.id } } })
+    if (data) setTeamDeletePreview(data)
+  }
+
+  async function handleDeleteTeam() {
+    if (!deleteTeamTarget) return
+    await api.DELETE('/api/v1/teams/{teamId}', { params: { path: { teamId: deleteTeamTarget.id } } })
+    setDeleteTeamTarget(null)
+    await load()
+  }
+
   return (
     <AdminShell>
       {/* Teams before Users: fewer teams than users in the common case, so
@@ -235,23 +251,33 @@ export default function PeoplePage() {
 
               return (
                 <li key={t.id} className="overflow-hidden rounded-lg border">
-                  <button
-                    type="button"
-                    aria-expanded={expanded}
-                    className={`flex w-full items-center gap-3 px-4 py-2 text-left hover:bg-accent ${expanded ? 'border-b' : ''}`}
-                    onClick={() => toggleExpand(t.id)}
-                  >
-                    <span
-                      className="flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-bold"
-                      style={avatarStyle(t.name)}
+                  <div className={`flex items-center gap-2 ${expanded ? 'border-b' : ''}`}>
+                    <button
+                      type="button"
+                      aria-expanded={expanded}
+                      className="flex min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left hover:bg-accent"
+                      onClick={() => toggleExpand(t.id)}
                     >
-                      {initialsFor(t.name)}
-                    </span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold">{t.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {t.memberIds.length} {t.memberIds.length === 1 ? 'member' : 'members'}
-                    </span>
-                  </button>
+                      <span
+                        className="flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-bold"
+                        style={avatarStyle(t.name)}
+                      >
+                        {initialsFor(t.name)}
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{t.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {t.memberIds.length} {t.memberIds.length === 1 ? 'member' : 'members'}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label={`Delete ${t.name}`}
+                      className="mr-3 text-muted-foreground hover:text-destructive"
+                      onClick={() => void openDeleteTeamDialog(t)}
+                    >
+                      <Trash2Icon className="size-4" aria-hidden="true" />
+                    </button>
+                  </div>
 
                   {expanded && (
                     <div className="space-y-3 p-3">
@@ -596,6 +622,37 @@ export default function PeoplePage() {
             </Button>
             <Button variant="destructive" onClick={() => void handleRemoveMember()}>
               Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={deleteTeamTarget !== null} onOpenChange={(open) => !open && setDeleteTeamTarget(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Delete "{deleteTeamTarget?.name}"?</DialogTitle>
+          <DialogDescription>
+            Currently has{' '}
+            {teamDeletePreview === undefined ? (
+              <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
+            ) : (
+              <>
+                {teamDeletePreview.memberCount} member{teamDeletePreview.memberCount === 1 ? '' : 's'}, with access on{' '}
+                {teamDeletePreview.projectCount} project{teamDeletePreview.projectCount === 1 ? '' : 's'}
+              </>
+            )}
+            . Deleting it removes those members and revokes that project access too, not just the team itself. This
+            cannot be undone.
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTeamTarget(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={teamDeletePreview === undefined}
+              onClick={() => void handleDeleteTeam()}
+            >
+              Delete team
             </Button>
           </DialogFooter>
         </DialogContent>

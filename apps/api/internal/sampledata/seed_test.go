@@ -773,6 +773,47 @@ func TestSeedContentShowcasesScopedApiToken(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesDeletableTeam covers add-team-deletion-preview's
+// Sample-Project-showcase task: without a seeded team, a fresh instance
+// would never show the People page's Teams section or its delete-preview
+// dialog against real content. The team has real members (a non-zero
+// preview) but no project role assignment, so it's genuinely safe to
+// delete live during evaluation.
+func TestSeedContentShowcasesDeletableTeam(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	adminActor, _ := domain.ActorFromContext(actorCtx)
+
+	teams, err := svc.ListTeams(actorCtx)
+	if err != nil {
+		t.Fatalf("ListTeams: %v", err)
+	}
+	var qaCore domain.Team
+	for _, team := range teams {
+		if team.Name == "QA Core" {
+			qaCore = team
+		}
+	}
+	if qaCore.ID == "" {
+		t.Fatal("seeded demo team \"QA Core\" not found")
+	}
+	if len(qaCore.MemberIDs) != 2 {
+		t.Errorf("QA Core has %d members, want 2 — the delete-preview dialog would show a zero count", len(qaCore.MemberIDs))
+	}
+
+	preview, err := svc.TeamDeletionPreview(actorCtx, adminActor, qaCore.ID)
+	if err != nil {
+		t.Fatalf("TeamDeletionPreview: %v", err)
+	}
+	if preview.ProjectCount != 0 {
+		t.Errorf("QA Core holds a role on %d project(s), want 0 — deleting it live would revoke real access", preview.ProjectCount)
+	}
+}
+
 // TestSeedContentShowcasesScreenshotAttachment covers
 // add-run-item-screenshot-attachments' Sample-Project-showcase task: without
 // this, a fresh instance would never show a run item result with an

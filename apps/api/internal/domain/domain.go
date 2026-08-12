@@ -734,6 +734,14 @@ type RoleDeletionPreview struct {
 	ProjectCount    int `json:"projectCount"`
 }
 
+// TeamDeletionPreview is the "what does deleting this team affect" summary
+// shown by the delete-team confirmation dialog (add-team-deletion-preview),
+// mirroring UserDeletionPreview and RoleDeletionPreview's pattern.
+type TeamDeletionPreview struct {
+	MemberCount  int `json:"memberCount"`
+	ProjectCount int `json:"projectCount"`
+}
+
 // AvatarPresetKeys is the fixed, curated set of avatar preset keys
 // (add-user-profile design.md) — static bundled assets, not database rows.
 // A nil/absent AvatarKey renders as a generated initial-on-color instead.

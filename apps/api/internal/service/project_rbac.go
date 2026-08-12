@@ -251,6 +251,20 @@ func (s *Service) DeleteTeam(ctx context.Context, actor domain.Actor, teamID str
 	return nil
 }
 
+// TeamDeletionPreview returns real reference counts for the delete-team
+// confirmation dialog (add-team-deletion-preview), mirroring the pattern
+// UserDeletionPreview and RoleDeletionPreview already established.
+func (s *Service) TeamDeletionPreview(ctx context.Context, actor domain.Actor, teamID string) (domain.TeamDeletionPreview, error) {
+	if !actor.IsTenantAdmin {
+		return domain.TeamDeletionPreview{}, forbidden("only a Tenant Admin can manage teams")
+	}
+	members, projects, err := s.store.Teams.TeamReferenceCounts(ctx, teamID)
+	if err != nil {
+		return domain.TeamDeletionPreview{}, err
+	}
+	return domain.TeamDeletionPreview{MemberCount: members, ProjectCount: projects}, nil
+}
+
 func (s *Service) AddTeamMember(ctx context.Context, actor domain.Actor, teamID, userID string) (domain.Team, error) {
 	if !actor.IsTenantAdmin {
 		return domain.Team{}, forbidden("only a Tenant Admin can manage teams")

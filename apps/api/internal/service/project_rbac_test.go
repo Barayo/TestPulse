@@ -70,6 +70,43 @@ func TestTenantAdminManagesTeamLifecycle(t *testing.T) {
 	}
 }
 
+// TestTeamDeletionPreview covers add-team-deletion-preview task 3.1.
+func TestTeamDeletionPreview(t *testing.T) {
+	s := testService(t)
+	admin := actorFor(mustCreateUser(t, s, "team-preview-admin@example.com", "correcthorse", true))
+	ctx := context.Background()
+
+	team, err := s.CreateTeam(ctx, admin, "Previewed Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+
+	preview, err := s.TeamDeletionPreview(ctx, admin, team.ID)
+	if err != nil {
+		t.Fatalf("TeamDeletionPreview: %v", err)
+	}
+	if preview.MemberCount != 0 || preview.ProjectCount != 0 {
+		t.Errorf("preview = %+v, want all zero for a fresh, unassigned team", preview)
+	}
+}
+
+func TestNonTenantAdminCannotViewTeamDeletionPreview(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "team-preview-admin2@example.com", "correcthorse", true))
+	team, err := s.CreateTeam(ctx, admin, "Non-admin-viewed Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	nonAdmin := actorFor(mustCreateUser(t, s, "team-preview-member@example.com", "correcthorse", false))
+
+	_, err = s.TeamDeletionPreview(ctx, nonAdmin, team.ID)
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
+	}
+}
+
 func TestNonTenantAdminCannotAssignProjectMembership(t *testing.T) {
 	s := testService(t)
 	member := actorFor(mustCreateUser(t, s, "member@example.com", "correcthorse", false))

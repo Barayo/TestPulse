@@ -76,6 +76,55 @@ func TestTeamList(t *testing.T) {
 	}
 }
 
+// TestTeamReferenceCounts covers add-team-deletion-preview task 1.1: the
+// deletion-preview endpoint needs a cheap, DB-side count of a team's members
+// and the distinct projects it holds a role on.
+func TestTeamReferenceCounts(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	team, err := s.Teams.Create(ctx, "Ref Team")
+	if err != nil {
+		t.Fatalf("Teams.Create: %v", err)
+	}
+
+	memberCount, projectCount, err := s.Teams.TeamReferenceCounts(ctx, team.ID)
+	if err != nil {
+		t.Fatalf("TeamReferenceCounts (none yet): %v", err)
+	}
+	if memberCount != 0 || projectCount != 0 {
+		t.Errorf("counts = %d/%d, want both zero before any membership or assignment", memberCount, projectCount)
+	}
+
+	u1 := mustUser(t, s, "team-ref-user1@example.com", false)
+	u2 := mustUser(t, s, "team-ref-user2@example.com", false)
+	if err := s.Teams.AddMember(ctx, team.ID, u1.ID); err != nil {
+		t.Fatalf("AddMember u1: %v", err)
+	}
+	if err := s.Teams.AddMember(ctx, team.ID, u2.ID); err != nil {
+		t.Fatalf("AddMember u2: %v", err)
+	}
+	role := mustRole(t, s, domain.Role{Name: "Team Ref Role", CanRead: true})
+	p1 := mustProject(t, s)
+	p2 := mustProject(t, s)
+	if err := s.ProjectMembers.SetTeamRole(ctx, p1.ID, team.ID, role.ID); err != nil {
+		t.Fatalf("SetTeamRole p1: %v", err)
+	}
+	if err := s.ProjectMembers.SetTeamRole(ctx, p2.ID, team.ID, role.ID); err != nil {
+		t.Fatalf("SetTeamRole p2: %v", err)
+	}
+
+	memberCount, projectCount, err = s.Teams.TeamReferenceCounts(ctx, team.ID)
+	if err != nil {
+		t.Fatalf("TeamReferenceCounts: %v", err)
+	}
+	if memberCount != 2 {
+		t.Errorf("memberCount = %d, want 2", memberCount)
+	}
+	if projectCount != 2 {
+		t.Errorf("projectCount = %d, want 2", projectCount)
+	}
+}
+
 // --- Roles ---
 
 func mustRole(t *testing.T, s *store.Store, role domain.Role) domain.Role {

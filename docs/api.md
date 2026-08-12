@@ -188,6 +188,7 @@ field alongside the report text, not inside it.
 | POST | `/api/v1/teams` | Create a team (`name`) |
 | PATCH | `/api/v1/teams/{teamId}` | Rename a team |
 | DELETE | `/api/v1/teams/{teamId}` | Delete a team — cascades its membership and project role assignments |
+| GET | `/api/v1/teams/{teamId}/deletion-preview` | Real reference counts for the delete-team confirmation dialog — current member count and distinct projects it holds a role on (`add-team-deletion-preview`) |
 | POST | `/api/v1/teams/{teamId}/members/{userId}` | Add a user to a team |
 | DELETE | `/api/v1/teams/{teamId}/members/{userId}` | Remove a user from a team |
 

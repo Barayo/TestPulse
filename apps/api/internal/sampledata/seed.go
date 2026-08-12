@@ -131,6 +131,21 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: creating scoped sample API token: %w", err)
 	}
 
+	// A team (add-team-deletion-preview showcase): has real members so its
+	// delete-confirmation dialog on the People page shows a non-zero
+	// preview, but deliberately holds no project role assignment, so
+	// deleting it live during evaluation doesn't revoke anyone's access.
+	qaCore, err := svc.CreateTeam(ctx, adminActor, "QA Core")
+	if err != nil {
+		return fmt.Errorf("sampledata: creating demo team: %w", err)
+	}
+	if _, err := svc.AddTeamMember(ctx, adminActor, qaCore.ID, julia.ID); err != nil {
+		return fmt.Errorf("sampledata: adding demo team member: %w", err)
+	}
+	if _, err := svc.AddTeamMember(ctx, adminActor, qaCore.ID, sam.ID); err != nil {
+		return fmt.Errorf("sampledata: adding demo team member: %w", err)
+	}
+
 	root, err := RootFolder(ctx, svc, p.ID)
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)

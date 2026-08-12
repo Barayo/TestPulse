@@ -45,6 +45,14 @@ beforeEach(() => {
   vi.resetAllMocks()
 })
 
+// Matches the team-row expand toggle by its visible name, without also
+// matching the row's "Delete {team name}" button — both contain the team
+// name as a substring, so a plain name regex is ambiguous between them.
+function teamToggleName(text: string) {
+  const re = new RegExp(text, 'i')
+  return (name: string) => re.test(name) && !/^delete /i.test(name)
+}
+
 function renderPage() {
   return render(
     <MemoryRouter>
@@ -469,7 +477,7 @@ describe('PeoplePage', () => {
       renderPage()
       await screen.findByText('QA Core')
 
-      const teamToggle = screen.getByRole('button', { name: /qa core/i })
+      const teamToggle = screen.getByRole('button', { name: teamToggleName('qa core') })
       await user.click(teamToggle)
       const teamCard = teamToggle.closest('li') as HTMLElement
       expect(within(teamCard).getByText('member1@example.com')).toBeInTheDocument()
@@ -482,7 +490,7 @@ describe('PeoplePage', () => {
       renderPage()
       await screen.findByText('QA Core')
 
-      const teamToggle = screen.getByRole('button', { name: /qa core/i })
+      const teamToggle = screen.getByRole('button', { name: teamToggleName('qa core') })
       await user.click(teamToggle)
       const teamCard = teamToggle.closest('li') as HTMLElement
       expect(within(teamCard).queryByText('member6@example.com')).not.toBeInTheDocument()
@@ -497,7 +505,7 @@ describe('PeoplePage', () => {
       renderPage()
       await screen.findByText('QA Core')
 
-      const teamToggle = screen.getByRole('button', { name: /qa core/i })
+      const teamToggle = screen.getByRole('button', { name: teamToggleName('qa core') })
       await user.click(teamToggle)
       const teamCard = teamToggle.closest('li') as HTMLElement
       await user.type(within(teamCard).getByPlaceholderText(/filter members/i), 'member2')
@@ -515,7 +523,7 @@ describe('PeoplePage', () => {
       renderPage()
       await screen.findByText('QA Core')
 
-      const teamToggle = screen.getByRole('button', { name: /qa core/i })
+      const teamToggle = screen.getByRole('button', { name: teamToggleName('qa core') })
       await user.click(teamToggle)
       const teamCard = teamToggle.closest('li') as HTMLElement
 
@@ -533,7 +541,7 @@ describe('PeoplePage', () => {
         renderPage()
         await screen.findByText('Mobile Squad')
 
-        const teamToggle = screen.getByRole('button', { name: /mobile squad/i })
+        const teamToggle = screen.getByRole('button', { name: teamToggleName('mobile squad') })
         await user.click(teamToggle)
         const teamCard = teamToggle.closest('li') as HTMLElement
         expect(within(teamCard).queryByPlaceholderText(/search directory/i)).not.toBeInTheDocument()
@@ -545,7 +553,7 @@ describe('PeoplePage', () => {
         renderPage()
         await screen.findByText('Mobile Squad')
 
-        const teamToggle = screen.getByRole('button', { name: /mobile squad/i })
+        const teamToggle = screen.getByRole('button', { name: teamToggleName('mobile squad') })
         await user.click(teamToggle)
         const teamCard = teamToggle.closest('li') as HTMLElement
         await user.click(within(teamCard).getByRole('button', { name: /add member/i }))
@@ -580,7 +588,7 @@ describe('PeoplePage', () => {
         renderPage()
         await screen.findByText('Mobile Squad')
 
-        const teamToggle = screen.getByRole('button', { name: /mobile squad/i })
+        const teamToggle = screen.getByRole('button', { name: teamToggleName('mobile squad') })
         await user.click(teamToggle)
         const teamCard = teamToggle.closest('li') as HTMLElement
         await user.click(within(teamCard).getByRole('button', { name: /add member/i }))
@@ -599,7 +607,7 @@ describe('PeoplePage', () => {
         renderPage()
         await screen.findByText('QA Core')
 
-        await user.click(screen.getByRole('button', { name: /qa core/i }))
+        await user.click(screen.getByRole('button', { name: teamToggleName('qa core') }))
         await user.click(await screen.findByRole('button', { name: /remove member1@example.com/i }))
 
         const dialog = await screen.findByRole('dialog', { name: /remove/i })
@@ -614,7 +622,7 @@ describe('PeoplePage', () => {
         renderPage()
         await screen.findByText('QA Core')
 
-        await user.click(screen.getByRole('button', { name: /qa core/i }))
+        await user.click(screen.getByRole('button', { name: teamToggleName('qa core') }))
         await user.click(await screen.findByRole('button', { name: /remove member1@example.com/i }))
         const dialog = await screen.findByRole('dialog', { name: /remove/i })
         await user.click(within(dialog).getByRole('button', { name: /^remove$/i }))
@@ -624,6 +632,101 @@ describe('PeoplePage', () => {
             params: { path: { teamId: 't1', userId: 'm1' } },
           }),
         )
+      })
+    })
+
+    describe('delete team (add-team-deletion-preview)', () => {
+      function mockTeamPreview() {
+        mockGET.mockImplementation((path: string) => {
+          if (path === '/api/v1/users/me') {
+            return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
+          }
+          if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
+          if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
+          if (path === '/api/v1/teams/{teamId}/deletion-preview') {
+            return Promise.resolve({ data: { memberCount: 7, projectCount: 2 }, response: { ok: true } })
+          }
+          return Promise.resolve({ data: [], response: { ok: true } })
+        })
+      }
+
+      it('shows a Delete action on each team row', async () => {
+        mockAsTenantAdmin(true)
+        renderPage()
+        await screen.findByText('QA Core')
+
+        expect(screen.getByRole('button', { name: /^delete qa core$/i })).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: /^delete mobile squad$/i })).toBeInTheDocument()
+      })
+
+      it('opens a confirmation dialog naming the team, disables confirm until real counts load', async () => {
+        let resolvePreview: (v: { data: { memberCount: number; projectCount: number } }) => void
+        const previewPromise = new Promise<{ data: { memberCount: number; projectCount: number } }>((resolve) => {
+          resolvePreview = resolve
+        })
+        mockGET.mockImplementation((path: string) => {
+          if (path === '/api/v1/users/me') {
+            return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
+          }
+          if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
+          if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
+          if (path === '/api/v1/teams/{teamId}/deletion-preview') return previewPromise as Promise<never>
+          return Promise.resolve({ data: [], response: { ok: true } })
+        })
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('QA Core')
+
+        await user.click(screen.getByRole('button', { name: /^delete qa core$/i }))
+        const dialog = await screen.findByRole('dialog')
+        expect(dialog).toHaveTextContent(/qa core/i)
+
+        const confirmBtn = within(dialog).getByRole('button', { name: /^delete team$/i })
+        expect(confirmBtn).toBeDisabled()
+        expect(mockGET).toHaveBeenCalledWith(
+          '/api/v1/teams/{teamId}/deletion-preview',
+          expect.objectContaining({ params: { path: { teamId: 't1' } } }),
+        )
+
+        resolvePreview!({ data: { memberCount: 7, projectCount: 2 } })
+        await waitFor(() => expect(confirmBtn).toBeEnabled())
+        expect(dialog).toHaveTextContent(/7 members/i)
+        expect(dialog).toHaveTextContent(/2 projects/i)
+      })
+
+      it('cancelling the dialog does not call DELETE', async () => {
+        mockTeamPreview()
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('QA Core')
+
+        await user.click(screen.getByRole('button', { name: /^delete qa core$/i }))
+        await screen.findByRole('dialog')
+        await user.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+        expect(mockDELETE).not.toHaveBeenCalled()
+      })
+
+      it('confirming deletes the team and reloads the list', async () => {
+        mockTeamPreview()
+        mockDELETE.mockResolvedValue({ response: { ok: true } })
+        const user = userEvent.setup()
+        renderPage()
+        await screen.findByText('QA Core')
+
+        await user.click(screen.getByRole('button', { name: /^delete qa core$/i }))
+        const dialog = await screen.findByRole('dialog')
+        const confirmBtn = within(dialog).getByRole('button', { name: /^delete team$/i })
+        await waitFor(() => expect(confirmBtn).toBeEnabled())
+        await user.click(confirmBtn)
+
+        await waitFor(() =>
+          expect(mockDELETE).toHaveBeenCalledWith('/api/v1/teams/{teamId}', {
+            params: { path: { teamId: 't1' } },
+          }),
+        )
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       })
     })
   })

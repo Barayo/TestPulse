@@ -93,6 +93,20 @@ func (r *TeamRepo) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
+// TeamReferenceCounts reports how much a team would take with it if deleted:
+// its current member count, and the count of distinct projects it holds a
+// role on (via project_team_roles) — surfaced in the deletion-preview UI
+// before the destructive action is enabled.
+func (r *TeamRepo) TeamReferenceCounts(ctx context.Context, teamID string) (memberCount, projectCount int, err error) {
+	err = r.pool.QueryRow(ctx,
+		`SELECT
+		   (SELECT count(*) FROM team_members WHERE team_id = $1),
+		   (SELECT count(DISTINCT project_id) FROM project_team_roles WHERE team_id = $1)`,
+		teamID,
+	).Scan(&memberCount, &projectCount)
+	return memberCount, projectCount, err
+}
+
 func (r *TeamRepo) AddMember(ctx context.Context, teamID, userID string) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO team_members (team_id, user_id) VALUES ($1, $2)

@@ -382,6 +382,37 @@ func TestScenario_NonTenantAdminCannotManageTeamsOverHTTP(t *testing.T) {
 // TestScenario_MyPermissionsExposesRealFlagsOverHTTP covers add-delete-
 // mode's dependency: the frontend needs to know its own effective
 // permissions to hide (not just disable) permission-gated controls.
+func TestScenario_TeamDeletionPreviewOverHTTP(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var created jmap
+	callAs(t, handler, admin, "POST", "/api/v1/teams", jmap{"name": "Previewed Team (http-test)"}, 201, &created)
+	teamID, _ := created["id"].(string)
+
+	var preview jmap
+	callAs(t, handler, admin, "GET", "/api/v1/teams/"+teamID+"/deletion-preview", nil, 200, &preview)
+	if preview["memberCount"] != float64(0) || preview["projectCount"] != float64(0) {
+		t.Errorf("preview = %+v, want all zero for a fresh, unassigned team", preview)
+	}
+}
+
+func TestScenario_NonTenantAdminCannotViewTeamDeletionPreviewOverHTTP(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var created jmap
+	callAs(t, handler, admin, "POST", "/api/v1/teams", jmap{"name": "Guarded Team (http-test)"}, 201, &created)
+	teamID, _ := created["id"].(string)
+
+	var member jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "teamview@example.com", "password": "correcthorse"}, 201, &member)
+	memberCookie := loginCookie(t, handler, "teamview@example.com", "correcthorse")
+
+	callAs(t, handler, memberCookie, "GET", "/api/v1/teams/"+teamID+"/deletion-preview", nil, 403, nil)
+}
+
 func TestScenario_MyPermissionsExposesRealFlagsOverHTTP(t *testing.T) {
 	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")

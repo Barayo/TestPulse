@@ -18,6 +18,7 @@ func mountTeams(r chi.Router, h *api) {
 		r.Route("/{teamID}", func(r chi.Router) {
 			r.Patch("/", h.renameTeam)
 			r.Delete("/", h.deleteTeam)
+			r.Get("/deletion-preview", h.teamDeletionPreview)
 			r.Post("/members/{userID}", h.addTeamMember)
 			r.Delete("/members/{userID}", h.removeTeamMember)
 		})
@@ -59,6 +60,12 @@ func (h *api) deleteTeam(w http.ResponseWriter, r *http.Request) {
 	actor, _ := domain.ActorFromContext(r.Context())
 	err := h.svc.DeleteTeam(r.Context(), actor, chi.URLParam(r, "teamID"))
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) teamDeletionPreview(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	preview, err := h.svc.TeamDeletionPreview(r.Context(), actor, chi.URLParam(r, "teamID"))
+	h.respond(w, http.StatusOK, preview, err)
 }
 
 func (h *api) addTeamMember(w http.ResponseWriter, r *http.Request) {

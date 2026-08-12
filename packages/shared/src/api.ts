@@ -1207,6 +1207,25 @@ export interface paths {
         patch: operations["renameTeam"];
         trace?: never;
     };
+    "/api/v1/teams/{teamId}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        /** Real counts of what deleting this team would affect (Tenant Admin only) — current member count and distinct projects it holds a role on */
+        get: operations["teamDeletionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/teams/{teamId}/members/{userId}": {
         parameters: {
             query?: never;
@@ -1773,6 +1792,13 @@ export interface components {
             /** @description Teams holding this role. */
             teamCount: number;
             /** @description Distinct projects touched by either direct or team assignment. */
+            projectCount: number;
+        };
+        /** @description Real counts of what deleting a team would affect (add-team-deletion-preview) — server-computed, mirroring UserDeletionPreview and RoleDeletionPreview's pattern. */
+        TeamDeletionPreview: {
+            /** @description The team's current member count. */
+            memberCount: number;
+            /** @description Distinct projects the team holds a role on. */
             projectCount: number;
         };
         /** @description A resolved, unioned set of permission flags — the caller's own effective permissions on one project (add-delete-mode), not a role definition. */
@@ -4057,6 +4083,31 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    teamDeletionPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                teamId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deletion preview counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TeamDeletionPreview"];
+                };
+            };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

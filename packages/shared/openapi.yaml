@@ -1346,6 +1346,22 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/teams/{teamId}/deletion-preview:
+    parameters:
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: teamDeletionPreview
+      summary: Real counts of what deleting this team would affect (Tenant Admin only) — current member count and distinct projects it holds a role on
+      tags: [teams]
+      responses:
+        "200":
+          description: Deletion preview counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamDeletionPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/teams/{teamId}/members/{userId}:
     parameters:
       - { name: teamId, in: path, required: true, schema: { type: string } }
@@ -2186,6 +2202,20 @@ components:
         projectCount:
           type: integer
           description: Distinct projects touched by either direct or team assignment.
+    TeamDeletionPreview:
+      type: object
+      description: >-
+        Real counts of what deleting a team would affect
+        (add-team-deletion-preview) — server-computed, mirroring
+        UserDeletionPreview and RoleDeletionPreview's pattern.
+      required: [memberCount, projectCount]
+      properties:
+        memberCount:
+          type: integer
+          description: The team's current member count.
+        projectCount:
+          type: integer
+          description: Distinct projects the team holds a role on.
     Permissions:
       type: object
       description: >-
