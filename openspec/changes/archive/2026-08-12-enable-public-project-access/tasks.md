@@ -158,11 +158,16 @@ deliberately-deferred pattern as task 5.1 in `collapse-duplicate-ci-runs`.
       authenticated header on `/public/*` ("You're viewing this project
       without an account... [Log in]"), with a test asserting it renders
       and the normal authenticated header/nav does not.
-- [ ] 5.4 Follow-up (not part of this change's scope): deep-linkable public
+- [x] 5.4 Follow-up (not part of this change's scope): deep-linkable public
       pages for an individual suite, run, and case
       (`/public/:projectKey/suites/:suiteKey`, `/public/:projectKey/runs/
       :runKey`, `/public/:projectKey/library/:folderId/cases/:caseKey`),
       giving the public surface full parity with the authenticated app.
+      Resolved for free by `unify-authenticated-and-public-views`: every
+      project-content page now renders identically for anonymous and
+      authenticated visitors at its normal `/projects/{key}/...` URL, so
+      suite/run/case pages are already deep-linkable for a public project
+      — no separate `/public/*` route family needed.
       The backend routes and tests for all of these already exist and pass
       (task 3.3) — this is frontend-only work.
 
