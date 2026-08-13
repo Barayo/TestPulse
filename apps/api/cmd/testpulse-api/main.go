@@ -44,10 +44,16 @@ func run() error {
 	}
 	defer pool.Close()
 
-	if err := db.MigrateWithOptions(ctx, pool, cfg.AllowMissingMigrations); err != nil {
-		return fmt.Errorf("running migrations: %w", err)
+	if err := db.ApplySchema(ctx, pool); err != nil {
+		return fmt.Errorf("applying schema: %w", err)
 	}
-	logger.Info("migrations applied", "status", "current")
+	if current, err := db.SchemaCurrent(ctx, pool); err != nil {
+		logger.Warn("checking schema status", "error", err)
+	} else if !current {
+		logger.Warn("database schema does not match this binary's schema.sql — a manual database reset is required (pre-1.0.0 only, see CLAUDE.md)")
+	} else {
+		logger.Info("schema applied", "status", "current")
+	}
 
 	svc := service.New(store.New(pool))
 

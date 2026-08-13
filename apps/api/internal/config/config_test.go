@@ -90,27 +90,71 @@ func TestLoadAdminBootstrapCredentialsSet(t *testing.T) {
 	}
 }
 
-func TestLoadAllowMissingMigrationsDefaultsFalse(t *testing.T) {
+
+func TestLoadReadsSMTPSettings(t *testing.T) {
 	cfg, err := Load(envStub(map[string]string{
-		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+		"TESTPULSE_DATABASE_URL":      "postgres://localhost/testpulse",
+		"TESTPULSE_SMTP_HOST":         "smtp.example.com",
+		"TESTPULSE_SMTP_PORT":         "587",
+		"TESTPULSE_SMTP_USERNAME":     "smtp-user",
+		"TESTPULSE_SMTP_PASSWORD":     "smtp-pass",
+		"TESTPULSE_SMTP_FROM_ADDRESS": "noreply@example.com",
+		"TESTPULSE_PUBLIC_URL":        "https://testpulse.example.com",
 	}))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if cfg.AllowMissingMigrations {
-		t.Error("AllowMissingMigrations should default false")
+	if cfg.SMTPHost != "smtp.example.com" || cfg.SMTPPort != "587" || cfg.SMTPUsername != "smtp-user" ||
+		cfg.SMTPPassword != "smtp-pass" || cfg.SMTPFromAddress != "noreply@example.com" ||
+		cfg.PublicURL != "https://testpulse.example.com" {
+		t.Errorf("cfg = %+v", cfg)
 	}
 }
 
-func TestLoadAllowMissingMigrationsSet(t *testing.T) {
-	cfg, err := Load(envStub(map[string]string{
-		"TESTPULSE_DATABASE_URL":             "postgres://localhost/testpulse",
-		"TESTPULSE_ALLOW_MISSING_MIGRATIONS": "true",
-	}))
+func TestPasswordResetEnabledRequiresAllVars(t *testing.T) {
+	full := map[string]string{
+		"TESTPULSE_DATABASE_URL":      "postgres://localhost/testpulse",
+		"TESTPULSE_SMTP_HOST":         "smtp.example.com",
+		"TESTPULSE_SMTP_PORT":         "587",
+		"TESTPULSE_SMTP_FROM_ADDRESS": "noreply@example.com",
+		"TESTPULSE_PUBLIC_URL":        "https://testpulse.example.com",
+	}
+	cfg, err := Load(envStub(full))
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if !cfg.AllowMissingMigrations {
-		t.Error("AllowMissingMigrations = false, want true")
+	if !cfg.PasswordResetEnabled() {
+		t.Error("PasswordResetEnabled() = false with host/port/from/public-url all set, want true")
+	}
+
+	// Username/password may be blank (unauthenticated relay, e.g. Mailpit).
+	cfg, err = Load(envStub(full))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.SMTPUsername != "" || cfg.SMTPPassword != "" {
+		t.Fatalf("expected blank username/password in this fixture, got %+v", cfg)
+	}
+	if !cfg.PasswordResetEnabled() {
+		t.Error("PasswordResetEnabled() = false with blank username/password, want true (unauthenticated relay)")
+	}
+
+	for missing := range full {
+		if missing == "TESTPULSE_DATABASE_URL" {
+			continue
+		}
+		partial := map[string]string{}
+		for k, v := range full {
+			if k != missing {
+				partial[k] = v
+			}
+		}
+		cfg, err := Load(envStub(partial))
+		if err != nil {
+			t.Fatalf("unexpected error with %s missing: %v", missing, err)
+		}
+		if cfg.PasswordResetEnabled() {
+			t.Errorf("PasswordResetEnabled() = true with %s missing, want false", missing)
+		}
 	}
 }

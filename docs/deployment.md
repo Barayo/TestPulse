@@ -13,15 +13,16 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_ADMIN_EMAIL`, `TESTPULSE_ADMIN_PASSWORD` | no | — | Seed one Tenant Admin on first startup, only if the `users` table is empty; ignored on any later startup once users exist |
 
 The process exits immediately with an error naming the variable if a required
-value is missing. Schema migrations run automatically and idempotently at
-startup.
+value is missing. The schema (`apps/api/internal/db/schema.sql`, pre-1.0.0 —
+see [Database](database.md)) applies automatically to an empty database at
+startup; a database that already has it applied is left alone.
 
 ## Health endpoints
 
 | Endpoint | Meaning | Use for |
 |---|---|---|
 | `GET /healthz` | Process is alive; never depends on the database | Kubernetes liveness probe |
-| `GET /readyz` | Database reachable **and** migrations current (503 otherwise) | Kubernetes readiness probe, load balancer checks |
+| `GET /readyz` | Database reachable **and** applied schema matches this binary's `schema.sql` (503 otherwise) | Kubernetes readiness probe, load balancer checks |
 
 ## Container images
 

@@ -28,7 +28,7 @@ admin credentials from
 
 - The UI, the REST API (`/api/v1`), and the health endpoints all serve from
   port 8080.
-- Database migrations apply automatically on startup.
+- The database schema applies automatically on first startup.
 - PostgreSQL data lives in the named volume `testpulse-db` and survives
   `docker compose down` / `up`. Use `down -v` to wipe it.
 - A fresh instance (zero existing projects) automatically gets a populated

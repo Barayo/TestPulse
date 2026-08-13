@@ -40,8 +40,8 @@ func run() error {
 	}
 	defer pool.Close()
 
-	if err := db.Migrate(ctx, pool); err != nil {
-		return fmt.Errorf("running migrations: %w", err)
+	if err := db.ApplySchema(ctx, pool); err != nil {
+		return fmt.Errorf("applying schema: %w", err)
 	}
 
 	svc := service.New(store.New(pool))

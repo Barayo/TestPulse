@@ -60,8 +60,8 @@ func Pool(t *testing.T, suffix string) *pgxpool.Pool {
 	if _, err := pool.Exec(ctx, "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"); err != nil {
 		t.Fatalf("resetting schema: %v", err)
 	}
-	if err := db.Migrate(ctx, pool); err != nil {
-		t.Fatalf("migrating: %v", err)
+	if err := db.ApplySchema(ctx, pool); err != nil {
+		t.Fatalf("applying schema: %v", err)
 	}
 	return pool
 }

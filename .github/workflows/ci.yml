@@ -158,33 +158,3 @@ jobs:
             fi
           done < <(git rev-list --no-merges "$range")
           exit $missing
-
-  migrations:
-    name: Migrations
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: No already-merged migration file was edited
-        # goose tracks applied migrations by version number, not content — a
-        # deployed, already-migrated database (testpulse.fly.dev) silently
-        # skips an edited-in-place file instead of re-running it, so its
-        # schema drifts from what the code expects. This turned into a real
-        # production outage once (2026-07-25: link-runs-to-suite amended
-        # 00002_core_domain.sql, which testpulse.fly.dev had already passed,
-        # and broke run creation/listing site-wide). A migration file, once
-        # it exists on main, must never change again — add a new one instead.
-        run: |
-          base="${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
-          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
-            echo "No base commit to compare against (first push to a new ref) — skipping."
-            exit 0
-          fi
-          changed=$(git diff --name-status "$base" HEAD -- apps/api/internal/db/migrations/ | awk '$1 == "M" {print $2}')
-          if [ -n "$changed" ]; then
-            echo "::error::Migration file(s) already on main were edited instead of adding a new file:"
-            echo "$changed"
-            echo "Add a new NNNNN_*.sql migration instead — see CLAUDE.md's migration policy."
-            exit 1
-          fi

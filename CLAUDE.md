@@ -71,25 +71,34 @@ dev-web / generate / sync-web / compose-up`. See `docs/development.md`.
 
 ## Architecture constraints (from establish-architecture)
 
-- Modular monolith: one Go binary (chi, pgx, goose migrations in
-  `apps/api/internal/db/migrations/`), web bundle embedded via
-  `apps/api/internal/web` (placeholder `dist/index.html` stays committed).
-- **Migration policy: real incremental migrations, one file per schema
-  change — never edit a migration file that already exists on `main`.**
-  `testpulse.fly.dev` is a real, continuously-deployed instance with a
-  persistent database; goose tracks applied migrations by *version number*,
-  not content, so editing an already-applied file gets silently skipped on
-  deploy rather than re-run, leaving the live database's schema out of sync
-  with what the code expects. This caused a real production outage
+- Modular monolith: one Go binary (chi, pgx, single `schema.sql` in
+  `apps/api/internal/db/`), web bundle embedded via `apps/api/internal/web`
+  (placeholder `dist/index.html` stays committed).
+- **Migration policy, pre-1.0.0 only: no incremental migration files —
+  `apps/api/internal/db/schema.sql` is the single source of truth, edited
+  directly in place (`replace-migrations-with-schema-sql`).** This is a
+  deliberate *reversal* of the incremental-migration discipline the project
+  ran before (goose, one file per change, never edit an already-applied
+  one) — that discipline existed because of a real production outage
   (2026-07-25: an edited `00002_core_domain.sql` broke run creation/listing
-  site-wide until a proper `00004_*.sql` file was added). CI enforces this
-  (`migrations` job in `.github/workflows/ci.yml`): a migration file that
-  differs from its version on `main` fails the build. The earlier
-  "amend in place, no stacked files" policy is retired — it assumed no
-  deployment had data to preserve, which stopped being true once
-  `testpulse.fly.dev` became a real running instance. goose itself stays
-  (its version-tracking is what makes "migrations apply automatically and
-  idempotently at startup" true, a `platform-deployment` spec requirement).
+  on `testpulse.fly.dev` site-wide, since goose tracked applied migrations
+  by version number, not content, and silently skipped the edit). This
+  reversal does not repeat that failure mode: there is no version-tracked
+  history to silently skip. `ApplySchema` (`internal/db`) applies
+  `schema.sql` once, to an empty database, and records its checksum; on a
+  database that already has it applied, a checksum mismatch fails
+  `/readyz` *loudly* rather than serving traffic against a schema the
+  binary doesn't match. There are no real customer deployments yet to
+  protect the cost of incremental migrations exists for — `testpulse.fly.dev`
+  is evaluation data, not customer data. **Local dev volumes, CI's ephemeral
+  test DB, and E2E's compose volume all need a one-time wipe to pick up a
+  `schema.sql` change** (`docker compose down -v` or equivalent) — there is
+  no auto-upgrade path from an old schema to a new one, by design.
+  **This is explicitly temporary: before 1.0.0 ships with real customer
+  deployments, the project must adopt a real incremental-migration
+  discipline again** (goose or otherwise, plus an equivalent CI
+  immutability gate) — don't let this policy silently outlive its reason
+  for existing.
 - Contract-first: edit `packages/shared/openapi.yaml` together with Go
   handlers, then `make generate`; CI fails on drift.
 - Config only via `TESTPULSE_*` env vars; required values fail fast by name.

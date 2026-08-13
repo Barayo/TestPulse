@@ -267,6 +267,64 @@ func TestUserUpdatePasswordHashUnknownIDNotFound(t *testing.T) {
 	}
 }
 
+// --- Password reset tokens (add-forgot-password task 3.1) ---
+
+func TestPasswordResetTokenCreateAndGetByHash(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "reset-create@example.com", false)
+
+	if err := s.PasswordResetTokens.Create(ctx, u.ID, "reset-hash-1", time.Now().Add(30*time.Minute)); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := s.PasswordResetTokens.GetByHash(ctx, "reset-hash-1")
+	if err != nil {
+		t.Fatalf("GetByHash: %v", err)
+	}
+	if got.UserID != u.ID {
+		t.Errorf("UserID = %q, want %q", got.UserID, u.ID)
+	}
+	if got.UsedAt != nil {
+		t.Errorf("UsedAt = %v, want nil for a fresh token", got.UsedAt)
+	}
+}
+
+func TestPasswordResetTokenGetByHashUnknownNotFound(t *testing.T) {
+	s := testStore(t)
+	if _, err := s.PasswordResetTokens.GetByHash(context.Background(), "does-not-exist"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound", err)
+	}
+}
+
+func TestPasswordResetTokenExpiredIsNotFound(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "reset-expired@example.com", false)
+
+	if err := s.PasswordResetTokens.Create(ctx, u.ID, "reset-hash-expired", time.Now().Add(-time.Minute)); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if _, err := s.PasswordResetTokens.GetByHash(ctx, "reset-hash-expired"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("err = %v, want ErrNotFound for an expired token", err)
+	}
+}
+
+func TestPasswordResetTokenMarkUsed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "reset-mark@example.com", false)
+
+	if err := s.PasswordResetTokens.Create(ctx, u.ID, "reset-hash-mark", time.Now().Add(30*time.Minute)); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	if err := s.PasswordResetTokens.MarkUsed(ctx, "reset-hash-mark"); err != nil {
+		t.Fatalf("MarkUsed: %v", err)
+	}
+	if _, err := s.PasswordResetTokens.GetByHash(ctx, "reset-hash-mark"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("GetByHash after MarkUsed err = %v, want ErrNotFound (a used token is not a live token)", err)
+	}
+}
+
 // --- Sessions (task 2.2) ---
 //
 // The store layer never hashes anything itself (backlog #116) — it treats

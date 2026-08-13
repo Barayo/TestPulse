@@ -94,11 +94,11 @@ in place of plain email text. A newly-created user has no project access until a
 Tenant Admin assigns them a role on a project (directly, or via a team) —
 see [Test management](test-management.md#project-roles-and-teams).
 
-Amending `00003_identity.sql` in place (this change's schema work — see the
-pre-1.0 migration policy in `CLAUDE.md`) means an existing local/compose
-Postgres volume needs a full reset to pick it up: `docker compose down -v`
-before `make compose-up` again, or drop and recreate your local `dev-api`
-database.
+Pre-1.0.0, the schema is a single file (`apps/api/internal/db/schema.sql`),
+edited directly in place — see CLAUDE.md's migration policy. Any change to
+it means an existing local/compose Postgres volume needs a full reset to
+pick it up: `docker compose down -v` before `make compose-up` again, or
+drop and recreate your local `dev-api` database.
 
 ## The contract workflow
 

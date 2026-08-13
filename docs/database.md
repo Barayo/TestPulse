@@ -1,12 +1,15 @@
 # Database
 
-PostgreSQL 16+. Schema managed by [goose](https://github.com/pressly/goose)
-migrations embedded in the binary at
-[`apps/api/internal/db/migrations/`](../apps/api/internal/db/migrations/) —
-**those SQL files are the source of truth**; this page is the readable
-narrative on top of them, kept in sync with every schema-changing PR.
-Migrations apply automatically and idempotently at API startup (see
-[Deployment](deployment.md)).
+PostgreSQL 16+. **Pre-1.0.0**, the schema is a single file,
+[`apps/api/internal/db/schema.sql`](../apps/api/internal/db/schema.sql),
+embedded in the binary and edited directly in place — no incremental
+migration files (see CLAUDE.md's migration policy for why, and why this is
+temporary). **`schema.sql` is the source of truth**; this page is the
+readable narrative on top of it, kept in sync with every schema-changing
+PR. It's applied once, automatically, to an empty database at API startup;
+a database that already has it applied is left alone (see
+[Deployment](deployment.md)) — changing `schema.sql` requires a manual
+database reset to pick up, there is no auto-upgrade path.
 
 ## Entity relationships
 
@@ -99,7 +102,7 @@ Two independent groupings sit on top of `test_cases`, deliberately orthogonal: *
 The top-level container for all test assets. `archived` is a soft flag, not a delete. A `projects_create_root_folder` trigger fires on every insert, creating that project's root folder in the same transaction — the root's existence is a database guarantee, not an application convention. `description` is free text, defaulting to `''`. There is no owner column: `enrich-project-list` originally added one, but `add-project-rbac` removed it (amended in place, pre-1.0 policy) — a project's access is now entirely determined by `project_members`/`project_team_roles`, not a single nominal owner. `is_sample` (`add-sample-project`) is `true` for exactly one project — the automatically-seeded showroom project a fresh instance gets on first startup — and `false` for every normally-created project.
 
 ### `project_favorites`
-Per-user starred projects (`enrich-project-list`), added alongside the identity tables in `00003_identity.sql` since both its FKs reference `users`. Composite PK `(user_id, project_id)`; both FKs `ON DELETE CASCADE` — a favorite has no meaning once either side is gone, unlike audit or result history, which must survive deletion.
+Per-user starred projects (`enrich-project-list`), added alongside the identity tables since both its FKs reference `users`. Composite PK `(user_id, project_id)`; both FKs `ON DELETE CASCADE` — a favorite has no meaning once either side is gone, unlike audit or result history, which must survive deletion.
 
 ### `test_case_folders`
 A self-referencing tree per project for **organizing** cases (independent of suites, which are for **executing** them). Exactly one row per project has `parent_folder_id IS NULL` — the auto-created root — enforced by a partial unique index (`test_case_folders_one_root_idx`). Every other folder requires an explicit parent; the API never allows creating a second root. `deleted boolean NOT NULL DEFAULT false` (`add-delete-mode`) mirrors `test_cases.deleted` — `test_case_folders_project_idx`/`test_case_folders_parent_idx` are `WHERE NOT deleted` filtered indexes. Deleting a non-root folder soft-deletes it and every folder and case anywhere in its subtree in one transaction (a `WITH RECURSIVE` walk of `parent_folder_id`), replacing the previous reparent-on-delete behavior; the root folder cannot be deleted.

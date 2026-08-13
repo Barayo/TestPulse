@@ -11,24 +11,37 @@
 //	                        admin user on first startup if the users table
 //	                        is empty; ignored on any later startup once
 //	                        users exist
-//	TESTPULSE_ALLOW_MISSING_MIGRATIONS
-//	                        (default "false") recovery escape hatch — see
-//	                        internal/db.MigrateWithOptions. Only set this
-//	                        temporarily, to unblock a startup after a
-//	                        migration-history gap; leave it off otherwise,
-//	                        since it's the check that catches that gap in
-//	                        the first place.
+//	TESTPULSE_SMTP_HOST, TESTPULSE_SMTP_PORT, TESTPULSE_SMTP_USERNAME,
+//	TESTPULSE_SMTP_PASSWORD, TESTPULSE_SMTP_FROM_ADDRESS,
+//	TESTPULSE_PUBLIC_URL
+//	                        (all optional) enable self-service password
+//	                        recovery (add-forgot-password) — see
+//	                        Config.PasswordResetEnabled. Username/password
+//	                        may be left blank for an unauthenticated relay.
 package config
 
 import "fmt"
 
 type Config struct {
-	DatabaseURL            string
-	Addr                   string
-	LogLevel               string
-	AdminEmail             string
-	AdminPassword          string
-	AllowMissingMigrations bool
+	DatabaseURL     string
+	Addr            string
+	LogLevel        string
+	AdminEmail      string
+	AdminPassword   string
+	SMTPHost        string
+	SMTPPort        string
+	SMTPUsername    string
+	SMTPPassword    string
+	SMTPFromAddress string
+	PublicURL       string
+}
+
+// PasswordResetEnabled reports whether enough is configured to send a
+// password-reset email — host/port/from-address and PublicURL (needed to
+// build an absolute reset link) are required; username/password may stay
+// blank for an unauthenticated relay (e.g. Mailpit in the compose stack).
+func (c Config) PasswordResetEnabled() bool {
+	return c.SMTPHost != "" && c.SMTPPort != "" && c.SMTPFromAddress != "" && c.PublicURL != ""
 }
 
 // Load reads configuration via getenv (os.Getenv in production, a stub in
@@ -36,12 +49,17 @@ type Config struct {
 // has no default.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		DatabaseURL:            getenv("TESTPULSE_DATABASE_URL"),
-		Addr:                   withDefault(getenv("TESTPULSE_ADDR"), ":8080"),
-		LogLevel:               withDefault(getenv("TESTPULSE_LOG_LEVEL"), "info"),
-		AdminEmail:             getenv("TESTPULSE_ADMIN_EMAIL"),
-		AdminPassword:          getenv("TESTPULSE_ADMIN_PASSWORD"),
-		AllowMissingMigrations: getenv("TESTPULSE_ALLOW_MISSING_MIGRATIONS") == "true",
+		DatabaseURL:     getenv("TESTPULSE_DATABASE_URL"),
+		Addr:            withDefault(getenv("TESTPULSE_ADDR"), ":8080"),
+		LogLevel:        withDefault(getenv("TESTPULSE_LOG_LEVEL"), "info"),
+		AdminEmail:      getenv("TESTPULSE_ADMIN_EMAIL"),
+		AdminPassword:   getenv("TESTPULSE_ADMIN_PASSWORD"),
+		SMTPHost:        getenv("TESTPULSE_SMTP_HOST"),
+		SMTPPort:        getenv("TESTPULSE_SMTP_PORT"),
+		SMTPUsername:    getenv("TESTPULSE_SMTP_USERNAME"),
+		SMTPPassword:    getenv("TESTPULSE_SMTP_PASSWORD"),
+		SMTPFromAddress: getenv("TESTPULSE_SMTP_FROM_ADDRESS"),
+		PublicURL:       getenv("TESTPULSE_PUBLIC_URL"),
 	}
 
 	if cfg.DatabaseURL == "" {

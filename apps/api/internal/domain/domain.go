@@ -842,6 +842,17 @@ func ValidateEmail(email string) error {
 	return nil
 }
 
+// PasswordResetToken (add-forgot-password) is returned only internally by
+// the store — the raw token that goes out in the email is never persisted
+// or returned, only its hash (mirrors Session/ApiToken).
+type PasswordResetToken struct {
+	ID        string
+	UserID    string
+	ExpiresAt time.Time
+	UsedAt    *time.Time
+	CreatedAt time.Time
+}
+
 type Session struct {
 	// Never serialized: it is the raw session secret (the cookie value),
 	// only ever populated by Service.Login — the store layer never stores
