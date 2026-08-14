@@ -109,6 +109,46 @@ describe('LoginPage', () => {
     expect(screen.queryByRole('link', { name: /browse public projects/i })).not.toBeInTheDocument()
   })
 
+  it('shows a "Forgot password?" link when passwordResetEnabled is true', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { publicProjectsEnabled: false, passwordResetEnabled: true }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLogin()
+
+    expect(await screen.findByRole('link', { name: /forgot password/i })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    )
+  })
+
+  it('hides the "Forgot password?" link when passwordResetEnabled is false', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { publicProjectsEnabled: false, passwordResetEnabled: false }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLogin()
+
+    await screen.findByLabelText(/email/i)
+    expect(screen.queryByRole('link', { name: /forgot password/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a confirmation banner after navigating here from a successful password reset', async () => {
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/login', state: { passwordReset: true } }]}>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText(/password updated/i)).toBeInTheDocument()
+  })
+
   it('falls back to the projects root when there is no redirect-back location', async () => {
     mockPOST.mockResolvedValue({
       data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },

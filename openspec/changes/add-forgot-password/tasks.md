@@ -36,10 +36,10 @@
 
 ## 7. Web: forgot/reset pages
 
-- [ ] 7.1 Dispatch Pepe (Fable 5, ultrathink) for the forgot-password and reset-password pages' visual design, grounded in the real current `LoginPage.tsx` — get explicit user validation before writing any component code
-- [ ] 7.2 Write failing tests for `ForgotPasswordPage.test.tsx` (submits email, shows a generic confirmation regardless of what the API implies) and `ResetPasswordPage.test.tsx` (reads `token` from the URL, submits new password, redirects to login on success, shows an error on an invalid/expired token) and `LoginPage.test.tsx` (the "Forgot password?" link only renders when `/api/v1/meta`'s `passwordResetEnabled` is true)
-- [ ] 7.3 Implement `apps/web/src/pages/ForgotPasswordPage.tsx`, `ResetPasswordPage.tsx`, wire routes, add the conditional link to `LoginPage.tsx`, per the validated Pepe design
-- [ ] 7.4 Verify tests pass
+- [x] 7.1 Dispatch Pepe (Fable 5, ultrathink) for the forgot-password and reset-password pages' visual design, grounded in the real current `LoginPage.tsx` — get explicit user validation before writing any component code — user approved, plus extending scope: also add the "Forgot password?" link to `SessionExpiredModal.tsx` (Pepe's design scoped it to `LoginPage` only; user asked to close that gap too)
+- [x] 7.2 Write failing tests for `ForgotPasswordPage.test.tsx` (submits email, shows a generic confirmation regardless of what the API implies) and `ResetPasswordPage.test.tsx` (reads `token` from the URL, submits new password, redirects to login on success, shows an error on an invalid/expired token) and `LoginPage.test.tsx` (the "Forgot password?" link only renders when `/api/v1/meta`'s `passwordResetEnabled` is true) — also extended to `LoginForm.test.tsx` and `SessionExpiredModal.test.tsx` per the scope extension in 7.1
+- [x] 7.3 Implement `apps/web/src/pages/ForgotPasswordPage.tsx`, `ResetPasswordPage.tsx`, wire routes, add the conditional link to `LoginPage.tsx` (via a new `LoginForm` `showForgotPassword` prop, shared with `SessionExpiredModal.tsx`), per the validated Pepe design
+- [x] 7.4 Verify tests pass — full web suite (1004 tests), typecheck, lint, and `make coverage-web` (92.18%/84.34%/89.12%/94.49%, gate passes) all green
 
 ## 8. E2E
 

@@ -16,6 +16,8 @@ import CaseDetailPage from '@/pages/CaseDetailPage'
 import RunPage from '@/pages/RunPage'
 import RunItemDetailPage from '@/pages/RunItemDetailPage'
 import LoginPage from '@/pages/LoginPage'
+import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
+import ResetPasswordPage from '@/pages/ResetPasswordPage'
 import PeoplePage from '@/pages/PeoplePage'
 import RolesPage from '@/pages/RolesPage'
 import TokensPage from '@/pages/TokensPage'
@@ -116,6 +118,8 @@ function App() {
             <SessionExpiredModal />
             <Routes>
               <Route path="/login" element={<LoginPage />} />
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password" element={<ResetPasswordPage />} />
               <Route path="/public" element={<Navigate to="/" replace />} />
               <Route path="/public/:projectKey" element={<RedirectToProject />} />
               {/* The only two sources of a route below `/login`/`/public*` — see

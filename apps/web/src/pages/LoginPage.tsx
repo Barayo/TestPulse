@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { LoginForm } from '@/components/LoginForm'
+import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { HealthBadge } from '@/components/HealthBadge'
 import { api } from '@/lib/api'
@@ -9,14 +10,30 @@ export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState(false)
+  const [passwordResetEnabled, setPasswordResetEnabled] = useState(false)
 
   useEffect(() => {
     void api
       .GET('/api/v1/meta')
       .then(({ data }) => {
-        if (data) setPublicProjectsEnabled(data.publicProjectsEnabled)
+        if (data) {
+          setPublicProjectsEnabled(data.publicProjectsEnabled)
+          setPasswordResetEnabled(data.passwordResetEnabled)
+        }
       })
       .catch(() => {})
+  }, [])
+
+  // One-shot confirmation after navigating here from ResetPasswordPage on
+  // success — same idiom as RunPage's justCreated banner: read router
+  // state once, then clear it so a refresh doesn't re-show it.
+  const [showPasswordResetBanner, setShowPasswordResetBanner] = useState(
+    Boolean((location.state as { passwordReset?: boolean } | null)?.passwordReset),
+  )
+  useEffect(() => {
+    if (!showPasswordResetBanner) return
+    navigate(location.pathname, { replace: true, state: null })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return (
@@ -24,12 +41,21 @@ export default function LoginPage() {
       <div className="fixed right-6 top-6">
         <HealthBadge />
       </div>
+      {showPasswordResetBanner && (
+        <div className="w-full max-w-sm">
+          <ConfirmBanner
+            message="Password updated — log in with your new password"
+            onDismiss={() => setShowPasswordResetBanner(false)}
+          />
+        </div>
+      )}
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="tp-heading">Log in to TestPulse</CardTitle>
         </CardHeader>
         <CardContent>
           <LoginForm
+            showForgotPassword={passwordResetEnabled}
             onSuccess={() => {
               // Returns to wherever RequireAuth bounced the user from (e.g. a session
               // timeout mid-task) rather than always the projects root — if that page

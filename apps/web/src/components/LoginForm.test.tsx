@@ -2,6 +2,7 @@ import { createRef } from 'react'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { LoginForm } from './LoginForm'
 import { AuthProvider } from '@/lib/useAuth'
 import { api } from '@/lib/api'
@@ -18,9 +19,11 @@ beforeEach(() => {
 function renderForm(props: Partial<React.ComponentProps<typeof LoginForm>> = {}) {
   const onSuccess = props.onSuccess ?? vi.fn()
   render(
-    <AuthProvider>
-      <LoginForm onSuccess={onSuccess} {...props} />
-    </AuthProvider>,
+    <MemoryRouter>
+      <AuthProvider>
+        <LoginForm onSuccess={onSuccess} {...props} />
+      </AuthProvider>
+    </MemoryRouter>,
   )
   return { onSuccess }
 }
@@ -58,6 +61,20 @@ describe('LoginForm', () => {
     renderForm({ passwordInputRef })
     await screen.findByLabelText(/email/i)
     expect(passwordInputRef.current).toBe(screen.getByLabelText(/password/i))
+  })
+
+  it('shows a "Forgot password?" link only when showForgotPassword is true', async () => {
+    renderForm({ showForgotPassword: false })
+    await screen.findByLabelText(/email/i)
+    expect(screen.queryByRole('link', { name: /forgot password/i })).not.toBeInTheDocument()
+  })
+
+  it('renders the "Forgot password?" link pointing at /forgot-password when enabled', async () => {
+    renderForm({ showForgotPassword: true })
+    expect(await screen.findByRole('link', { name: /forgot password/i })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    )
   })
 
   it('shows an inline error and does not call onSuccess on failure', async () => {

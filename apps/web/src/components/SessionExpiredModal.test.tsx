@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router'
 import { SessionExpiredModal } from './SessionExpiredModal'
 import { AuthProvider, useAuth } from '@/lib/useAuth'
 import { notifySessionExpired } from '@/lib/sessionExpiry'
@@ -69,6 +70,43 @@ describe('SessionExpiredModal', () => {
     )
     await screen.findByText('a@b.com')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('shows a "Forgot password?" link when passwordResetEnabled is true', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { passwordResetEnabled: true }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false }, response: { ok: true } })
+    })
+    render(
+      <MemoryRouter>
+        <AuthProvider>
+          <UserProbe />
+          <SessionExpiredModal />
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await screen.findByText('a@b.com')
+    notifySessionExpired()
+    await screen.findByRole('dialog')
+
+    expect(await screen.findByRole('link', { name: /forgot password/i })).toHaveAttribute(
+      'href',
+      '/forgot-password',
+    )
+  })
+
+  it('hides the "Forgot password?" link when passwordResetEnabled is false', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { passwordResetEnabled: false }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false }, response: { ok: true } })
+    })
+    await renderExpiredModal()
+
+    expect(screen.queryByRole('link', { name: /forgot password/i })).not.toBeInTheDocument()
   })
 
   it('opens, explains why, and pre-fills the previous user email once notified', async () => {

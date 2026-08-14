@@ -1,7 +1,8 @@
-import { useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useAuth, type AuthUser } from '@/lib/useAuth'
 import { LoginForm } from '@/components/LoginForm'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
+import { api } from '@/lib/api'
 
 // Non-dismissable by design — a session going invalid mid-use isn't
 // optional to resolve, and the only way out is a successful re-login
@@ -11,6 +12,16 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 export function SessionExpiredModal() {
   const { user, sessionExpired } = useAuth()
   const passwordRef = useRef<HTMLInputElement>(null)
+  const [passwordResetEnabled, setPasswordResetEnabled] = useState(false)
+
+  useEffect(() => {
+    void api
+      .GET('/api/v1/meta')
+      .then(({ data }) => {
+        if (data) setPasswordResetEnabled(data.passwordResetEnabled)
+      })
+      .catch(() => {})
+  }, [])
 
   function handleSuccess(newUser: AuthUser) {
     if (user && newUser.id === user.id) {
@@ -33,7 +44,12 @@ export function SessionExpiredModal() {
       >
         <DialogTitle>Your session has expired</DialogTitle>
         <DialogDescription>Log back in to continue where you left off.</DialogDescription>
-        <LoginForm onSuccess={handleSuccess} initialEmail={user?.email} passwordInputRef={passwordRef} />
+        <LoginForm
+          onSuccess={handleSuccess}
+          initialEmail={user?.email}
+          passwordInputRef={passwordRef}
+          showForgotPassword={passwordResetEnabled}
+        />
       </DialogContent>
     </Dialog>
   )
