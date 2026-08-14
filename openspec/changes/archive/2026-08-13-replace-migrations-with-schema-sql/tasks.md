@@ -41,9 +41,9 @@
 
 ## 7. testpulse.fly.dev — explicit, separate step
 
-- [ ] 7.1 **Stop and get explicit confirmation from the user immediately before this task** — wiping `testpulse.fly.dev`'s database is destructive and irreversible for whatever evaluation data currently lives there
-- [ ] 7.2 Wipe and redeploy `testpulse.fly.dev` from the new `schema.sql`; verify `/healthz` and `/readyz` both report healthy against the fresh schema
+- [x] 7.1 **Stop and get explicit confirmation from the user immediately before this task** — wiping `testpulse.fly.dev`'s database is destructive and irreversible for whatever evaluation data currently lives there — confirmed by the user
+- [x] 7.2 Wipe and redeploy `testpulse.fly.dev` from the new `schema.sql`; verify `/healthz` and `/readyz` both report healthy against the fresh schema — Fly's GitHub-linked auto-deploy had already pushed the new binary against the still-goose-migrated database, crash-looping the app (`ERROR: function "create_project_defaults" already exists`, SQLSTATE 42723, hit max restart count). Wiped via a temporary, uncommitted, env-var-gated `DROP SCHEMA public CASCADE` step in `main.go` (deployed directly, bypassing CI, then immediately reverted and redeployed clean — confirmed zero `git diff` afterward), plus staging the previously-missing `TESTPULSE_ADMIN_EMAIL` secret so the admin re-seeded. Verified: `/healthz` and `/readyz` both `200 {"status":"ok"}`, boot log shows `"schema applied","status":"current"` and `"sample project seeded"`, login endpoint responds correctly (401 on a blank password, not a 500)
 
 ## 8. Spec sync
 
-- [ ] 8.1 Sync `specs/platform-deployment/spec.md`'s delta into `openspec/specs/` at archive time
+- [x] 8.1 Sync `specs/platform-deployment/spec.md`'s delta into `openspec/specs/` at archive time

@@ -5,7 +5,7 @@
 How TestPulse is configured, deployed, and observed as a runnable system:
 docker-compose single-command startup, Helm-based Kubernetes deployment,
 multi-arch images, environment-variable configuration, health/readiness
-endpoints, and database migrations.
+endpoints, and applying the database schema at startup.
 
 ## Requirements
 
@@ -14,7 +14,7 @@ The system SHALL start a complete working stack (API, web UI, PostgreSQL) from t
 
 #### Scenario: Fresh checkout starts successfully
 - **WHEN** a user runs `docker compose up` in `deploy/compose/` on a fresh clone
-- **THEN** the application container (serving both the API and the embedded web UI) and the PostgreSQL container start, migrations apply automatically, and the UI is reachable on a documented localhost port
+- **THEN** the application container (serving both the API and the embedded web UI) and the PostgreSQL container start, the schema applies automatically, and the UI is reachable on a documented localhost port
 
 #### Scenario: Data survives restarts
 - **WHEN** the compose stack is stopped and started again
@@ -53,7 +53,7 @@ The API SHALL read all runtime configuration (database connection, listen port/a
 The API SHALL expose a liveness endpoint that reports process health and a readiness endpoint that reports dependency health (database connectivity), suitable for Kubernetes probes and compose healthchecks.
 
 #### Scenario: Ready when database is reachable
-- **WHEN** the readiness endpoint is called while the database is reachable and migrations are current
+- **WHEN** the readiness endpoint is called while the database is reachable and the applied schema matches the running binary
 - **THEN** it returns a success status
 
 #### Scenario: Not ready when database is down
@@ -61,15 +61,19 @@ The API SHALL expose a liveness endpoint that reports process health and a readi
 - **THEN** it returns a failure status while the liveness endpoint continues to return success
 
 ### Requirement: Automatic database migrations
-The API SHALL apply pending schema migrations automatically at startup, and migrations MUST be idempotent so repeated startups and rolling restarts are safe.
+The API SHALL apply its schema automatically at startup, and startup MUST be idempotent so repeated startups and rolling restarts are safe. On an empty database, the full schema SHALL be applied in one transaction. On a database that already has the schema applied, the API SHALL verify the applied schema matches what the running binary expects and MUST NOT silently proceed on a mismatch.
 
 #### Scenario: First startup on empty database
 - **WHEN** the API starts against an empty database
-- **THEN** all migrations apply and the schema reaches the current version before the API reports ready
+- **THEN** the full schema applies and the API reports ready
 
 #### Scenario: Restart with schema current
-- **WHEN** the API restarts against an already-migrated database
-- **THEN** no migrations are re-applied and startup completes normally
+- **WHEN** the API restarts against a database whose applied schema matches the running binary
+- **THEN** nothing is re-applied and startup completes normally
+
+#### Scenario: Schema mismatch fails readiness, not silently
+- **WHEN** the API starts against a database whose previously-applied schema does not match what the running binary expects
+- **THEN** the mismatch is logged and the readiness endpoint reports not-ready, rather than the API silently serving traffic against a schema it does not actually match
 
 ### Requirement: No known open dependency vulnerabilities
 The project's dependency tree SHALL carry no open Dependabot (or equivalent)
