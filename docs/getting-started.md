@@ -4,6 +4,11 @@ Two supported ways to run TestPulse: Docker Compose for a local evaluation,
 Helm for Kubernetes. Both bring up the same stack: the TestPulse application
 container (API + embedded web UI) and PostgreSQL 16.
 
+The Docker Compose stack additionally bundles a fake SMTP server ([Mailpit](https://mailpit.axllent.org/)),
+so self-service password recovery ("Forgot password?" on the login page)
+works out of the box for evaluation — see
+[Testing password recovery locally](development.md#testing-password-recovery-locally).
+
 ## Docker Compose
 
 Prerequisite: Docker with the compose plugin.

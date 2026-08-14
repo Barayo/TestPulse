@@ -100,6 +100,20 @@ it means an existing local/compose Postgres volume needs a full reset to
 pick it up: `docker compose down -v` before `make compose-up` again, or
 drop and recreate your local `dev-api` database.
 
+## Testing password recovery locally
+
+`deploy/compose/docker-compose.yml` bundles
+[Mailpit](https://mailpit.axllent.org/) (`axllent/mailpit`, MIT-licensed) as
+a fake SMTP server — permanently part of the evaluation/local-dev stack,
+not an E2E-only override, so `passwordResetEnabled` is `true` out of the
+box for anyone running `make compose-up`. Request a reset at `/forgot-password`,
+then read the actual sent email at Mailpit's own web UI,
+**http://localhost:8025** — no separate configuration needed. `make e2e`'s
+suite (`apps/web/e2e/forgot-password.spec.ts`) exercises the same real
+`net/smtp` code path end-to-end via Mailpit's REST API rather than a stub.
+The real `testpulse.fly.dev` deployment uses `fly.toml`, not this compose
+file, and has no SMTP configured unless its operator sets one up.
+
 ## The contract workflow
 
 1. Change the API surface → edit `packages/shared/openapi.yaml` **and** the Go

@@ -43,19 +43,19 @@
 
 ## 8. E2E
 
-- [ ] 8.1 Add a `mailpit` service to `deploy/compose/docker-compose.yml` (`axllent/mailpit`, MIT-licensed) with SMTP on `1025`, web UI/REST API on `8025`; point the `app` service's `TESTPULSE_SMTP_*`/`TESTPULSE_PUBLIC_URL` env vars at it by default (unauthenticated relay — no username/password needed for Mailpit)
-- [ ] 8.2 Add an E2E spec covering the `password-recovery` capability's core scenario end-to-end: request a reset, fetch the sent email via Mailpit's REST API (`GET http://mailpit:8025/api/v1/messages` from the test runner) and extract the reset link/token, submit a new password, confirm login with the new password succeeds and the prior session no longer authenticates
-- [ ] 8.3 Add an E2E spec (or extend the above) covering the "no SMTP configured" case: temporarily unset the SMTP env vars is not practical mid-suite, so instead assert directly against the compose-stack's `/api/v1/meta` that `passwordResetEnabled` is `true` and the login page's link renders — the negative case (`false` when unconfigured) is already covered by the `config` package's unit tests (task 1.1), not re-proven at the E2E layer
+- [x] 8.1 Add a `mailpit` service to `deploy/compose/docker-compose.yml` (`axllent/mailpit`, MIT-licensed) with SMTP on `1025`, web UI/REST API on `8025`; point the `app` service's `TESTPULSE_SMTP_*`/`TESTPULSE_PUBLIC_URL` env vars at it by default (unauthenticated relay — no username/password needed for Mailpit) — verified live: real delivery through the compiled binary's actual `net/smtp` code path, read back via `curl http://localhost:8025/api/v1/messages`, full forgot→reset→login-with-new-password loop confirmed manually before writing the E2E spec
+- [x] 8.2 Add an E2E spec covering the `password-recovery` capability's core scenario end-to-end: request a reset, fetch the sent email via Mailpit's REST API (`GET http://localhost:8025/api/v1/messages` from the test runner — compose exposes Mailpit's port to the host, same as the app's; design.md's `http://mailpit:8025` assumed in-container access, which the test runner doesn't have) and extract the reset link/token, submit a new password, confirm login with the new password succeeds and the prior session no longer authenticates (`apps/web/e2e/forgot-password.spec.ts`, TD-81)
+- [x] 8.3 Add an E2E spec (or extend the above) covering the "no SMTP configured" case: temporarily unset the SMTP env vars is not practical mid-suite, so instead assert directly against the compose-stack's `/api/v1/meta` that `passwordResetEnabled` is `true` and the login page's link renders — the negative case (`false` when unconfigured) is already covered by the `config` package's unit tests (task 1.1), not re-proven at the E2E layer (TD-82). Full local E2E suite (114 tests, `apps/web/e2e/forgot-password.spec.ts` included) verified green against the Mailpit-enabled compose stack
 
 ## 9. Docs
 
-- [ ] 9.1 Document the two new endpoints and the `passwordResetEnabled` meta field in `docs/api.md`
-- [ ] 9.2 Document the new `TESTPULSE_SMTP_*`/`TESTPULSE_PUBLIC_URL` env vars in `docs/deployment.md`
-- [ ] 9.3 Document the bundled Mailpit service (compose-only, for local dev/eval/E2E — not part of the production `fly.toml` deployment) in `docs/development.md` or `docs/testing.md`, whichever already documents `make e2e`'s compose stack
+- [x] 9.1 Document the two new endpoints and the `passwordResetEnabled` meta field in `docs/api.md` — also fixed a stale `/readyz` description left over from the migration-policy change ("migrations are current" → "the applied schema matches this binary's `schema.sql`")
+- [x] 9.2 Document the new `TESTPULSE_SMTP_*`/`TESTPULSE_PUBLIC_URL` env vars in `docs/deployment.md`
+- [x] 9.3 Document the bundled Mailpit service (compose-only, for local dev/eval/E2E — not part of the production `fly.toml` deployment) in `docs/development.md` (new "Testing password recovery locally" section) — also added a pointer in `docs/getting-started.md` since this is real out-of-the-box evaluation behavior, not just a dev detail
 
 ## 10. Sample Project showcase
 
-- [ ] 10.1 With Mailpit wired into `docker-compose.yml` by default, the demo/evaluation stack now has `passwordResetEnabled: true` out of the box — the "Forgot password?" link on the login page is real and demoable without any extra setup. No seeded *data* change is needed (this is an auth capability, not project content), but confirm live that the full flow — request, receive in Mailpit, reset, log in — works against the seeded admin/demo users
+- [x] 10.1 With Mailpit wired into `docker-compose.yml` by default, the demo/evaluation stack now has `passwordResetEnabled: true` out of the box — the "Forgot password?" link on the login page is real and demoable without any extra setup. No seeded *data* change is needed (this is an auth capability, not project content), but confirm live that the full flow — request, receive in Mailpit, reset, log in — works against the seeded admin/demo users — verified live against the actual seeded Tenant Admin (`admin@example.com`) on a fresh compose stack: requested a reset, received the real email via Mailpit's REST API, redeemed it, and confirmed the new password authenticates while the old one no longer does
 
 ## 11. Spec sync
 

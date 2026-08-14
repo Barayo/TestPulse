@@ -26,9 +26,25 @@ services:
       # local dev or any other evaluation use of this compose file.
       TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE: ${TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE:-5}
       TESTPULSE_LOGIN_RATE_LIMIT_BURST: ${TESTPULSE_LOGIN_RATE_LIMIT_BURST:-5}
+      # Mailpit (add-forgot-password): a fake SMTP server, permanently
+      # part of this evaluation stack, not an E2E-only override — so
+      # passwordResetEnabled is true out of the box for anyone evaluating
+      # TestPulse via `docker compose up`, and a developer can watch real
+      # emails at Mailpit's own UI (http://localhost:8025) while manually
+      # testing the flow. Unauthenticated relay (no username/password) is
+      # fine here — this is a fake SMTP server on the compose network, not
+      # a real one. The real testpulse.fly.dev deployment uses fly.toml,
+      # not this file, and stays unconfigured unless its operator sets it
+      # up separately.
+      TESTPULSE_SMTP_HOST: mailpit
+      TESTPULSE_SMTP_PORT: "1025"
+      TESTPULSE_SMTP_FROM_ADDRESS: testpulse@example.com
+      TESTPULSE_PUBLIC_URL: http://localhost:8080
     depends_on:
       db:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     # Distroless has no shell/curl; probe the API over TCP from compose's
     # perspective via the db healthcheck + restart policy. Kubernetes gets
     # real HTTP probes from the Helm chart.
@@ -47,6 +63,12 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "8025:8025" # web UI + REST API (E2E reads sent emails from here)
+      - "1025:1025" # SMTP
 
 volumes:
   testpulse-db:

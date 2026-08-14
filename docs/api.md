@@ -19,8 +19,8 @@ the root because infrastructure expects them there.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/healthz` | Liveness: process health only; `200` even when the database is down |
-| GET | `/readyz` | Readiness: `200` when the database is reachable and migrations are current, `503 {"status":"unavailable","reason":"..."}` otherwise |
-| GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` — the instance-wide public-project-access kill switch (see below) |
+| GET | `/readyz` | Readiness: `200` when the database is reachable and the applied schema matches this binary's `schema.sql`, `503 {"status":"unavailable","reason":"..."}` otherwise |
+| GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` (see below) and `passwordResetEnabled` — whether self-service password recovery is available (SMTP configured) |
 | PATCH | `/api/v1/instance-settings` | Update instance-wide settings — currently just `publicProjectsEnabled` — Tenant Admin only |
 
 Everything else under `/` serves the embedded web UI (with SPA fallback).
@@ -165,8 +165,10 @@ field alongside the report text, not inside it.
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/api/v1/auth/login` | Log in with `email`/`password`; sets an `HttpOnly` session cookie (30-day sliding expiry). Rate-limited per client IP (burst of 5, refilling at 5/minute) — returns `429` once exhausted |
+| POST | `/api/v1/auth/login` | Log in with `email`/`password`; sets an `HttpOnly` session cookie (30-day sliding expiry). Rate-limited per client IP (burst of 5, refilling at 5/minute by default — see `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`/`_BURST`, [Deployment](deployment.md#configuration-reference)) — returns `429` once exhausted |
 | POST | `/api/v1/auth/logout` | End the current session |
+| POST | `/api/v1/auth/forgot-password` | Request a password-reset email (`email`) — only available when the instance has SMTP configured (`passwordResetEnabled` on `GET /api/v1/meta`). Always returns `200` regardless of outcome (unknown email, deactivated account, SMTP not configured) — never leaks account existence or instance configuration. Rate-limited the same way as login |
+| POST | `/api/v1/auth/reset-password` | Redeem a password-reset token (`token`, `newPassword`) — single-use, expires 30 minutes after the email was sent. Revokes every existing session for the account, same as a Tenant Admin setting a new password |
 | GET | `/api/v1/users/me` | The currently authenticated actor, as a user record |
 | PATCH | `/api/v1/users/me` | Update the caller's own `displayName`, `avatarKey`, and/or `timezone` — self-service only, no target-user parameter |
 | POST | `/api/v1/users/me/avatar` | Upload a custom photo avatar (`multipart/form-data`, field `avatar`; JPEG/PNG/WebP, max 500KB) — server-side center-cropped and resized to 128×128, sets `avatarKey` to the reserved value `"custom"` |

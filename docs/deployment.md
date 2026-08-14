@@ -12,6 +12,7 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, or `error` (JSON logs on stdout) |
 | `TESTPULSE_ADMIN_EMAIL`, `TESTPULSE_ADMIN_PASSWORD` | no | — | Seed one Tenant Admin on first startup, only if the `users` table is empty; ignored on any later startup once users exist |
 | `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`, `TESTPULSE_LOGIN_RATE_LIMIT_BURST` | no | `5`, `5` | Login attempts allowed per client IP (backlog #113) — sustained rate and burst size. The defaults are a real brute-force mitigation; raise them only for a same-process environment that legitimately logs in often in quick succession (e.g. an E2E suite), never to relax production |
+| `TESTPULSE_SMTP_HOST`, `TESTPULSE_SMTP_PORT`, `TESTPULSE_SMTP_FROM_ADDRESS`, `TESTPULSE_PUBLIC_URL` | no | — | Enable self-service password recovery (add-forgot-password) — all four required together, plus optionally `TESTPULSE_SMTP_USERNAME`/`_PASSWORD` (may be left blank for an unauthenticated relay, e.g. Mailpit). `TESTPULSE_PUBLIC_URL` builds the absolute link in the reset email (e.g. `https://testpulse.example.com`). Reported as `passwordResetEnabled` on `GET /api/v1/meta`; the login page's "Forgot password?" link only renders when true |
 
 The process exits immediately with an error naming the variable if a required
 value is missing. The schema (`apps/api/internal/db/schema.sql`, pre-1.0.0 —
