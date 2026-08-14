@@ -59,4 +59,4 @@
 
 ## 11. Spec sync
 
-- [ ] 11.1 Sync `specs/password-recovery/spec.md`'s new capability into `openspec/specs/` at archive time
+- [x] 11.1 Sync `specs/password-recovery/spec.md`'s new capability into `openspec/specs/` at archive time
