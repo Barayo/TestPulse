@@ -10,6 +10,7 @@ import (
 
 	"github.com/Barayo/TestPulse/apps/api/internal/attachmentimage"
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
+	"github.com/Barayo/TestPulse/apps/api/internal/mailer"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 )
 
@@ -48,9 +49,34 @@ func conflict(msg string) error { return &ConflictError{msg: msg} }
 
 type Service struct {
 	store *store.Store
+
+	// Password-reset email (add-forgot-password), wired via WithMailer.
+	// Zero-value here means passwordResetEnabled is false — every call
+	// site that doesn't need this feature gets the correct, safe default
+	// (ForgotPassword silently no-ops) with no changes required.
+	mailer               mailer.Sender
+	publicURL            string
+	passwordResetEnabled bool
 }
 
 func New(s *store.Store) *Service { return &Service{store: s} }
+
+// WithMailer enables password-reset email delivery (add-forgot-password).
+// publicURL builds the absolute reset link; enabled mirrors
+// config.Config.PasswordResetEnabled(), resolved once at construction.
+func (s *Service) WithMailer(sender mailer.Sender, publicURL string, enabled bool) *Service {
+	s.mailer = sender
+	s.publicURL = publicURL
+	s.passwordResetEnabled = enabled
+	return s
+}
+
+// PasswordResetEnabled reports whether this Service can send password-reset
+// email — surfaced on GET /api/v1/meta so the login page knows whether to
+// render the "Forgot password?" link (design.md).
+func (s *Service) PasswordResetEnabled() bool {
+	return s.passwordResetEnabled
+}
 
 // --- Projects ---
 

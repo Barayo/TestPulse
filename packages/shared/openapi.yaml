@@ -1063,6 +1063,40 @@ paths:
       tags: [auth]
       responses:
         "204": { description: Logged out }
+  /api/v1/auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      summary: Request a password-reset email
+      description: >
+        Always returns 200 regardless of outcome (add-forgot-password
+        design.md) — an unknown email, a deactivated account, or SMTP not
+        being configured all look identical to the caller, so the response
+        never leaks account existence, deactivation status, or instance
+        configuration.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForgotPasswordInput" }
+      responses:
+        "200": { description: Request accepted (no signal about the outcome) }
+  /api/v1/auth/reset-password:
+    post:
+      operationId: resetPassword
+      summary: Redeem a password-reset token, setting a new password
+      description: >
+        Revokes every existing session for the account on success, the same
+        guarantee as a Tenant Admin's SetUserPassword.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResetPasswordInput" }
+      responses:
+        "204": { description: Password updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
   /api/v1/users:
     get:
       operationId: listUsers
@@ -2093,7 +2127,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled]
       properties:
         name:
           type: string
@@ -2110,6 +2144,14 @@ components:
             flag. Read here since this endpoint is unauthenticated and
             needed by both the anonymous public frontend and the
             authenticated Project Settings page.
+        passwordResetEnabled:
+          type: boolean
+          description: >
+            Self-service password recovery (add-forgot-password) is only
+            available when the instance has SMTP fully configured
+            (TESTPULSE_SMTP_* + TESTPULSE_PUBLIC_URL). The login page
+            renders its "Forgot password?" link only when true, rather
+            than showing it and failing at submit time.
     InstanceSettings:
       type: object
       required: [publicProjectsEnabled, updatedAt]
@@ -2347,6 +2389,17 @@ components:
       properties:
         email: { type: string }
         password: { type: string }
+    ForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+    ResetPasswordInput:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token: { type: string }
+        newPassword: { type: string }
     ApiToken:
       type: object
       required: [id, createdBy, name, prefix, createdAt]

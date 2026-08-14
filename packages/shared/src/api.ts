@@ -1003,6 +1003,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/forgot-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request a password-reset email
+         * @description Always returns 200 regardless of outcome (add-forgot-password design.md) — an unknown email, a deactivated account, or SMTP not being configured all look identical to the caller, so the response never leaks account existence, deactivation status, or instance configuration.
+         */
+        post: operations["forgotPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/reset-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Redeem a password-reset token, setting a new password
+         * @description Revokes every existing session for the account on success, the same guarantee as a Tenant Admin's SetUserPassword.
+         */
+        post: operations["resetPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users": {
         parameters: {
             query?: never;
@@ -1735,6 +1775,8 @@ export interface components {
             version: string;
             /** @description Instance-wide kill switch (enable-public-project-access), Tenant-Admin-controlled. When false, no project is reachable at its public URL regardless of that project's own publicAccess flag. Read here since this endpoint is unauthenticated and needed by both the anonymous public frontend and the authenticated Project Settings page. */
             publicProjectsEnabled: boolean;
+            /** @description Self-service password recovery (add-forgot-password) is only available when the instance has SMTP fully configured (TESTPULSE_SMTP_* + TESTPULSE_PUBLIC_URL). The login page renders its "Forgot password?" link only when true, rather than showing it and failing at submit time. */
+            passwordResetEnabled: boolean;
         };
         InstanceSettings: {
             publicProjectsEnabled: boolean;
@@ -1885,6 +1927,13 @@ export interface components {
         LoginInput: {
             email: string;
             password: string;
+        };
+        ForgotPasswordInput: {
+            email: string;
+        };
+        ResetPasswordInput: {
+            token: string;
+            newPassword: string;
         };
         ApiToken: {
             id: string;
@@ -3638,6 +3687,51 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    forgotPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ForgotPasswordInput"];
+            };
+        };
+        responses: {
+            /** @description Request accepted (no signal about the outcome) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    resetPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResetPasswordInput"];
+            };
+        };
+        responses: {
+            /** @description Password updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
         };
     };
     listUsers: {

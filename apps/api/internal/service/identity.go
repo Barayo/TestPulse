@@ -18,6 +18,10 @@ import (
 // sessionLifetime is the sliding session expiry window (design D2).
 const sessionLifetime = 30 * 24 * time.Hour
 
+// passwordResetTokenLifetime is how long a forgot-password link stays
+// redeemable (add-forgot-password design.md).
+const passwordResetTokenLifetime = 30 * time.Minute
+
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
@@ -192,6 +196,74 @@ func (s *Service) BootstrapAdmin(ctx context.Context, email, password string) er
 		Timezone:    &timezone,
 	})
 	return err
+}
+
+// ForgotPassword always succeeds from the caller's perspective — an unknown
+// email, a deactivated account, and SMTP not being configured all take the
+// same silent no-op path, so the response never leaks account existence,
+// deactivation status, or instance configuration (design.md). A new
+// request does not invalidate a prior unexpired token; multiple valid
+// tokens for the same user may coexist (design.md — redeeming any one of
+// them revokes every session either way).
+func (s *Service) ForgotPassword(ctx context.Context, email string) error {
+	if !s.passwordResetEnabled {
+		return nil
+	}
+	user, _, err := s.store.Users.GetByEmailWithHash(ctx, email)
+	if errors.Is(err, store.ErrNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if user.DeactivatedAt != nil {
+		return nil
+	}
+	raw, err := randomSecret()
+	if err != nil {
+		return err
+	}
+	if err := s.store.PasswordResetTokens.Create(ctx, user.ID, hashToken(raw), time.Now().Add(passwordResetTokenLifetime)); err != nil {
+		return err
+	}
+	link := s.publicURL + "/reset-password?token=" + raw
+	body := "Someone requested a password reset for your TestPulse account.\r\n\r\n" +
+		"Reset your password: " + link + "\r\n\r\n" +
+		"This link expires in 30 minutes. If you didn't request this, you can ignore this email."
+	return s.mailer.Send(ctx, user.Email, "Reset your TestPulse password", body)
+}
+
+// ResetPassword redeems a single-use token, sets a new password, and
+// revokes every existing session for the account — the same
+// session-invalidation guarantee as SetUserPassword (a session's validity
+// is never re-derived from the password hash).
+func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) error {
+	if err := domain.ValidatePassword(newPassword); err != nil {
+		return invalid("%s", err)
+	}
+	tokenHash := hashToken(token)
+	rt, err := s.store.PasswordResetTokens.GetByHash(ctx, tokenHash)
+	if errors.Is(err, store.ErrNotFound) {
+		return invalid("invalid or expired reset link")
+	}
+	if err != nil {
+		return err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+	if err := s.store.Users.UpdatePasswordHash(ctx, rt.UserID, string(hash)); err != nil {
+		return err
+	}
+	if err := s.store.PasswordResetTokens.MarkUsed(ctx, tokenHash); err != nil {
+		return err
+	}
+	if err := s.store.Sessions.DeleteByUser(ctx, rt.UserID); err != nil {
+		return err
+	}
+	s.audit(ctx, "reset_password", "user", rt.UserID)
+	return nil
 }
 
 // --- Users ---

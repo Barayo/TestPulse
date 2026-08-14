@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -367,6 +368,175 @@ func TestNonTenantAdminCannotUpdateAnotherUsersPassword(t *testing.T) {
 	if !asForbidden(err, &ferr) {
 		t.Errorf("err = %v, want ForbiddenError", err)
 	}
+}
+
+// --- Forgot / reset password (add-forgot-password) ---
+
+// fakeMailer records every send in-memory — no network I/O, so these tests
+// exercise the real service logic without a real SMTP server.
+type fakeMailer struct {
+	sent []fakeMail
+}
+
+type fakeMail struct {
+	to, subject, body string
+}
+
+func (f *fakeMailer) Send(_ context.Context, to, subject, body string) error {
+	f.sent = append(f.sent, fakeMail{to: to, subject: subject, body: body})
+	return nil
+}
+
+func testServiceWithMailer(t *testing.T) (*service.Service, *fakeMailer) {
+	t.Helper()
+	fm := &fakeMailer{}
+	s := service.New(store.New(testutil.Pool(t, "identity_service"))).WithMailer(fm, "https://testpulse.example.com", true)
+	return s, fm
+}
+
+func TestForgotPasswordSendsEmailForRealActiveAccount(t *testing.T) {
+	s, fm := testServiceWithMailer(t)
+	ctx := context.Background()
+	mustCreateUser(t, s, "forgot@example.com", "correcthorse", false)
+
+	if err := s.ForgotPassword(ctx, "forgot@example.com"); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	if len(fm.sent) != 1 {
+		t.Fatalf("sent = %d emails, want 1", len(fm.sent))
+	}
+	if fm.sent[0].to != "forgot@example.com" {
+		t.Errorf("sent to %q, want forgot@example.com", fm.sent[0].to)
+	}
+	if !strings.Contains(fm.sent[0].body, "https://testpulse.example.com/reset-password?token=") {
+		t.Errorf("body = %q, want a reset link", fm.sent[0].body)
+	}
+}
+
+func TestForgotPasswordSilentForUnknownEmail(t *testing.T) {
+	s, fm := testServiceWithMailer(t)
+
+	if err := s.ForgotPassword(context.Background(), "nobody@example.com"); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	if len(fm.sent) != 0 {
+		t.Errorf("sent = %d emails, want 0 for an unknown email", len(fm.sent))
+	}
+}
+
+func TestForgotPasswordSilentForDeactivatedAccount(t *testing.T) {
+	s, fm := testServiceWithMailer(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-forgot@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "deactivated-forgot@example.com", "correcthorse", false)
+	if err := s.DeactivateUser(ctx, target.ID); err != nil {
+		t.Fatalf("DeactivateUser: %v", err)
+	}
+	_ = admin
+
+	if err := s.ForgotPassword(ctx, "deactivated-forgot@example.com"); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	if len(fm.sent) != 0 {
+		t.Errorf("sent = %d emails, want 0 for a deactivated account", len(fm.sent))
+	}
+}
+
+func TestForgotPasswordSilentWhenSMTPNotConfigured(t *testing.T) {
+	s := testService(t) // no WithMailer — passwordResetEnabled defaults false
+	ctx := context.Background()
+	mustCreateUser(t, s, "no-smtp@example.com", "correcthorse", false)
+
+	if err := s.ForgotPassword(ctx, "no-smtp@example.com"); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+}
+
+func TestResetPasswordUpdatesPasswordAndRevokesSessions(t *testing.T) {
+	s, fm := testServiceWithMailer(t)
+	ctx := context.Background()
+	mustCreateUser(t, s, "reset@example.com", "correcthorse-old", false)
+
+	sess, _, err := s.Login(ctx, "reset@example.com", "correcthorse-old")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	if err := s.ForgotPassword(ctx, "reset@example.com"); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	token := extractToken(t, fm.sent[0].body)
+
+	if err := s.ResetPassword(ctx, token, "correcthorse-new"); err != nil {
+		t.Fatalf("ResetPassword: %v", err)
+	}
+
+	if _, err := s.AuthenticateSession(ctx, sess.ID); err == nil {
+		t.Error("session still authenticates after password reset, want revoked")
+	}
+	if _, _, err := s.Login(ctx, "reset@example.com", "correcthorse-new"); err != nil {
+		t.Errorf("login with new password failed: %v", err)
+	}
+}
+
+func TestResetPasswordRejectsExpiredToken(t *testing.T) {
+	s, _ := testServiceWithMailer(t)
+	ctx := context.Background()
+
+	if err := s.ResetPassword(ctx, "not-a-real-token", "correcthorse-new"); err == nil {
+		t.Error("expected error for an unknown/expired token")
+	}
+}
+
+func TestResetPasswordRejectsUsedToken(t *testing.T) {
+	s, fm := testServiceWithMailer(t)
+	ctx := context.Background()
+	mustCreateUser(t, s, "reused@example.com", "correcthorse-old", false)
+
+	if err := s.ForgotPassword(ctx, "reused@example.com"); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	token := extractToken(t, fm.sent[0].body)
+
+	if err := s.ResetPassword(ctx, token, "correcthorse-new"); err != nil {
+		t.Fatalf("first ResetPassword: %v", err)
+	}
+	if err := s.ResetPassword(ctx, token, "correcthorse-newer"); err == nil {
+		t.Error("expected error reusing an already-redeemed token")
+	}
+}
+
+func TestResetPasswordRejectsWeakPassword(t *testing.T) {
+	s, fm := testServiceWithMailer(t)
+	ctx := context.Background()
+	mustCreateUser(t, s, "weakreset@example.com", "correcthorse-old", false)
+
+	if err := s.ForgotPassword(ctx, "weakreset@example.com"); err != nil {
+		t.Fatalf("ForgotPassword: %v", err)
+	}
+	token := extractToken(t, fm.sent[0].body)
+
+	if err := s.ResetPassword(ctx, token, "short"); err == nil {
+		t.Error("weak password accepted, want error")
+	}
+}
+
+// extractToken pulls the raw token out of the reset link a fakeMailer
+// captured, mirroring what the real reset-password page would read from
+// its URL query string.
+func extractToken(t *testing.T, body string) string {
+	t.Helper()
+	const marker = "/reset-password?token="
+	i := strings.Index(body, marker)
+	if i == -1 {
+		t.Fatalf("body %q does not contain a reset link", body)
+	}
+	rest := body[i+len(marker):]
+	end := strings.IndexAny(rest, "\r\n \t")
+	if end == -1 {
+		end = len(rest)
+	}
+	return rest[:end]
 }
 
 func TestLogoutInvalidatesSession(t *testing.T) {

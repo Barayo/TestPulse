@@ -90,6 +90,7 @@ func handleMeta(svc *service.Service) http.HandlerFunc {
 			"name":                  "TestPulse",
 			"version":               "0.0.1",
 			"publicProjectsEnabled": settings.PublicProjectsEnabled,
+			"passwordResetEnabled":  svc.PasswordResetEnabled(),
 		})
 	}
 }

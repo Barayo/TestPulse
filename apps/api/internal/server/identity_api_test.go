@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/server"
@@ -34,6 +35,49 @@ func apiServerWithAdminAndLoginRateLimit(t *testing.T, email, password string, p
 		t.Fatalf("BootstrapAdmin: %v", err)
 	}
 	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, perMinute, burst), svc
+}
+
+// fakeMailer records every send in-memory — no network I/O (add-forgot-password).
+type fakeMailer struct {
+	sent []fakeMail
+}
+
+type fakeMail struct {
+	to, subject, body string
+}
+
+func (f *fakeMailer) Send(_ context.Context, to, subject, body string) error {
+	f.sent = append(f.sent, fakeMail{to: to, subject: subject, body: body})
+	return nil
+}
+
+// apiServerWithAdminAndMailer builds a server with password-reset email
+// enabled and a fake mailer, at the given login/forgot-password rate limit.
+func apiServerWithAdminAndMailer(t *testing.T, email, password string, enabled bool, perMinute float64, burst int) (http.Handler, *fakeMailer) {
+	t.Helper()
+	pool := testutil.Pool(t, "server")
+	fm := &fakeMailer{}
+	svc := service.New(store.New(pool)).WithMailer(fm, "https://testpulse.example.com", enabled)
+	if err := svc.BootstrapAdmin(context.Background(), email, password); err != nil {
+		t.Fatalf("BootstrapAdmin: %v", err)
+	}
+	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, perMinute, burst), fm
+}
+
+// extractToken pulls the raw token out of a reset link a fakeMailer captured.
+func extractToken(t *testing.T, body string) string {
+	t.Helper()
+	const marker = "/reset-password?token="
+	i := strings.Index(body, marker)
+	if i == -1 {
+		t.Fatalf("body %q does not contain a reset link", body)
+	}
+	rest := body[i+len(marker):]
+	end := strings.IndexAny(rest, "\r\n \t")
+	if end == -1 {
+		end = len(rest)
+	}
+	return rest[:end]
 }
 
 // Identity API integration tests: full HTTP -> service -> store -> Postgres
@@ -119,6 +163,69 @@ func TestScenario_LoginRateLimitIsConfigurable(t *testing.T) {
 		var errBody jmap
 		callAs(t, h, "", "POST", "/api/v1/auth/login",
 			jmap{"email": "admin@example.com", "password": "wrong"}, 401, &errBody)
+	}
+}
+
+// --- Forgot / reset password (add-forgot-password) ---
+
+func TestScenario_ForgotPasswordAlwaysReturns200(t *testing.T) {
+	h, fm := apiServerWithAdminAndMailer(t, "admin@example.com", "correcthorse", true, 600, 50)
+
+	callAs(t, h, "", "POST", "/api/v1/auth/forgot-password", jmap{"email": "admin@example.com"}, 200, nil)
+	if len(fm.sent) != 1 {
+		t.Fatalf("sent = %d emails, want 1 for a real account", len(fm.sent))
+	}
+
+	// Unknown email: identical 200, no leak of account existence.
+	callAs(t, h, "", "POST", "/api/v1/auth/forgot-password", jmap{"email": "nobody@example.com"}, 200, nil)
+	if len(fm.sent) != 1 {
+		t.Errorf("sent = %d emails, want still 1 (no email for an unknown address)", len(fm.sent))
+	}
+}
+
+func TestScenario_ForgotPasswordRateLimited(t *testing.T) {
+	h, _ := apiServerWithAdminAndMailer(t, "admin@example.com", "correcthorse", true, 1, 1)
+
+	callAs(t, h, "", "POST", "/api/v1/auth/forgot-password", jmap{"email": "admin@example.com"}, 200, nil)
+	var errBody jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/forgot-password", jmap{"email": "admin@example.com"}, 429, &errBody)
+}
+
+func TestScenario_ResetPasswordWithValidTokenSucceeds(t *testing.T) {
+	h, fm := apiServerWithAdminAndMailer(t, "admin@example.com", "correcthorse", true, 600, 50)
+
+	callAs(t, h, "", "POST", "/api/v1/auth/forgot-password", jmap{"email": "admin@example.com"}, 200, nil)
+	token := extractToken(t, fm.sent[0].body)
+
+	callAs(t, h, "", "POST", "/api/v1/auth/reset-password",
+		jmap{"token": token, "newPassword": "correcthorse-new"}, 204, nil)
+
+	var user jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": "admin@example.com", "password": "correcthorse-new"}, 200, &user)
+}
+
+func TestScenario_ResetPasswordRejectsInvalidToken(t *testing.T) {
+	h, _ := apiServerWithAdminAndMailer(t, "admin@example.com", "correcthorse", true, 600, 50)
+
+	var errBody jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/reset-password",
+		jmap{"token": "not-a-real-token", "newPassword": "correcthorse-new"}, 400, &errBody)
+}
+
+func TestScenario_MetaReportsPasswordResetEnabled(t *testing.T) {
+	enabled, _ := apiServerWithAdminAndMailer(t, "admin@example.com", "correcthorse", true, 5, 5)
+	var meta jmap
+	callAs(t, enabled, "", "GET", "/api/v1/meta", nil, 200, &meta)
+	if meta["passwordResetEnabled"] != true {
+		t.Errorf("meta = %+v, want passwordResetEnabled=true", meta)
+	}
+
+	disabled, _ := apiServerWithAdmin(t, "admin2@example.com", "correcthorse")
+	var meta2 jmap
+	callAs(t, disabled, "", "GET", "/api/v1/meta", nil, 200, &meta2)
+	if meta2["passwordResetEnabled"] != false {
+		t.Errorf("meta = %+v, want passwordResetEnabled=false", meta2)
 	}
 }
 

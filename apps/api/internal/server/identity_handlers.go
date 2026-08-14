@@ -23,9 +23,17 @@ import (
 // set via TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE/_BURST in CI rather than
 // weakening the production default.
 func mountAuth(r chi.Router, h *api, perMinute float64, burst int) {
-	limiter := newLoginRateLimiter(rate.Limit(perMinute/60), burst)
-	r.With(limiter.middleware).Post("/auth/login", h.login)
+	loginLimiter := newLoginRateLimiter(rate.Limit(perMinute/60), burst)
+	r.With(loginLimiter.middleware).Post("/auth/login", h.login)
 	r.Post("/auth/logout", h.logout)
+
+	// forgot-password is the same abuse surface as login — unauthenticated,
+	// triggers real work (a token + an email send) — so it gets its own
+	// limiter at the same shape rather than sharing login's bucket
+	// (add-forgot-password design.md).
+	forgotPasswordLimiter := newLoginRateLimiter(rate.Limit(perMinute/60), burst)
+	r.With(forgotPasswordLimiter.middleware).Post("/auth/forgot-password", h.forgotPassword)
+	r.Post("/auth/reset-password", h.resetPassword)
 }
 
 // mountIdentity registers the users/tokens/audit routes. The caller mounts
@@ -70,6 +78,42 @@ func (h *api) login(w http.ResponseWriter, r *http.Request) {
 	}
 	setSessionCookie(w, r, sess)
 	h.respond(w, http.StatusOK, user, nil)
+}
+
+type forgotPasswordInput struct {
+	Email string `json:"email"`
+}
+
+// forgotPassword always responds 200 regardless of outcome — unknown
+// email, deactivated account, or SMTP not configured all look identical to
+// the caller (design.md's enumeration-resistance decision). A genuine
+// unexpected error (e.g. the database) is logged server-side rather than
+// surfaced, since the response can't reveal anything about it either.
+func (h *api) forgotPassword(w http.ResponseWriter, r *http.Request) {
+	in, err := decode[forgotPasswordInput](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	if err := h.svc.ForgotPassword(r.Context(), in.Email); err != nil {
+		h.logger.Error("forgot-password request failed", "error", err)
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+type resetPasswordInput struct {
+	Token       string `json:"token"`
+	NewPassword string `json:"newPassword"`
+}
+
+func (h *api) resetPassword(w http.ResponseWriter, r *http.Request) {
+	in, err := decode[resetPasswordInput](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	err = h.svc.ResetPassword(r.Context(), in.Token, in.NewPassword)
+	h.respond(w, http.StatusNoContent, nil, err)
 }
 
 func (h *api) logout(w http.ResponseWriter, r *http.Request) {

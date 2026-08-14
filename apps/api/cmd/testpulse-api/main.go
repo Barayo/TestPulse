@@ -13,6 +13,7 @@ import (
 
 	"github.com/Barayo/TestPulse/apps/api/internal/config"
 	"github.com/Barayo/TestPulse/apps/api/internal/db"
+	"github.com/Barayo/TestPulse/apps/api/internal/mailer"
 	"github.com/Barayo/TestPulse/apps/api/internal/sampledata"
 	"github.com/Barayo/TestPulse/apps/api/internal/server"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
@@ -55,7 +56,14 @@ func run() error {
 		logger.Info("schema applied", "status", "current")
 	}
 
-	svc := service.New(store.New(pool))
+	svc := service.New(store.New(pool)).WithMailer(
+		&mailer.SMTPSender{
+			Host: cfg.SMTPHost, Port: cfg.SMTPPort,
+			Username: cfg.SMTPUsername, Password: cfg.SMTPPassword,
+			From: cfg.SMTPFromAddress,
+		},
+		cfg.PublicURL, cfg.PasswordResetEnabled(),
+	)
 
 	if err := svc.BootstrapAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword); err != nil {
 		return fmt.Errorf("bootstrapping admin: %w", err)
