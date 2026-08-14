@@ -11,6 +11,7 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_ADDR` | no | `:8080` | HTTP listen address |
 | `TESTPULSE_LOG_LEVEL` | no | `info` | `debug`, `info`, `warn`, or `error` (JSON logs on stdout) |
 | `TESTPULSE_ADMIN_EMAIL`, `TESTPULSE_ADMIN_PASSWORD` | no | — | Seed one Tenant Admin on first startup, only if the `users` table is empty; ignored on any later startup once users exist |
+| `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`, `TESTPULSE_LOGIN_RATE_LIMIT_BURST` | no | `5`, `5` | Login attempts allowed per client IP (backlog #113) — sustained rate and burst size. The defaults are a real brute-force mitigation; raise them only for a same-process environment that legitimately logs in often in quick succession (e.g. an E2E suite), never to relax production |
 
 The process exits immediately with an error naming the variable if a required
 value is missing. The schema (`apps/api/internal/db/schema.sql`, pre-1.0.0 —

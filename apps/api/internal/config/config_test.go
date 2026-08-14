@@ -90,7 +90,6 @@ func TestLoadAdminBootstrapCredentialsSet(t *testing.T) {
 	}
 }
 
-
 func TestLoadReadsSMTPSettings(t *testing.T) {
 	cfg, err := Load(envStub(map[string]string{
 		"TESTPULSE_DATABASE_URL":      "postgres://localhost/testpulse",
@@ -108,6 +107,64 @@ func TestLoadReadsSMTPSettings(t *testing.T) {
 		cfg.SMTPPassword != "smtp-pass" || cfg.SMTPFromAddress != "noreply@example.com" ||
 		cfg.PublicURL != "https://testpulse.example.com" {
 		t.Errorf("cfg = %+v", cfg)
+	}
+}
+
+func TestLoadLoginRateLimitDefaults(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.LoginRateLimitPerMinute != 5 {
+		t.Errorf("LoginRateLimitPerMinute = %v, want 5", cfg.LoginRateLimitPerMinute)
+	}
+	if cfg.LoginRateLimitBurst != 5 {
+		t.Errorf("LoginRateLimitBurst = %v, want 5", cfg.LoginRateLimitBurst)
+	}
+}
+
+func TestLoadLoginRateLimitOverrides(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":                "postgres://localhost/testpulse",
+		"TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE": "600",
+		"TESTPULSE_LOGIN_RATE_LIMIT_BURST":      "50",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.LoginRateLimitPerMinute != 600 {
+		t.Errorf("LoginRateLimitPerMinute = %v, want 600", cfg.LoginRateLimitPerMinute)
+	}
+	if cfg.LoginRateLimitBurst != 50 {
+		t.Errorf("LoginRateLimitBurst = %v, want 50", cfg.LoginRateLimitBurst)
+	}
+}
+
+func TestLoadInvalidLoginRateLimitPerMinuteNamesVariable(t *testing.T) {
+	_, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":                "postgres://localhost/testpulse",
+		"TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE": "not-a-number",
+	}))
+	if err == nil {
+		t.Fatal("expected error for invalid TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE")
+	}
+	if !strings.Contains(err.Error(), "TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE") {
+		t.Errorf("error %q does not name the invalid variable", err)
+	}
+}
+
+func TestLoadInvalidLoginRateLimitBurstNamesVariable(t *testing.T) {
+	_, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":           "postgres://localhost/testpulse",
+		"TESTPULSE_LOGIN_RATE_LIMIT_BURST": "not-a-number",
+	}))
+	if err == nil {
+		t.Fatal("expected error for invalid TESTPULSE_LOGIN_RATE_LIMIT_BURST")
+	}
+	if !strings.Contains(err.Error(), "TESTPULSE_LOGIN_RATE_LIMIT_BURST") {
+		t.Errorf("error %q does not name the invalid variable", err)
 	}
 }
 

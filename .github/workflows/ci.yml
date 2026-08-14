@@ -90,7 +90,15 @@ jobs:
       - name: Install Playwright browser
         run: npx --workspace=web playwright install --with-deps chromium
       - name: Start compose stack
+        # The suite runs single-worker/sequential and logs in as a fresh
+        # user in most RBAC/teams/permission scenarios — well over the
+        # production login rate limit (5/min, burst 5, backlog #113) in a
+        # normal ~4-minute run. Raise it for this job only; the compose
+        # file's own default (used by local dev / evaluation) stays strict.
         run: docker compose -f deploy/compose/docker-compose.yml up --build -d --wait
+        env:
+          TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE: "600"
+          TESTPULSE_LOGIN_RATE_LIMIT_BURST: "100"
       - name: Wait for readiness
         run: |
           for i in $(seq 1 30); do

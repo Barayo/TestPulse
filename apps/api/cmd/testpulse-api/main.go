@@ -67,7 +67,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(logger, db.NewHealth(pool), svc),
+		Handler:           server.New(logger, db.NewHealth(pool), svc, cfg.LoginRateLimitPerMinute, cfg.LoginRateLimitBurst),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 

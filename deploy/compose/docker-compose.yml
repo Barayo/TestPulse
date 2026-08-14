@@ -19,6 +19,13 @@ services:
       # this compose file is the local/E2E evaluation stack, not production.
       TESTPULSE_ADMIN_EMAIL: admin@example.com
       TESTPULSE_ADMIN_PASSWORD: correcthorsebatterystaple
+      # Defaults match production (5/min, burst 5 — backlog #113); CI's E2E
+      # job overrides both via its own shell environment before `docker
+      # compose up` so the suite's many legitimate sequential logins don't
+      # trip the brute-force limiter, without weakening the default for
+      # local dev or any other evaluation use of this compose file.
+      TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE: ${TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE:-5}
+      TESTPULSE_LOGIN_RATE_LIMIT_BURST: ${TESTPULSE_LOGIN_RATE_LIMIT_BURST:-5}
     depends_on:
       db:
         condition: service_healthy

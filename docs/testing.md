@@ -58,6 +58,13 @@ container), **Web** (lint, typecheck, unit tests with coverage thresholds,
 build), **E2E** (compose stack + Playwright, traces uploaded on failure), and
 **Helm/DCO** checks.
 
+The E2E job raises `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`/`_BURST`
+(see [Deployment](deployment.md#configuration-reference)) when starting the
+compose stack — the suite runs single-worker and logs in as a fresh user in
+most RBAC/teams/permission scenarios, well past the production login rate
+limit (5/min, burst 5, backlog #113) in a normal run. Local dev and any
+other use of `deploy/compose/docker-compose.yml` keep the strict default.
+
 ## Dogfooding
 
 On every push to `main`, the E2E job also reports its own results into a

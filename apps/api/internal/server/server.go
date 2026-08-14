@@ -19,7 +19,7 @@ type ReadinessChecker interface {
 	Ready(ctx context.Context) error
 }
 
-func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) http.Handler {
+func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, loginRateLimitPerMinute float64, loginRateLimitBurst int) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
@@ -32,7 +32,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service) 
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/meta", handleMeta(svc))
-		mountAuth(r, h)
+		mountAuth(r, h, loginRateLimitPerMinute, loginRateLimitBurst)
 		mountPublicAPI(r, h)
 
 		r.Group(func(r chi.Router) {

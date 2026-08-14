@@ -5,17 +5,9 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/time/rate"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
-)
-
-// loginRateLimit: burst of 5 quick attempts (a real user mistyping a
-// password shouldn't get blocked), refilling at 5/minute sustained —
-// enough to make network-speed brute-forcing impractical without being
-// punitive to normal use (backlog #113).
-const (
-	loginRateLimitPerMinute = 5.0
-	loginRateLimitBurst     = 5
 )
 
 // mountAuth registers the unauthenticated auth routes — login is how a
@@ -23,8 +15,15 @@ const (
 // one (design D6); logout is likewise open, and reads whatever session
 // cookie is present (or none) rather than requiring a valid one. login
 // alone is rate-limited (logout has nothing worth brute-forcing).
-func mountAuth(r chi.Router, h *api) {
-	limiter := newLoginRateLimiter(loginRateLimitPerMinute/60, loginRateLimitBurst)
+//
+// perMinute/burst come from config.Config.LoginRateLimitPerMinute/Burst —
+// production defaults to 5/5 (a real brute-force mitigation, backlog #113),
+// but a same-process caller doing many legitimate logins in quick
+// succession (the E2E suite, single worker) needs a higher ceiling; that's
+// set via TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE/_BURST in CI rather than
+// weakening the production default.
+func mountAuth(r chi.Router, h *api, perMinute float64, burst int) {
+	limiter := newLoginRateLimiter(rate.Limit(perMinute/60), burst)
 	r.With(limiter.middleware).Post("/auth/login", h.login)
 	r.Post("/auth/logout", h.logout)
 }

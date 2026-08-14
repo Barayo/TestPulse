@@ -20,12 +20,20 @@ import (
 // create the very first user on an empty instance.
 func apiServerWithAdmin(t *testing.T, email, password string) (http.Handler, *service.Service) {
 	t.Helper()
+	return apiServerWithAdminAndLoginRateLimit(t, email, password, 5, 5)
+}
+
+// apiServerWithAdminAndLoginRateLimit is apiServerWithAdmin with an
+// explicit login rate limit, for tests that exercise the limit itself
+// (TestScenario_LoginRateLimitIsConfigurable).
+func apiServerWithAdminAndLoginRateLimit(t *testing.T, email, password string, perMinute float64, burst int) (http.Handler, *service.Service) {
+	t.Helper()
 	pool := testutil.Pool(t, "server")
 	svc := service.New(store.New(pool))
 	if err := svc.BootstrapAdmin(context.Background(), email, password); err != nil {
 		t.Fatalf("BootstrapAdmin: %v", err)
 	}
-	return server.New(slog.New(slog.DiscardHandler), ok{}, svc), svc
+	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, perMinute, burst), svc
 }
 
 // Identity API integration tests: full HTTP -> service -> store -> Postgres
@@ -97,6 +105,21 @@ func TestScenario_LoginSuccessAndFailure(t *testing.T) {
 	var errBody jmap
 	callAs(t, h, "", "POST", "/api/v1/auth/login",
 		jmap{"email": "admin@example.com", "password": "wrong"}, 401, &errBody)
+}
+
+// TestScenario_LoginRateLimitIsConfigurable proves server.New actually
+// wires its perMinute/burst parameters into the login rate limiter rather
+// than the old hardcoded 5/5 (TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE/_BURST,
+// backlog #113's CI-flake fix): a server built with a high burst tolerates
+// far more than 5 rapid login attempts without a 429.
+func TestScenario_LoginRateLimitIsConfigurable(t *testing.T) {
+	h, _ := apiServerWithAdminAndLoginRateLimit(t, "admin@example.com", "correcthorse", 600, 50)
+
+	for i := 0; i < 20; i++ {
+		var errBody jmap
+		callAs(t, h, "", "POST", "/api/v1/auth/login",
+			jmap{"email": "admin@example.com", "password": "wrong"}, 401, &errBody)
+	}
 }
 
 func TestScenario_AnonymousRequestToDomainRouteRejected(t *testing.T) {

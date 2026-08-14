@@ -18,22 +18,35 @@
 //	                        recovery (add-forgot-password) — see
 //	                        Config.PasswordResetEnabled. Username/password
 //	                        may be left blank for an unauthenticated relay.
+//	TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE, TESTPULSE_LOGIN_RATE_LIMIT_BURST
+//	                        (default 5, 5) login attempts allowed per client
+//	                        IP (backlog #113). The defaults are a real
+//	                        brute-force mitigation for production; a
+//	                        same-process test/CI environment doing many
+//	                        legitimate logins in quick succession (e.g. the
+//	                        E2E suite) should raise these rather than defeat
+//	                        the limiter globally.
 package config
 
-import "fmt"
+import (
+	"fmt"
+	"strconv"
+)
 
 type Config struct {
-	DatabaseURL     string
-	Addr            string
-	LogLevel        string
-	AdminEmail      string
-	AdminPassword   string
-	SMTPHost        string
-	SMTPPort        string
-	SMTPUsername    string
-	SMTPPassword    string
-	SMTPFromAddress string
-	PublicURL       string
+	DatabaseURL             string
+	Addr                    string
+	LogLevel                string
+	AdminEmail              string
+	AdminPassword           string
+	SMTPHost                string
+	SMTPPort                string
+	SMTPUsername            string
+	SMTPPassword            string
+	SMTPFromAddress         string
+	PublicURL               string
+	LoginRateLimitPerMinute float64
+	LoginRateLimitBurst     int
 }
 
 // PasswordResetEnabled reports whether enough is configured to send a
@@ -66,6 +79,18 @@ func Load(getenv func(string) string) (Config, error) {
 		return Config{}, fmt.Errorf("missing required environment variable TESTPULSE_DATABASE_URL")
 	}
 
+	perMinute, err := parseFloatWithDefault(getenv("TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE"), 5, "TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.LoginRateLimitPerMinute = perMinute
+
+	burst, err := parseIntWithDefault(getenv("TESTPULSE_LOGIN_RATE_LIMIT_BURST"), 5, "TESTPULSE_LOGIN_RATE_LIMIT_BURST")
+	if err != nil {
+		return Config{}, err
+	}
+	cfg.LoginRateLimitBurst = burst
+
 	switch cfg.LogLevel {
 	case "debug", "info", "warn", "error":
 	default:
@@ -80,4 +105,26 @@ func withDefault(value, fallback string) string {
 		return fallback
 	}
 	return value
+}
+
+func parseFloatWithDefault(value string, fallback float64, name string) (float64, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	f, err := strconv.ParseFloat(value, 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", name, value, err)
+	}
+	return f, nil
+}
+
+func parseIntWithDefault(value string, fallback int, name string) (int, error) {
+	if value == "" {
+		return fallback, nil
+	}
+	i, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, fmt.Errorf("invalid %s %q: %w", name, value, err)
+	}
+	return i, nil
 }

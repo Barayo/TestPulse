@@ -20,7 +20,7 @@ func (s stubReadiness) Ready(context.Context) error { return s.err }
 
 func newTestServer(readyErr error) http.Handler {
 	logger := slog.New(slog.DiscardHandler)
-	return New(logger, stubReadiness{err: readyErr}, nil)
+	return New(logger, stubReadiness{err: readyErr}, nil, 5, 5)
 }
 
 func TestLivenessAlwaysOK(t *testing.T) {
@@ -113,7 +113,7 @@ func TestMetaEndpoint(t *testing.T) {
 	// so this needs a real service backed by the test database, unlike the
 	// liveness/readiness tests above.
 	svc := service.New(store.New(testutil.Pool(t, "server_meta")))
-	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc)
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
 	if rec.Code != http.StatusOK {
