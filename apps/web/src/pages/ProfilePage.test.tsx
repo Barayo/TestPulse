@@ -8,6 +8,7 @@ import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PATCH: vi.fn(), DELETE: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
+const mockPOST = vi.mocked(api.POST)
 const mockPATCH = vi.mocked(api.PATCH)
 const mockDELETE = vi.mocked(api.DELETE)
 
@@ -103,21 +104,6 @@ describe('ProfilePage', () => {
     await screen.findByLabelText(/display name/i)
     expect(screen.queryByRole('link', { name: /manage users/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /^people$/i })).not.toBeInTheDocument()
-  })
-
-  it('shows a disabled password-change entry as a coming-soon placeholder', async () => {
-    mockMe()
-    renderPage()
-    await screen.findByLabelText(/display name/i)
-    const changePassword = screen.getByRole('button', { name: /change password/i })
-    expect(changePassword).toBeDisabled()
-  })
-
-  it('the coming-soon label is visible text, not only a hover tooltip (Pepe review)', async () => {
-    mockMe()
-    renderPage()
-    await screen.findByLabelText(/display name/i)
-    expect(screen.getByText(/coming soon/i)).toBeVisible()
   })
 
   describe('Appearance (add-dark-mode-toggle, moved here after design review — a set-once whole-app preference belongs on the deliberately-navigated-to settings page, not a transient account dropdown)', () => {
@@ -259,6 +245,81 @@ describe('ProfilePage', () => {
       renderPage()
       await screen.findByLabelText(/display name/i)
       expect(screen.queryByRole('button', { name: /^remove$/i })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('Change password (add-change-own-password)', () => {
+    function renderWithLoginRoute() {
+      return render(
+        <MemoryRouter initialEntries={['/settings/profile']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/settings/profile" element={<ProfilePage />} />
+              <Route path="/login" element={<div>login stub</div>} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      )
+    }
+
+    it('is not disabled — opens a dialog', async () => {
+      mockMe()
+      renderPage()
+      const user = userEvent.setup()
+
+      const row = await screen.findByRole('button', { name: /change password/i })
+      expect(row).not.toBeDisabled()
+      await user.click(row)
+
+      expect(await screen.findByLabelText(/current password/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/^new password$/i)).toBeInTheDocument()
+    })
+
+    it('submits current and new password, then redirects to login on success', async () => {
+      mockMe()
+      mockPOST.mockResolvedValue({ data: undefined, error: undefined, response: { ok: true, status: 204 } as Response })
+      const user = userEvent.setup()
+      renderWithLoginRoute()
+
+      await user.click(await screen.findByRole('button', { name: /change password/i }))
+      await user.type(screen.getByLabelText(/current password/i), 'correcthorse-old')
+      await user.type(screen.getByLabelText(/^new password$/i), 'correcthorse-new')
+      await user.click(screen.getByRole('button', { name: /^change password$/i }))
+
+      expect(await screen.findByText('login stub')).toBeInTheDocument()
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/users/me/password',
+        expect.objectContaining({ body: { currentPassword: 'correcthorse-old', newPassword: 'correcthorse-new' } }),
+      )
+    })
+
+    it('shows an inline error on a wrong current password, without navigating away', async () => {
+      mockMe()
+      mockPOST.mockResolvedValue({
+        data: undefined,
+        error: { error: 'incorrect current password' },
+        response: { ok: false, status: 401 } as Response,
+      })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(await screen.findByRole('button', { name: /change password/i }))
+      await user.type(screen.getByLabelText(/current password/i), 'wrong')
+      await user.type(screen.getByLabelText(/^new password$/i), 'correcthorse-new')
+      await user.click(screen.getByRole('button', { name: /^change password$/i }))
+
+      expect(await screen.findByText(/incorrect current password/i)).toBeInTheDocument()
+      expect(screen.getByLabelText(/current password/i)).toBeInTheDocument()
+    })
+
+    it('warns that every session ends, including this one', async () => {
+      mockMe()
+      renderPage()
+      const user = userEvent.setup()
+
+      await user.click(await screen.findByRole('button', { name: /change password/i }))
+
+      expect(await screen.findByText(/signs you out everywhere/i)).toBeInTheDocument()
     })
   })
 })

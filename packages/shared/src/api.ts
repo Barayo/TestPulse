@@ -1079,6 +1079,26 @@ export interface paths {
         patch: operations["updateCurrentUserProfile"];
         trace?: never;
     };
+    "/api/v1/users/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change the caller's own password, given the current one
+         * @description Revokes every session for the account, including the one making this request, and clears the account's required-password-change flag if it was set (add-change-own-password).
+         */
+        post: operations["changeOwnPassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/users/me/avatar": {
         parameters: {
             query?: never;
@@ -1132,7 +1152,7 @@ export interface paths {
         delete: operations["deleteUser"];
         options?: never;
         head?: never;
-        /** Change a user's Tenant Admin flag, deactivate/reactivate them, or update their email/password (Tenant Admin only) */
+        /** Change a user's Tenant Admin flag, deactivate/reactivate them, update their email, or require a password change (Tenant Admin only) */
         patch: operations["updateUser"];
         trace?: never;
     };
@@ -1149,6 +1169,50 @@ export interface paths {
         get: operations["userDeletionPreview"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/password-reset-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Trigger a password-reset email for this account (Tenant Admin only)
+         * @description The same reset-email mechanism the self-service forgot-password flow uses, addressed at a known account rather than an email the caller supplied. Only available when the instance has SMTP configured (add-change-own-password) — the temporary-password fallback exists for the case where it isn't.
+         */
+        post: operations["adminSendPasswordResetEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/users/{userId}/generate-temporary-password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Generate a temporary password for this account (Tenant Admin only, SMTP-less fallback)
+         * @description Only available when the instance has no SMTP configured — the reset-email path is required when it does. Sets the account's required-password-change flag and revokes every existing session in the same action. The raw password is returned once and never retrievable again (add-change-own-password).
+         */
+        post: operations["adminGenerateTemporaryPassword"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1798,6 +1862,8 @@ export interface components {
             deactivatedAt?: string | null;
             /** Format: date-time */
             createdAt: string;
+            /** @description True when this account must set a new password before doing anything else (add-change-own-password) — set by a Tenant Admin directly, or as a side effect of a generated temporary password. On the response to POST /auth/login, signals the frontend to show the required-change gate before the app shell. */
+            mustChangePassword: boolean;
         };
         /** @description Self-service profile fields — a user editing their own display name, avatar, or timezone. */
         UserProfileUpdate: {
@@ -1820,8 +1886,16 @@ export interface components {
             reactivate?: boolean;
             /** @description Change the account's email (add-update-user). */
             email?: string;
-            /** @description Set a new password directly (add-update-user, Tenant Admin only) — revokes every existing session for the account. */
-            password?: string;
+            /** @description Flag (or clear) the account as requiring a new password, enforced starting at its next login (add-change-own-password). A Tenant Admin can no longer set another account's password directly — see POST .../password-reset-email and POST .../generate-temporary-password. */
+            requirePasswordChange?: boolean;
+        };
+        ChangeOwnPasswordInput: {
+            currentPassword: string;
+            newPassword: string;
+        };
+        TemporaryPassword: {
+            /** @description The generated raw value — shown once, never retrievable again. */
+            password: string;
         };
         /** @description Real counts of what deleting a user would remove (add-user-deletion design.md D5) — server-computed, not a client-side fan-out. */
         UserDeletionPreview: {
@@ -3829,6 +3903,30 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
         };
     };
+    changeOwnPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeOwnPasswordInput"];
+            };
+        };
+        responses: {
+            /** @description Password changed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
     updateCurrentUserAvatar: {
         parameters: {
             query?: never;
@@ -3982,6 +4080,56 @@ export interface operations {
                     "application/json": components["schemas"]["UserDeletionPreview"];
                 };
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    adminSendPasswordResetEmail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Reset email sent */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    adminGenerateTemporaryPassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Temporary password generated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemporaryPassword"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

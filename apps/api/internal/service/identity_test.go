@@ -17,6 +17,15 @@ func testService(t *testing.T) *service.Service {
 	return service.New(store.New(testutil.Pool(t, "identity_service")))
 }
 
+// testServiceAndStore is testService plus direct store access, for tests
+// that need to arrange state no Service method exposes yet (e.g. setting
+// must_change_password directly, ahead of SetRequirePasswordChange).
+func testServiceAndStore(t *testing.T) (*service.Service, *store.Store) {
+	t.Helper()
+	st := store.New(testutil.Pool(t, "identity_service"))
+	return service.New(st), st
+}
+
 func mustCreateUser(t *testing.T, s *service.Service, email, password string, isTenantAdmin bool) domain.User {
 	t.Helper()
 	u, err := s.CreateUser(context.Background(), email, password, isTenantAdmin)
@@ -318,55 +327,81 @@ func TestNonTenantAdminCannotUpdateAnotherUsersEmail(t *testing.T) {
 	}
 }
 
-// TestSetUserPasswordRevokesSessions covers add-update-user task 2.1: a
-// session created before the password change must not authenticate after.
-func TestSetUserPasswordRevokesSessions(t *testing.T) {
+// --- Change own password (add-change-own-password) ---
+
+func TestChangeOwnPasswordUpdatesPasswordAndRevokesAllSessions(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	admin := actorFor(mustCreateUser(t, s, "admin-pw@example.com", "correcthorse", true))
-	target := mustCreateUser(t, s, "pwtarget@example.com", "correcthorse-old", false)
+	user := mustCreateUser(t, s, "changepw@example.com", "correcthorse-old", false)
+	actor := actorFor(user)
 
-	sess, _, err := s.Login(ctx, "pwtarget@example.com", "correcthorse-old")
+	sess, _, err := s.Login(ctx, "changepw@example.com", "correcthorse-old")
 	if err != nil {
 		t.Fatalf("Login: %v", err)
 	}
-	if _, err := s.AuthenticateSession(ctx, sess.ID); err != nil {
-		t.Fatalf("session should authenticate before password change: %v", err)
-	}
 
-	if err := s.SetUserPassword(ctx, admin, target.ID, "correcthorse-new"); err != nil {
-		t.Fatalf("SetUserPassword: %v", err)
+	if err := s.ChangeOwnPassword(ctx, actor, "correcthorse-old", "correcthorse-new"); err != nil {
+		t.Fatalf("ChangeOwnPassword: %v", err)
 	}
 
 	if _, err := s.AuthenticateSession(ctx, sess.ID); err == nil {
 		t.Error("session still authenticates after password change, want revoked")
 	}
-	if _, _, err := s.Login(ctx, "pwtarget@example.com", "correcthorse-new"); err != nil {
+	if _, _, err := s.Login(ctx, "changepw@example.com", "correcthorse-new"); err != nil {
 		t.Errorf("login with new password failed: %v", err)
 	}
 }
 
-func TestSetUserPasswordRejectsWeak(t *testing.T) {
+func TestChangeOwnPasswordRejectsWrongCurrentPassword(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	admin := actorFor(mustCreateUser(t, s, "admin-weak@example.com", "correcthorse", true))
-	target := mustCreateUser(t, s, "weaktarget@example.com", "correcthorse", false)
+	actor := actorFor(mustCreateUser(t, s, "wrongcurrent@example.com", "correcthorse-old", false))
 
-	if err := s.SetUserPassword(ctx, admin, target.ID, "short"); err == nil {
-		t.Error("weak password accepted, want error")
+	if err := s.ChangeOwnPassword(ctx, actor, "not-the-real-password", "correcthorse-new"); err == nil {
+		t.Error("expected error for an incorrect current password")
+	}
+	if _, _, err := s.Login(ctx, "wrongcurrent@example.com", "correcthorse-old"); err != nil {
+		t.Errorf("original password should still work: %v", err)
 	}
 }
 
-func TestNonTenantAdminCannotUpdateAnotherUsersPassword(t *testing.T) {
+func TestChangeOwnPasswordRejectsWeakNewPassword(t *testing.T) {
 	s := testService(t)
 	ctx := context.Background()
-	nonAdmin := actorFor(mustCreateUser(t, s, "not-admin-pw@example.com", "correcthorse", false))
-	target := mustCreateUser(t, s, "victim-pw@example.com", "correcthorse", false)
+	actor := actorFor(mustCreateUser(t, s, "weaknew@example.com", "correcthorse-old", false))
 
-	err := s.SetUserPassword(ctx, nonAdmin, target.ID, "correcthorse-new")
-	var ferr *service.ForbiddenError
-	if !asForbidden(err, &ferr) {
-		t.Errorf("err = %v, want ForbiddenError", err)
+	if err := s.ChangeOwnPassword(ctx, actor, "correcthorse-old", "short"); err == nil {
+		t.Error("weak new password accepted, want error")
+	}
+}
+
+func TestChangeOwnPasswordClearsRequiredChangeFlag(t *testing.T) {
+	s, st := testServiceAndStore(t)
+	ctx := context.Background()
+	user := mustCreateUser(t, s, "clearsflag@example.com", "correcthorse-old", false)
+	actor := actorFor(user)
+
+	if err := st.Users.SetMustChangePassword(ctx, user.ID, true); err != nil {
+		t.Fatalf("SetMustChangePassword: %v", err)
+	}
+	before, err := s.GetUser(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if !before.MustChangePassword {
+		t.Fatal("MustChangePassword should be true before the change")
+	}
+
+	if err := s.ChangeOwnPassword(ctx, actor, "correcthorse-old", "correcthorse-new"); err != nil {
+		t.Fatalf("ChangeOwnPassword: %v", err)
+	}
+
+	after, err := s.GetUser(ctx, user.ID)
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if after.MustChangePassword {
+		t.Error("MustChangePassword should be cleared after ChangeOwnPassword")
 	}
 }
 
@@ -537,6 +572,136 @@ func extractToken(t *testing.T, body string) string {
 		end = len(rest)
 	}
 	return rest[:end]
+}
+
+// --- Admin password actions (add-change-own-password) ---
+
+func TestSendPasswordResetEmailForExistingAccount(t *testing.T) {
+	s, fm := testServiceWithMailer(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-trigger@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "target-trigger@example.com", "correcthorse", false)
+
+	if err := s.SendPasswordResetEmail(ctx, admin, target.ID); err != nil {
+		t.Fatalf("SendPasswordResetEmail: %v", err)
+	}
+	if len(fm.sent) != 1 {
+		t.Fatalf("sent = %d emails, want 1", len(fm.sent))
+	}
+	if fm.sent[0].to != "target-trigger@example.com" {
+		t.Errorf("sent to %q, want target-trigger@example.com", fm.sent[0].to)
+	}
+}
+
+func TestSendPasswordResetEmailRejectedWithoutSMTPConfigured(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-nosmtp@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "target-nosmtp@example.com", "correcthorse", false)
+
+	if err := s.SendPasswordResetEmail(ctx, admin, target.ID); err == nil {
+		t.Error("expected error when SMTP is not configured")
+	}
+}
+
+func TestSendPasswordResetEmailRequiresTenantAdmin(t *testing.T) {
+	s, _ := testServiceWithMailer(t)
+	ctx := context.Background()
+	nonAdmin := actorFor(mustCreateUser(t, s, "nonadmin-trigger@example.com", "correcthorse", false))
+	target := mustCreateUser(t, s, "target-nonadmin@example.com", "correcthorse", false)
+
+	err := s.SendPasswordResetEmail(ctx, nonAdmin, target.ID)
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
+	}
+}
+
+func TestSetRequirePasswordChangeFlagsAccount(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-flag@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "target-flag@example.com", "correcthorse", false)
+
+	if err := s.SetRequirePasswordChange(ctx, admin, target.ID, true); err != nil {
+		t.Fatalf("SetRequirePasswordChange: %v", err)
+	}
+	got, err := s.GetUser(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if !got.MustChangePassword {
+		t.Error("MustChangePassword = false, want true")
+	}
+
+	if err := s.SetRequirePasswordChange(ctx, admin, target.ID, false); err != nil {
+		t.Fatalf("SetRequirePasswordChange(false): %v", err)
+	}
+	got, err = s.GetUser(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if got.MustChangePassword {
+		t.Error("MustChangePassword = true, want false after clearing")
+	}
+}
+
+func TestGenerateTemporaryPasswordSetsFlagAndRevokesSessions(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-temp@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "target-temp@example.com", "correcthorse-old", false)
+
+	sess, _, err := s.Login(ctx, "target-temp@example.com", "correcthorse-old")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	raw, err := s.GenerateTemporaryPassword(ctx, admin, target.ID)
+	if err != nil {
+		t.Fatalf("GenerateTemporaryPassword: %v", err)
+	}
+	if len(raw) < 12 {
+		t.Errorf("generated password %q is shorter than the minimum length", raw)
+	}
+
+	if _, err := s.AuthenticateSession(ctx, sess.ID); err == nil {
+		t.Error("old session still authenticates, want revoked")
+	}
+	if _, _, err := s.Login(ctx, "target-temp@example.com", raw); err != nil {
+		t.Errorf("login with the generated password failed: %v", err)
+	}
+	got, err := s.GetUser(ctx, target.ID)
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if !got.MustChangePassword {
+		t.Error("MustChangePassword = false, want true after generating a temporary password")
+	}
+}
+
+func TestGenerateTemporaryPasswordRejectedWhenSMTPConfigured(t *testing.T) {
+	s, _ := testServiceWithMailer(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-temp-smtp@example.com", "correcthorse", true))
+	target := mustCreateUser(t, s, "target-temp-smtp@example.com", "correcthorse", false)
+
+	if _, err := s.GenerateTemporaryPassword(ctx, admin, target.ID); err == nil {
+		t.Error("expected error generating a temporary password when SMTP is configured")
+	}
+}
+
+func TestGenerateTemporaryPasswordRequiresTenantAdmin(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	nonAdmin := actorFor(mustCreateUser(t, s, "nonadmin-temp@example.com", "correcthorse", false))
+	target := mustCreateUser(t, s, "target-nonadmin-temp@example.com", "correcthorse", false)
+
+	_, err := s.GenerateTemporaryPassword(ctx, nonAdmin, target.ID)
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
+	}
 }
 
 func TestLogoutInvalidatesSession(t *testing.T) {

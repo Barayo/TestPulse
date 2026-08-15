@@ -41,6 +41,21 @@ function mockAsTenantAdmin(isTenantAdmin: boolean) {
   })
 }
 
+// Same as mockAsTenantAdmin, but with an explicit passwordResetEnabled on
+// GET /api/v1/meta (add-change-own-password) — the Edit-user dialog's
+// password actions branch on this.
+function mockAsTenantAdminWithMeta(passwordResetEnabled: boolean) {
+  mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/users/me') {
+      return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
+    }
+    if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
+    if (path === '/api/v1/meta') return Promise.resolve({ data: { passwordResetEnabled }, response: { ok: true } })
+    return Promise.resolve({ data: [], response: { ok: true } })
+  })
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
 })
@@ -303,7 +318,7 @@ describe('PeoplePage', () => {
         expect(screen.getByRole('button', { name: /^reactivate$/i })).toBeInTheDocument()
       })
 
-      it('opens a dialog pre-filled with the current email and a blank password field', async () => {
+      it('opens a dialog pre-filled with the current email', async () => {
         mockAsTenantAdmin(true)
         const user = userEvent.setup()
         renderPage()
@@ -312,22 +327,7 @@ describe('PeoplePage', () => {
         await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
         const dialog = await screen.findByRole('dialog')
         expect(within(dialog).getByLabelText(/^email$/i)).toHaveValue('other@example.com')
-        expect(within(dialog).getByLabelText(/new password/i)).toHaveValue('')
         expect(mockPATCH).not.toHaveBeenCalled()
-      })
-
-      it('shows a caution notice the instant a new password is typed, not just on submit', async () => {
-        mockAsTenantAdmin(true)
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByText('other@example.com')
-
-        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
-        const dialog = await screen.findByRole('dialog')
-        expect(dialog).not.toHaveTextContent(/signs them out everywhere/i)
-
-        await user.type(within(dialog).getByLabelText(/new password/i), 'correcthorse-new')
-        expect(dialog).toHaveTextContent(/signs them out everywhere/i)
       })
 
       it('submitting an email-only change sends only the email field', async () => {
@@ -351,26 +351,6 @@ describe('PeoplePage', () => {
           }),
         )
         expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-      })
-
-      it('submitting a password-only change sends only the password field', async () => {
-        mockAsTenantAdmin(true)
-        mockPATCH.mockResolvedValue({ response: { ok: true } })
-        const user = userEvent.setup()
-        renderPage()
-        await screen.findByText('other@example.com')
-
-        await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
-        const dialog = await screen.findByRole('dialog')
-        await user.type(within(dialog).getByLabelText(/new password/i), 'correcthorse-new')
-        await user.click(within(dialog).getByRole('button', { name: /^save$/i }))
-
-        await waitFor(() =>
-          expect(mockPATCH).toHaveBeenCalledWith('/api/v1/users/{userId}', {
-            params: { path: { userId: 'u2' } },
-            body: { password: 'correcthorse-new' },
-          }),
-        )
       })
 
       it('rejects an invalid email inline without calling the API', async () => {
@@ -421,54 +401,85 @@ describe('PeoplePage', () => {
         expect(mockPATCH).not.toHaveBeenCalled()
       })
 
-      describe('Generate password', () => {
-        it('clicking Generate fills the field and reveals the plaintext with a Copy button', async () => {
-          mockAsTenantAdmin(true)
+      describe('password actions (add-change-own-password)', () => {
+        it('never shows a free-text password field, in either SMTP state', async () => {
+          mockAsTenantAdminWithMeta(true)
           const user = userEvent.setup()
           renderPage()
           await screen.findByText('other@example.com')
 
           await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
           const dialog = await screen.findByRole('dialog')
-          await user.click(within(dialog).getByRole('button', { name: /^generate$/i }))
-
-          const passwordField = within(dialog).getByLabelText(/new password/i) as HTMLInputElement
-          expect(passwordField.value).toHaveLength(20)
-          const copyBtn = within(dialog).getByRole('button', { name: /^copy$/i })
-          expect(dialog).toHaveTextContent(passwordField.value)
-          expect(copyBtn).toBeInTheDocument()
+          expect(within(dialog).queryByLabelText(/^new password$/i)).not.toBeInTheDocument()
         })
 
-        it('copies the generated password to the clipboard', async () => {
-          mockAsTenantAdmin(true)
+        it('with SMTP configured: sends a reset email immediately, with an inline confirmation', async () => {
+          mockAsTenantAdminWithMeta(true)
+          mockPOST.mockResolvedValue({ data: undefined, error: undefined, response: { ok: true, status: 204 } as Response })
           const user = userEvent.setup()
-          const writeText = vi.fn().mockResolvedValue(undefined)
           renderPage()
           await screen.findByText('other@example.com')
-          Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
 
           await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
           const dialog = await screen.findByRole('dialog')
-          await user.click(within(dialog).getByRole('button', { name: /^generate$/i }))
-          const passwordField = within(dialog).getByLabelText(/new password/i) as HTMLInputElement
-          await user.click(within(dialog).getByRole('button', { name: /^copy$/i }))
+          await user.click(within(dialog).getByRole('button', { name: /send password reset email/i }))
 
-          expect(writeText).toHaveBeenCalledWith(passwordField.value)
+          expect(mockPOST).toHaveBeenCalledWith(
+            '/api/v1/users/{userId}/password-reset-email',
+            expect.objectContaining({ params: { path: { userId: 'u2' } } }),
+          )
+          expect(await within(dialog).findByText(/reset email sent to other@example\.com/i)).toBeInTheDocument()
         })
 
-        it('manually editing the field after Generate clears the reveal', async () => {
-          mockAsTenantAdmin(true)
+        it('with SMTP configured: shows a "require a password change at next login" checkbox, saved with the rest of the form', async () => {
+          mockAsTenantAdminWithMeta(true)
+          mockPATCH.mockResolvedValue({ response: { ok: true } })
           const user = userEvent.setup()
           renderPage()
           await screen.findByText('other@example.com')
 
           await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
           const dialog = await screen.findByRole('dialog')
-          await user.click(within(dialog).getByRole('button', { name: /^generate$/i }))
-          expect(within(dialog).getByRole('button', { name: /^copy$/i })).toBeInTheDocument()
+          await user.click(within(dialog).getByRole('checkbox', { name: /require a password change/i }))
+          await user.click(within(dialog).getByRole('button', { name: /^save$/i }))
 
-          await user.type(within(dialog).getByLabelText(/new password/i), 'x')
-          expect(within(dialog).queryByRole('button', { name: /^copy$/i })).not.toBeInTheDocument()
+          await waitFor(() =>
+            expect(mockPATCH).toHaveBeenCalledWith('/api/v1/users/{userId}', {
+              params: { path: { userId: 'u2' } },
+              body: { requirePasswordChange: true },
+            }),
+          )
+        })
+
+        it('without SMTP configured: offers Generate a temporary password instead of the reset-email action', async () => {
+          mockAsTenantAdminWithMeta(false)
+          const user = userEvent.setup()
+          renderPage()
+          await screen.findByText('other@example.com')
+
+          await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+          const dialog = await screen.findByRole('dialog')
+          expect(within(dialog).queryByRole('button', { name: /send password reset email/i })).not.toBeInTheDocument()
+          expect(within(dialog).getByRole('button', { name: /generate a temporary password/i })).toBeInTheDocument()
+        })
+
+        it('without SMTP configured: generating reveals the chip and warns about the forced change', async () => {
+          mockAsTenantAdminWithMeta(false)
+          mockPOST.mockResolvedValue({ data: { password: 'Gxk7mQ2pRz9nT4wYcVbA' }, error: undefined, response: { ok: true, status: 200 } as Response })
+          const user = userEvent.setup()
+          renderPage()
+          await screen.findByText('other@example.com')
+
+          await user.click(screen.getByRole('button', { name: /^edit other@example.com$/i }))
+          const dialog = await screen.findByRole('dialog')
+          await user.click(within(dialog).getByRole('button', { name: /generate a temporary password/i }))
+
+          expect(mockPOST).toHaveBeenCalledWith(
+            '/api/v1/users/{userId}/generate-temporary-password',
+            expect.objectContaining({ params: { path: { userId: 'u2' } } }),
+          )
+          expect(await within(dialog).findByText('Gxk7mQ2pRz9nT4wYcVbA')).toBeInTheDocument()
+          expect(within(dialog).getByText(/signs them out everywhere/i)).toBeInTheDocument()
         })
       })
     })

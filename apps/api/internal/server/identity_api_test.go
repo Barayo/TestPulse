@@ -229,6 +229,140 @@ func TestScenario_MetaReportsPasswordResetEnabled(t *testing.T) {
 	}
 }
 
+// --- Change own password / admin password actions (add-change-own-password) ---
+
+func TestScenario_ChangeOwnPasswordSucceeds(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	cookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	callAs(t, h, cookie, "POST", "/api/v1/users/me/password",
+		jmap{"currentPassword": "correcthorse", "newPassword": "correcthorse-new"}, 204, nil)
+
+	var errBody jmap
+	callAs(t, h, cookie, "GET", "/api/v1/projects", nil, 401, &errBody)
+
+	var user jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": "admin@example.com", "password": "correcthorse-new"}, 200, &user)
+}
+
+func TestScenario_ChangeOwnPasswordRejectsWrongCurrentPassword(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	cookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var errBody jmap
+	callAs(t, h, cookie, "POST", "/api/v1/users/me/password",
+		jmap{"currentPassword": "wrong", "newPassword": "correcthorse-new"}, 401, &errBody)
+}
+
+func TestScenario_AdminTriggersPasswordResetEmail(t *testing.T) {
+	h, fm := apiServerWithAdminAndMailer(t, "admin@example.com", "correcthorse", true, 5, 5)
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users", jmap{"email": "target@example.com", "password": "correcthorse"}, 201, &member)
+	userID, _ := member["id"].(string)
+
+	callAs(t, h, admin, "POST", "/api/v1/users/"+userID+"/password-reset-email", nil, 204, nil)
+	if len(fm.sent) != 1 {
+		t.Fatalf("sent = %d emails, want 1", len(fm.sent))
+	}
+	if fm.sent[0].to != "target@example.com" {
+		t.Errorf("sent to %q, want target@example.com", fm.sent[0].to)
+	}
+}
+
+func TestScenario_AdminTriggersPasswordResetEmailRejectedWithoutSMTP(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users", jmap{"email": "target@example.com", "password": "correcthorse"}, 201, &member)
+	userID, _ := member["id"].(string)
+
+	var errBody jmap
+	callAs(t, h, admin, "POST", "/api/v1/users/"+userID+"/password-reset-email", nil, 400, &errBody)
+}
+
+func TestScenario_AdminSetsRequirePasswordChangeFlag(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users", jmap{"email": "target@example.com", "password": "correcthorse"}, 201, &member)
+	userID, _ := member["id"].(string)
+
+	callAs(t, h, admin, "PATCH", "/api/v1/users/"+userID, jmap{"requirePasswordChange": true}, 204, nil)
+
+	var user jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": "target@example.com", "password": "correcthorse"}, 200, &user)
+	if user["mustChangePassword"] != true {
+		t.Errorf("login response = %+v, want mustChangePassword=true", user)
+	}
+}
+
+func TestScenario_AdminGeneratesTemporaryPassword(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users", jmap{"email": "target@example.com", "password": "correcthorse"}, 201, &member)
+	userID, _ := member["id"].(string)
+
+	var resp jmap
+	callAs(t, h, admin, "POST", "/api/v1/users/"+userID+"/generate-temporary-password", nil, 200, &resp)
+	temp, _ := resp["password"].(string)
+	if len(temp) < 12 {
+		t.Fatalf("generated password %q too short", temp)
+	}
+
+	var user jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": "target@example.com", "password": temp}, 200, &user)
+	if user["mustChangePassword"] != true {
+		t.Errorf("login response = %+v, want mustChangePassword=true", user)
+	}
+}
+
+func TestScenario_AdminGenerateTemporaryPasswordRejectedWithSMTPConfigured(t *testing.T) {
+	h, _ := apiServerWithAdminAndMailer(t, "admin@example.com", "correcthorse", true, 5, 5)
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users", jmap{"email": "target@example.com", "password": "correcthorse"}, 201, &member)
+	userID, _ := member["id"].(string)
+
+	var errBody jmap
+	callAs(t, h, admin, "POST", "/api/v1/users/"+userID+"/generate-temporary-password", nil, 400, &errBody)
+}
+
+func TestScenario_FlaggedAccountBlockedFromOrdinaryRoutesUntilItChangesPassword(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users", jmap{"email": "target@example.com", "password": "correcthorse"}, 201, &member)
+	userID, _ := member["id"].(string)
+	callAs(t, h, admin, "PATCH", "/api/v1/users/"+userID, jmap{"requirePasswordChange": true}, 204, nil)
+
+	target := loginCookie(t, h, "target@example.com", "correcthorse")
+
+	var errBody jmap
+	callAs(t, h, target, "GET", "/api/v1/projects", nil, 403, &errBody)
+
+	// Allowlisted regardless of the flag.
+	callAs(t, h, target, "GET", "/api/v1/users/me", nil, 200, nil)
+
+	callAs(t, h, target, "POST", "/api/v1/users/me/password",
+		jmap{"currentPassword": "correcthorse", "newPassword": "correcthorse-new"}, 204, nil)
+
+	// The password change revoked the session that made the request —
+	// verify the *new* password now works normally, unblocked.
+	newCookie := loginCookie(t, h, "target@example.com", "correcthorse-new")
+	callAs(t, h, newCookie, "GET", "/api/v1/projects", nil, 200, nil)
+}
+
 func TestScenario_AnonymousRequestToDomainRouteRejected(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	var errBody jmap
@@ -434,29 +568,7 @@ func TestScenario_TenantAdminUpdatesUserEmailOverHTTP(t *testing.T) {
 
 // TestScenario_TenantAdminSetsNewPasswordOverHTTP covers add-update-user: a
 // session created before the password change stops authenticating.
-func TestScenario_TenantAdminSetsNewPasswordOverHTTP(t *testing.T) {
-	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
-	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
-
-	var member jmap
-	callAs(t, h, adminCookie, "POST", "/api/v1/users",
-		jmap{"email": "resettarget@example.com", "password": "correcthorse-old"}, 201, &member)
-	memberID, _ := member["id"].(string)
-	memberCookie := loginCookie(t, h, "resettarget@example.com", "correcthorse-old")
-
-	var me jmap
-	callAs(t, h, memberCookie, "GET", "/api/v1/users/me", nil, 200, &me)
-
-	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"password": "correcthorse-new"}, 204, nil)
-
-	callAs(t, h, memberCookie, "GET", "/api/v1/users/me", nil, 401, nil)
-
-	var loggedIn jmap
-	callAs(t, h, "", "POST", "/api/v1/auth/login",
-		jmap{"email": "resettarget@example.com", "password": "correcthorse-new"}, 200, &loggedIn)
-}
-
-func TestScenario_NonTenantAdminCannotUpdateAnotherUsersEmailOrPasswordOverHTTP(t *testing.T) {
+func TestScenario_NonTenantAdminCannotUpdateAnotherUsersEmailOrRequirePasswordChangeOverHTTP(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
 
@@ -471,7 +583,9 @@ func TestScenario_NonTenantAdminCannotUpdateAnotherUsersEmailOrPasswordOverHTTP(
 	victimID, _ := victim["id"].(string)
 
 	callAs(t, h, attackerCookie, "PATCH", "/api/v1/users/"+victimID, jmap{"email": "hijacked@example.com"}, 403, nil)
-	callAs(t, h, attackerCookie, "PATCH", "/api/v1/users/"+victimID, jmap{"password": "correcthorse-new"}, 403, nil)
+	callAs(t, h, attackerCookie, "PATCH", "/api/v1/users/"+victimID, jmap{"requirePasswordChange": true}, 403, nil)
+	callAs(t, h, attackerCookie, "POST", "/api/v1/users/"+victimID+"/password-reset-email", nil, 403, nil)
+	callAs(t, h, attackerCookie, "POST", "/api/v1/users/"+victimID+"/generate-temporary-password", nil, 403, nil)
 }
 
 func TestScenario_DeleteUserRequiresDeactivationFirst(t *testing.T) {

@@ -44,6 +44,7 @@ func mountIdentity(r chi.Router, h *api) {
 		r.Get("/", h.listUsers)
 		r.Get("/me", h.currentUser)
 		r.Patch("/me", h.updateCurrentUserProfile)
+		r.Post("/me/password", h.changeOwnPassword)
 		r.Post("/me/avatar", h.updateCurrentUserAvatar)
 		r.Delete("/me/avatar", h.removeCurrentUserAvatar)
 		r.Get("/{userId}/avatar", h.getUserAvatar)
@@ -51,6 +52,8 @@ func mountIdentity(r chi.Router, h *api) {
 		r.With(requireTenantAdmin).Patch("/{userId}", h.updateUser)
 		r.With(requireTenantAdmin).Delete("/{userId}", h.deleteUser)
 		r.With(requireTenantAdmin).Get("/{userId}/deletion-preview", h.userDeletionPreview)
+		r.With(requireTenantAdmin).Post("/{userId}/password-reset-email", h.adminSendPasswordResetEmail)
+		r.With(requireTenantAdmin).Post("/{userId}/generate-temporary-password", h.adminGenerateTemporaryPassword)
 	})
 	r.Route("/tokens", func(r chi.Router) {
 		r.Get("/", h.listTokens)
@@ -113,6 +116,24 @@ func (h *api) resetPassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err = h.svc.ResetPassword(r.Context(), in.Token, in.NewPassword)
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+type changeOwnPasswordInput struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+// changeOwnPassword is the self-service path (add-change-own-password) —
+// mounted authenticated, unlike forgotPassword/resetPassword.
+func (h *api) changeOwnPassword(w http.ResponseWriter, r *http.Request) {
+	in, err := decode[changeOwnPasswordInput](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	actor, _ := domain.ActorFromContext(r.Context())
+	err = h.svc.ChangeOwnPassword(r.Context(), actor, in.CurrentPassword, in.NewPassword)
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 
@@ -226,11 +247,11 @@ func (h *api) createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 type userUpdate struct {
-	IsTenantAdmin *bool   `json:"isTenantAdmin"`
-	Deactivate    bool    `json:"deactivate"`
-	Reactivate    bool    `json:"reactivate"`
-	Email         *string `json:"email"`
-	Password      *string `json:"password"`
+	IsTenantAdmin         *bool   `json:"isTenantAdmin"`
+	Deactivate            bool    `json:"deactivate"`
+	Reactivate            bool    `json:"reactivate"`
+	Email                 *string `json:"email"`
+	RequirePasswordChange *bool   `json:"requirePasswordChange"`
 }
 
 func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
@@ -247,8 +268,8 @@ func (h *api) updateUser(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	if in.Password != nil {
-		if err := h.svc.SetUserPassword(r.Context(), actor, userID, *in.Password); err != nil {
+	if in.RequirePasswordChange != nil {
+		if err := h.svc.SetRequirePasswordChange(r.Context(), actor, userID, *in.RequirePasswordChange); err != nil {
 			h.respond(w, 0, nil, err)
 			return
 		}
@@ -286,6 +307,29 @@ func (h *api) userDeletionPreview(w http.ResponseWriter, r *http.Request) {
 	userID := chi.URLParam(r, "userId")
 	preview, err := h.svc.UserDeletionPreview(r.Context(), actor, userID)
 	h.respond(w, http.StatusOK, preview, err)
+}
+
+// adminSendPasswordResetEmail triggers the same reset-email flow
+// forgotPassword uses, addressed at a known account rather than an email
+// the caller supplied — Tenant-Admin-only (add-change-own-password).
+func (h *api) adminSendPasswordResetEmail(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	userID := chi.URLParam(r, "userId")
+	err := h.svc.SendPasswordResetEmail(r.Context(), actor, userID)
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+// adminGenerateTemporaryPassword is the SMTP-less fallback — the raw value
+// is returned once and never retrievable again (add-change-own-password).
+func (h *api) adminGenerateTemporaryPassword(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	userID := chi.URLParam(r, "userId")
+	raw, err := h.svc.GenerateTemporaryPassword(r.Context(), actor, userID)
+	if err != nil {
+		h.respond(w, 0, nil, err)
+		return
+	}
+	h.respond(w, http.StatusOK, map[string]string{"password": raw}, nil)
 }
 
 // --- API tokens ---

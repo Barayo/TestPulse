@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { Trash2Icon, Loader2Icon, PowerIcon, PencilIcon, TriangleAlertIcon, CopyIcon, CheckIcon } from 'lucide-react'
+import { Trash2Icon, Loader2Icon, PowerIcon, PencilIcon, TriangleAlertIcon, MailIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { isValidEmail } from '@/lib/email'
@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { AdminShell } from '@/components/AdminShell'
+import { GeneratedPasswordChip } from '@/components/GeneratedPasswordChip'
 
 type User = {
   id: string
@@ -20,6 +21,7 @@ type User = {
   isTenantAdmin: boolean
   avatarKey?: string | null
   deactivatedAt: string | null
+  mustChangePassword?: boolean
 }
 type Team = { id: string; name: string; memberIds: string[]; createdAt: string }
 type UserOption = { id: string; email: string }
@@ -42,35 +44,6 @@ const USER_BATCH_SIZE = 10
 // inline results list from ever dumping an unbounded list into the page.
 const ADD_RESULTS_CAP = 8
 
-// Shared "here's a secret, shown once — copy it" chip, reused for both the
-// New-user form and the Edit-user dialog's Generate action (matches
-// TokensPage's identical idiom for a newly-created API token).
-function GeneratedPasswordChip({ value }: { value: string }) {
-  const [copied, setCopied] = useState(false)
-  async function handleCopy() {
-    await navigator.clipboard.writeText(value)
-    setCopied(true)
-  }
-  return (
-    <div className="flex items-center gap-2">
-      <code className="block flex-1 rounded bg-muted p-1.5 text-xs break-all">{value}</code>
-      <Button type="button" variant="outline" size="sm" onClick={() => void handleCopy()}>
-        {copied ? (
-          <>
-            <CheckIcon className="size-3.5" aria-hidden="true" />
-            Copied
-          </>
-        ) : (
-          <>
-            <CopyIcon className="size-3.5" aria-hidden="true" />
-            Copy
-          </>
-        )}
-      </Button>
-    </div>
-  )
-}
-
 export default function PeoplePage() {
   const { user: me } = useAuth()
 
@@ -87,9 +60,11 @@ export default function PeoplePage() {
   const [createUserError, setCreateUserError] = useState<string>()
   const [editTarget, setEditTarget] = useState<User | null>(null)
   const [editEmail, setEditEmail] = useState('')
-  const [editPassword, setEditPassword] = useState('')
-  const [editRevealedPassword, setEditRevealedPassword] = useState<string>()
+  const [editRequirePasswordChange, setEditRequirePasswordChange] = useState(false)
   const [editError, setEditError] = useState<string>()
+  const [passwordResetEnabled, setPasswordResetEnabled] = useState(false)
+  const [resetEmailSentTo, setResetEmailSentTo] = useState<string>()
+  const [temporaryPassword, setTemporaryPassword] = useState<string>()
   const [deactivateTarget, setDeactivateTarget] = useState<User | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null)
   const [deletePreview, setDeletePreview] = useState<{ teamCount: number; projectCount: number; tokenCount: number }>()
@@ -106,9 +81,14 @@ export default function PeoplePage() {
   const [teamDeletePreview, setTeamDeletePreview] = useState<{ memberCount: number; projectCount: number }>()
 
   async function load() {
-    const [{ data: u }, { data: t }] = await Promise.all([api.GET('/api/v1/users'), api.GET('/api/v1/teams')])
+    const [{ data: u }, { data: t }, { data: m }] = await Promise.all([
+      api.GET('/api/v1/users'),
+      api.GET('/api/v1/teams'),
+      api.GET('/api/v1/meta'),
+    ])
     if (u) setUsers(u as User[])
     if (t) setTeams(t as Team[])
+    if (m) setPasswordResetEnabled(m.passwordResetEnabled)
   }
 
   useEffect(() => {
@@ -150,20 +130,39 @@ export default function PeoplePage() {
   function openEditDialog(u: User) {
     setEditTarget(u)
     setEditEmail(u.email)
-    setEditPassword('')
-    setEditRevealedPassword(undefined)
+    setEditRequirePasswordChange(u.mustChangePassword ?? false)
     setEditError(undefined)
+    setResetEmailSentTo(undefined)
+    setTemporaryPassword(undefined)
   }
 
-  function handleGenerateEditPassword() {
-    const generated = generateSecurePassword()
-    setEditPassword(generated)
-    setEditRevealedPassword(generated)
+  // Fires immediately, not deferred to Save — the email is sent (or the
+  // temporary password generated) the moment the admin asks for it, same
+  // idiom as ForgotPasswordPage's own submit (add-change-own-password).
+  async function handleSendPasswordResetEmail() {
+    if (!editTarget) return
+    setEditError(undefined)
+    const { error: apiError } = await api.POST('/api/v1/users/{userId}/password-reset-email', {
+      params: { path: { userId: editTarget.id } },
+    })
+    if (apiError) {
+      setEditError((apiError as { error?: string }).error ?? 'Could not send the reset email.')
+      return
+    }
+    setResetEmailSentTo(editTarget.email)
   }
 
-  function handleEditPasswordChange(value: string) {
-    setEditPassword(value)
-    if (value !== editRevealedPassword) setEditRevealedPassword(undefined)
+  async function handleGenerateTemporaryPasswordForTarget() {
+    if (!editTarget) return
+    setEditError(undefined)
+    const { data, error: apiError } = await api.POST('/api/v1/users/{userId}/generate-temporary-password', {
+      params: { path: { userId: editTarget.id } },
+    })
+    if (apiError || !data) {
+      setEditError((apiError as { error?: string })?.error ?? 'Could not generate a temporary password.')
+      return
+    }
+    setTemporaryPassword(data.password)
   }
 
   function handleGeneratePassword() {
@@ -185,9 +184,11 @@ export default function PeoplePage() {
       setEditError('Enter a valid email address')
       return
     }
-    const body: { email?: string; password?: string } = {}
+    const body: { email?: string; requirePasswordChange?: boolean } = {}
     if (editEmail !== editTarget.email) body.email = editEmail
-    if (editPassword) body.password = editPassword
+    if (editRequirePasswordChange !== (editTarget.mustChangePassword ?? false)) {
+      body.requirePasswordChange = editRequirePasswordChange
+    }
     if (Object.keys(body).length === 0) {
       setEditTarget(null)
       return
@@ -699,48 +700,73 @@ export default function PeoplePage() {
       <Dialog open={editTarget !== null} onOpenChange={(open) => !open && setEditTarget(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>Edit user</DialogTitle>
-          <DialogDescription>
-            Change this account's email, password, or both — leave either field as-is to keep it unchanged.
-          </DialogDescription>
+          <DialogDescription>Change this account's email, or manage its password.</DialogDescription>
           <form onSubmit={handleEditUser} className="space-y-3">
             <div className="space-y-1">
               <Label htmlFor="edit-user-email">Email</Label>
               <Input id="edit-user-email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
             </div>
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label htmlFor="edit-user-password">New password</Label>
-                <button type="button" className="text-xs font-bold text-primary" onClick={handleGenerateEditPassword}>
-                  Generate
-                </button>
-              </div>
-              <Input
-                id="edit-user-password"
-                type="password"
-                autoComplete="new-password"
-                value={editPassword}
-                onChange={(e) => handleEditPasswordChange(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">Leave blank to keep the current password.</p>
-            </div>
-            {editPassword && (
-              <div className="space-y-2 rounded-lg border border-secondary/30 bg-secondary/10 p-2.5">
-                {editRevealedPassword && editPassword === editRevealedPassword && (
-                  <GeneratedPasswordChip value={editRevealedPassword} />
+
+            {passwordResetEnabled ? (
+              <div className="space-y-2 rounded-lg border p-2.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleSendPasswordResetEmail()}
+                >
+                  <MailIcon className="size-3.5" aria-hidden="true" />
+                  Send password reset email
+                </Button>
+                {resetEmailSentTo && (
+                  <p className="text-sm text-muted-foreground">Reset email sent to {resetEmailSentTo}.</p>
                 )}
-                <div className="flex items-start gap-2">
-                  <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
-                  <div>
-                    <p className="text-sm font-medium">
-                      {editTarget?.id === me.id ? 'This signs you out everywhere' : 'This signs them out everywhere'}
-                    </p>
-                    <p className="text-sm text-muted-foreground">
-                      {editTarget?.id === me.id
-                        ? "Every active session for your account ends the moment you save, including this one — you'll need to log in again."
-                        : "Every active session for this account ends the moment you save — they'll need to log in again."}
-                    </p>
-                  </div>
+                <div className="flex items-center gap-2 pt-1">
+                  <input
+                    id="edit-user-require-password-change"
+                    type="checkbox"
+                    checked={editRequirePasswordChange}
+                    onChange={(e) => setEditRequirePasswordChange(e.target.checked)}
+                    className="size-4"
+                  />
+                  <Label htmlFor="edit-user-require-password-change">
+                    Require a password change at next login
+                  </Label>
                 </div>
+              </div>
+            ) : (
+              <div className="space-y-2 rounded-lg border p-2.5">
+                <p className="text-xs text-muted-foreground">
+                  Email isn't configured on this instance, so this account can't receive a reset link.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => void handleGenerateTemporaryPasswordForTarget()}
+                >
+                  Generate a temporary password
+                </Button>
+                {temporaryPassword && (
+                  <div className="space-y-2">
+                    <GeneratedPasswordChip value={temporaryPassword} />
+                    <div className="flex items-start gap-2 rounded-lg border border-secondary/30 bg-secondary/10 p-2.5">
+                      <TriangleAlertIcon
+                        className="mt-0.5 size-4 shrink-0 text-secondary-foreground"
+                        aria-hidden="true"
+                      />
+                      <div>
+                        <p className="text-sm font-medium">
+                          {editTarget?.id === me.id ? 'This signs you out everywhere' : 'This signs them out everywhere'}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          Every active session for this account ends immediately, and they must set a real
+                          password of their own the next time they log in.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
             {editError && <p className="text-sm text-destructive">{editError}</p>}

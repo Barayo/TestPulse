@@ -113,6 +113,7 @@ func (s *Service) AuthenticateSession(ctx context.Context, sessionID string) (do
 	return domain.Actor{
 		ID: user.ID, Kind: domain.ActorKindUser, DisplayName: user.Email,
 		EffectiveUserID: user.ID, IsTenantAdmin: user.IsTenantAdmin,
+		MustChangePassword: user.MustChangePassword,
 	}, nil
 }
 
@@ -219,6 +220,15 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	if user.DeactivatedAt != nil {
 		return nil
 	}
+	return s.sendPasswordResetEmail(ctx, user)
+}
+
+// sendPasswordResetEmail creates a token and sends the reset link — shared
+// by the public, enumeration-safe ForgotPassword (which does its own
+// lookup/silent-no-op checks before calling this) and the admin-triggered
+// SendPasswordResetEmail (which has no enumeration concern: the caller
+// already knows the account is real).
+func (s *Service) sendPasswordResetEmail(ctx context.Context, user domain.User) error {
 	raw, err := randomSecret()
 	if err != nil {
 		return err
@@ -233,10 +243,106 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	return s.mailer.Send(ctx, user.Email, "Reset your TestPulse password", body)
 }
 
+// SendPasswordResetEmail is the admin-triggered variant of ForgotPassword
+// (add-change-own-password) — a Tenant Admin sending a known account a
+// reset link, rather than an unauthenticated caller supplying an email to
+// check. Rejected when the instance has no SMTP configured; the temporary-
+// password fallback (GenerateTemporaryPassword) exists for that case.
+func (s *Service) SendPasswordResetEmail(ctx context.Context, actor domain.Actor, userID string) error {
+	if !actor.IsTenantAdmin {
+		return forbidden("only a Tenant Admin can trigger a password reset for another account")
+	}
+	if !s.passwordResetEnabled {
+		return invalid("SMTP is not configured on this instance")
+	}
+	user, err := s.store.Users.Get(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.sendPasswordResetEmail(ctx, user)
+}
+
+// SetRequirePasswordChange flags (or clears) an account as requiring a new
+// password — enforced starting at that account's next login (design.md),
+// not retroactively against any session already in progress.
+func (s *Service) SetRequirePasswordChange(ctx context.Context, actor domain.Actor, userID string, require bool) error {
+	if !actor.IsTenantAdmin {
+		return forbidden("only a Tenant Admin can require a password change for another account")
+	}
+	if err := s.store.Users.SetMustChangePassword(ctx, userID, require); err != nil {
+		return err
+	}
+	s.audit(ctx, "require_password_change", "user", userID)
+	return nil
+}
+
+// GenerateTemporaryPassword is the SMTP-less fallback (add-change-own-password
+// design.md): a Tenant Admin can no longer choose another account's
+// password directly, only generate a random one server-side. Forces
+// must_change_password in the same action, revokes every session, and
+// returns the raw value once — it is never stored or logged in plain text.
+func (s *Service) GenerateTemporaryPassword(ctx context.Context, actor domain.Actor, userID string) (string, error) {
+	if !actor.IsTenantAdmin {
+		return "", forbidden("only a Tenant Admin can generate a temporary password for another account")
+	}
+	if s.passwordResetEnabled {
+		return "", invalid("SMTP is configured on this instance — send a password reset email instead")
+	}
+	raw, err := generateTemporaryPassword()
+	if err != nil {
+		return "", err
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(raw), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	if err := s.store.Users.UpdatePasswordHash(ctx, userID, string(hash)); err != nil {
+		return "", err
+	}
+	if err := s.store.Users.SetMustChangePassword(ctx, userID, true); err != nil {
+		return "", err
+	}
+	if err := s.store.Sessions.DeleteByUser(ctx, userID); err != nil {
+		return "", err
+	}
+	s.audit(ctx, "generate_temporary_password", "user", userID)
+	return raw, nil
+}
+
+// temporaryPasswordAlphabet excludes visually-ambiguous characters
+// (0/O, 1/l/I) — mirrors apps/web/src/lib/generatePassword.ts's alphabet,
+// since this value may be relayed out of band and retyped, not always
+// pasted.
+const temporaryPasswordAlphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+
+// generateTemporaryPassword mirrors generatePassword.ts's approach
+// server-side: crypto/rand (never math/rand — this stands in for a real
+// credential), rejection sampling to avoid the modulo bias a naive
+// byte % len(alphabet) would introduce.
+func generateTemporaryPassword() (string, error) {
+	const length = 20
+	max := 256 - (256 % len(temporaryPasswordAlphabet))
+	result := make([]byte, 0, length)
+	buf := make([]byte, length)
+	for len(result) < length {
+		if _, err := rand.Read(buf); err != nil {
+			return "", err
+		}
+		for _, b := range buf {
+			if len(result) == length {
+				break
+			}
+			if int(b) < max {
+				result = append(result, temporaryPasswordAlphabet[int(b)%len(temporaryPasswordAlphabet)])
+			}
+		}
+	}
+	return string(result), nil
+}
+
 // ResetPassword redeems a single-use token, sets a new password, and
-// revokes every existing session for the account — the same
-// session-invalidation guarantee as SetUserPassword (a session's validity
-// is never re-derived from the password hash).
+// revokes every existing session for the account — a session's validity
+// is never re-derived from the password hash.
 func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) error {
 	if err := domain.ValidatePassword(newPassword); err != nil {
 		return invalid("%s", err)
@@ -257,6 +363,12 @@ func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) 
 		return err
 	}
 	if err := s.store.PasswordResetTokens.MarkUsed(ctx, tokenHash); err != nil {
+		return err
+	}
+	// This is the account owner setting their own real password (proven by
+	// possession of the emailed link), exactly what must_change_password
+	// waits for — same reasoning as ChangeOwnPassword clearing it.
+	if err := s.store.Users.SetMustChangePassword(ctx, rt.UserID, false); err != nil {
 		return err
 	}
 	if err := s.store.Sessions.DeleteByUser(ctx, rt.UserID); err != nil {
@@ -348,28 +460,43 @@ func (s *Service) UpdateUserEmail(ctx context.Context, actor domain.Actor, userI
 	return user, nil
 }
 
-// SetUserPassword sets a new password for a target user (add-update-user)
-// and revokes every existing session for that account — a session's
-// validity is never re-derived from the password hash, so nothing else
-// invalidates a session left over from before the reset.
-func (s *Service) SetUserPassword(ctx context.Context, actor domain.Actor, userID, password string) error {
-	if !actor.IsTenantAdmin {
-		return forbidden("only a Tenant Admin can update another user's account")
+// ChangeOwnPassword lets an authenticated user change their own password,
+// given proof they know the current one — one of three password-setting
+// paths, each substituting a different proof: an emailed single-use token
+// for ResetPassword, a Tenant Admin generating one server-side for
+// GenerateTemporaryPassword, the current password itself here.
+// Revokes every session for the account, including the one making the
+// request, and clears must_change_password if it was set — this is the
+// account owner setting their own real password, exactly what that flag
+// exists to wait for.
+func (s *Service) ChangeOwnPassword(ctx context.Context, actor domain.Actor, currentPassword, newPassword string) error {
+	if actor.Kind != domain.ActorKindUser {
+		return invalid("only a human user has a password to change")
 	}
-	if err := domain.ValidatePassword(password); err != nil {
-		return invalid("%s", err)
-	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	_, hash, err := s.store.Users.GetByIDWithHash(ctx, actor.ID)
 	if err != nil {
 		return err
 	}
-	if err := s.store.Users.UpdatePasswordHash(ctx, userID, string(hash)); err != nil {
+	if err := bcrypt.CompareHashAndPassword([]byte(hash), []byte(currentPassword)); err != nil {
+		return unauthorized("incorrect current password")
+	}
+	if err := domain.ValidatePassword(newPassword); err != nil {
+		return invalid("%s", err)
+	}
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPassword), bcrypt.DefaultCost)
+	if err != nil {
 		return err
 	}
-	if err := s.store.Sessions.DeleteByUser(ctx, userID); err != nil {
+	if err := s.store.Users.UpdatePasswordHash(ctx, actor.ID, string(newHash)); err != nil {
 		return err
 	}
-	s.audit(ctx, "update_password", "user", userID)
+	if err := s.store.Users.SetMustChangePassword(ctx, actor.ID, false); err != nil {
+		return err
+	}
+	if err := s.store.Sessions.DeleteByUser(ctx, actor.ID); err != nil {
+		return err
+	}
+	s.audit(ctx, "change_password", "user", actor.ID)
 	return nil
 }
 

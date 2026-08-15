@@ -37,6 +37,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 
 		r.Group(func(r chi.Router) {
 			r.Use(authenticate(svc))
+			r.Use(requireNoPendingPasswordChange)
 			mountAPI(r, h)
 			mountIdentity(r, h)
 			mountTeams(r, h)

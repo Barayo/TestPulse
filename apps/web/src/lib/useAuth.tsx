@@ -9,6 +9,7 @@ export type AuthUser = {
   displayName?: string | null
   avatarKey?: string | null
   timezone?: string | null
+  mustChangePassword?: boolean
 }
 
 type LoginResult = { ok: true; user: AuthUser } | { ok: false; error: string }

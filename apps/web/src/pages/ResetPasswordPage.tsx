@@ -6,6 +6,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { HealthBadge } from '@/components/HealthBadge'
+import { GeneratedPasswordChip } from '@/components/GeneratedPasswordChip'
+import { generateSecurePassword } from '@/lib/generatePassword'
 import { api } from '@/lib/api'
 
 const NETWORK_ERROR = "Couldn't reach the server — check your connection and try again."
@@ -17,9 +19,27 @@ export default function ResetPasswordPage() {
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
+  const [revealedPassword, setRevealedPassword] = useState<string>()
   const [error, setError] = useState<string>()
   const [submitting, setSubmitting] = useState(false)
   const [tokenDead, setTokenDead] = useState(false)
+
+  function handleGeneratePassword() {
+    const generated = generateSecurePassword()
+    setPassword(generated)
+    setConfirmPassword(generated)
+    setRevealedPassword(generated)
+  }
+
+  function handlePasswordChange(value: string) {
+    setPassword(value)
+    setRevealedPassword(undefined)
+  }
+
+  function handleConfirmPasswordChange(value: string) {
+    setConfirmPassword(value)
+    setRevealedPassword(undefined)
+  }
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -89,7 +109,16 @@ export default function ResetPasswordPage() {
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
-                  <Label htmlFor="reset-password-new">New password</Label>
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="reset-password-new">New password</Label>
+                    <button
+                      type="button"
+                      className="text-xs font-bold text-primary"
+                      onClick={handleGeneratePassword}
+                    >
+                      Generate
+                    </button>
+                  </div>
                   <Input
                     id="reset-password-new"
                     type="password"
@@ -97,7 +126,7 @@ export default function ResetPasswordPage() {
                     autoFocus
                     disabled={submitting}
                     value={password}
-                    onChange={(e) => setPassword(e.target.value)}
+                    onChange={(e) => handlePasswordChange(e.target.value)}
                   />
                   <p className="text-xs text-muted-foreground">At least 12 characters.</p>
                 </div>
@@ -109,9 +138,12 @@ export default function ResetPasswordPage() {
                     autoComplete="new-password"
                     disabled={submitting}
                     value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onChange={(e) => handleConfirmPasswordChange(e.target.value)}
                   />
                 </div>
+                {revealedPassword && password === revealedPassword && confirmPassword === revealedPassword && (
+                  <GeneratedPasswordChip value={revealedPassword} />
+                )}
                 <Button type="submit" className="w-full" disabled={submitting}>
                   {submitting ? 'Resetting…' : 'Reset password'}
                 </Button>

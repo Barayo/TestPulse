@@ -116,4 +116,43 @@ describe('ResetPasswordPage', () => {
 
     expect(await screen.findByText(/couldn't reach the server/i)).toBeInTheDocument()
   })
+
+  describe('Generate password (add-change-own-password)', () => {
+    it('fills both password fields with the same generated value and reveals the chip', async () => {
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(screen.getByRole('button', { name: /generate/i }))
+
+      const newPasswordInput = screen.getByLabelText(/^new password$/i) as HTMLInputElement
+      const confirmInput = screen.getByLabelText(/confirm new password/i) as HTMLInputElement
+      expect(newPasswordInput.value).toBe(confirmInput.value)
+      expect(newPasswordInput.value.length).toBeGreaterThanOrEqual(12)
+      expect(screen.getByText(newPasswordInput.value)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^copy$/i })).toBeInTheDocument()
+    })
+
+    it('invalidates the chip when the new-password field is edited afterward', async () => {
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(screen.getByRole('button', { name: /generate/i }))
+      const newPasswordInput = screen.getByLabelText(/^new password$/i) as HTMLInputElement
+      const generated = newPasswordInput.value
+      await user.type(newPasswordInput, 'x')
+
+      expect(screen.queryByText(generated)).not.toBeInTheDocument()
+    })
+
+    it('submits successfully using the generated password', async () => {
+      mockPOST.mockResolvedValue({ data: undefined, error: undefined, response: { ok: true, status: 204 } as Response })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.click(screen.getByRole('button', { name: /generate/i }))
+      await user.click(screen.getByRole('button', { name: /reset password/i }))
+
+      expect(await screen.findByText('login stub')).toBeInTheDocument()
+    })
+  })
 })

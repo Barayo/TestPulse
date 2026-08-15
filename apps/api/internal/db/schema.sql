@@ -284,6 +284,7 @@ CREATE TABLE public.users (
     display_name text,
     avatar_key text,
     timezone text,
+    must_change_password boolean DEFAULT false NOT NULL,
     CONSTRAINT users_email_check CHECK ((email <> ''::text))
 );
 

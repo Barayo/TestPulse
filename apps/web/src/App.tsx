@@ -18,6 +18,7 @@ import RunItemDetailPage from '@/pages/RunItemDetailPage'
 import LoginPage from '@/pages/LoginPage'
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
+import RequiredPasswordChangePage from '@/pages/RequiredPasswordChangePage'
 import PeoplePage from '@/pages/PeoplePage'
 import RolesPage from '@/pages/RolesPage'
 import TokensPage from '@/pages/TokensPage'
@@ -37,6 +38,12 @@ function RequireAuth({ children }: { children: ReactNode }) {
 
   if (loading) return null
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />
+  // A mandatory gate, not a redirect to a route of its own — rendered in
+  // place of whatever was requested, for every RequireAuth-protected route
+  // (add-change-own-password). AllowAnonymous checks the same flag below —
+  // the root path (`/`) is itself an anonymous route, so gating only here
+  // would miss a flagged admin who lands there right after login.
+  if (user.mustChangePassword) return <RequiredPasswordChangePage />
   return <Layout>{children}</Layout>
 }
 
@@ -49,8 +56,14 @@ function RequireAuth({ children }: { children: ReactNode }) {
 // specific page's dual-mode migration has landed — until then, entries in
 // that list still render through RequireAuth like everything else.
 function AllowAnonymous({ children }: { children: ReactNode }) {
-  const { loading } = useAuth()
+  const { user, loading } = useAuth()
   if (loading) return null
+  // Same mandatory gate as RequireAuth, for the same reason — an
+  // authenticated, flagged user must see it regardless of whether the
+  // specific route they landed on would also work anonymously
+  // (add-change-own-password). An anonymous visitor (user === null) is
+  // unaffected — the page's own dual-mode logic still applies to them.
+  if (user?.mustChangePassword) return <RequiredPasswordChangePage />
   return <Layout>{children}</Layout>
 }
 

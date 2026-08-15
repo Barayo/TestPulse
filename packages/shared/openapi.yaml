@@ -1158,6 +1158,24 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/users/me/password:
+    post:
+      operationId: changeOwnPassword
+      summary: Change the caller's own password, given the current one
+      description: >-
+        Revokes every session for the account, including the one making
+        this request, and clears the account's required-password-change
+        flag if it was set (add-change-own-password).
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeOwnPasswordInput" }
+      responses:
+        "204": { description: Password changed }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v1/users/me/avatar:
     post:
       operationId: updateCurrentUserAvatar
@@ -1212,7 +1230,7 @@ paths:
       - { name: userId, in: path, required: true, schema: { type: string } }
     patch:
       operationId: updateUser
-      summary: Change a user's Tenant Admin flag, deactivate/reactivate them, or update their email/password (Tenant Admin only)
+      summary: Change a user's Tenant Admin flag, deactivate/reactivate them, update their email, or require a password change (Tenant Admin only)
       tags: [users]
       requestBody:
         required: true
@@ -1248,6 +1266,48 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/UserDeletionPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/users/{userId}/password-reset-email:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: adminSendPasswordResetEmail
+      summary: Trigger a password-reset email for this account (Tenant Admin only)
+      description: >-
+        The same reset-email mechanism the self-service forgot-password
+        flow uses, addressed at a known account rather than an email the
+        caller supplied. Only available when the instance has SMTP
+        configured (add-change-own-password) — the temporary-password
+        fallback exists for the case where it isn't.
+      tags: [users]
+      responses:
+        "204": { description: Reset email sent }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/users/{userId}/generate-temporary-password:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: adminGenerateTemporaryPassword
+      summary: Generate a temporary password for this account (Tenant Admin only, SMTP-less fallback)
+      description: >-
+        Only available when the instance has no SMTP configured — the
+        reset-email path is required when it does. Sets the account's
+        required-password-change flag and revokes every existing session
+        in the same action. The raw password is returned once and never
+        retrievable again (add-change-own-password).
+      tags: [users]
+      responses:
+        "200":
+          description: Temporary password generated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemporaryPassword" }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -2165,7 +2225,7 @@ components:
         publicProjectsEnabled: { type: boolean }
     User:
       type: object
-      required: [id, email, isTenantAdmin, createdAt]
+      required: [id, email, isTenantAdmin, createdAt, mustChangePassword]
       properties:
         id: { type: string }
         email: { type: string }
@@ -2184,6 +2244,15 @@ components:
           format: date-time
           nullable: true
         createdAt: { type: string, format: date-time }
+        mustChangePassword:
+          type: boolean
+          description: >-
+            True when this account must set a new password before doing
+            anything else (add-change-own-password) — set by a Tenant
+            Admin directly, or as a side effect of a generated temporary
+            password. On the response to POST /auth/login, signals the
+            frontend to show the required-change gate before the app
+            shell.
     UserProfileUpdate:
       type: object
       description: Self-service profile fields — a user editing their own display name, avatar, or timezone.
@@ -2217,11 +2286,28 @@ components:
         email:
           type: string
           description: Change the account's email (add-update-user).
+        requirePasswordChange:
+          type: boolean
+          description: >-
+            Flag (or clear) the account as requiring a new password,
+            enforced starting at its next login (add-change-own-password).
+            A Tenant Admin can no longer set another account's password
+            directly — see POST .../password-reset-email and
+            POST .../generate-temporary-password.
+    ChangeOwnPasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string }
+    TemporaryPassword:
+      type: object
+      required: [password]
+      properties:
         password:
           type: string
           description: >-
-            Set a new password directly (add-update-user, Tenant Admin
-            only) — revokes every existing session for the account.
+            The generated raw value — shown once, never retrievable again.
     UserDeletionPreview:
       type: object
       description: >-

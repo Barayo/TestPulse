@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
-import { Link } from 'react-router'
+import { Link, useNavigate } from 'react-router'
 import { KeyRoundIcon, LockIcon, ChevronRightIcon, UploadIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/useAuth'
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { ChangePasswordForm } from '@/components/ChangePasswordForm'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { useTheme } from '@/lib/ThemeProvider'
 import type { Theme } from '@/lib/theme'
@@ -24,6 +26,7 @@ const ACCEPTED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 export default function ProfilePage() {
   const { user, refreshUser } = useAuth()
+  const navigate = useNavigate()
   const [, setThemeOverride, themeOverride] = useTheme()
   const [displayName, setDisplayName] = useState('')
   const [avatarKey, setAvatarKey] = useState<string | null>(null)
@@ -33,6 +36,12 @@ export default function ProfilePage() {
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false)
+
+  function closeChangePasswordDialog() {
+    setChangePasswordOpen(false)
+  }
 
   useEffect(() => {
     if (!user) return
@@ -329,27 +338,32 @@ export default function ProfilePage() {
             <li className="border-b last:border-b-0">
               <button
                 type="button"
-                disabled
-                title="Coming soon"
-                className="flex w-full items-center gap-3 px-4 py-3 text-left disabled:cursor-not-allowed"
+                onClick={() => setChangePasswordOpen(true)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-accent"
               >
-                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <LockIcon className="size-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-muted-foreground">Change password</span>
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                      Coming soon
-                    </span>
-                  </span>
-                  <span className="block text-xs text-muted-foreground">Password login isn&apos;t available yet on this instance</span>
+                  <span className="block text-sm font-medium">Change password</span>
+                  <span className="block text-xs text-muted-foreground">Set a new password for your account</span>
                 </span>
+                <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </button>
             </li>
           </ul>
         </CardContent>
       </Card>
+
+      <Dialog open={changePasswordOpen} onOpenChange={(open) => !open && closeChangePasswordDialog()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Change password</DialogTitle>
+          <ChangePasswordForm
+            onSuccess={() => navigate('/login', { replace: true, state: { passwordReset: true } })}
+            onCancel={closeChangePasswordDialog}
+          />
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

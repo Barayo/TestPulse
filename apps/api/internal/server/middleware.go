@@ -79,6 +79,38 @@ func requireTenantAdmin(next http.Handler) http.Handler {
 	})
 }
 
+// requireNoPendingPasswordChange rejects every authenticated route with 403
+// for an actor whose underlying user has a pending required password
+// change (add-change-own-password), except a small allowlist: reading own
+// profile (so the frontend's gate has something to render) and changing
+// own password (the only way to clear the flag). The frontend already
+// knows to show the gate from the login response's own mustChangePassword
+// field — this exists as defense-in-depth against a client bypassing that
+// gate, not as the mechanism the UI depends on. An agent/token actor's
+// MustChangePassword is always false (AuthenticateToken never sets it), so
+// this never affects API-token traffic.
+func requireNoPendingPasswordChange(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := domain.ActorFromContext(r.Context())
+		if ok && actor.MustChangePassword && !passwordChangeAllowlisted(r) {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "password change required"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func passwordChangeAllowlisted(r *http.Request) bool {
+	switch {
+	case r.Method == http.MethodGet && r.URL.Path == "/api/v1/users/me":
+		return true
+	case r.Method == http.MethodPost && r.URL.Path == "/api/v1/users/me/password":
+		return true
+	default:
+		return false
+	}
+}
+
 // projectIDResolver maps a request to the project it concerns — sometimes
 // directly from the URL (projectIDParam), sometimes via one extra store
 // lookup from a case/suite/run/folder/item id (add-project-rbac design.md

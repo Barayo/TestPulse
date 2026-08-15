@@ -705,14 +705,15 @@ func (p Permissions) Intersect(other Permissions) Permissions {
 // (add-project-rbac design.md D1) — a non-Tenant-Admin's access is entirely
 // determined by their per-project membership, not a flat instance role.
 type User struct {
-	ID            string     `json:"id"`
-	Email         string     `json:"email"`
-	IsTenantAdmin bool       `json:"isTenantAdmin"`
-	DisplayName   *string    `json:"displayName"`
-	AvatarKey     *string    `json:"avatarKey"`
-	Timezone      *string    `json:"timezone"`
-	DeactivatedAt *time.Time `json:"deactivatedAt"`
-	CreatedAt     time.Time  `json:"createdAt"`
+	ID                 string     `json:"id"`
+	Email              string     `json:"email"`
+	IsTenantAdmin      bool       `json:"isTenantAdmin"`
+	DisplayName        *string    `json:"displayName"`
+	AvatarKey          *string    `json:"avatarKey"`
+	Timezone           *string    `json:"timezone"`
+	DeactivatedAt      *time.Time `json:"deactivatedAt"`
+	CreatedAt          time.Time  `json:"createdAt"`
+	MustChangePassword bool       `json:"mustChangePassword"`
 }
 
 // UserDeletionPreview is the "what does deleting this account remove"
@@ -912,6 +913,11 @@ type Actor struct {
 	DisplayName     string
 	EffectiveUserID string
 	IsTenantAdmin   bool
+	// MustChangePassword (add-change-own-password): always false for an
+	// agent/token actor — only a human session actor can have a pending
+	// required password change, resolved fresh from the underlying user
+	// on every request (AuthenticateSession), never cached.
+	MustChangePassword bool
 	// ScopedProjectID/ScopedPermissions: both nil for a human actor or an
 	// unscoped agent token (full inheritance, unchanged default
 	// behavior). Both set for a token scoped to a project + role

@@ -417,6 +417,40 @@ describe('App shell', () => {
   })
 })
 
+// The gate is rendered by RequireAuth in place of whatever route was
+// requested — it has no URL of its own (add-change-own-password).
+describe('Required password change gate', () => {
+  function mockFlaggedUser() {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/meta')
+        return Promise.resolve({ response: { ok: true }, data: { name: 'TestPulse', version: '0.0.1' } })
+      if (path === '/api/v1/users/me')
+        return Promise.resolve({
+          response: { ok: true },
+          data: { id: 'u1', email: 'admin@example.com', isTenantAdmin: true, mustChangePassword: true },
+        })
+      return Promise.resolve({ response: { ok: true }, data: [] })
+    })
+  }
+
+  it('shows the gate instead of the requested route when mustChangePassword is true', async () => {
+    mockFlaggedUser()
+    render(<App />)
+
+    expect(await screen.findByText(/set a new password/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /new project/i })).not.toBeInTheDocument()
+  })
+
+  it('does not show the gate for an unflagged user', async () => {
+    mockProjectData()
+    render(<App />)
+
+    await screen.findByRole('button', { name: /new project/i })
+    expect(screen.queryByText(/set a new password/i)).not.toBeInTheDocument()
+  })
+})
+
 // Old /public* URLs become plain redirects, not 404s (design.md D7,
 // unify-authenticated-and-public-views tasks.md 12.1/12.2) — someone who
 // already has a /public/{key} link (documented, potentially shared) should

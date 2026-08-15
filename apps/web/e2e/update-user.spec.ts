@@ -35,19 +35,16 @@ test.describe('Requirement: Local user accounts', () => {
     await expect(page.getByText(originalEmail)).toHaveCount(0)
   })
 
-  test('Scenario: Tenant Admin sets a new password for a user', async ({ page, browser }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-80' })
-    const email = `${unique('reset-target').replace(/\s+/g, '-').toLowerCase()}@example.com`
-    await createUser(page, email, 'correcthorse-old')
-
-    // A real active session for the target, established before the reset —
-    // proves it stops authenticating afterward.
-    const memberContext = await browser.newContext()
-    const memberPage = await memberContext.newPage()
-    const loginRes = await memberPage.request.post('/api/v1/auth/login', { data: { email, password: 'correcthorse-old' } })
-    expect(loginRes.ok()).toBe(true)
-    const meBefore = await memberPage.request.get('/api/v1/users/me')
-    expect(meBefore.status()).toBe(200)
+  // Replaces the old "Tenant Admin sets a new password for a user"
+  // scenario (TD-80) — that exercised the Edit-user dialog's free-text
+  // password field, removed by add-change-own-password. An admin can no
+  // longer choose another account's password directly; see
+  // change-own-password.spec.ts for the replacement admin actions
+  // (trigger a reset email, require a password change at next login).
+  test('Scenario: Tenant Admin triggers a password reset email for a user', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-83' })
+    const email = `${unique('admin-reset-target').replace(/\s+/g, '-').toLowerCase()}@example.com`
+    await createUser(page, email, 'correcthorse')
 
     await page.goto('/settings/people')
     await page.getByPlaceholder(/search by email/i).fill(email)
@@ -55,21 +52,9 @@ test.describe('Requirement: Local user accounts', () => {
     await page.getByRole('button', { name: `Edit ${email}` }).click()
 
     const dialog = page.getByRole('dialog')
-    await dialog.getByRole('button', { name: /^generate$/i }).click()
-    const passwordField = dialog.getByLabel(/new password/i)
-    const generated = await passwordField.inputValue()
-    expect(generated).toHaveLength(20)
-    await expect(dialog).toContainText(/signs them out everywhere/i)
-    await dialog.getByRole('button', { name: /^save$/i }).click()
-    await expect(dialog).toHaveCount(0)
-
-    // The pre-existing session no longer authenticates…
-    const meAfter = await memberPage.request.get('/api/v1/users/me')
-    expect(meAfter.status()).toBe(401)
-    // …but the new password works.
-    const newLogin = await memberPage.request.post('/api/v1/auth/login', { data: { email, password: generated } })
-    expect(newLogin.ok()).toBe(true)
-
-    await memberPage.close()
+    // The compose stack has Mailpit configured by default (add-forgot-password),
+    // so this is the send-reset-email path, not the SMTP-less fallback.
+    await dialog.getByRole('button', { name: /send password reset email/i }).click()
+    await expect(dialog).toContainText(new RegExp(`reset email sent to ${email}`, 'i'))
   })
 })
