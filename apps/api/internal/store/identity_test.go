@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 	"time"
 
@@ -581,6 +582,50 @@ func TestAuditAppendAndListByEntity(t *testing.T) {
 	}
 	if list[0].Action != "create" || list[1].Action != "update" {
 		t.Errorf("order wrong: %+v", list)
+	}
+}
+
+func TestAuditEntryDetailRoundTrips(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "detail-actor@example.com", false)
+
+	if err := s.Audit.Append(ctx, domain.AuditEntry{
+		ActorKind: domain.ActorKindUser, ActorID: u.ID, ActorName: u.Email,
+		Action: "move", EntityType: "case", EntityID: "c1",
+		Detail: map[string]any{"from": "folder-a", "to": "folder-b"},
+	}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	list, err := s.Audit.ListByEntity(ctx, "case", "c1")
+	if err != nil || len(list) != 1 {
+		t.Fatalf("ListByEntity = %d, %v; want 1", len(list), err)
+	}
+	want := map[string]any{"from": "folder-a", "to": "folder-b"}
+	if !reflect.DeepEqual(list[0].Detail, want) {
+		t.Errorf("Detail = %+v, want %+v", list[0].Detail, want)
+	}
+}
+
+func TestAuditEntryWithoutDetailListsAsNil(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "no-detail-actor@example.com", false)
+
+	if err := s.Audit.Append(ctx, domain.AuditEntry{
+		ActorKind: domain.ActorKindUser, ActorID: u.ID, ActorName: u.Email,
+		Action: "create", EntityType: "case", EntityID: "c2",
+	}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	list, err := s.Audit.ListByEntity(ctx, "case", "c2")
+	if err != nil || len(list) != 1 {
+		t.Fatalf("ListByEntity = %d, %v; want 1", len(list), err)
+	}
+	if list[0].Detail != nil {
+		t.Errorf("Detail = %+v, want nil", list[0].Detail)
 	}
 }
 

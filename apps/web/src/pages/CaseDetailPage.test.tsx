@@ -7,11 +7,12 @@ import { api } from '@/lib/api'
 import { AuthProvider } from '@/lib/useAuth'
 
 vi.mock('@/lib/api', () => ({
-  api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() },
+  api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn(), POST: vi.fn() },
 }))
 const mockGET = vi.mocked(api.GET)
 const mockPUT = vi.mocked(api.PUT)
 const mockDELETE = vi.mocked(api.DELETE)
+const mockPOST = vi.mocked(api.POST)
 
 const root = { id: 'root', projectId: 'p1', name: 'Root', createdAt: '' }
 const transferencias = { id: 'transferencias', projectId: 'p1', parentFolderId: 'root', name: 'Transferencias', createdAt: '' }
@@ -411,6 +412,59 @@ describe('CaseDetailPage', () => {
     await within(history).findByText('Daily transfer limit (v2)')
     const v2Row = within(history).getByText('v2').closest('li')!
     expect(within(v2Row).getAllByText('Jane')).toHaveLength(1)
+  })
+
+  describe('Restore version (add-version-restore)', () => {
+    it('shows a Restore action for a non-current version but not the current one', async () => {
+      mockDetailAPI()
+      renderDetail()
+      const history = await screen.findByRole('list', { name: /version history/i })
+      await userEvent.click(within(history).getByText('v1'))
+      expect(await within(history).findByRole('button', { name: /restore this version/i })).toBeInTheDocument()
+
+      await userEvent.click(within(history).getByText('v1'))
+      await userEvent.click(within(history).getByText('v2'))
+      expect(within(history).queryByRole('button', { name: /restore this version/i })).not.toBeInTheDocument()
+    })
+
+    it('hides the Restore action when the caller lacks caseEdit', async () => {
+      mockDetailAPI({ permissions: { ...fullPermissions, caseEdit: false } })
+      renderDetail()
+      const history = await screen.findByRole('list', { name: /version history/i })
+      await userEvent.click(within(history).getByText('v1'))
+      expect(within(history).queryByRole('button', { name: /restore this version/i })).not.toBeInTheDocument()
+    })
+
+    it('hides the Restore action for an anonymous/public visitor', async () => {
+      mockDetailAPI({ anonymous: true })
+      renderDetail()
+      const history = await screen.findByRole('list', { name: /version history/i })
+      await userEvent.click(within(history).getByText('v1'))
+      expect(within(history).queryByRole('button', { name: /restore this version/i })).not.toBeInTheDocument()
+    })
+
+    it('shows a confirmation before restoring, and confirming calls the restore endpoint', async () => {
+      mockDetailAPI()
+      mockPOST.mockResolvedValue({
+        data: { ...limitCase, currentVersion: 3, content: { ...limitCase.content, title: 'Daily transfer limit v1 restored' } },
+        response: { ok: true },
+      })
+      renderDetail()
+      const history = await screen.findByRole('list', { name: /version history/i })
+      await userEvent.click(within(history).getByText('v1'))
+      await userEvent.click(await within(history).findByRole('button', { name: /restore this version/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/restore version 1/i)).toBeInTheDocument()
+      await userEvent.click(within(dialog).getByRole('button', { name: /^restore$/i }))
+
+      await waitFor(() => {
+        expect(mockPOST).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}/versions/{version}/restore',
+          expect.objectContaining({ params: { path: { caseKey: 'c1', version: 1 } } }),
+        )
+      })
+    })
   })
 
   it('renders priority, platform, test type, and automated status as pills', async () => {

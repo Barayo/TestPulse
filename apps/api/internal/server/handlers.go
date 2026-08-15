@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 
@@ -57,6 +58,7 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/", h.editCase)
 		r.With(h.requirePermission(domain.PermCaseDelete, projectIDFromCase)).Delete("/", h.deleteCase)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/versions", h.listCaseVersions)
+		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Post("/versions/{version}/restore", h.restoreCaseVersion)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/executions", h.listCaseExecutions)
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
 	})
@@ -305,6 +307,16 @@ func (h *api) deleteCase(w http.ResponseWriter, r *http.Request) {
 func (h *api) listCaseVersions(w http.ResponseWriter, r *http.Request) {
 	versions, err := h.svc.CaseVersions(r.Context(), resolvedID(r, "caseKey"))
 	h.respond(w, http.StatusOK, versions, err)
+}
+
+func (h *api) restoreCaseVersion(w http.ResponseWriter, r *http.Request) {
+	version, err := strconv.Atoi(chi.URLParam(r, "version"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid version"})
+		return
+	}
+	c, err := h.svc.RestoreVersion(r.Context(), resolvedID(r, "caseKey"), version)
+	h.respond(w, http.StatusCreated, c, err)
 }
 
 func (h *api) listCaseExecutions(w http.ResponseWriter, r *http.Request) {

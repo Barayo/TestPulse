@@ -87,7 +87,10 @@ always exposes its current version number. Editing a case SHALL
 require `caseEdit` permission. Every version SHALL record the actor
 who created it (`actorKind`: `user`/`agent`/`unknown`, `actorRefId`),
 resolved from the authenticated caller — mirroring how a recorded
-result already tracks its actor.
+result already tracks its actor. A user with `caseEdit` permission
+SHALL be able to restore an old version's content, which SHALL create
+a new version rather than modifying or reusing the target version's
+own version number.
 
 #### Scenario: Editing creates a new version
 - **WHEN** a user with `caseEdit` permission edits the steps of a case at version 1
@@ -100,6 +103,14 @@ result already tracks its actor.
 #### Scenario: A permission that doesn't include caseEdit cannot edit a case
 - **WHEN** a user whose effective permissions on a project do not include `caseEdit` attempts to edit a case's steps
 - **THEN** the request is rejected with `403`
+
+#### Scenario: Restoring an old version creates a new version with its content
+- **WHEN** a case is at version 3 and a user with `caseEdit` permission restores version 1
+- **THEN** a new version 4 is created with version 1's content, and versions 1 through 3 remain unchanged and readable
+
+#### Scenario: Restoring never reuses a version number
+- **WHEN** a case is restored any number of times
+- **THEN** every restore produces a strictly higher version number than any that came before it, never reusing or overwriting an existing one
 
 #### Scenario: A new version records who created it
 - **WHEN** an authenticated user creates a case or saves an edit

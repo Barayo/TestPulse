@@ -60,8 +60,16 @@
 
 ## 5. Follow-up (not part of this change's automated scope)
 
-- [ ] 5.1 After this change ships, manually close the known pre-fix
+- [x] 5.1 After this change ships, manually close the known pre-fix
       stuck-open runs on `testpulse.fly.dev` (the ~25 runs named after
       `delete-mode.spec.ts` or similar) via the existing Close action, or
       a narrowly-scoped one-off ops script matching their known pre-fix
-      names — run once, not committed as a migration.
+      names — run once, not committed as a migration. Resolved as a side
+      effect of the 2026-08-15 `add-change-own-password` schema deploy:
+      that change's `must_change_password` column required a full
+      `testpulse.fly.dev` database wipe (Fly auto-deploys `main`
+      independent of CI; no auto-upgrade path pre-1.0.0), which cleared
+      every pre-fix stuck-open run along with all other data. Verified
+      live via `GET /api/v1/public/projects` — only the freshly reseeded
+      Sample Project (`createdAt: 2026-08-15T08:51:52Z`) exists, no
+      leftover runs from before.

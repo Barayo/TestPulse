@@ -344,6 +344,24 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CaseVersion" }
+  /api/v1/cases/{caseKey}/versions/{version}/restore:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: restoreCaseVersion
+      summary: Restore an old version's content as a new current version
+      tags: [cases]
+      responses:
+        "201":
+          description: Case at its new (restored-content) version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/cases/{caseKey}/executions:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
@@ -2547,3 +2565,10 @@ components:
         entityType: { type: string }
         entityId: { type: string }
         occurredAt: { type: string, format: date-time }
+        detail:
+          type: object
+          additionalProperties: true
+          description: >-
+            Optional structured before/after detail, shape varies by action
+            (e.g. move: {from, to}; restore: {restoredFrom, newVersion}).
+            Omitted when an action carries no extra detail.

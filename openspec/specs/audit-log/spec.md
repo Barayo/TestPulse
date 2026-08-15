@@ -12,8 +12,9 @@ entity.
 The system SHALL record an audit entry for every mutating operation
 (create/update/delete across projects, cases, suites, runs, folders, users,
 and tokens), capturing the acting actor (human or agent), the action, the
-entity type and ID, and the timestamp. The audit log is append-only — no
-entry is ever edited or deleted.
+entity type and ID, the timestamp, and optional structured detail about
+what changed. The audit log is append-only — no entry is ever edited or
+deleted.
 
 #### Scenario: A write creates an audit entry
 - **WHEN** an authenticated actor creates, updates, or deletes any domain
@@ -30,6 +31,14 @@ entry is ever edited or deleted.
 - **WHEN** the user who performed a past write is later deleted
 - **THEN** that write's audit entry still displays the actor's name as it
   was at the time of the write, rather than an error or a blank actor
+
+#### Scenario: Moving a case records its previous and new folder
+- **WHEN** a case is moved from one section to another
+- **THEN** the resulting audit entry's detail records both the previous and the new folder id
+
+#### Scenario: Restoring a version records which version was restored
+- **WHEN** a case's content is restored from an old version
+- **THEN** the resulting audit entry's detail records which version was restored from and which new version it produced
 
 ### Requirement: Audit history is queryable per entity
 The system SHALL let an authenticated actor retrieve the audit history for

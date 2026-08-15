@@ -222,6 +222,56 @@ func TestSeedContentHasARealNestedSubsection(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesMoveAuditDetail covers add-version-restore's
+// structured-audit-detail half: the seeded Two-Factor case is moved into its
+// subsection after creation (the same move that gives
+// TestSeedContentHasARealNestedSubsection its nested case), and that move's
+// audit entry should carry a real {from, to} detail now that
+// Service.MoveCase records it.
+func TestSeedContentShowcasesMoveAuditDetail(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var twoFactorID string
+	for _, c := range cases {
+		if c.Content.Title == "Two-factor prompt is required for a new device" {
+			twoFactorID = c.ID
+		}
+	}
+	if twoFactorID == "" {
+		t.Fatal("seeded Two-Factor case not found")
+	}
+
+	history, err := svc.AuditHistory(ctx, "case", twoFactorID)
+	if err != nil {
+		t.Fatalf("AuditHistory: %v", err)
+	}
+	var moveEntry *domain.AuditEntry
+	for i := range history {
+		if history[i].Action == "move" {
+			moveEntry = &history[i]
+		}
+	}
+	if moveEntry == nil {
+		t.Fatalf("no move audit entry found for the Two-Factor case: %+v", history)
+	}
+	from, _ := moveEntry.Detail["from"].(string)
+	to, _ := moveEntry.Detail["to"].(string)
+	if from == "" || to == "" || from == to {
+		t.Errorf("move detail = %+v, want distinct non-empty from/to", moveEntry.Detail)
+	}
+}
+
 // TestSeedContentHasAFlakyVersion covers "Sample Project demonstrates the
 // flaky-test signal": at least one case's currently-pinned version has
 // mixed pass/fail(blocked) executions, which is what VersionDetailDialog's

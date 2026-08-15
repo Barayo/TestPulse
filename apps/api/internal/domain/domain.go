@@ -933,14 +933,15 @@ type Actor struct {
 // history remains readable even after the actor itself is deleted (design
 // D5).
 type AuditEntry struct {
-	ID         string    `json:"id"`
-	ActorKind  ActorKind `json:"actorKind"`
-	ActorID    string    `json:"actorId"`
-	ActorName  string    `json:"actorName"`
-	Action     string    `json:"action"`
-	EntityType string    `json:"entityType"`
-	EntityID   string    `json:"entityId"`
-	OccurredAt time.Time `json:"occurredAt"`
+	ID         string         `json:"id"`
+	ActorKind  ActorKind      `json:"actorKind"`
+	ActorID    string         `json:"actorId"`
+	ActorName  string         `json:"actorName"`
+	Action     string         `json:"action"`
+	EntityType string         `json:"entityType"`
+	EntityID   string         `json:"entityId"`
+	OccurredAt time.Time      `json:"occurredAt"`
+	Detail     map[string]any `json:"detail,omitempty"`
 }
 
 // actorContextKey is unexported so only WithActor/ActorFromContext can set

@@ -44,12 +44,17 @@ action, and timestamp.
 
 - `apps/api/internal/domain/domain.go` — `AuditEntry.Detail`
   (`map[string]any`, optional); new `Service.RestoreVersion` method.
-- `apps/api/internal/db/migrations/` — amend the audit table (add a
-  `detail jsonb` column) in place, pre-1.0 policy.
+- `apps/api/internal/db/schema.sql` — add a `detail jsonb` column to
+  `audit_log`, edited directly in place (single-schema-file policy,
+  pre-1.0.0 — see CLAUDE.md's migration policy).
 - `packages/shared/openapi.yaml` — `AuditEntry` schema gains `detail`;
   new `POST /api/v1/cases/{caseId}/versions/{version}/restore` endpoint.
-- `apps/web/src/components/CaseDrawer.tsx` (or wherever version history
-  renders) — restore action + confirmation.
+- `apps/web/src/pages/CaseDetailPage.tsx` — the "Version history" list
+  (each row already has a "View" action opening `VersionDetailDialog`);
+  restore is added as a second row-level action, gated by the existing
+  `permissions?.caseEdit` check that page already uses for `canEdit`
+  (`VersionDetailDialog.tsx` itself stays read-only — diff + executions
+  only, unchanged).
 - No changes to `test_case_versions`/`test_run_items` — restore reuses
   the exact same "create a new version" path `EditCase` already uses;
   no new relation, no schema change to the versioning tables themselves.

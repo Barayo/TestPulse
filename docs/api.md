@@ -72,6 +72,7 @@ internal `id` in paths — they aren't in scope for this scheme.
 | PUT | `/api/v1/cases/{caseKey}` | Edit — creates a new version |
 | DELETE | `/api/v1/cases/{caseKey}` | Soft delete (versions stay readable in past runs) |
 | GET | `/api/v1/cases/{caseKey}/versions` | Full version history, oldest first |
+| POST | `/api/v1/cases/{caseKey}/versions/{version}/restore` | Restore an old version's content as a **new** current version — never rewinds `currentVersion` in place |
 
 **Folders** — project-level, orthogonal to suites; every case belongs to
 exactly one folder, defaulting to the project's root; see
@@ -280,7 +281,10 @@ access to a project at all, including read, until explicitly assigned a
 role on it. See [Test management](test-management.md#project-roles-and-teams)
 for the full permission model. Every write is recorded in an append-only
 audit log naming the acting actor (human or agent), queryable per entity via
-`GET /api/v1/audit`.
+`GET /api/v1/audit`. An entry MAY carry an optional structured `detail`
+object with action-specific before/after state — a case move records
+`{from, to}` (folder ids), a case-version restore records
+`{restoredFrom, newVersion}`; most actions carry no `detail` at all.
 
 A fresh instance seeds one user as Tenant Admin from `TESTPULSE_ADMIN_EMAIL`
 / `TESTPULSE_ADMIN_PASSWORD` on first startup (skipped once any user exists

@@ -79,6 +79,7 @@ export default function CaseDetailPage() {
   const [moving, setMoving] = useState(false)
   const [moveQuery, setMoveQuery] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [restoringVersion, setRestoringVersion] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     // Waits for the session check and confirmed project read access before
@@ -207,6 +208,15 @@ export default function CaseDetailPage() {
     if (!caseKey || !projectKey) return
     await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } })
     navigate(`/projects/${projectKey}/library`)
+  }
+
+  async function confirmRestoreVersion() {
+    if (!caseKey || restoringVersion === null) return
+    await api.POST('/api/v1/cases/{caseKey}/versions/{version}/restore', {
+      params: { path: { caseKey, version: restoringVersion } },
+    })
+    setRestoringVersion(null)
+    await load()
   }
 
   const canEdit = Boolean(permissions?.caseEdit)
@@ -437,9 +447,21 @@ export default function CaseDetailPage() {
                               This is the first version — there is no previous version to compare against.
                             </p>
                           )}
-                          <Button type="button" variant="outline" size="sm" onClick={() => setViewingVersion(v.version)}>
-                            View executions
-                          </Button>
+                          <div className="flex gap-2">
+                            <Button type="button" variant="outline" size="sm" onClick={() => setViewingVersion(v.version)}>
+                              View executions
+                            </Button>
+                            {canEdit && v.version !== testCase.currentVersion && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setRestoringVersion(v.version)}
+                              >
+                                Restore this version
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       )}
                     </li>
@@ -487,6 +509,22 @@ export default function CaseDetailPage() {
             <Button variant="destructive" onClick={() => void confirmDeleteCase()}>
               Delete case
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={restoringVersion !== null} onOpenChange={(open) => !open && setRestoringVersion(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Restore version {restoringVersion}?</DialogTitle>
+          <DialogDescription>
+            This creates a new version with version {restoringVersion}&rsquo;s content, which becomes current.
+            Existing versions remain in history, untouched.
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestoringVersion(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void confirmRestoreVersion()}>Restore</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

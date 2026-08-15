@@ -293,6 +293,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{caseKey}/versions/{version}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore an old version's content as a new current version */
+        post: operations["restoreCaseVersion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{caseKey}/executions": {
         parameters: {
             query?: never;
@@ -2046,6 +2066,10 @@ export interface components {
             entityId: string;
             /** Format: date-time */
             occurredAt: string;
+            /** @description Optional structured before/after detail, shape varies by action (e.g. move: {from, to}; restore: {restoredFrom, newVersion}). Omitted when an action carries no extra detail. */
+            detail?: {
+                [key: string]: unknown;
+            };
         };
     };
     responses: {
@@ -2625,6 +2649,33 @@ export interface operations {
                     "application/json": components["schemas"]["CaseVersion"][];
                 };
             };
+        };
+    };
+    restoreCaseVersion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+                version: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Case at its new (restored-content) version */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listCaseExecutions: {

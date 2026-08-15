@@ -135,6 +135,37 @@ func TestScenario_CaseVersioningOverHTTP(t *testing.T) {
 	}
 }
 
+func TestScenario_RestoreCaseVersionOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+
+	var c struct {
+		Key            string
+		CurrentVersion int `json:"currentVersion"`
+	}
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key),
+		jmap{"title": "v1 title", "steps": []jmap{{"action": "open page"}}}, 201, &c)
+	call(t, h, "PUT", "/api/v1/cases/"+c.Key, jmap{"title": "v2 title"}, 200, &c)
+
+	// Restoring version 1 creates a new (3rd) version with v1's content.
+	call(t, h, "POST", "/api/v1/cases/"+c.Key+"/versions/1/restore", nil, 201, &c)
+	if c.CurrentVersion != 3 {
+		t.Errorf("after restore version = %d, want 3", c.CurrentVersion)
+	}
+
+	var caseBody struct {
+		Content jmap
+	}
+	call(t, h, "GET", "/api/v1/cases/"+c.Key, nil, 200, &caseBody)
+	if caseBody.Content["title"] != "v1 title" {
+		t.Errorf("restored content = %+v, want title v1 title", caseBody.Content)
+	}
+
+	// Restoring a nonexistent version is rejected.
+	call(t, h, "POST", "/api/v1/cases/"+c.Key+"/versions/99/restore", nil, 404, nil)
+}
+
 // "updatedAt reflects the current version, not original creation" scenario
 // (rework-library-ux: the Library's staleness badge needs a case's last-
 // touched time, which for an immutably-versioned case is the current

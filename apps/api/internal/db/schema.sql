@@ -63,6 +63,7 @@ CREATE TABLE public.audit_log (
     entity_type text NOT NULL,
     entity_id text NOT NULL,
     occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    detail jsonb,
     CONSTRAINT audit_log_actor_kind_check CHECK ((actor_kind = ANY (ARRAY['user'::text, 'agent'::text])))
 );
 

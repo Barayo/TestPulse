@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -1255,6 +1256,118 @@ func TestDomainWritesRecordAuditEntries(t *testing.T) {
 	history, err = s.AuditHistory(context.Background(), "run", run.ID)
 	if err != nil || len(history) != 1 {
 		t.Errorf("run audit history = %+v, %v", history, err)
+	}
+}
+
+func TestMoveCaseAuditEntryRecordsFromAndTo(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "mover@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Move Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Login", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatal(err)
+	}
+	originalFolderID := c.FolderID
+
+	target, err := s.CreateFolder(ctx, project.ID, domain.NewFolder{Name: "Target", ParentFolderID: originalFolderID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.MoveCase(ctx, c.ID, target.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	history, err := s.AuditHistory(context.Background(), "case", c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var moveEntry *domain.AuditEntry
+	for i := range history {
+		if history[i].Action == "move" {
+			moveEntry = &history[i]
+		}
+	}
+	if moveEntry == nil {
+		t.Fatalf("no move audit entry found: %+v", history)
+	}
+	want := map[string]any{"from": originalFolderID, "to": target.ID}
+	if !reflect.DeepEqual(moveEntry.Detail, want) {
+		t.Errorf("move detail = %+v, want %+v", moveEntry.Detail, want)
+	}
+}
+
+func TestRestoreVersionCreatesNewVersionWithOldContent(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "restorer@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Restore Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "v1 title", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EditCase(ctx, c.ID, domain.CaseContent{Title: "v2 title", Priority: domain.PriorityMedium}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.EditCase(ctx, c.ID, domain.CaseContent{Title: "v3 title", Priority: domain.PriorityMedium}); err != nil {
+		t.Fatal(err)
+	}
+
+	restored, err := s.RestoreVersion(ctx, c.ID, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if restored.CurrentVersion != 4 {
+		t.Errorf("CurrentVersion = %d, want 4 (always higher than any existing version)", restored.CurrentVersion)
+	}
+	if restored.Content.Title != "v1 title" {
+		t.Errorf("Content.Title = %q, want %q", restored.Content.Title, "v1 title")
+	}
+
+	history, err := s.AuditHistory(context.Background(), "case", c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var restoreEntry *domain.AuditEntry
+	for i := range history {
+		if history[i].Action == "restore" {
+			restoreEntry = &history[i]
+		}
+	}
+	if restoreEntry == nil {
+		t.Fatalf("no restore audit entry found: %+v", history)
+	}
+	want := map[string]any{"restoredFrom": float64(1), "newVersion": float64(4)}
+	if !reflect.DeepEqual(restoreEntry.Detail, want) {
+		t.Errorf("restore detail = %+v, want %+v", restoreEntry.Detail, want)
+	}
+}
+
+func TestRestoreNonexistentVersionIsRejected(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "restorer2@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Restore Project 2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "only version", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := s.RestoreVersion(ctx, c.ID, 99); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("RestoreVersion(nonexistent) = %v, want store.ErrNotFound", err)
 	}
 }
 

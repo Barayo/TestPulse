@@ -284,10 +284,14 @@ func (s *Service) MoveCase(ctx context.Context, caseID, folderID string) error {
 	if folderID == "" {
 		return invalid("folderId is required")
 	}
+	before, err := s.store.Cases.Get(ctx, caseID)
+	if err != nil {
+		return err
+	}
 	if err := s.store.Cases.Move(ctx, caseID, folderID); err != nil {
 		return err
 	}
-	s.audit(ctx, "move", "case", caseID)
+	s.audit(ctx, "move", "case", caseID, map[string]any{"from": before.FolderID, "to": folderID})
 	return nil
 }
 
@@ -301,6 +305,35 @@ func (s *Service) EditCase(ctx context.Context, caseID string, content domain.Ca
 		return domain.TestCase{}, err
 	}
 	s.audit(ctx, "edit", "case", caseID)
+	return c, nil
+}
+
+// RestoreVersion reverts a case to an old version's content by creating a
+// **new** version copied from it — it never rewinds `current_version` in
+// place, so a version number is never reused for different content (see
+// add-version-restore design.md: any run pinning that number via the
+// (case_id, version) FK must keep pointing at the same content forever).
+func (s *Service) RestoreVersion(ctx context.Context, caseID string, version int) (domain.TestCase, error) {
+	versions, err := s.store.Cases.Versions(ctx, caseID)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	var target *domain.CaseVersion
+	for i := range versions {
+		if versions[i].Version == version {
+			target = &versions[i]
+			break
+		}
+	}
+	if target == nil {
+		return domain.TestCase{}, store.ErrNotFound
+	}
+	actorKind, actorRefID := resolveActor(ctx)
+	c, err := s.store.Cases.NewVersion(ctx, caseID, target.Content, actorKind, actorRefID)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	s.audit(ctx, "restore", "case", caseID, map[string]any{"restoredFrom": version, "newVersion": c.CurrentVersion})
 	return c, nil
 }
 

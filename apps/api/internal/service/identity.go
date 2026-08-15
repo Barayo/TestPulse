@@ -664,10 +664,17 @@ func (s *Service) RevokeToken(ctx context.Context, actor domain.Actor, tokenID s
 // Authenticate middleware (design D1/D6). It is a best-effort side effect:
 // until every domain route is authenticated (task 5.2), calls made without
 // a resolved Actor simply record nothing rather than failing the request.
-func (s *Service) audit(ctx context.Context, action, entityType, entityID string) {
+// An optional detail map (add-version-restore design.md) carries
+// action-specific before/after state, e.g. move: {from, to}; omit it for
+// actions that need no extra detail.
+func (s *Service) audit(ctx context.Context, action, entityType, entityID string, detail ...map[string]any) {
 	actor, ok := domain.ActorFromContext(ctx)
 	if !ok {
 		return
+	}
+	var d map[string]any
+	if len(detail) > 0 {
+		d = detail[0]
 	}
 	_ = s.store.Audit.Append(ctx, domain.AuditEntry{
 		ActorKind:  actor.Kind,
@@ -676,6 +683,7 @@ func (s *Service) audit(ctx context.Context, action, entityType, entityID string
 		Action:     action,
 		EntityType: entityType,
 		EntityID:   entityID,
+		Detail:     d,
 	})
 }
 

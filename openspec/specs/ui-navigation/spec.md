@@ -317,7 +317,9 @@ history SHALL still open a dialog (independent of the inline row signal) showing
 field-by-field diff against the previous version and the list of executions that pinned
 that version, with a Flaky indicator when both a pass and a fail/blocked execution exist
 for the same version. Each listed execution SHALL link to that execution's own run item
-page.
+page. Each entry in the version history SHALL offer a restore action, gated behind a
+confirmation explaining that restoring creates a new current version rather than altering
+history.
 
 #### Scenario: Opening a case navigates to its own route
 - **WHEN** a user selects a test case from the library content list
@@ -330,6 +332,14 @@ page.
 #### Scenario: Version history is visible
 - **WHEN** a user views a case that has more than one version
 - **THEN** its version history is listed in the sidebar with the current version clearly marked
+
+#### Scenario: Restoring a version requires confirmation
+- **WHEN** a user triggers "Restore" on a past version
+- **THEN** a confirmation explains that a new version will be created from the selected one and become current, before anything happens
+
+#### Scenario: Restoring updates the current view
+- **WHEN** a user confirms restoring a past version
+- **THEN** the case view now shows the newly created version as current, with the restored content, and the full version history — including the version just restored from — remains listed
 
 #### Scenario: Properties render as pills
 - **WHEN** a user views a case's properties in the sidebar
