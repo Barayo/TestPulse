@@ -33,7 +33,7 @@ The system SHALL assign every user exactly one instance-wide flag, Tenant Admin 
 - **THEN** the request is rejected as if the project does not exist (`403`), and the project is absent from that user's project list
 
 ### Requirement: Fully custom, instance-wide roles built from permission flags
-The system SHALL let a Tenant Admin create, rename, and delete roles, each carrying a name, a display-only `rank`, and independently toggleable permission flags: `read`, `caseCreate`, `caseEdit`, `caseDelete`, `sectionCreate`, `sectionDelete`, `suiteCreate`, `suiteEditMembership`, `runCreate`, `runRecordResult`, `manageProject`. `rank` is a display/sort-order integer only — no authorization decision compares ranks; a role either grants a flag or it doesn't. A fresh instance SHALL be seeded with three editable default roles — Tester (`read`, `runCreate`, `runRecordResult`), Contributor (Tester's flags plus `caseCreate`, `caseEdit`, `sectionCreate`, `suiteCreate`, `suiteEditMembership`), Project Admin (Contributor's flags plus `caseDelete`, `sectionDelete`, `manageProject`) — reproducing a conventional three-tier default without hardcoding it. A Tenant Admin MAY freely edit, rename, or delete any role, including the three defaults.
+The system SHALL let a Tenant Admin create, rename, and delete roles, each carrying a name, a display-only `rank`, and independently toggleable permission flags: `read`, `caseCreate`, `caseEdit`, `caseDelete`, `sectionCreate`, `sectionDelete`, `suiteCreate`, `suiteEditMembership`, `runCreate`, `runRecordResult`, `manageProject`, `runDelete`, `projectDelete`. `rank` is a display/sort-order integer only — no authorization decision compares ranks; a role either grants a flag or it doesn't. A fresh instance SHALL be seeded with three editable default roles — Tester (`read`, `runCreate`, `runRecordResult`), Contributor (Tester's flags plus `caseCreate`, `caseEdit`, `sectionCreate`, `suiteCreate`, `suiteEditMembership`), Project Admin (Contributor's flags plus `caseDelete`, `sectionDelete`, `manageProject`, `runDelete`, `projectDelete`) — reproducing a conventional three-tier default without hardcoding it. A Tenant Admin MAY freely edit, rename, or delete any role, including the three defaults.
 
 #### Scenario: Create a role
 - **WHEN** a Tenant Admin creates a role with a name and a set of permission flags
@@ -54,6 +54,17 @@ The system SHALL let a Tenant Admin create, rename, and delete roles, each carry
 #### Scenario: Reset restores only the three named default roles, in place
 - **WHEN** a Tenant Admin resets roles to defaults, and a role named "Contributor" currently exists with edited flags
 - **THEN** the "Contributor" role's flags and rank are overwritten back to its factory values with the same `id` (existing assignments referencing it stay valid), and every other role in the instance is left untouched
+
+### Requirement: Run and project deletion permissions
+The system SHALL define two additional project-scoped permission flags beyond the original ten: `runDelete` (permanently delete a run) and `projectDelete` (permanently delete an already-archived project). Both follow the same fully-custom, instance-wide role model as every other permission flag — a Tenant Admin toggles them per role, and a user's effective grant is the union of every role they hold on the project, direct or via team.
+
+#### Scenario: `projectDelete` is independent of `manageProject`
+- **WHEN** a role grants `manageProject` (rename/describe/archive) but not `projectDelete`
+- **THEN** a user holding only that role can archive the project but cannot permanently delete it
+
+#### Scenario: Seeded Project Admin role has both new flags
+- **WHEN** a fresh instance is seeded with the default Tester/Contributor/Project Admin roles
+- **THEN** Project Admin has both `runDelete` and `projectDelete`, and Tester and Contributor have neither
 
 ### Requirement: Effective project permissions from membership and teams
 A user's effective permissions on a project SHALL be the union — one flag OR'd across every applicable role, not "the single highest-ranked role" — of every role reachable through either a direct project membership row or membership in a team that is itself assigned a role on that project. Only a Tenant Admin SHALL be able to assign or remove a user's or team's project membership — no project-scoped role, however permissive, SHALL be able to.

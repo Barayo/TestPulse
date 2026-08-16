@@ -11,10 +11,10 @@ entity.
 ### Requirement: Every write is recorded in an append-only audit log
 The system SHALL record an audit entry for every mutating operation
 (create/update/delete across projects, cases, suites, runs, folders, users,
-and tokens), capturing the acting actor (human or agent), the action, the
-entity type and ID, the timestamp, and optional structured detail about
-what changed. The audit log is append-only — no entry is ever edited or
-deleted.
+and tokens), capturing the acting actor (human, agent, or an automated
+system process), the action, the entity type and ID, the timestamp, and
+optional structured detail about what changed. The audit log is
+append-only — no entry is ever edited or deleted.
 
 #### Scenario: A write creates an audit entry
 - **WHEN** an authenticated actor creates, updates, or deletes any domain
@@ -26,6 +26,13 @@ deleted.
 - **WHEN** a write is made by an actor authenticated via an API token
 - **THEN** the audit entry's actor kind is recorded as an agent, distinct
   from a human user, even though the token acts at its creator's role
+
+#### Scenario: Automated writes are distinguishable from both human and agent ones
+- **WHEN** a write is made by an unattended background process rather than
+  a resolved request-time actor (e.g. the automatic run-retention sweep or
+  the automatic project-archiving sweep)
+- **THEN** the audit entry's actor kind is recorded as `system`, distinct
+  from both a human user and an agent-authenticated token
 
 #### Scenario: Audit entry survives its actor's deletion
 - **WHEN** the user who performed a past write is later deleted
