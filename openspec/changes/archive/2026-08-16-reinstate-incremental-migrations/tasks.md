@@ -49,8 +49,8 @@
 
 ## 10. Rollout: `testpulse.fly.dev`
 
-- [ ] 10.1 Merge this change to `main`. Expect `testpulse.fly.dev`'s automatic Fly deploy to crash-loop (`/readyz` failing because `goose_db_version` doesn't exist yet) — this is expected, not a signal to revert.
-- [ ] 10.2 Run the documented wipe-and-redeploy recovery procedure against `testpulse.fly.dev`: temporary env-var-gated wipe step in `main.go`, `flyctl deploy --strategy immediate` (bypassing git/CI, never committed), verify via `flyctl logs` and `curl /readyz`, then `git checkout -- apps/api/cmd/testpulse-api/main.go` and redeploy clean, confirmed via an empty `git diff`.
+- [x] 10.1 Merge this change to `main`. Expect `testpulse.fly.dev`'s automatic Fly deploy to crash-loop (`/readyz` failing because `goose_db_version` doesn't exist yet) — this is expected, not a signal to revert. (Committed `e2949c2`, pushed; confirmed crash-loop in `flyctl logs`: `function "create_project_defaults" already exists`, matching design.md exactly.)
+- [x] 10.2 Run the documented wipe-and-redeploy recovery procedure against `testpulse.fly.dev`: temporary env-var-gated wipe step in `main.go`, `flyctl deploy --strategy immediate` (bypassing git/CI, never committed), verify via `flyctl logs` and `curl /readyz`, then `git checkout -- apps/api/cmd/testpulse-api/main.go` and redeploy clean, confirmed via an empty `git diff`. (Done; machine landed `stopped` after the wipe deploy per the known gotcha, `flyctl machine start` fixed it; clean redeploy landed `started` directly. `/readyz`, `/healthz`, `/api/v1/meta` all confirmed 200 on the final clean binary.)
 
 ## 11. Close out
 

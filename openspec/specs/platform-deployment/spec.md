@@ -5,7 +5,7 @@
 How TestPulse is configured, deployed, and observed as a runnable system:
 docker-compose single-command startup, Helm-based Kubernetes deployment,
 multi-arch images, environment-variable configuration, health/readiness
-endpoints, and applying the database schema at startup.
+endpoints, and applying database migrations at startup.
 
 ## Requirements
 
@@ -53,7 +53,7 @@ The API SHALL read all runtime configuration (database connection, listen port/a
 The API SHALL expose a liveness endpoint that reports process health and a readiness endpoint that reports dependency health (database connectivity), suitable for Kubernetes probes and compose healthchecks.
 
 #### Scenario: Ready when database is reachable
-- **WHEN** the readiness endpoint is called while the database is reachable and the applied schema matches the running binary
+- **WHEN** the readiness endpoint is called while the database is reachable and at the latest applied migration
 - **THEN** it returns a success status
 
 #### Scenario: Not ready when database is down
@@ -61,19 +61,45 @@ The API SHALL expose a liveness endpoint that reports process health and a readi
 - **THEN** it returns a failure status while the liveness endpoint continues to return success
 
 ### Requirement: Automatic database migrations
-The API SHALL apply its schema automatically at startup, and startup MUST be idempotent so repeated startups and rolling restarts are safe. On an empty database, the full schema SHALL be applied in one transaction. On a database that already has the schema applied, the API SHALL verify the applied schema matches what the running binary expects and MUST NOT silently proceed on a mismatch.
+The API SHALL apply pending schema migrations automatically at startup, in
+order, and startup MUST be idempotent so repeated startups and rolling
+restarts are safe. Each migration is a single, immutable, versioned file
+applied at most once per database — once a migration has shipped, it is
+never edited in place; a further change is a new migration file. On a
+database that already has some migrations applied, the API SHALL apply only
+the migrations not yet recorded as applied, and MUST NOT silently proceed if
+the database's applied-migration state cannot be reconciled with what the
+running binary expects.
 
 #### Scenario: First startup on empty database
 - **WHEN** the API starts against an empty database
-- **THEN** the full schema applies and the API reports ready
+- **THEN** every migration applies in order and the API reports ready
 
-#### Scenario: Restart with schema current
-- **WHEN** the API restarts against a database whose applied schema matches the running binary
+#### Scenario: Restart with migrations current
+- **WHEN** the API restarts against a database already at the latest
+  migration version
 - **THEN** nothing is re-applied and startup completes normally
 
-#### Scenario: Schema mismatch fails readiness, not silently
-- **WHEN** the API starts against a database whose previously-applied schema does not match what the running binary expects
-- **THEN** the mismatch is logged and the readiness endpoint reports not-ready, rather than the API silently serving traffic against a schema it does not actually match
+#### Scenario: New migration applies without a wipe
+- **WHEN** the API starts against a database that has some, but not all,
+  migrations applied
+- **THEN** only the not-yet-applied migrations run, in order, and no
+  existing data is lost or requires a manual reset
+
+#### Scenario: Migration mismatch fails readiness, not silently
+- **WHEN** the API starts against a database whose applied-migration state
+  the running binary cannot reconcile (e.g. the database is ahead of what
+  this binary's embedded migrations recognize)
+- **THEN** the mismatch is logged and the readiness endpoint reports
+  not-ready, rather than the API silently serving traffic against a schema
+  it does not actually match
+
+#### Scenario: An already-applied migration file is never edited
+- **WHEN** a migration file has already been merged and is part of any
+  environment's applied history
+- **THEN** it is never edited in place; a subsequent schema change ships as
+  a new migration file, and CI rejects a pull request that edits an
+  already-merged migration file
 
 ### Requirement: No known open dependency vulnerabilities
 The project's dependency tree SHALL carry no open Dependabot (or equivalent)
