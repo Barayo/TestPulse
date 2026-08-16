@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { Badge } from '@/components/ui/badge'
 import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
@@ -76,6 +77,7 @@ export default function ProjectPage() {
           passRate: landing.runs[0]?.passRate ?? null,
           lastRunAt: landing.runs[0]?.createdAt ?? null,
           isFavorite: false,
+          archived: project?.archived ?? false,
         }
       : undefined
   const summary = access === 'member' ? summaries.find((s) => s.id === projectKey) : anonymousSummary
@@ -136,8 +138,9 @@ export default function ProjectPage() {
       <div className="flex items-start justify-between gap-4">
         {project && (
           <div>
-            <h1 className="tp-heading flex items-center gap-1.5 text-2xl">
-              {project.name}
+            <div className="flex items-center gap-1.5">
+              <h1 className="tp-heading text-2xl">{project.name}</h1>
+              {project.archived && <Badge variant="outline">Archived</Badge>}
               {canSwitch && (
                 <button
                   type="button"
@@ -149,7 +152,7 @@ export default function ProjectPage() {
                   <ChevronDown className="size-5" aria-hidden="true" />
                 </button>
               )}
-            </h1>
+            </div>
             <p className="text-sm text-muted-foreground">{project.key} · project overview</p>
           </div>
         )}

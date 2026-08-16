@@ -67,6 +67,26 @@ func TestCloseRunThenReopen(t *testing.T) {
 
 // An imported run is created closed (collapse-duplicate-ci-runs); confirm
 // the existing reopen capability generalizes to it unmodified.
+// TestDeleteRunRemovesIt covers add-data-retention design.md D1: a plain,
+// thin passthrough to the store — no permission check here (that's the
+// HTTP middleware's job, not the service's).
+func TestDeleteRunRemovesIt(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "sprint 1"})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	if err := s.DeleteRun(ctx, run.ID); err != nil {
+		t.Fatalf("DeleteRun: %v", err)
+	}
+	if _, err := s.GetRun(ctx, run.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("GetRun after delete = %v, want ErrNotFound", err)
+	}
+}
+
 func TestReopenImportedRun(t *testing.T) {
 	s := lifecycleTestService(t)
 	ctx := context.Background()

@@ -49,12 +49,59 @@ func (r *ProjectRepo) Create(ctx context.Context, name, description string) (dom
 func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, key, name, archived, description, is_sample, public_access, created_at FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt)
+		`SELECT id, key, name, archived, description, is_sample, public_access, auto_archive_exempt, created_at FROM projects WHERE id = $1`, id,
+	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.AutoArchiveExempt, &p.CreatedAt)
 	if err != nil {
 		return domain.Project{}, ErrNotFound
 	}
 	return p, nil
+}
+
+// SetAutoArchiveExempt sets whether this project is exempt from the
+// instance-wide auto-archive-inactive-projects policy (design.md D9 of
+// add-data-retention). Permission enforcement (Tenant-Admin-only) lives in
+// the service layer, not here.
+func (r *ProjectRepo) SetAutoArchiveExempt(ctx context.Context, id string, exempt bool) error {
+	_, err := r.pool.Exec(ctx, `UPDATE projects SET auto_archive_exempt = $1 WHERE id = $2`, exempt, id)
+	return err
+}
+
+// ListEligibleForAutoArchive returns every non-archived, non-exempt,
+// non-deleting project whose activity — the newest of its own created_at
+// and the most recent created_at across its runs, case versions, and
+// suites — is older than days (design.md D9 of add-data-retention). The
+// activity signal is computed here, per sweep, rather than maintained as a
+// column — one query across all eligible projects, not a per-project round
+// trip. A pure age filter — callers (the auto-archive worker) are
+// responsible for treating days == 0 as "policy off" before calling this.
+func (r *ProjectRepo) ListEligibleForAutoArchive(ctx context.Context, days int) ([]domain.Project, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT p.id, p.key, p.name, p.archived, p.description, p.is_sample, p.public_access, p.auto_archive_exempt, p.created_at
+		 FROM projects p
+		 WHERE p.archived = false
+		   AND p.deleting_at IS NULL
+		   AND p.auto_archive_exempt = false
+		   AND GREATEST(
+		         p.created_at,
+		         COALESCE((SELECT MAX(created_at) FROM test_runs WHERE project_id = p.id), p.created_at),
+		         COALESCE((SELECT MAX(tcv.created_at) FROM test_case_versions tcv JOIN test_cases tc ON tc.id = tcv.case_id WHERE tc.project_id = p.id), p.created_at),
+		         COALESCE((SELECT MAX(created_at) FROM test_suites WHERE project_id = p.id), p.created_at)
+		       ) < now() - make_interval(days => $1)
+		 ORDER BY p.created_at`, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	projects := []domain.Project{}
+	for rows.Next() {
+		var p domain.Project
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.AutoArchiveExempt, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
 }
 
 // MarkSample flags a project as the automatically-seeded showroom project
@@ -86,7 +133,8 @@ func (r *ProjectRepo) IDByKey(ctx context.Context, key string) (string, error) {
 
 func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, key, name, archived, description, is_sample, public_access, created_at FROM projects ORDER BY created_at`)
+		`SELECT id, key, name, archived, description, is_sample, public_access, created_at
+		 FROM projects WHERE deleting_at IS NULL ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -111,12 +159,13 @@ func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domai
 	rows, err := r.pool.Query(ctx,
 		`SELECT DISTINCT p.id, p.key, p.name, p.archived, p.description, p.is_sample, p.public_access, p.created_at
 		 FROM projects p
-		 WHERE p.id IN (SELECT project_id FROM project_members WHERE user_id = $1)
+		 WHERE p.deleting_at IS NULL
+		   AND (p.id IN (SELECT project_id FROM project_members WHERE user_id = $1)
 		    OR p.id IN (
 		        SELECT ptr.project_id FROM project_team_roles ptr
 		        JOIN team_members tm ON tm.team_id = ptr.team_id
 		        WHERE tm.user_id = $1
-		    )
+		    ))
 		 ORDER BY p.created_at`, userID)
 	if err != nil {
 		return nil, err
@@ -219,13 +268,15 @@ func (r *ProjectRepo) IsFavorite(ctx context.Context, userID, projectID string) 
 	return exists, err
 }
 
-// Summaries returns, per non-archived project, its suite count, case count,
-// latest-run pass rate, and whether userID has favorited it — as four
-// grouped queries (design.md D3), not one query per project, so the cost
-// stays O(1) in the number of HTTP round trips regardless of how many
-// projects exist.
+// Summaries returns, per project not queued for deletion (archived or
+// not — add-data-retention design.md D7: the delete-project confirmation
+// dialog needs real counts for the one project this always excluded
+// before), its suite count, case count, latest-run pass rate, and whether
+// userID has favorited it — as four grouped queries (design.md D3), not
+// one query per project, so the cost stays O(1) in the number of HTTP
+// round trips regardless of how many projects exist.
 func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.ProjectSummary, error) {
-	ids, err := r.pool.Query(ctx, `SELECT id FROM projects WHERE NOT archived ORDER BY created_at`)
+	ids, err := r.pool.Query(ctx, `SELECT id, archived FROM projects WHERE deleting_at IS NULL ORDER BY created_at`)
 	if err != nil {
 		return nil, err
 	}
@@ -233,12 +284,13 @@ func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.Pr
 	summaries := map[string]*domain.ProjectSummary{}
 	for ids.Next() {
 		var id string
-		if err := ids.Scan(&id); err != nil {
+		var archived bool
+		if err := ids.Scan(&id, &archived); err != nil {
 			ids.Close()
 			return nil, err
 		}
 		order = append(order, id)
-		summaries[id] = &domain.ProjectSummary{ProjectID: id}
+		summaries[id] = &domain.ProjectSummary{ProjectID: id, Archived: archived}
 	}
 	ids.Close()
 	if err := ids.Err(); err != nil {
@@ -352,6 +404,115 @@ func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.Pr
 
 func (r *ProjectRepo) Archive(ctx context.Context, id string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE projects SET archived = true WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Unarchive restores a previously-archived project to active
+// (add-data-retention design.md D7) — mirrors Archive exactly.
+func (r *ProjectRepo) Unarchive(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE projects SET archived = false WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// MarkForDeletion queues a project for background permanent deletion
+// (design.md D6) — the project is hidden from List/Summaries from this
+// instant, but its rows are not actually removed until the background
+// worker (service layer) drives PurgeBatch/Purge to completion.
+func (r *ProjectRepo) MarkForDeletion(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE projects SET deleting_at = now() WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListPendingDeletion returns every project queued for background deletion
+// — polled by the worker at startup and periodically, so a server restart
+// mid-purge simply resumes (design.md D6 resumability).
+func (r *ProjectRepo) ListPendingDeletion(ctx context.Context) ([]domain.Project, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, key, name, archived, description, is_sample, public_access, created_at
+		 FROM projects WHERE deleting_at IS NOT NULL ORDER BY deleting_at`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	projects := []domain.Project{}
+	for rows.Next() {
+		var p domain.Project
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt); err != nil {
+			return nil, err
+		}
+		projects = append(projects, p)
+	}
+	return projects, rows.Err()
+}
+
+// purgeBatchQueries maps each usage-scaled child table to a query deleting
+// up to $2 of its rows scoped to project $1 — chunked rather than one
+// project-wide cascade, per design.md D6 (avoids one giant transaction on
+// a project with a large run/result history). Tables without their own
+// project_id join through their parent to reach it.
+var purgeBatchQueries = map[string]string{
+	"test_run_results": `DELETE FROM test_run_results WHERE id IN (
+		SELECT trr.id FROM test_run_results trr
+		JOIN test_run_items tri ON tri.id = trr.run_item_id
+		JOIN test_runs tr ON tr.id = tri.run_id
+		WHERE tr.project_id = $1 LIMIT $2)`,
+	"test_run_items": `DELETE FROM test_run_items WHERE id IN (
+		SELECT tri.id FROM test_run_items tri
+		JOIN test_runs tr ON tr.id = tri.run_id
+		WHERE tr.project_id = $1 LIMIT $2)`,
+	"test_runs": `DELETE FROM test_runs WHERE id IN (
+		SELECT id FROM test_runs WHERE project_id = $1 LIMIT $2)`,
+	"test_case_versions": `DELETE FROM test_case_versions WHERE (case_id, version) IN (
+		SELECT tcv.case_id, tcv.version FROM test_case_versions tcv
+		JOIN test_cases tc ON tc.id = tcv.case_id
+		WHERE tc.project_id = $1 LIMIT $2)`,
+	"test_cases": `DELETE FROM test_cases WHERE id IN (
+		SELECT id FROM test_cases WHERE project_id = $1 LIMIT $2)`,
+}
+
+// PurgeBatch deletes up to limit rows of one usage-scaled child table
+// belonging to projectID, returning how many it actually removed — 0 means
+// that table is now empty for this project. The caller (the background
+// worker) loops per table until each returns 0 before calling Purge.
+func (r *ProjectRepo) PurgeBatch(ctx context.Context, projectID, table string, limit int) (int, error) {
+	query, ok := purgeBatchQueries[table]
+	if !ok {
+		return 0, fmt.Errorf("purge: unknown table %q", table)
+	}
+	tag, err := r.pool.Exec(ctx, query, projectID, limit)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+// Purge issues the final DELETE FROM projects once every usage-scaled
+// child table has been fully drained via PurgeBatch. Everything left at
+// this point (sections, suites, suite_cases, membership rows) is small and
+// bounded by project setup rather than execution volume, so it's cleaned
+// up by the ON DELETE CASCADE FKs in this one closing statement (design.md
+// D2/D6) rather than needing its own batching.
+func (r *ProjectRepo) Purge(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM projects WHERE id = $1`, id)
 	if err != nil {
 		return err
 	}

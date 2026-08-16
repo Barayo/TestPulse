@@ -614,6 +614,27 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: importing CI results: %w", err)
 	}
 
+	// 5.5. A small, closed, low-stakes run explicitly labeled as disposable
+	// (add-data-retention) — somewhere safe for a user trying the new
+	// "Delete run" action to practice on, instead of being tempted to
+	// delete one of the meaningful showcase runs above (the flaky-signal
+	// and pass-rate demonstrations depend on those staying intact).
+	// Deliberately created before, not after, the final run below — the
+	// project's shown pass rate is driven by whichever run was created
+	// LAST, and this one must never become that.
+	scratchRunName := "Scratch run — safe to delete"
+	if err := RunWithVerdicts(ctx, svc, p.ID, scratchRunName,
+		[]string{login.ID}, []domain.Verdict{domain.VerdictPass}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	scratchRun, err := runByName(ctx, svc, p.ID, scratchRunName)
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := svc.CloseRun(ctx, scratchRun.ID); err != nil {
+		return fmt.Errorf("sampledata: closing scratch run: %w", err)
+	}
+
 	// 6. Final run, created last: a strong go/no-go pass across a wide set
 	// of cases, so the project's health indicator (driven only by the most
 	// recently created run) shows its healthy state.

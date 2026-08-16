@@ -452,6 +452,7 @@ function ExpandedGrid({
                         {p.name}
                       </h2>
                       {p.isSample && <Badge variant="secondary">Sample</Badge>}
+                      {p.archived && <Badge variant="outline">Archived</Badge>}
                     </span>
                     {p.description && (
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.description}</p>
@@ -529,6 +530,7 @@ function CompactList({
                     {p.name}
                   </h2>
                   {p.isSample && <Badge variant="secondary">Sample</Badge>}
+                  {p.archived && <Badge variant="outline">Archived</Badge>}
                 </span>
                 <span className="size-4 shrink-0" aria-hidden="true" />
               </span>

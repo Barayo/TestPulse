@@ -38,6 +38,8 @@ type roleInput struct {
 	CanRunCreate           bool   `json:"canRunCreate"`
 	CanRunRecordResult     bool   `json:"canRunRecordResult"`
 	CanManageProject       bool   `json:"canManageProject"`
+	CanRunDelete           bool   `json:"canRunDelete"`
+	CanProjectDelete       bool   `json:"canProjectDelete"`
 }
 
 func roleFromInput(in roleInput) domain.Role {
@@ -48,6 +50,7 @@ func roleFromInput(in roleInput) domain.Role {
 		CanSuiteCreate: in.CanSuiteCreate, CanSuiteEditMembership: in.CanSuiteEditMembership,
 		CanRunCreate: in.CanRunCreate, CanRunRecordResult: in.CanRunRecordResult,
 		CanManageProject: in.CanManageProject,
+		CanRunDelete:     in.CanRunDelete, CanProjectDelete: in.CanProjectDelete,
 	}
 }
 

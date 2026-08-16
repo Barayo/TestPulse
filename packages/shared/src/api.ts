@@ -68,15 +68,19 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Read instance-wide settings
+         * @description Tenant-Admin-only.
+         */
+        get: operations["getInstanceSettings"];
         put?: never;
         post?: never;
         delete?: never;
         options?: never;
         head?: never;
         /**
-         * Update instance-wide settings (enable-public-project-access)
-         * @description Tenant-Admin-only. Currently one setting, publicProjectsEnabled.
+         * Update instance-wide settings
+         * @description Tenant-Admin-only. A partial update — publicProjectsEnabled (enable-public-project-access) and runRetentionDays (add-data-retention) may be set independently or together.
          */
         patch: operations["updateInstanceSettings"];
         trace?: never;
@@ -129,7 +133,8 @@ export interface paths {
         get: operations["getProject"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Permanently delete an already-archived project and everything scoped to it. Queues the deletion (hidden from listings immediately) and returns before the background purge completes. */
+        delete: operations["deleteProject"];
         options?: never;
         head?: never;
         /** Rename, describe, or archive a project */
@@ -444,7 +449,8 @@ export interface paths {
         get: operations["getRun"];
         put?: never;
         post?: never;
-        delete?: never;
+        /** Permanently delete a run and everything scoped to it (items, results) */
+        delete: operations["deleteRun"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1593,6 +1599,8 @@ export interface components {
             isSample: boolean;
             /** @description Opts this project into unauthenticated read-only access at its public URL (/api/v1/public/projects/{projectKey}/...). False by default. Also gated by the instance-wide Meta.publicProjectsEnabled kill switch — a project is only actually reachable anonymously when both are true. */
             publicAccess: boolean;
+            /** @description Exempts this project from the instance-wide autoArchiveInactiveDays policy (add-data-retention). Settable only by a Tenant Admin, via PATCH — a request setting this field from anyone else is rejected (403), even a Project Admin who otherwise has manageProject on this project. */
+            autoArchiveExempt: boolean;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1605,6 +1613,7 @@ export interface components {
             description?: string;
             archived?: boolean;
             publicAccess?: boolean;
+            autoArchiveExempt?: boolean;
         };
         TestCase: {
             id: string;
@@ -1845,6 +1854,8 @@ export interface components {
             lastRunAt: string | null;
             /** @description Whether the calling user has starred this project. */
             isFavorite: boolean;
+            /** @description The project's current archived state (add-data-retention) — summaries now include archived projects (previously excluded), since the delete-project confirmation needs real counts for the one project this always excluded before. */
+            archived: boolean;
         };
         HealthStatus: {
             /** @enum {string} */
@@ -1864,11 +1875,18 @@ export interface components {
         };
         InstanceSettings: {
             publicProjectsEnabled: boolean;
+            /** @description Instance-wide, Tenant-Admin-configurable age threshold (in days) past which a closed run is automatically and permanently deleted. 0 (the default) means the policy is off. */
+            runRetentionDays: number;
+            /** @description Instance-wide, Tenant-Admin-configurable inactivity threshold (in days) past which a non-exempt project is automatically archived. 0 (the default) means the policy is off. Archiving is reversible; unlike runRetentionDays, this never destroys data. */
+            autoArchiveInactiveDays: number;
             /** Format: date-time */
             updatedAt: string;
         };
+        /** @description A partial update — every field is optional; omitted fields are left unchanged. */
         InstanceSettingsUpdate: {
-            publicProjectsEnabled: boolean;
+            publicProjectsEnabled?: boolean;
+            runRetentionDays?: number;
+            autoArchiveInactiveDays?: number;
         };
         User: {
             id: string;
@@ -1954,6 +1972,8 @@ export interface components {
             runCreate: boolean;
             runRecordResult: boolean;
             manageProject: boolean;
+            runDelete: boolean;
+            projectDelete: boolean;
         };
         /** @description A fully custom, instance-wide role (add-project-rbac design.md D10): the Tenant Admin creates/renames/deletes roles and toggles their permission flags freely. A user's effective permissions on a project are the union of every role granted to them directly or via a team (not a single "highest" role — there is no fixed ranking). Ten concrete, per-resource flags (design.md D11) rather than a handful of broad ones — e.g. caseCreate is independent of caseDelete. */
         Role: {
@@ -1972,6 +1992,8 @@ export interface components {
             canRunCreate: boolean;
             canRunRecordResult: boolean;
             canManageProject: boolean;
+            canRunDelete: boolean;
+            canProjectDelete: boolean;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1989,6 +2011,8 @@ export interface components {
             canRunCreate?: boolean;
             canRunRecordResult?: boolean;
             canManageProject?: boolean;
+            canRunDelete?: boolean;
+            canProjectDelete?: boolean;
         };
         Team: {
             id: string;
@@ -2195,6 +2219,27 @@ export interface operations {
             };
         };
     };
+    getInstanceSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current instance settings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstanceSettings"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+        };
+    };
     updateInstanceSettings: {
         parameters: {
             query?: never;
@@ -2305,6 +2350,30 @@ export interface operations {
                     "application/json": components["schemas"]["Project"];
                 };
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deletion queued; the project is already hidden from listings */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
@@ -2921,6 +2990,29 @@ export interface operations {
                     "application/json": components["schemas"]["Run"];
                 };
             };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };

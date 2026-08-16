@@ -8,6 +8,15 @@ import (
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
 )
 
+// setPublicProjectsEnabled is a thin test helper over UpdateInstanceSettings
+// for tests that only care about the public-projects kill switch.
+func setPublicProjectsEnabled(t *testing.T, s *service.Service, ctx context.Context, enabled bool) {
+	t.Helper()
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{PublicProjectsEnabled: &enabled}); err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+}
+
 func TestUpdateProjectSetsPublicAccess(t *testing.T) {
 	s := testService(t)
 	admin := mustCreateUser(t, s, "admin@example.com", "correcthorse", true)
@@ -62,9 +71,7 @@ func TestIsProjectPubliclyAccessibleRequiresBothFlags(t *testing.T) {
 	}
 
 	// Instance-wide switch off overrides the project's own flag: not accessible.
-	if err := s.SetPublicProjectsEnabled(ctx, false); err != nil {
-		t.Fatalf("SetPublicProjectsEnabled: %v", err)
-	}
+	setPublicProjectsEnabled(t, s, ctx, false)
 	ok, err = s.IsProjectPubliclyAccessible(ctx, p.ID)
 	if err != nil {
 		t.Fatalf("IsProjectPubliclyAccessible: %v", err)
@@ -75,9 +82,7 @@ func TestIsProjectPubliclyAccessibleRequiresBothFlags(t *testing.T) {
 
 	// Re-enabling the instance switch restores access without touching the
 	// project's own flag.
-	if err := s.SetPublicProjectsEnabled(ctx, true); err != nil {
-		t.Fatalf("SetPublicProjectsEnabled: %v", err)
-	}
+	setPublicProjectsEnabled(t, s, ctx, true)
 	ok, err = s.IsProjectPubliclyAccessible(ctx, p.ID)
 	if err != nil {
 		t.Fatalf("IsProjectPubliclyAccessible: %v", err)
@@ -112,9 +117,7 @@ func TestListPublicProjectsRespectsInstanceSwitch(t *testing.T) {
 		t.Errorf("ListPublicProjects = %+v, want only %q", list, p.ID)
 	}
 
-	if err := s.SetPublicProjectsEnabled(ctx, false); err != nil {
-		t.Fatalf("SetPublicProjectsEnabled: %v", err)
-	}
+	setPublicProjectsEnabled(t, s, ctx, false)
 	list, err = s.ListPublicProjects(ctx)
 	if err != nil {
 		t.Fatalf("ListPublicProjects with switch off: %v", err)

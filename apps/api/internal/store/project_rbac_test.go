@@ -284,6 +284,25 @@ func TestEffectivePermissionsDirectAssignment(t *testing.T) {
 	}
 }
 
+// TestEffectivePermissionsRunDeleteAndProjectDelete covers add-data-retention
+// design.md D3: the two new flags round-trip through Create and are
+// visible in the resolved bool_or() union, same as every other flag.
+func TestEffectivePermissionsRunDeleteAndProjectDelete(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "deleter@example.com", false)
+	p := mustProject(t, s)
+	projectAdmin := mustRole(t, s, domain.Role{Name: "Project Admin B", CanRead: true, CanRunDelete: true, CanProjectDelete: true})
+
+	if err := s.ProjectMembers.SetMember(ctx, p.ID, u.ID, projectAdmin.ID); err != nil {
+		t.Fatalf("SetMember: %v", err)
+	}
+	perms, err := s.ProjectMembers.EffectivePermissions(ctx, u.ID, p.ID)
+	if err != nil || !perms.RunDelete || !perms.ProjectDelete {
+		t.Errorf("EffectivePermissions = %+v, %v; want runDelete+projectDelete", perms, err)
+	}
+}
+
 func TestEffectivePermissionsViaTeam(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

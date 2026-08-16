@@ -15,15 +15,24 @@ func (s *Service) InstanceSettings(ctx context.Context) (domain.InstanceSettings
 	return s.store.InstanceSettings.Get(ctx)
 }
 
-// SetPublicProjectsEnabled updates the instance-wide kill switch. Tenant
-// Admin enforcement happens at the route level (requireTenantAdmin), the
-// same as SetTenantAdmin — this method does not re-check the actor.
-func (s *Service) SetPublicProjectsEnabled(ctx context.Context, enabled bool) error {
-	if err := s.store.InstanceSettings.SetPublicProjectsEnabled(ctx, enabled); err != nil {
-		return err
+// UpdateInstanceSettings applies a partial update to the instance-wide
+// settings row (design.md D8/D9 of add-data-retention — generalizes the
+// previous single-field SetPublicProjectsEnabled). Tenant Admin enforcement
+// happens at the route level (requireTenantAdmin), the same as
+// SetTenantAdmin — this method does not re-check the actor.
+func (s *Service) UpdateInstanceSettings(ctx context.Context, upd domain.InstanceSettingsUpdate) (domain.InstanceSettings, error) {
+	if upd.RunRetentionDays != nil && *upd.RunRetentionDays < 0 {
+		return domain.InstanceSettings{}, invalid("runRetentionDays must not be negative")
 	}
-	s.audit(ctx, "update", "instance_settings", "public_projects_enabled")
-	return nil
+	if upd.AutoArchiveInactiveDays != nil && *upd.AutoArchiveInactiveDays < 0 {
+		return domain.InstanceSettings{}, invalid("autoArchiveInactiveDays must not be negative")
+	}
+	settings, err := s.store.InstanceSettings.Update(ctx, upd)
+	if err != nil {
+		return domain.InstanceSettings{}, err
+	}
+	s.audit(ctx, "update", "instance_settings", "")
+	return settings, nil
 }
 
 // ListPublicProjects returns every project eligible for the anonymous

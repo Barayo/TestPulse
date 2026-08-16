@@ -1,23 +1,29 @@
 import { useEffect, useState } from 'react'
-import { GlobeIcon, LockIcon } from 'lucide-react'
+import { DatabaseIcon, GlobeIcon, LockIcon, TriangleAlertIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { AdminShell } from '@/components/AdminShell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { RetentionPillSelector } from '@/components/RetentionPillSelector'
 import { Switch } from '@/components/ui/switch'
 
-// Tenant-Admin-only instance-wide settings (enable-public-project-access).
-// Self-gates the same way RolesPage.tsx/PeoplePage.tsx do — a client-side
-// check, not just the route-level RequireAuth — since a non-admin logged-in
-// user can still navigate here directly.
+// Tenant-Admin-only instance-wide settings (enable-public-project-access,
+// add-data-retention). Self-gates the same way RolesPage.tsx/PeoplePage.tsx
+// do — a client-side check, not just the route-level RequireAuth — since a
+// non-admin logged-in user can still navigate here directly.
 export default function InstanceSettingsPage() {
   const { user: me } = useAuth()
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState<boolean>()
+  const [runRetentionDays, setRunRetentionDays] = useState<number>()
+  const [autoArchiveInactiveDays, setAutoArchiveInactiveDays] = useState<number>()
 
   useEffect(() => {
     if (!me?.isTenantAdmin) return
-    void api.GET('/api/v1/meta').then(({ data }) => {
-      if (data) setPublicProjectsEnabled(data.publicProjectsEnabled)
+    void api.GET('/api/v1/instance-settings').then(({ data }) => {
+      if (!data) return
+      setPublicProjectsEnabled(data.publicProjectsEnabled)
+      setRunRetentionDays(data.runRetentionDays)
+      setAutoArchiveInactiveDays(data.autoArchiveInactiveDays)
     })
   }, [me])
 
@@ -30,6 +36,16 @@ export default function InstanceSettingsPage() {
     const next = !publicProjectsEnabled
     const { data } = await api.PATCH('/api/v1/instance-settings', { body: { publicProjectsEnabled: next } })
     if (data) setPublicProjectsEnabled(data.publicProjectsEnabled)
+  }
+
+  async function selectRunRetention(days: number) {
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { runRetentionDays: days } })
+    if (data) setRunRetentionDays(data.runRetentionDays)
+  }
+
+  async function selectAutoArchive(days: number) {
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { autoArchiveInactiveDays: days } })
+    if (data) setAutoArchiveInactiveDays(data.autoArchiveInactiveDays)
   }
 
   return (
@@ -66,6 +82,68 @@ export default function InstanceSettingsPage() {
               When off: no project is reachable anonymously, even one with its own &quot;Public access&quot; left
               on — that project's setting is kept, not cleared, and takes effect again the moment this is switched
               back on.
+            </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <DatabaseIcon className="size-3.5" aria-hidden="true" />
+          Data
+        </div>
+        <Card className={runRetentionDays ? 'ring-destructive/30' : undefined}>
+          <CardHeader>
+            <CardTitle>Run retention</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Automatically and permanently deletes a closed run once it crosses this age, counted from when the run
+              was created. Open runs are never touched, no matter how old. This applies to every closed run already
+              in the system today, not just ones closed after you turn it on.
+            </p>
+            <RetentionPillSelector
+              value={runRetentionDays}
+              onSelect={selectRunRetention}
+              ariaLabel="Run retention period"
+              customAriaLabel="Custom retention period, in days"
+            />
+            {runRetentionDays === undefined ? null : runRetentionDays === 0 ? (
+              <p className="text-xs text-muted-foreground">Off — runs are never automatically deleted.</p>
+            ) : (
+              <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2.5">
+                <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
+                <p className="text-sm text-foreground">
+                  Closed runs older than {runRetentionDays} day{runRetentionDays === 1 ? '' : 's'} are deleted
+                  automatically and permanently — including runs already past that age right now.{' '}
+                  <strong>This cannot be undone.</strong>
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Auto-archive inactive projects</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Automatically archives a project once it's gone quiet for this long — no new runs, case edits, or
+              suites. Archiving never deletes anything.
+            </p>
+            <RetentionPillSelector
+              value={autoArchiveInactiveDays}
+              onSelect={selectAutoArchive}
+              ariaLabel="Auto-archive inactivity period"
+              customAriaLabel="Custom inactivity period, in days"
+            />
+            <p className="text-xs text-muted-foreground">
+              {autoArchiveInactiveDays === undefined
+                ? null
+                : autoArchiveInactiveDays === 0
+                  ? 'Off — projects are never automatically archived.'
+                  : `Projects inactive for ${autoArchiveInactiveDays} day${autoArchiveInactiveDays === 1 ? '' : 's'} are archived automatically. Reversible any time from the project's own Settings.`}
             </p>
           </CardContent>
         </Card>

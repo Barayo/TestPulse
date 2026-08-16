@@ -1371,6 +1371,130 @@ func TestRestoreNonexistentVersionIsRejected(t *testing.T) {
 	}
 }
 
+// TestDeleteProjectRequiresArchivedProject covers add-data-retention
+// design.md D4: the archived-first precondition is real service-layer
+// business logic (unlike permission checks, which live purely in HTTP
+// middleware in this codebase) — a non-archived project cannot be deleted.
+// TestUpdateProjectUnarchivesRatherThanNoOp covers add-data-retention
+// design.md D7: before this change, archived: false was silently accepted
+// and did nothing.
+func TestUpdateProjectUnarchivesRatherThanNoOp(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "unarchiver@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Toggle Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archived := true
+	if _, err := s.UpdateProject(ctx, project.ID, service.ProjectUpdate{Archived: &archived}); err != nil {
+		t.Fatal(err)
+	}
+
+	unarchived := false
+	got, err := s.UpdateProject(ctx, project.ID, service.ProjectUpdate{Archived: &unarchived})
+	if err != nil {
+		t.Fatalf("UpdateProject(archived: false): %v", err)
+	}
+	if got.Archived {
+		t.Error("project should be unarchived, not still archived (was a silent no-op before design.md D7)")
+	}
+}
+
+// TestUpdateProjectAutoArchiveExemptRequiresTenantAdmin covers add-data-retention
+// design.md D9: the auto-archive exemption is settable only by a Tenant
+// Admin, never a Project Admin — even one with manageProject, the
+// permission that otherwise gates every other field UpdateProject accepts.
+func TestUpdateProjectAutoArchiveExemptRequiresTenantAdmin(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "exempt-admin@example.com", "correcthorse", true)
+	adminCtx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(adminCtx, service.ProjectInput{Name: "Exempt Me"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	nonAdmin := mustCreateUser(t, s, "exempt-nonadmin@example.com", "correcthorse", false)
+	nonAdminCtx := domain.WithActor(context.Background(), actorFor(nonAdmin))
+
+	exempt := true
+	var ferr *service.ForbiddenError
+	if _, err := s.UpdateProject(nonAdminCtx, project.ID, service.ProjectUpdate{AutoArchiveExempt: &exempt}); !errors.As(err, &ferr) {
+		t.Errorf("UpdateProject(AutoArchiveExempt) by non-Tenant-Admin = %v, want ForbiddenError", err)
+	}
+	got, err := s.GetProject(adminCtx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.AutoArchiveExempt {
+		t.Error("AutoArchiveExempt was set by a non-Tenant-Admin, want unchanged false")
+	}
+
+	got, err = s.UpdateProject(adminCtx, project.ID, service.ProjectUpdate{AutoArchiveExempt: &exempt})
+	if err != nil {
+		t.Fatalf("UpdateProject(AutoArchiveExempt) by Tenant Admin: %v", err)
+	}
+	if !got.AutoArchiveExempt {
+		t.Error("AutoArchiveExempt = false after a Tenant Admin set it true")
+	}
+}
+
+func TestDeleteProjectRequiresArchivedProject(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "deleter1@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Active Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = s.DeleteProject(ctx, project.ID)
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) || !strings.Contains(err.Error(), "archived") {
+		t.Errorf("err = %v (%T), want a ValidationError mentioning archived", err, err)
+	}
+
+	got, err := s.GetProject(ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != project.ID {
+		t.Errorf("project should survive a rejected delete: %+v", got)
+	}
+}
+
+func TestDeleteProjectMarksArchivedProjectForDeletion(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "deleter2@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Archived Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	archived := true
+	if _, err := s.UpdateProject(ctx, project.ID, service.ProjectUpdate{Archived: &archived}); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.DeleteProject(ctx, project.ID); err != nil {
+		t.Fatalf("DeleteProject: %v", err)
+	}
+
+	list, err := s.ListProjects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range list {
+		if p.ID == project.ID {
+			t.Error("a project marked for deletion should no longer be listed")
+		}
+	}
+}
+
 func TestGetUserByID(t *testing.T) {
 	s := testService(t)
 	created := mustCreateUser(t, s, "getme@example.com", "correcthorse", false)

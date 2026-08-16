@@ -6,6 +6,7 @@ import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { StatusBadge, dotClass } from '@/components/StatusBadge'
@@ -198,6 +199,7 @@ export default function RunPage() {
   const [lifecycleError, setLifecycleError] = useState<string>()
   const [isClosing, setIsClosing] = useState(false)
   const [isReopening, setIsReopening] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<Status | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
   const [groupEnabled, setGroupEnabled] = useState(false)
@@ -329,6 +331,13 @@ export default function RunPage() {
     }
     setRun((r) => (r ? { ...r, status: 'open' } : r))
     bumpDataRevision()
+  }
+
+  async function confirmDeleteRun() {
+    if (!runKey || !projectKey) return
+    await api.DELETE('/api/v1/runs/{runKey}', { params: { path: { runKey } } })
+    setDeleteDialogOpen(false)
+    navigate(`/projects/${projectKey}/runs`)
   }
 
   const visibleItems = useMemo(
@@ -508,6 +517,11 @@ export default function RunPage() {
                         {isReopening ? 'Reopening…' : 'Reopen'}
                       </Button>
                     )}
+                {permissions?.runDelete && (
+                  <Button size="sm" variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
+                    Delete run
+                  </Button>
+                )}
               </div>
             )}
           </div>
@@ -691,6 +705,24 @@ export default function RunPage() {
 
       <RunShortcutsHint shortcuts={runShortcuts} />
       <RunShortcutsOverlay shortcuts={runShortcuts} />
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Delete &quot;{run?.name}&quot;?</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Permanently removes this run and its {summary?.total ?? 0} recorded result
+            {summary?.total === 1 ? '' : 's'}. This cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={() => void confirmDeleteRun()}>
+              Delete run
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

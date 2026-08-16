@@ -73,6 +73,24 @@ func run() error {
 		logger.Warn("clearing expired sessions at startup", "error", err)
 	}
 
+	// The codebase's first background worker (add-data-retention design.md
+	// D6) — purges projects queued for permanent deletion. Runs for the
+	// server's whole lifetime; ctx cancellation (the same signal-driven
+	// context the HTTP server shuts down on) stops it cleanly.
+	go service.NewProjectDeletionWorker(svc).Run(ctx)
+
+	// A second, independent background worker (add-data-retention design.md
+	// D8) — automatically deletes closed runs past the configured
+	// instance-wide age threshold. No-ops entirely while the threshold is 0
+	// (the default). Same signal-cancelled ctx.
+	go service.NewRunRetentionWorker(svc).Run(ctx)
+
+	// A third, independent background worker (add-data-retention design.md
+	// D9) — automatically archives inactive, non-exempt projects past the
+	// configured instance-wide inactivity threshold. Same signal-cancelled
+	// ctx.
+	go service.NewProjectAutoArchiveWorker(svc).Run(ctx)
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.New(logger, db.NewHealth(pool), svc, cfg.LoginRateLimitPerMinute, cfg.LoginRateLimitBurst),

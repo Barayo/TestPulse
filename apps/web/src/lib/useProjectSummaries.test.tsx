@@ -75,6 +75,7 @@ describe('useProjectSummaries', () => {
       passRate: null,
       lastRunAt: null,
       isFavorite: false,
+      archived: false,
     })
     expect(result.current[1]).toEqual({
       id: 'p1',
@@ -87,7 +88,32 @@ describe('useProjectSummaries', () => {
       passRate: 50,
       lastRunAt: null,
       isFavorite: false,
+      archived: false,
     })
+  })
+
+  // add-data-retention design.md D7: ProjectsPage badges archived projects,
+  // so this hook needs to carry the flag through.
+  it('passes through archived from the project record', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects') {
+        return Promise.resolve({
+          data: [{ id: 'id0', key: 'p0', name: 'Archived Project', archived: true, description: '', isSample: false, createdAt: '' }],
+          response: { ok: true },
+        })
+      }
+      if (path === '/api/v1/projects/summaries') {
+        return Promise.resolve({
+          data: [{ projectId: 'id0', suiteCount: 0, caseCount: 0, passRate: null, isFavorite: false, archived: true }],
+          response: { ok: true },
+        })
+      }
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    const { result } = renderHook(() => useProjectSummaries(), { wrapper })
+    await waitFor(() => expect(result.current).toHaveLength(1))
+
+    expect(result.current[0].archived).toBe(true)
   })
 
   it('passes through description, isSample, and isFavorite from the API', async () => {
@@ -139,6 +165,7 @@ describe('useProjectSummaries', () => {
       passRate: 90,
       lastRunAt: '2026-01-02T00:00:00Z',
       isFavorite: true,
+      archived: false,
     })
   })
 

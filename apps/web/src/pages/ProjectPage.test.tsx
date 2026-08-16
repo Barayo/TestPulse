@@ -155,6 +155,21 @@ describe('ProjectPage landing', () => {
     expect(screen.getByText(/p1 · project overview/i)).toBeInTheDocument()
   })
 
+  // add-data-retention design.md D5: same badge as ProjectsPage's cards.
+  it('shows an "Archived" badge on the heading for an archived project', async () => {
+    mockProjectAPI({ project: { id: 'p1', key: 'p1', name: 'QA Platform', archived: true, description: '', createdAt: '' } })
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(screen.getByText('Archived')).toBeInTheDocument()
+  })
+
+  it('shows no "Archived" badge for an active project', async () => {
+    mockProjectAPI()
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(screen.queryByText('Archived')).not.toBeInTheDocument()
+  })
+
   describe('switch-project chevron on the heading', () => {
     it('shows a chevron on the heading that opens the switcher when the account has multiple projects', async () => {
       mockProjectAPI()

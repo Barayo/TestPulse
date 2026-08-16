@@ -324,6 +324,47 @@ func (r *RunRepo) Reopen(ctx context.Context, runID string) error {
 	return nil
 }
 
+// Delete permanently removes a run (add-data-retention design.md D1). No
+// application-level cascade is needed — test_run_items.run_id and
+// test_run_results.run_item_id are both ON DELETE CASCADE, so one DELETE
+// here removes every item and result scoped to this run.
+func (r *RunRepo) Delete(ctx context.Context, runID string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM test_runs WHERE id = $1`, runID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// ListEligibleForRetention returns every closed run whose created_at is
+// older than days (add-data-retention design.md D8). A pure age filter —
+// callers (the retention worker) are responsible for treating days == 0 as
+// "policy off" before calling this, not this method.
+func (r *RunRepo) ListEligibleForRetention(ctx context.Context, days int) ([]domain.Run, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, key, project_id, name, status, created_at
+		 FROM test_runs
+		 WHERE status = $1 AND created_at < now() - make_interval(days => $2)`,
+		domain.RunStatusClosed, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	runs := []domain.Run{}
+	for rows.Next() {
+		var run domain.Run
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.Status, &run.CreatedAt); err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
 // IDByKey resolves a run's key to its internal id — used at the API
 // boundary to translate a key-based path param before delegating to
 // UUID-based service/store calls (add-human-readable-keys D4).

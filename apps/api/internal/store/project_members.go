@@ -112,7 +112,9 @@ func (r *ProjectMemberRepo) EffectivePermissions(ctx context.Context, userID, pr
 		       COALESCE(bool_or(rl.can_suite_edit_membership), false),
 		       COALESCE(bool_or(rl.can_run_create), false),
 		       COALESCE(bool_or(rl.can_run_record_result), false),
-		       COALESCE(bool_or(rl.can_manage_project), false)
+		       COALESCE(bool_or(rl.can_manage_project), false),
+		       COALESCE(bool_or(rl.can_run_delete), false),
+		       COALESCE(bool_or(rl.can_project_delete), false)
 		FROM roles rl
 		WHERE rl.id IN (
 			SELECT role_id FROM project_members WHERE project_id = $1 AND user_id = $2
@@ -123,7 +125,8 @@ func (r *ProjectMemberRepo) EffectivePermissions(ctx context.Context, userID, pr
 		)`, projectID, userID,
 	).Scan(&count, &perms.Read, &perms.CaseCreate, &perms.CaseEdit, &perms.CaseDelete,
 		&perms.SectionCreate, &perms.SectionDelete, &perms.SuiteCreate, &perms.SuiteEditMembership,
-		&perms.RunCreate, &perms.RunRecordResult, &perms.ManageProject)
+		&perms.RunCreate, &perms.RunRecordResult, &perms.ManageProject,
+		&perms.RunDelete, &perms.ProjectDelete)
 	if err != nil {
 		return domain.Permissions{}, err
 	}

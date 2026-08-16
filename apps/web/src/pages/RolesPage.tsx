@@ -24,6 +24,8 @@ type Role = {
   canRunCreate: boolean
   canRunRecordResult: boolean
   canManageProject: boolean
+  canRunDelete: boolean
+  canProjectDelete: boolean
 }
 
 type PermissionKey =
@@ -38,6 +40,8 @@ type PermissionKey =
   | 'canRunCreate'
   | 'canRunRecordResult'
   | 'canManageProject'
+  | 'canRunDelete'
+  | 'canProjectDelete'
 
 // Ten concrete, per-resource permission flags (design.md D11) — replaced an
 // earlier set of five broader ones (read/execute/author/delete/manageProject)
@@ -70,7 +74,10 @@ const PERMISSION_SECTIONS: {
   {
     heading: 'Project',
     icon: <SettingsIcon className="size-4" aria-hidden="true" />,
-    items: [{ key: 'canManageProject', shortLabel: 'Manage', fullLabel: 'Manage Project' }],
+    items: [
+      { key: 'canManageProject', shortLabel: 'Manage', fullLabel: 'Manage Project' },
+      { key: 'canProjectDelete', shortLabel: 'Delete', fullLabel: 'Delete Project' },
+    ],
   },
   {
     heading: 'Sections',
@@ -103,6 +110,7 @@ const PERMISSION_SECTIONS: {
     items: [
       { key: 'canRunCreate', shortLabel: 'Create', fullLabel: 'Create Run' },
       { key: 'canRunRecordResult', shortLabel: 'Record Result', fullLabel: 'Record Result' },
+      { key: 'canRunDelete', shortLabel: 'Delete', fullLabel: 'Delete Run' },
     ],
   },
 ]
@@ -125,6 +133,8 @@ const emptyFlags: Record<PermissionKey, boolean> = {
   canRunCreate: false,
   canRunRecordResult: false,
   canManageProject: false,
+  canRunDelete: false,
+  canProjectDelete: false,
 }
 
 // Used by the create form, where there's only one role in play — a single
@@ -213,6 +223,7 @@ export default function RolesPage() {
     const {
       canRead, canCaseCreate, canCaseEdit, canCaseDelete, canSectionCreate, canSectionDelete,
       canSuiteCreate, canSuiteEditMembership, canRunCreate, canRunRecordResult, canManageProject,
+      canRunDelete, canProjectDelete,
       name, rank,
     } = role
     await api.PATCH('/api/v1/roles/{roleId}', {
@@ -220,6 +231,7 @@ export default function RolesPage() {
       body: {
         name, rank, canRead, canCaseCreate, canCaseEdit, canCaseDelete, canSectionCreate, canSectionDelete,
         canSuiteCreate, canSuiteEditMembership, canRunCreate, canRunRecordResult, canManageProject,
+        canRunDelete, canProjectDelete,
         [key]: !role[key],
       },
     })

@@ -36,7 +36,12 @@ func TestScenario_ProjectSummariesBatchedAcrossProjects(t *testing.T) {
 	}
 }
 
-func TestScenario_ProjectSummariesExcludeArchivedProjects(t *testing.T) {
+// TestScenario_ProjectSummariesIncludeArchivedProjects: reversed from its
+// original intent (add-data-retention design.md D7) — the delete-project
+// confirmation dialog needs real counts for a project that IS archived
+// (deletion requires archiving first), so summaries now includes archived
+// projects, marked via the `archived` field, instead of excluding them.
+func TestScenario_ProjectSummariesIncludeArchivedProjects(t *testing.T) {
 	h := apiServer(t)
 
 	var p struct{ ID, Key string }
@@ -45,11 +50,19 @@ func TestScenario_ProjectSummariesExcludeArchivedProjects(t *testing.T) {
 
 	var summaries []struct {
 		ProjectID string `json:"projectId"`
+		Archived  bool   `json:"archived"`
 	}
 	call(t, h, "GET", "/api/v1/projects/summaries", nil, 200, &summaries)
+	var found bool
 	for _, s := range summaries {
 		if s.ProjectID == p.ID {
-			t.Errorf("archived project %s appeared in summaries", p.ID)
+			found = true
+			if !s.Archived {
+				t.Errorf("archived project %s summary has archived: false", p.ID)
+			}
 		}
+	}
+	if !found {
+		t.Errorf("archived project %s did not appear in summaries", p.ID)
 	}
 }

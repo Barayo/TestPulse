@@ -269,16 +269,39 @@ type Project struct {
 	// PublicAccess opts this project into unauthenticated read-only access
 	// at its public URL (enable-public-project-access); also gated by the
 	// instance-wide InstanceSettings.PublicProjectsEnabled kill switch.
-	PublicAccess bool      `json:"publicAccess"`
-	CreatedAt    time.Time `json:"createdAt"`
+	PublicAccess bool `json:"publicAccess"`
+	// AutoArchiveExempt exempts this project from the instance-wide
+	// auto-archive-inactive-projects policy (design.md D9 of
+	// add-data-retention) — settable only by a Tenant Admin, never a
+	// Project Admin, even one with manageProject.
+	AutoArchiveExempt bool      `json:"autoArchiveExempt"`
+	CreatedAt         time.Time `json:"createdAt"`
 }
 
 // InstanceSettings is the single, instance-wide configuration row
 // (enable-public-project-access) — a Tenant-Admin-only kill switch layered
 // above every project's own PublicAccess flag.
 type InstanceSettings struct {
-	PublicProjectsEnabled bool      `json:"publicProjectsEnabled"`
-	UpdatedAt             time.Time `json:"updatedAt"`
+	PublicProjectsEnabled bool `json:"publicProjectsEnabled"`
+	// RunRetentionDays is a Tenant-Admin-configurable, instance-wide age
+	// threshold (in days) past which a closed run is automatically and
+	// permanently deleted by RunRetentionWorker (design.md D8 of
+	// add-data-retention). 0 means the policy is off.
+	RunRetentionDays int `json:"runRetentionDays"`
+	// AutoArchiveInactiveDays is a Tenant-Admin-configurable, instance-wide
+	// inactivity threshold (in days) past which a non-exempt project is
+	// automatically archived by ProjectAutoArchiveWorker (design.md D9 of
+	// add-data-retention). 0 means the policy is off.
+	AutoArchiveInactiveDays int       `json:"autoArchiveInactiveDays"`
+	UpdatedAt               time.Time `json:"updatedAt"`
+}
+
+// InstanceSettingsUpdate is a partial update to InstanceSettings — nil
+// fields are left unchanged (design.md D8/D9 of add-data-retention).
+type InstanceSettingsUpdate struct {
+	PublicProjectsEnabled   *bool
+	RunRetentionDays        *int
+	AutoArchiveInactiveDays *int
 }
 
 type TestCase struct {
@@ -511,6 +534,10 @@ type ProjectSummary struct {
 	PassRate   *int       `json:"passRate"`
 	LastRunAt  *time.Time `json:"lastRunAt"`
 	IsFavorite bool       `json:"isFavorite"`
+	// Archived reflects the project's current archived state
+	// (add-data-retention design.md D7) — Summaries() no longer excludes
+	// archived projects, so callers need this to badge them correctly.
+	Archived bool `json:"archived"`
 }
 
 // --- Identity (add-identity-basics) ---
@@ -537,6 +564,8 @@ const (
 	PermRunCreate           Permission = "runCreate"
 	PermRunRecordResult     Permission = "runRecordResult"
 	PermManageProject       Permission = "manageProject"
+	PermRunDelete           Permission = "runDelete"
+	PermProjectDelete       Permission = "projectDelete"
 )
 
 // Role is a Tenant-Admin-defined, instance-wide record: a name plus ten
@@ -559,6 +588,8 @@ type Role struct {
 	CanRunCreate           bool      `json:"canRunCreate"`
 	CanRunRecordResult     bool      `json:"canRunRecordResult"`
 	CanManageProject       bool      `json:"canManageProject"`
+	CanRunDelete           bool      `json:"canRunDelete"`
+	CanProjectDelete       bool      `json:"canProjectDelete"`
 	CreatedAt              time.Time `json:"createdAt"`
 }
 
@@ -587,6 +618,10 @@ func (r Role) Has(perm Permission) bool {
 		return r.CanRunRecordResult
 	case PermManageProject:
 		return r.CanManageProject
+	case PermRunDelete:
+		return r.CanRunDelete
+	case PermProjectDelete:
+		return r.CanProjectDelete
 	default:
 		return false
 	}
@@ -608,6 +643,8 @@ func (r Role) Permissions() Permissions {
 		RunCreate:           r.CanRunCreate,
 		RunRecordResult:     r.CanRunRecordResult,
 		ManageProject:       r.CanManageProject,
+		RunDelete:           r.CanRunDelete,
+		ProjectDelete:       r.CanProjectDelete,
 	}
 }
 
@@ -632,6 +669,8 @@ type Permissions struct {
 	RunCreate           bool `json:"runCreate"`
 	RunRecordResult     bool `json:"runRecordResult"`
 	ManageProject       bool `json:"manageProject"`
+	RunDelete           bool `json:"runDelete"`
+	ProjectDelete       bool `json:"projectDelete"`
 }
 
 // Has reports whether the resolved set includes perm.
@@ -659,6 +698,10 @@ func (p Permissions) Has(perm Permission) bool {
 		return p.RunRecordResult
 	case PermManageProject:
 		return p.ManageProject
+	case PermRunDelete:
+		return p.RunDelete
+	case PermProjectDelete:
+		return p.ProjectDelete
 	default:
 		return false
 	}
@@ -678,7 +721,9 @@ func (p Permissions) IsSubsetOf(other Permissions) bool {
 		(!p.SuiteEditMembership || other.SuiteEditMembership) &&
 		(!p.RunCreate || other.RunCreate) &&
 		(!p.RunRecordResult || other.RunRecordResult) &&
-		(!p.ManageProject || other.ManageProject)
+		(!p.ManageProject || other.ManageProject) &&
+		(!p.RunDelete || other.RunDelete) &&
+		(!p.ProjectDelete || other.ProjectDelete)
 }
 
 // Intersect returns the permissions granted by both p and other — a
@@ -698,6 +743,8 @@ func (p Permissions) Intersect(other Permissions) Permissions {
 		RunCreate:           p.RunCreate && other.RunCreate,
 		RunRecordResult:     p.RunRecordResult && other.RunRecordResult,
 		ManageProject:       p.ManageProject && other.ManageProject,
+		RunDelete:           p.RunDelete && other.RunDelete,
+		ProjectDelete:       p.ProjectDelete && other.ProjectDelete,
 	}
 }
 
@@ -898,6 +945,10 @@ type ActorKind string
 const (
 	ActorKindUser  ActorKind = "user"
 	ActorKindAgent ActorKind = "agent"
+	// ActorKindSystem attributes an audit entry to an unattended background
+	// process (e.g. the automatic run-retention sweep, design.md D8 of
+	// add-data-retention) rather than a resolved request-time actor.
+	ActorKindSystem ActorKind = "system"
 )
 
 // Actor is whoever is making an authenticated request: a human user via

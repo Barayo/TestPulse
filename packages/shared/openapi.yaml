@@ -60,10 +60,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/Meta"
   /api/v1/instance-settings:
+    get:
+      operationId: getInstanceSettings
+      summary: Read instance-wide settings
+      description: Tenant-Admin-only.
+      tags: [system]
+      responses:
+        "200":
+          description: Current instance settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstanceSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
     patch:
       operationId: updateInstanceSettings
-      summary: Update instance-wide settings (enable-public-project-access)
-      description: Tenant-Admin-only. Currently one setting, publicProjectsEnabled.
+      summary: Update instance-wide settings
+      description: >
+        Tenant-Admin-only. A partial update — publicProjectsEnabled
+        (enable-public-project-access) and runRetentionDays
+        (add-data-retention) may be set independently or together.
       tags: [system]
       requestBody:
         required: true
@@ -149,6 +164,19 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Project" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteProject
+      summary: >-
+        Permanently delete an already-archived project and everything
+        scoped to it. Queues the deletion (hidden from listings
+        immediately) and returns before the background purge completes.
+      tags: [projects]
+      responses:
+        "202": { description: Deletion queued; the project is already hidden from listings }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/projects/{projectKey}/favorite:
     parameters:
@@ -512,6 +540,15 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteRun
+      summary: Permanently delete a run and everything scoped to it (items, results)
+      tags: [runs]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/runs/{runKey}/close:
     parameters:
@@ -1814,7 +1851,7 @@ components:
           description: Required — only the root folder (auto-created with the project) may have no parent.
     Project:
       type: object
-      required: [id, key, name, archived, description, isSample, publicAccess, createdAt]
+      required: [id, key, name, archived, description, isSample, publicAccess, autoArchiveExempt, createdAt]
       properties:
         id: { type: string }
         key:
@@ -1834,6 +1871,14 @@ components:
             default. Also gated by the instance-wide
             Meta.publicProjectsEnabled kill switch — a project is only
             actually reachable anonymously when both are true.
+        autoArchiveExempt:
+          type: boolean
+          description: >
+            Exempts this project from the instance-wide
+            autoArchiveInactiveDays policy (add-data-retention). Settable
+            only by a Tenant Admin, via PATCH — a request setting this
+            field from anyone else is rejected (403), even a Project Admin
+            who otherwise has manageProject on this project.
         createdAt: { type: string, format: date-time }
     ProjectInput:
       type: object
@@ -1848,6 +1893,7 @@ components:
         description: { type: string }
         archived: { type: boolean }
         publicAccess: { type: boolean }
+        autoArchiveExempt: { type: boolean }
     TestCase:
       type: object
       required: [id, key, projectId, folderId, currentVersion, content, createdAt, updatedAt]
@@ -2176,7 +2222,7 @@ components:
         rate: { type: integer, description: "0-100 percentage: min(pass, failedOrBlocked) / (pass + failedOrBlocked)" }
     ProjectSummary:
       type: object
-      required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite]
+      required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite, archived]
       properties:
         projectId: { type: string }
         suiteCount: { type: integer }
@@ -2193,6 +2239,13 @@ components:
         isFavorite:
           type: boolean
           description: Whether the calling user has starred this project.
+        archived:
+          type: boolean
+          description: >-
+            The project's current archived state (add-data-retention) —
+            summaries now include archived projects (previously excluded),
+            since the delete-project confirmation needs real counts for
+            the one project this always excluded before.
     HealthStatus:
       type: object
       required: [status]
@@ -2232,15 +2285,32 @@ components:
             than showing it and failing at submit time.
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, updatedAt]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, updatedAt]
       properties:
         publicProjectsEnabled: { type: boolean }
+        runRetentionDays:
+          type: integer
+          minimum: 0
+          description: >
+            Instance-wide, Tenant-Admin-configurable age threshold (in days)
+            past which a closed run is automatically and permanently
+            deleted. 0 (the default) means the policy is off.
+        autoArchiveInactiveDays:
+          type: integer
+          minimum: 0
+          description: >
+            Instance-wide, Tenant-Admin-configurable inactivity threshold
+            (in days) past which a non-exempt project is automatically
+            archived. 0 (the default) means the policy is off. Archiving is
+            reversible; unlike runRetentionDays, this never destroys data.
         updatedAt: { type: string, format: date-time }
     InstanceSettingsUpdate:
       type: object
-      required: [publicProjectsEnabled]
+      description: A partial update — every field is optional; omitted fields are left unchanged.
       properties:
         publicProjectsEnabled: { type: boolean }
+        runRetentionDays: { type: integer, minimum: 0 }
+        autoArchiveInactiveDays: { type: integer, minimum: 0 }
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]
@@ -2378,7 +2448,8 @@ components:
         definition.
       required:
         [read, caseCreate, caseEdit, caseDelete, sectionCreate, sectionDelete,
-         suiteCreate, suiteEditMembership, runCreate, runRecordResult, manageProject]
+         suiteCreate, suiteEditMembership, runCreate, runRecordResult, manageProject,
+         runDelete, projectDelete]
       properties:
         read: { type: boolean }
         caseCreate: { type: boolean }
@@ -2391,6 +2462,8 @@ components:
         runCreate: { type: boolean }
         runRecordResult: { type: boolean }
         manageProject: { type: boolean }
+        runDelete: { type: boolean }
+        projectDelete: { type: boolean }
     Role:
       type: object
       description: >-
@@ -2404,7 +2477,8 @@ components:
       required:
         [id, name, rank, canRead, canCaseCreate, canCaseEdit, canCaseDelete,
          canSectionCreate, canSectionDelete, canSuiteCreate, canSuiteEditMembership,
-         canRunCreate, canRunRecordResult, canManageProject, createdAt]
+         canRunCreate, canRunRecordResult, canManageProject, canRunDelete,
+         canProjectDelete, createdAt]
       properties:
         id: { type: string }
         name: { type: string }
@@ -2422,6 +2496,8 @@ components:
         canRunCreate: { type: boolean }
         canRunRecordResult: { type: boolean }
         canManageProject: { type: boolean }
+        canRunDelete: { type: boolean }
+        canProjectDelete: { type: boolean }
         createdAt: { type: string, format: date-time }
     RoleInput:
       type: object
@@ -2440,6 +2516,8 @@ components:
         canRunCreate: { type: boolean }
         canRunRecordResult: { type: boolean }
         canManageProject: { type: boolean }
+        canRunDelete: { type: boolean }
+        canProjectDelete: { type: boolean }
     Team:
       type: object
       required: [id, name, memberIds, createdAt]

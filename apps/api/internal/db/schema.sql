@@ -64,12 +64,14 @@ CREATE TABLE public.audit_log (
     entity_id text NOT NULL,
     occurred_at timestamp with time zone DEFAULT now() NOT NULL,
     detail jsonb,
-    CONSTRAINT audit_log_actor_kind_check CHECK ((actor_kind = ANY (ARRAY['user'::text, 'agent'::text])))
+    CONSTRAINT audit_log_actor_kind_check CHECK ((actor_kind = ANY (ARRAY['user'::text, 'agent'::text, 'system'::text])))
 );
 
 CREATE TABLE public.instance_settings (
     id boolean DEFAULT true NOT NULL,
     public_projects_enabled boolean DEFAULT true NOT NULL,
+    run_retention_days integer DEFAULT 0 NOT NULL,
+    auto_archive_inactive_days integer DEFAULT 0 NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT instance_settings_id_check CHECK (id)
 );
@@ -117,6 +119,8 @@ CREATE TABLE public.projects (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     description text DEFAULT ''::text NOT NULL,
     public_access boolean DEFAULT false NOT NULL,
+    deleting_at timestamp with time zone,
+    auto_archive_exempt boolean DEFAULT false NOT NULL,
     CONSTRAINT projects_name_check CHECK ((name <> ''::text))
 );
 
@@ -145,6 +149,8 @@ CREATE TABLE public.roles (
     can_run_create boolean DEFAULT false NOT NULL,
     can_run_record_result boolean DEFAULT false NOT NULL,
     can_manage_project boolean DEFAULT false NOT NULL,
+    can_run_delete boolean DEFAULT false NOT NULL,
+    can_project_delete boolean DEFAULT false NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT roles_name_check CHECK ((name <> ''::text))
 );
@@ -449,7 +455,7 @@ ALTER TABLE ONLY public.project_favorites
     ADD CONSTRAINT project_favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.project_key_counters
-    ADD CONSTRAINT project_key_counters_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id);
+    ADD CONSTRAINT project_key_counters_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.project_members
     ADD CONSTRAINT project_members_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
@@ -479,7 +485,7 @@ ALTER TABLE ONLY public.sessions
     ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.suite_cases
-    ADD CONSTRAINT suite_cases_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.test_cases(id);
+    ADD CONSTRAINT suite_cases_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.test_cases(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.suite_cases
     ADD CONSTRAINT suite_cases_suite_id_fkey FOREIGN KEY (suite_id) REFERENCES public.test_suites(id) ON DELETE CASCADE;
@@ -494,16 +500,16 @@ ALTER TABLE ONLY public.test_case_folders
     ADD CONSTRAINT test_case_folders_parent_folder_id_fkey FOREIGN KEY (parent_folder_id) REFERENCES public.test_case_folders(id);
 
 ALTER TABLE ONLY public.test_case_folders
-    ADD CONSTRAINT test_case_folders_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id);
+    ADD CONSTRAINT test_case_folders_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.test_case_versions
-    ADD CONSTRAINT test_case_versions_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.test_cases(id);
+    ADD CONSTRAINT test_case_versions_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.test_cases(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.test_cases
     ADD CONSTRAINT test_cases_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES public.test_case_folders(id);
 
 ALTER TABLE ONLY public.test_cases
-    ADD CONSTRAINT test_cases_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id);
+    ADD CONSTRAINT test_cases_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.test_run_items
     ADD CONSTRAINT test_run_items_assignee_team_id_fkey FOREIGN KEY (assignee_team_id) REFERENCES public.teams(id) ON DELETE SET NULL;
@@ -521,13 +527,13 @@ ALTER TABLE ONLY public.test_run_results
     ADD CONSTRAINT test_run_results_run_item_id_fkey FOREIGN KEY (run_item_id) REFERENCES public.test_run_items(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.test_runs
-    ADD CONSTRAINT test_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id);
+    ADD CONSTRAINT test_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.test_runs
     ADD CONSTRAINT test_runs_suite_id_fkey FOREIGN KEY (suite_id) REFERENCES public.test_suites(id) ON DELETE SET NULL;
 
 ALTER TABLE ONLY public.test_suites
-    ADD CONSTRAINT test_suites_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id);
+    ADD CONSTRAINT test_suites_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
 
 ALTER TABLE ONLY public.user_avatars
     ADD CONSTRAINT user_avatars_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
@@ -549,9 +555,10 @@ INSERT INTO public.instance_settings (id) VALUES (true);
 INSERT INTO public.roles (
     name, rank, can_read, can_case_create, can_case_edit, can_case_delete,
     can_section_create, can_section_delete, can_suite_create,
-    can_suite_edit_membership, can_run_create, can_run_record_result, can_manage_project
+    can_suite_edit_membership, can_run_create, can_run_record_result, can_manage_project,
+    can_run_delete, can_project_delete
 ) VALUES
-    ('Viewer',        0, true, false, false, false, false, false, false, false, false, false, false),
-    ('Tester',        1, true, false, false, false, false, false, false, false, true,  true,  false),
-    ('Contributor',   2, true, true,  true,  false, true,  false, true,  true,  true,  true,  false),
-    ('Project Admin', 3, true, true,  true,  true,  true,  true,  true,  true,  true,  true,  true);
+    ('Viewer',        0, true, false, false, false, false, false, false, false, false, false, false, false, false),
+    ('Tester',        1, true, false, false, false, false, false, false, false, true,  true,  false, false, false),
+    ('Contributor',   2, true, true,  true,  false, true,  false, true,  true,  true,  true,  false, false, false),
+    ('Project Admin', 3, true, true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true);

@@ -446,6 +446,46 @@ func TestSeedContentCoversRunLifecycleAndImport(t *testing.T) {
 	}
 }
 
+// add-data-retention: the Sample Project ships a small, closed, explicitly
+// disposable run so a user trying the new "Delete run" action has something
+// low-stakes to practice on, rather than being tempted to delete one of the
+// meaningful showcase runs the flaky-signal/pass-rate demonstrations depend
+// on staying intact.
+func TestSeedIncludesADisposableScratchRun(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var scratch *domain.Run
+	for i, r := range runs {
+		if r.Name == "Scratch run — safe to delete" {
+			scratch = &runs[i]
+		}
+	}
+	if scratch == nil {
+		t.Fatal("no scratch run seeded")
+	}
+	if scratch.Status != domain.RunStatusClosed {
+		t.Errorf("scratch run status = %q, want closed", scratch.Status)
+	}
+	// ListRuns orders newest first — the scratch run must never be it, since
+	// the project's shown pass rate is driven by the most recently created
+	// run (TestSeedContentEndsOnAHealthyRun depends on that staying the
+	// deliberately strong "Release 1.2" run).
+	if runs[0].ID == scratch.ID {
+		t.Error("scratch run is the most recently created run, want the final go/no-go run to stay last")
+	}
+}
+
 // collapse-duplicate-ci-runs: the Sample Project should demonstrate the
 // fixed import behavior — a commit-style name, created closed — not the
 // old bug (mislabeled, stuck open).

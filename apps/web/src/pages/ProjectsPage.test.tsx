@@ -129,6 +129,29 @@ describe('ProjectsPage', () => {
     expect(screen.getByText('Sample')).toBeInTheDocument()
   })
 
+  // add-data-retention design.md D5: same slot/order as the Sample badge.
+  it('shows an "Archived" badge next to an archived project in expanded view', async () => {
+    mockProjectsList([project({ archived: true })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.getByText('Archived')).toBeInTheDocument()
+  })
+
+  it('shows no "Archived" badge for an active project in expanded view', async () => {
+    mockProjectsList([project({ archived: false })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.queryByText('Archived')).not.toBeInTheDocument()
+  })
+
+  it('shows an "Archived" badge next to an archived project in compact view', async () => {
+    window.localStorage.setItem('testpulse.projectListViewMode', 'compact')
+    mockProjectsList([project({ archived: true })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.getByText('Archived')).toBeInTheDocument()
+  })
+
   it('renders the project name clearly, not in the heavy page-title weight', async () => {
     mockProjectsList([project()])
     renderPage()

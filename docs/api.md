@@ -21,7 +21,8 @@ the root because infrastructure expects them there.
 | GET | `/healthz` | Liveness: process health only; `200` even when the database is down |
 | GET | `/readyz` | Readiness: `200` when the database is reachable and the applied schema matches this binary's `schema.sql`, `503 {"status":"unavailable","reason":"..."}` otherwise |
 | GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` (see below) and `passwordResetEnabled` — whether self-service password recovery is available (SMTP configured) |
-| PATCH | `/api/v1/instance-settings` | Update instance-wide settings — currently just `publicProjectsEnabled` — Tenant Admin only |
+| GET | `/api/v1/instance-settings` | Read instance-wide settings (`publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`) — Tenant Admin only |
+| PATCH | `/api/v1/instance-settings` | Update instance-wide settings — `publicProjectsEnabled`, `runRetentionDays`, and/or `autoArchiveInactiveDays` (`add-data-retention` — days of run/project inactivity before auto-deletion/auto-archiving respectively, `0` meaning each policy is off; any subset of the three fields may be set together) — Tenant Admin only |
 
 Everything else under `/` serves the embedded web UI (with SPA fallback).
 
@@ -57,7 +58,8 @@ internal `id` in paths — they aren't in scope for this scheme.
 | POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only; the response's `key` is auto-derived from `name`; `isSample` is always `false` for a project created this way |
 | GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), and whether the calling user has favorited it, for every non-archived project, in one request — computed server-side (4 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
 | GET | `/api/v1/projects/{projectKey}` | Get a project |
-| PATCH | `/api/v1/projects/{projectKey}` | Rename, describe, archive, and/or set `publicAccess` — Project Admin+ (renaming never changes `key`) |
+| PATCH | `/api/v1/projects/{projectKey}` | Rename, describe, archive/unarchive (`archived: true`/`false`, both directions — `add-data-retention` D7), and/or set `publicAccess` — Project Admin+ (renaming never changes `key`). `autoArchiveExempt` (`add-data-retention` D9 — exempts the project from the instance-wide auto-archive policy) is accepted in the same request body but enforced separately: rejected with `403` from anyone but a Tenant Admin, even a Project Admin who otherwise passes this route's `manageProject` gate |
+| DELETE | `/api/v1/projects/{projectKey}` | Permanently delete an **already-archived** project and everything scoped to it — `400` if the project isn't archived first. Returns `202 Accepted`: the project is hidden from lists immediately, but the actual purge (sections, cases, versions, suites, runs, items, results, membership) happens asynchronously in the background over the following seconds-to-minutes. Requires `projectDelete`, kept separate from `manageProject` (`add-data-retention` D4) |
 | POST | `/api/v1/projects/{projectKey}/favorite` | Star the project for the calling user (idempotent) |
 | DELETE | `/api/v1/projects/{projectKey}/favorite` | Unstar the project for the calling user (idempotent) |
 
@@ -102,6 +104,7 @@ exactly one folder, defaulting to the project's root; see
 | GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's, and `status` (`open`/`closed`) |
 | POST | `/api/v1/runs/{runKey}/close` | Seal a run — requires `runRecordResult`, the same permission needed to record a verdict |
 | POST | `/api/v1/runs/{runKey}/reopen` | Reopen a closed run — requires `manageProject`, the project-admin-level permission |
+| DELETE | `/api/v1/runs/{runKey}` | Permanently delete a run, its items, and its results (`204`) — no archived precondition, unlike project deletion. Requires `runDelete` (`add-data-retention` D1). A closed run may also be deleted automatically by the run-retention worker once past the configured age threshold — see [Test management](test-management.md#run-retention) |
 | GET / POST | `/api/v1/runs/{runKey}/items` | List items (optionally `?assignee=<userId-or-teamId>`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
 | GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`verdict`, `comment`, optional `actor` override — see below) |
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or assign to a real project member: `assigneeUserId` or `assigneeTeamId` (mutually exclusive; the id must belong to the project's membership) |
@@ -209,12 +212,17 @@ field alongside the report text, not inside it.
 | GET | `/api/v1/roles/{roleId}/deletion-preview` | Real reference counts for the delete-role confirmation dialog — direct user assignments, team assignments, and distinct projects touched (`redesign-admin-shell`) |
 | POST | `/api/v1/roles/reset` | Restore Tester/Contributor/Project Admin to their factory permission flags, in place — an existing one of the three keeps its `id` (so assignments referencing it stay valid), a missing one is recreated. Every other role, and every assignment, is untouched — not a wipe (design.md D12) |
 
-Each role carries ten independent boolean flags (design.md D11 — concrete,
-per-resource actions rather than a handful of broad ones): `canRead`,
-`canCaseCreate`, `canCaseEdit`, `canCaseDelete`, `canSectionCreate`,
-`canSectionDelete`, `canSuiteCreate`, `canSuiteEditMembership`,
-`canRunCreate`, `canRunRecordResult`, `canManageProject`. `rank` is a
-display/sort order only, never compared for authorization — see
+Each role carries twelve independent boolean flags (design.md D11 —
+concrete, per-resource actions rather than a handful of broad ones):
+`canRead`, `canCaseCreate`, `canCaseEdit`, `canCaseDelete`,
+`canSectionCreate`, `canSectionDelete`, `canSuiteCreate`,
+`canSuiteEditMembership`, `canRunCreate`, `canRunRecordResult`,
+`canManageProject`, plus `canRunDelete` and `canProjectDelete`
+(`add-data-retention` D3 — kept independent of `canRunCreate`/
+`canRunRecordResult` and `canManageProject` respectively, so a role that can
+create or seal runs, or rename/archive a project, doesn't automatically
+gain the power to permanently destroy one). `rank` is a display/sort order
+only, never compared for authorization — see
 [Test management](test-management.md#project-roles-and-teams).
 
 **Project membership** (`add-project-rbac`)
@@ -280,8 +288,10 @@ role granted to them, not a single ranked role. A non-Tenant-Admin has no
 access to a project at all, including read, until explicitly assigned a
 role on it. See [Test management](test-management.md#project-roles-and-teams)
 for the full permission model. Every write is recorded in an append-only
-audit log naming the acting actor (human or agent), queryable per entity via
-`GET /api/v1/audit`. An entry MAY carry an optional structured `detail`
+audit log naming the acting actor — human, agent, or (`add-data-retention`
+D8) `system` for an unattended background process such as the automatic
+run-retention sweep — queryable per entity via `GET /api/v1/audit`. An
+entry MAY carry an optional structured `detail`
 object with action-specific before/after state — a case move records
 `{from, to}` (folder ids), a case-version restore records
 `{restoredFrom, newVersion}`; most actions carry no `detail` at all.

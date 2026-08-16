@@ -41,6 +41,8 @@ const fullPermissions = {
   runCreate: true,
   runRecordResult: true,
   manageProject: true,
+  runDelete: true,
+  projectDelete: true,
 }
 
 function renderMenu(props: Partial<React.ComponentProps<typeof SuiteActionsMenu>> = {}) {

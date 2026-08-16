@@ -15,20 +15,21 @@ type RoleRepo struct {
 
 const roleColumns = "id, name, rank, can_read, can_case_create, can_case_edit, can_case_delete, " +
 	"can_section_create, can_section_delete, can_suite_create, can_suite_edit_membership, " +
-	"can_run_create, can_run_record_result, can_manage_project, created_at"
+	"can_run_create, can_run_record_result, can_manage_project, can_run_delete, can_project_delete, created_at"
 
-// roleFlagColumns is roleColumns without id/name/rank/created_at — the ten
-// design.md D11 permission flags, in the same order used by every INSERT/
-// UPDATE/scan below.
+// roleFlagColumns is roleColumns without id/name/rank/created_at — the
+// twelve design.md D11/add-data-retention D3 permission flags, in the same
+// order used by every INSERT/UPDATE/scan below.
 const roleFlagColumns = "can_read, can_case_create, can_case_edit, can_case_delete, " +
 	"can_section_create, can_section_delete, can_suite_create, can_suite_edit_membership, " +
-	"can_run_create, can_run_record_result, can_manage_project"
+	"can_run_create, can_run_record_result, can_manage_project, can_run_delete, can_project_delete"
 
 func roleFlagValues(role domain.Role) []any {
 	return []any{
 		role.CanRead, role.CanCaseCreate, role.CanCaseEdit, role.CanCaseDelete,
 		role.CanSectionCreate, role.CanSectionDelete, role.CanSuiteCreate, role.CanSuiteEditMembership,
 		role.CanRunCreate, role.CanRunRecordResult, role.CanManageProject,
+		role.CanRunDelete, role.CanProjectDelete,
 	}
 }
 
@@ -36,7 +37,8 @@ func roleScanTargets(r *domain.Role) []any {
 	return []any{
 		&r.ID, &r.Name, &r.Rank, &r.CanRead, &r.CanCaseCreate, &r.CanCaseEdit, &r.CanCaseDelete,
 		&r.CanSectionCreate, &r.CanSectionDelete, &r.CanSuiteCreate, &r.CanSuiteEditMembership,
-		&r.CanRunCreate, &r.CanRunRecordResult, &r.CanManageProject, &r.CreatedAt,
+		&r.CanRunCreate, &r.CanRunRecordResult, &r.CanManageProject,
+		&r.CanRunDelete, &r.CanProjectDelete, &r.CreatedAt,
 	}
 }
 
@@ -52,7 +54,7 @@ func scanRole(row pgx.Row) (domain.Role, error) {
 func (r *RoleRepo) Create(ctx context.Context, role domain.Role) (domain.Role, error) {
 	row := r.pool.QueryRow(ctx,
 		`INSERT INTO roles (name, rank, `+roleFlagColumns+`)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 		 RETURNING `+roleColumns,
 		append([]any{role.Name, role.Rank}, roleFlagValues(role)...)...,
 	)
@@ -87,7 +89,8 @@ func (r *RoleRepo) Update(ctx context.Context, role domain.Role) (domain.Role, e
 		`UPDATE roles SET name = $2, rank = $3, can_read = $4, can_case_create = $5, can_case_edit = $6,
 		                   can_case_delete = $7, can_section_create = $8, can_section_delete = $9,
 		                   can_suite_create = $10, can_suite_edit_membership = $11, can_run_create = $12,
-		                   can_run_record_result = $13, can_manage_project = $14
+		                   can_run_record_result = $13, can_manage_project = $14, can_run_delete = $15,
+		                   can_project_delete = $16
 		 WHERE id = $1
 		 RETURNING `+roleColumns,
 		append([]any{role.ID, role.Name, role.Rank}, roleFlagValues(role)...)...,

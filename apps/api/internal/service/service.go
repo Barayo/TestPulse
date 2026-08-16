@@ -176,11 +176,23 @@ type ProjectUpdate struct {
 	Description  *string
 	Archived     *bool
 	PublicAccess *bool
+	// AutoArchiveExempt exempts the project from the instance-wide
+	// auto-archive-inactive-projects policy (design.md D9 of
+	// add-data-retention) — settable only by a Tenant Admin, checked in
+	// UpdateProject itself, since this field needs a stricter gate than
+	// the route's own manageProject permission floor.
+	AutoArchiveExempt *bool
 }
 
 func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdate) (domain.Project, error) {
-	if upd.Name == nil && upd.Description == nil && upd.Archived == nil && upd.PublicAccess == nil {
-		return domain.Project{}, invalid("nothing to update: provide name, description, archived, and/or publicAccess")
+	if upd.Name == nil && upd.Description == nil && upd.Archived == nil && upd.PublicAccess == nil && upd.AutoArchiveExempt == nil {
+		return domain.Project{}, invalid("nothing to update: provide name, description, archived, publicAccess, and/or autoArchiveExempt")
+	}
+	if upd.AutoArchiveExempt != nil {
+		actor, ok := domain.ActorFromContext(ctx)
+		if !ok || !actor.IsTenantAdmin {
+			return domain.Project{}, forbidden("only a Tenant Admin can set a project's auto-archive exemption")
+		}
 	}
 	if upd.Name != nil {
 		if err := domain.ValidateProjectName(*upd.Name); err != nil {
@@ -197,11 +209,22 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 		}
 		s.audit(ctx, "update_description", "project", id)
 	}
-	if upd.Archived != nil && *upd.Archived {
-		if err := s.store.Projects.Archive(ctx, id); err != nil {
-			return domain.Project{}, err
+	if upd.Archived != nil {
+		if *upd.Archived {
+			if err := s.store.Projects.Archive(ctx, id); err != nil {
+				return domain.Project{}, err
+			}
+			s.audit(ctx, "archive", "project", id)
+		} else {
+			// add-data-retention design.md D7: archiving must be
+			// genuinely reversible — the archive-then-delete flow it
+			// gates assumes so, and before this the flag was a
+			// silent no-op when unset.
+			if err := s.store.Projects.Unarchive(ctx, id); err != nil {
+				return domain.Project{}, err
+			}
+			s.audit(ctx, "unarchive", "project", id)
 		}
-		s.audit(ctx, "archive", "project", id)
 	}
 	if upd.PublicAccess != nil {
 		if err := s.store.Projects.SetPublicAccess(ctx, id, *upd.PublicAccess); err != nil {
@@ -209,7 +232,36 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 		}
 		s.audit(ctx, "update_public_access", "project", id)
 	}
+	if upd.AutoArchiveExempt != nil {
+		if err := s.store.Projects.SetAutoArchiveExempt(ctx, id, *upd.AutoArchiveExempt); err != nil {
+			return domain.Project{}, err
+		}
+		if *upd.AutoArchiveExempt {
+			s.audit(ctx, "exempt_from_auto_archive", "project", id)
+		} else {
+			s.audit(ctx, "unexempt_from_auto_archive", "project", id)
+		}
+	}
 	return s.store.Projects.Get(ctx, id)
+}
+
+// DeleteProject queues an already-archived project for permanent
+// background deletion (add-data-retention design.md D4/D6). The archived
+// precondition is enforced here, server-side — never trusting the UI
+// alone for anything destructive, this codebase's consistent pattern.
+func (s *Service) DeleteProject(ctx context.Context, projectID string) error {
+	p, err := s.store.Projects.Get(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	if !p.Archived {
+		return invalid("project must be archived before it can be deleted")
+	}
+	if err := s.store.Projects.MarkForDeletion(ctx, projectID); err != nil {
+		return err
+	}
+	s.audit(ctx, "delete", "project", projectID)
+	return nil
 }
 
 // StarProject and UnstarProject are only available to human users (design
@@ -534,6 +586,17 @@ func (s *Service) CloseRun(ctx context.Context, runID string) error {
 		return err
 	}
 	s.audit(ctx, "close", "run", runID)
+	return nil
+}
+
+// DeleteRun permanently removes a run and everything scoped to it
+// (add-data-retention design.md D1) — a thin passthrough, the FK cascade
+// does the real work.
+func (s *Service) DeleteRun(ctx context.Context, runID string) error {
+	if err := s.store.Runs.Delete(ctx, runID); err != nil {
+		return err
+	}
+	s.audit(ctx, "delete", "run", runID)
 	return nil
 }
 

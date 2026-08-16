@@ -28,6 +28,8 @@ const roles = [
     canRunCreate: true,
     canRunRecordResult: true,
     canManageProject: false,
+    canRunDelete: false,
+    canProjectDelete: false,
     createdAt: '',
   },
   {
@@ -45,6 +47,8 @@ const roles = [
     canRunCreate: true,
     canRunRecordResult: true,
     canManageProject: false,
+    canRunDelete: false,
+    canProjectDelete: false,
     createdAt: '',
   },
 ]
@@ -89,6 +93,31 @@ describe('RolesPage', () => {
     expect(screen.getByLabelText('Tester — Read')).toBeChecked()
     expect(screen.getByLabelText('Tester — Create Case')).not.toBeChecked()
     expect(screen.getByLabelText('Contributor — Create Case')).toBeChecked()
+  })
+
+  // add-data-retention design.md D3: two new flags, slotted into the
+  // existing Runs and Project sections — no new section.
+  it('shows Delete Run and Delete Project flags in the existing Runs and Project sections', async () => {
+    mockAsTenantAdmin(true)
+    renderPage()
+    await waitForLoaded()
+    expect(screen.getByLabelText('Tester — Delete Run')).not.toBeChecked()
+    expect(screen.getByLabelText('Tester — Delete Project')).not.toBeChecked()
+  })
+
+  it('toggling Delete Run sends canRunDelete in the PATCH body', async () => {
+    mockAsTenantAdmin(true)
+    mockPATCH.mockResolvedValue({ data: roles[0], response: { ok: true } })
+    const user = userEvent.setup()
+    renderPage()
+    await waitForLoaded()
+
+    await user.click(screen.getByLabelText('Tester — Delete Run'))
+
+    expect(mockPATCH).toHaveBeenCalledWith(
+      '/api/v1/roles/{roleId}',
+      expect.objectContaining({ body: expect.objectContaining({ canRunDelete: true }) }),
+    )
   })
 
   it('shows a not-authorized message for a non-Tenant-Admin', async () => {

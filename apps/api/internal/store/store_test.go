@@ -10,6 +10,7 @@ import (
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 	"github.com/Barayo/TestPulse/apps/api/internal/testutil"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func testStore(t *testing.T) *store.Store {
@@ -1499,5 +1500,416 @@ func TestExecutionsByCaseGroupedByVersion(t *testing.T) {
 	execs, err = s.Runs.ExecutionsByCase(ctx, empty.ID)
 	if err != nil || len(execs) != 0 {
 		t.Errorf("ExecutionsByCase for unrun case = %d, %v; want 0, nil", len(execs), err)
+	}
+}
+
+// --- Run deletion (add-data-retention design.md D1) ---
+
+func TestDeleteRunCascadesToItemsAndResults(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	item := items[0]
+	if _, err := s.Runs.AppendResult(ctx, item.ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("AppendResult: %v", err)
+	}
+
+	if err := s.Runs.Delete(ctx, run.ID); err != nil {
+		t.Fatalf("Delete: %v", err)
+	}
+
+	if _, err := s.Runs.Get(ctx, run.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Get after delete = %v, want ErrNotFound", err)
+	}
+	if remaining, err := s.Runs.Items(ctx, run.ID, ""); err != nil || len(remaining) != 0 {
+		t.Errorf("Items after delete = %d, %v; want 0, nil (cascaded)", len(remaining), err)
+	}
+	if remaining, err := s.Runs.Results(ctx, item.ID); err != nil || len(remaining) != 0 {
+		t.Errorf("Results after delete = %d, %v; want 0, nil (cascaded)", len(remaining), err)
+	}
+}
+
+func TestDeleteNonexistentRunIsNotFound(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.Runs.Delete(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Delete(nonexistent) = %v, want ErrNotFound", err)
+	}
+}
+
+// --- Automatic run retention (add-data-retention design.md D8) ---
+
+// TestListEligibleForRetentionFiltersByStatusAndAge covers the store-layer
+// eligibility rule: closed runs older than the threshold, never open runs
+// regardless of age, and no zero-special-casing at this layer (that's the
+// worker's job, task 10.3).
+func TestListEligibleForRetentionFiltersByStatusAndAge(t *testing.T) {
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	oldClosed, _ := s.Runs.Create(ctx, p.ID, "old closed", nil)
+	if err := s.Runs.Close(ctx, oldClosed.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	backdateRunCreatedAt(t, pool, oldClosed.ID, 40)
+
+	recentClosed, _ := s.Runs.Create(ctx, p.ID, "recent closed", nil)
+	if err := s.Runs.Close(ctx, recentClosed.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	backdateRunCreatedAt(t, pool, recentClosed.ID, 5)
+
+	oldOpen, _ := s.Runs.Create(ctx, p.ID, "old open", nil)
+	backdateRunCreatedAt(t, pool, oldOpen.ID, 40)
+
+	eligible, err := s.Runs.ListEligibleForRetention(ctx, 30)
+	if err != nil {
+		t.Fatalf("ListEligibleForRetention: %v", err)
+	}
+	if len(eligible) != 1 || eligible[0].ID != oldClosed.ID {
+		t.Errorf("ListEligibleForRetention(30) = %+v, want only %q (old closed run)", eligible, oldClosed.ID)
+	}
+}
+
+func TestListEligibleForRetentionWithZeroDaysAppliesNoSpecialCase(t *testing.T) {
+	// The store method is a pure age filter with no "0 means off" special
+	// case — that check belongs to the worker (task 10.3/10.4), which never
+	// calls this method at all once RunRetentionDays == 0. Called directly
+	// with days=0, the cutoff is simply "now", so any already-created closed
+	// run (there's no such thing as one created in the future) is eligible.
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	run, _ := s.Runs.Create(ctx, p.ID, "closed", nil)
+	if err := s.Runs.Close(ctx, run.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+
+	eligible, err := s.Runs.ListEligibleForRetention(ctx, 0)
+	if err != nil {
+		t.Fatalf("ListEligibleForRetention: %v", err)
+	}
+	if len(eligible) != 1 || eligible[0].ID != run.ID {
+		t.Errorf("ListEligibleForRetention(0) = %+v, want just-created closed run %q (no 0 special-case)", eligible, run.ID)
+	}
+}
+
+func backdateRunCreatedAt(t *testing.T, pool *pgxpool.Pool, runID string, ageDays int) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE test_runs SET created_at = now() - make_interval(days => $2) WHERE id = $1`, runID, ageDays); err != nil {
+		t.Fatalf("backdate run: %v", err)
+	}
+}
+
+// --- Automatic project archiving (add-data-retention design.md D9) ---
+
+func backdateProjectCreatedAt(t *testing.T, pool *pgxpool.Pool, projectID string, ageDays int) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE projects SET created_at = now() - make_interval(days => $2) WHERE id = $1`, projectID, ageDays); err != nil {
+		t.Fatalf("backdate project: %v", err)
+	}
+}
+
+func TestSetAutoArchiveExemptPersists(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	if p.AutoArchiveExempt {
+		t.Fatalf("AutoArchiveExempt on create = %v, want false", p.AutoArchiveExempt)
+	}
+
+	if err := s.Projects.SetAutoArchiveExempt(ctx, p.ID, true); err != nil {
+		t.Fatalf("SetAutoArchiveExempt: %v", err)
+	}
+	got, err := s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.AutoArchiveExempt {
+		t.Errorf("AutoArchiveExempt after Set(true) = %v, want true", got.AutoArchiveExempt)
+	}
+
+	if err := s.Projects.SetAutoArchiveExempt(ctx, p.ID, false); err != nil {
+		t.Fatalf("SetAutoArchiveExempt: %v", err)
+	}
+	got, err = s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.AutoArchiveExempt {
+		t.Errorf("AutoArchiveExempt after Set(false) = %v, want false", got.AutoArchiveExempt)
+	}
+}
+
+func TestListEligibleForAutoArchiveFiltersByActivityExemptionAndArchived(t *testing.T) {
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+
+	inactive, err := s.Projects.Create(ctx, "Inactive", "")
+	if err != nil {
+		t.Fatalf("create inactive: %v", err)
+	}
+	backdateProjectCreatedAt(t, pool, inactive.ID, 100)
+
+	activeViaRun, err := s.Projects.Create(ctx, "Active Via Run", "")
+	if err != nil {
+		t.Fatalf("create active-via-run: %v", err)
+	}
+	backdateProjectCreatedAt(t, pool, activeViaRun.ID, 100)
+	if _, err := s.Runs.Create(ctx, activeViaRun.ID, "recent run", nil); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	exempt, err := s.Projects.Create(ctx, "Exempt", "")
+	if err != nil {
+		t.Fatalf("create exempt: %v", err)
+	}
+	backdateProjectCreatedAt(t, pool, exempt.ID, 100)
+	if err := s.Projects.SetAutoArchiveExempt(ctx, exempt.ID, true); err != nil {
+		t.Fatalf("SetAutoArchiveExempt: %v", err)
+	}
+
+	alreadyArchived, err := s.Projects.Create(ctx, "Already Archived", "")
+	if err != nil {
+		t.Fatalf("create archived: %v", err)
+	}
+	backdateProjectCreatedAt(t, pool, alreadyArchived.ID, 100)
+	if err := s.Projects.Archive(ctx, alreadyArchived.ID); err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+
+	if _, err := s.Projects.Create(ctx, "Fresh", ""); err != nil {
+		t.Fatalf("create fresh: %v", err)
+	}
+
+	eligible, err := s.Projects.ListEligibleForAutoArchive(ctx, 30)
+	if err != nil {
+		t.Fatalf("ListEligibleForAutoArchive: %v", err)
+	}
+	if len(eligible) != 1 || eligible[0].ID != inactive.ID {
+		t.Errorf("ListEligibleForAutoArchive(30) = %+v, want only %q (Inactive)", eligible, inactive.ID)
+	}
+}
+
+func TestListEligibleForAutoArchiveConsidersCaseVersionAndSuiteActivity(t *testing.T) {
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+
+	activeViaCase, err := s.Projects.Create(ctx, "Active Via Case", "")
+	if err != nil {
+		t.Fatalf("create active-via-case: %v", err)
+	}
+	backdateProjectCreatedAt(t, pool, activeViaCase.ID, 100)
+	mustCase(t, s, activeViaCase.ID, "recently created case")
+
+	activeViaSuite, err := s.Projects.Create(ctx, "Active Via Suite", "")
+	if err != nil {
+		t.Fatalf("create active-via-suite: %v", err)
+	}
+	backdateProjectCreatedAt(t, pool, activeViaSuite.ID, 100)
+	if _, err := s.Suites.Create(ctx, activeViaSuite.ID, "recent suite"); err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	eligible, err := s.Projects.ListEligibleForAutoArchive(ctx, 30)
+	if err != nil {
+		t.Fatalf("ListEligibleForAutoArchive: %v", err)
+	}
+	if len(eligible) != 0 {
+		t.Errorf("ListEligibleForAutoArchive(30) = %+v, want none (both projects have recent activity)", eligible)
+	}
+}
+
+func TestListEligibleForAutoArchiveWithZeroDaysAppliesNoSpecialCase(t *testing.T) {
+	// Pure age filter, no special case for 0 — mirrors
+	// ListEligibleForRetention's own convention (task 9.3).
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+
+	p, err := s.Projects.Create(ctx, "Old Project", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	eligible, err := s.Projects.ListEligibleForAutoArchive(ctx, 0)
+	if err != nil {
+		t.Fatalf("ListEligibleForAutoArchive: %v", err)
+	}
+	if len(eligible) != 1 || eligible[0].ID != p.ID {
+		t.Errorf("ListEligibleForAutoArchive(0) = %+v, want just-created project %q (no 0 special-case)", eligible, p.ID)
+	}
+}
+
+// --- Unarchive (add-data-retention design.md D7) ---
+
+func TestUnarchiveRestoresProjectToActive(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	if err := s.Projects.Archive(ctx, p.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	got, _ := s.Projects.Get(ctx, p.ID)
+	if !got.Archived {
+		t.Fatal("project should be archived before the test proceeds")
+	}
+
+	if err := s.Projects.Unarchive(ctx, p.ID); err != nil {
+		t.Fatalf("Unarchive: %v", err)
+	}
+	got, err := s.Projects.Get(ctx, p.ID)
+	if err != nil || got.Archived {
+		t.Errorf("after Unarchive: archived=%v, err=%v; want false, nil", got.Archived, err)
+	}
+}
+
+func TestUnarchiveNonexistentProjectIsNotFound(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	if err := s.Projects.Unarchive(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Unarchive(nonexistent) = %v, want ErrNotFound", err)
+	}
+}
+
+// --- Project deletion lifecycle (add-data-retention design.md D6) ---
+
+func TestMarkForDeletionExcludesFromListAndSummaries(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	u := mustUser(t, s, "marker@example.com", false)
+
+	if err := s.Projects.MarkForDeletion(ctx, p.ID); err != nil {
+		t.Fatalf("MarkForDeletion: %v", err)
+	}
+
+	list, err := s.Projects.List(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, lp := range list {
+		if lp.ID == p.ID {
+			t.Errorf("List still includes project marked for deletion: %+v", lp)
+		}
+	}
+
+	summaries, err := s.Projects.Summaries(ctx, u.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, sum := range summaries {
+		if sum.ProjectID == p.ID {
+			t.Errorf("Summaries still includes project marked for deletion: %+v", sum)
+		}
+	}
+}
+
+func TestListPendingDeletionReturnsMarkedProjects(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	kept := mustProject(t, s)
+	pending := mustProject(t, s)
+	if err := s.Projects.MarkForDeletion(ctx, pending.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	list, err := s.Projects.ListPendingDeletion(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || list[0].ID != pending.ID {
+		t.Errorf("ListPendingDeletion = %+v, want just [%s]", list, pending.ID)
+	}
+	for _, p := range list {
+		if p.ID == kept.ID {
+			t.Error("ListPendingDeletion should not include a project that wasn't marked")
+		}
+	}
+}
+
+func TestPurgeBatchDeletesUpToLimitAcrossChildTables(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "one")
+	c2 := mustCase(t, s, p.ID, "two")
+	c3 := mustCase(t, s, p.ID, "three")
+	// A version-2 on c1 gives test_case_versions more than one row per case.
+	if _, err := s.Cases.NewVersion(ctx, c1.ID, domain.CaseContent{Title: "one v2", Priority: domain.PriorityMedium}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c1.ID, c2.ID, c3.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Projects.MarkForDeletion(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// test_run_results: 1 row, limit 10 — one pass empties it.
+	deleted, err := s.Projects.PurgeBatch(ctx, p.ID, "test_run_results", 10)
+	if err != nil || deleted != 1 {
+		t.Fatalf("PurgeBatch(test_run_results) = %d, %v; want 1, nil", deleted, err)
+	}
+	deleted, err = s.Projects.PurgeBatch(ctx, p.ID, "test_run_results", 10)
+	if err != nil || deleted != 0 {
+		t.Fatalf("PurgeBatch(test_run_results) second call = %d, %v; want 0, nil (already empty)", deleted, err)
+	}
+
+	// test_run_items: 3 rows, limit 2 — needs two calls to fully drain.
+	deleted, err = s.Projects.PurgeBatch(ctx, p.ID, "test_run_items", 2)
+	if err != nil || deleted != 2 {
+		t.Fatalf("PurgeBatch(test_run_items) first call = %d, %v; want 2, nil", deleted, err)
+	}
+	deleted, err = s.Projects.PurgeBatch(ctx, p.ID, "test_run_items", 2)
+	if err != nil || deleted != 1 {
+		t.Fatalf("PurgeBatch(test_run_items) second call = %d, %v; want 1, nil (drains the remainder)", deleted, err)
+	}
+
+	// test_runs: 1 row.
+	deleted, err = s.Projects.PurgeBatch(ctx, p.ID, "test_runs", 10)
+	if err != nil || deleted != 1 {
+		t.Fatalf("PurgeBatch(test_runs) = %d, %v; want 1, nil", deleted, err)
+	}
+
+	// test_case_versions: c1 has 2 versions, c2/c3 have 1 each = 4 rows.
+	deleted, err = s.Projects.PurgeBatch(ctx, p.ID, "test_case_versions", 100)
+	if err != nil || deleted != 4 {
+		t.Fatalf("PurgeBatch(test_case_versions) = %d, %v; want 4, nil", deleted, err)
+	}
+
+	// test_cases: 3 rows.
+	deleted, err = s.Projects.PurgeBatch(ctx, p.ID, "test_cases", 100)
+	if err != nil || deleted != 3 {
+		t.Fatalf("PurgeBatch(test_cases) = %d, %v; want 3, nil", deleted, err)
+	}
+}
+
+func TestPurgeRemovesTheProjectRowOnceChildTablesAreEmpty(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	if err := s.Projects.MarkForDeletion(ctx, p.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := s.Projects.Purge(ctx, p.ID); err != nil {
+		t.Fatalf("Purge: %v", err)
+	}
+	if _, err := s.Projects.Get(ctx, p.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("Get after Purge = %v, want ErrNotFound", err)
 	}
 }

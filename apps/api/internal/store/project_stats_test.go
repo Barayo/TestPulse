@@ -122,7 +122,12 @@ func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
 	}
 }
 
-func TestProjectSummariesExcludesArchivedProjects(t *testing.T) {
+// TestProjectSummariesIncludesArchivedProjects: reversed from its original
+// intent (add-data-retention design.md D7) — the delete-project
+// confirmation dialog needs real counts for a project that IS archived
+// (deletion requires archiving first), so Summaries no longer excludes
+// archived projects; it marks them via the new Archived field instead.
+func TestProjectSummariesIncludesArchivedProjects(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	caller := mustUser(t, s, "stats-caller-4@b.com", false)
@@ -135,7 +140,7 @@ func TestProjectSummariesExcludesArchivedProjects(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Summaries: %v", err)
 	}
-	if len(summaries) != 0 {
-		t.Errorf("Summaries = %+v, want empty (archived project excluded)", summaries)
+	if len(summaries) != 1 || summaries[0].ProjectID != p.ID || !summaries[0].Archived {
+		t.Errorf("Summaries = %+v, want one entry for the archived project with Archived: true", summaries)
 	}
 }

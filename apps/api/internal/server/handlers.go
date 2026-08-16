@@ -32,6 +32,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.Use(h.resolveKey("projectKey", h.svc.ProjectIDByKey))
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/", h.getProject)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Patch("/", h.updateProject)
+			r.With(h.requirePermission(domain.PermProjectDelete, projectIDParam)).Delete("/", h.deleteProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Post("/favorite", h.starProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/favorite", h.unstarProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/cases", h.listCases)
@@ -81,6 +82,7 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.getRun)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromRun)).Post("/close", h.closeRun)
 		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRun)).Post("/reopen", h.reopenRun)
+		r.With(h.requirePermission(domain.PermRunDelete, projectIDFromRun)).Delete("/", h.deleteRun)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/items", h.listRunItems)
 		r.With(h.requirePermission(domain.PermRunCreate, projectIDFromRun)).Post("/items", h.addRunItem)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/summary", h.runSummary)
@@ -186,10 +188,11 @@ func (h *api) getProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name         *string `json:"name"`
-		Description  *string `json:"description"`
-		Archived     *bool   `json:"archived"`
-		PublicAccess *bool   `json:"publicAccess"`
+		Name              *string `json:"name"`
+		Description       *string `json:"description"`
+		Archived          *bool   `json:"archived"`
+		PublicAccess      *bool   `json:"publicAccess"`
+		AutoArchiveExempt *bool   `json:"autoArchiveExempt"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
@@ -198,9 +201,17 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	p, err := h.svc.UpdateProject(r.Context(), resolvedID(r, "projectKey"),
 		service.ProjectUpdate{
 			Name: body.Name, Description: body.Description, Archived: body.Archived,
-			PublicAccess: body.PublicAccess,
+			PublicAccess: body.PublicAccess, AutoArchiveExempt: body.AutoArchiveExempt,
 		})
 	h.respond(w, http.StatusOK, p, err)
+}
+
+// deleteProject queues an already-archived project for background
+// deletion (add-data-retention design.md D6) — 202, not 204: the delete
+// itself hasn't finished, only been accepted and hidden from listings.
+func (h *api) deleteProject(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.DeleteProject(r.Context(), resolvedID(r, "projectKey"))
+	h.respond(w, http.StatusAccepted, nil, err)
 }
 
 func (h *api) starProject(w http.ResponseWriter, r *http.Request) {
@@ -514,6 +525,11 @@ func (h *api) closeRun(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) reopenRun(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.ReopenRun(r.Context(), resolvedID(r, "runKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) deleteRun(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.DeleteRun(r.Context(), resolvedID(r, "runKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 

@@ -41,7 +41,8 @@ admin credentials from
   closed run, and a run imported from a JUnit XML report — so there's
   something real to explore immediately. It's marked with a "Sample" badge
   in the project list, behaves like any other project, and is safe to
-  archive or edit — it's created once and never comes back on its own.
+  archive, edit, or (once archived) permanently delete — it's created once
+  and never comes back on its own.
 
 Check that everything is healthy:
 

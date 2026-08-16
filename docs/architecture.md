@@ -48,6 +48,27 @@ recorded in the OpenSpec change `establish-architecture` (see
   failure mode that replaces goose's old silent-skip risk. There is no
   auto-upgrade path from an older applied schema to a newer `schema.sql`;
   changing it requires a manual database reset.
+- **In-process background workers, not a separate deployable.** Three
+  goroutines started at server boot (`cmd/testpulse-api/main.go`), sharing
+  the same signal-cancelled `context.Context` the HTTP server shuts down on
+  — this codebase's first async-processing mechanism (`add-data-retention`
+  D6): `ProjectDeletionWorker` purges a project queued for permanent
+  deletion (chunked, resumable — safe if the process restarts mid-purge),
+  `RunRetentionWorker` (D8) sweeps for closed runs past a
+  Tenant-Admin-configured age threshold and deletes them the same way a
+  manual delete would, and `ProjectAutoArchiveWorker` (D9) sweeps
+  non-archived, non-exempt projects for inactivity — computed per sweep
+  from run/case-version/suite timestamps, not a maintained column — and
+  archives eligible ones the same way a manual archive would. All three
+  currently assume a single API replica; scaling to multiple replicas would
+  need real work coordination (a leader lock or a job queue) first — not
+  built yet, since nothing requires it pre-1.0. Automated writes any worker
+  performs are audited under a `system` `ActorKind` (alongside
+  `user`/`agent`), each with its own worker id (`retention-worker`,
+  `auto-archive-worker`) so the two automated processes stay independently
+  attributable in the audit log, distinct from any human- or
+  agent-triggered write since nobody resolved a request-time actor for
+  them.
 - **12-factor configuration.** All runtime configuration comes from
   `TESTPULSE_*` environment variables — the same mechanism under compose,
   Helm, or a bare binary. Missing required values fail fast at startup, naming

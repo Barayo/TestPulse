@@ -160,6 +160,80 @@ func TestRoleHasPermission(t *testing.T) {
 	}
 }
 
+func TestRoleHasRunDeleteAndProjectDelete(t *testing.T) {
+	// design.md D3 (add-data-retention): two new flags, twelve total —
+	// runDelete is not implied by runCreate/runRecordResult, and
+	// projectDelete is kept separate from manageProject.
+	projectAdmin := Role{Name: "Project Admin", CanManageProject: true, CanRunDelete: true, CanProjectDelete: true}
+	contributor := Role{Name: "Contributor", CanRunCreate: true, CanRunRecordResult: true}
+
+	if !projectAdmin.Has(PermRunDelete) || !projectAdmin.Has(PermProjectDelete) {
+		t.Errorf("Project Admin = %+v, want runDelete+projectDelete", projectAdmin)
+	}
+	if contributor.Has(PermRunDelete) || contributor.Has(PermProjectDelete) {
+		t.Errorf("Contributor = %+v, want no runDelete/projectDelete", contributor)
+	}
+
+	p := projectAdmin.Permissions()
+	if !p.Has(PermRunDelete) || !p.Has(PermProjectDelete) {
+		t.Errorf("Permissions() = %+v, want runDelete+projectDelete", p)
+	}
+}
+
+func TestActorKindSystemIsAValidActorKind(t *testing.T) {
+	// design.md D8 (add-data-retention): a third ActorKind, alongside
+	// user/agent, for audit entries recorded by an unattended background
+	// process rather than a resolved request-time actor.
+	actor := Actor{Kind: ActorKindSystem, ID: "retention-worker"}
+	if actor.Kind != ActorKind("system") {
+		t.Errorf("ActorKindSystem = %q, want %q", actor.Kind, "system")
+	}
+}
+
+func TestInstanceSettingsUpdateAppliesOnlyNonNilFields(t *testing.T) {
+	// design.md D8: InstanceSettingsUpdate generalizes the previous
+	// single-field (PublicProjectsEnabled-only) update into a partial
+	// update carrying both settable fields.
+	enabled := true
+	days := 30
+	upd := InstanceSettingsUpdate{PublicProjectsEnabled: &enabled, RunRetentionDays: &days}
+	if upd.PublicProjectsEnabled == nil || *upd.PublicProjectsEnabled != true {
+		t.Errorf("PublicProjectsEnabled = %v, want true", upd.PublicProjectsEnabled)
+	}
+	if upd.RunRetentionDays == nil || *upd.RunRetentionDays != 30 {
+		t.Errorf("RunRetentionDays = %v, want 30", upd.RunRetentionDays)
+	}
+
+	settings := InstanceSettings{RunRetentionDays: 30}
+	if settings.RunRetentionDays != 30 {
+		t.Errorf("InstanceSettings.RunRetentionDays = %d, want 30", settings.RunRetentionDays)
+	}
+}
+
+func TestInstanceSettingsCarriesAutoArchiveInactiveDays(t *testing.T) {
+	// design.md D9 (add-data-retention): a third instance-wide threshold,
+	// same 0-means-off convention as RunRetentionDays.
+	days := 45
+	upd := InstanceSettingsUpdate{AutoArchiveInactiveDays: &days}
+	if upd.AutoArchiveInactiveDays == nil || *upd.AutoArchiveInactiveDays != 45 {
+		t.Errorf("AutoArchiveInactiveDays = %v, want 45", upd.AutoArchiveInactiveDays)
+	}
+
+	settings := InstanceSettings{AutoArchiveInactiveDays: 45}
+	if settings.AutoArchiveInactiveDays != 45 {
+		t.Errorf("InstanceSettings.AutoArchiveInactiveDays = %d, want 45", settings.AutoArchiveInactiveDays)
+	}
+}
+
+func TestProjectCarriesAutoArchiveExempt(t *testing.T) {
+	// design.md D9: a Tenant-Admin-only exemption from the instance-wide
+	// auto-archive policy.
+	p := Project{AutoArchiveExempt: true}
+	if !p.AutoArchiveExempt {
+		t.Errorf("Project.AutoArchiveExempt = %v, want true", p.AutoArchiveExempt)
+	}
+}
+
 func TestPermissionsUnionAcrossRoles(t *testing.T) {
 	// A user holding two non-nested custom roles gets the union of both —
 	// not just the "higher" one (design.md D10: there's no ordinal ranking

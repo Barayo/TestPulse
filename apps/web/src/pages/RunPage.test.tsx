@@ -7,11 +7,12 @@ import { api } from '@/lib/api'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { AuthProvider } from '@/lib/useAuth'
 
-vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() } }))
 vi.mock('@/lib/DataRevision', () => ({ useBumpDataRevision: vi.fn() }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 const mockPUT = vi.mocked(api.PUT)
+const mockDELETE = vi.mocked(api.DELETE)
 const mockBump = vi.fn()
 
 const run = {
@@ -58,6 +59,8 @@ const fullPermissions = {
   runCreate: true,
   runRecordResult: true,
   manageProject: true,
+  runDelete: true,
+  projectDelete: true,
 }
 
 const authenticatedUser = { id: 'u1', email: 'admin@example.com', isTenantAdmin: false }
@@ -158,6 +161,11 @@ function CaseLibraryProbe() {
   return <p data-testid="case-library-probe">case {projectKey} {caseKey}</p>
 }
 
+function RunsListProbe() {
+  const { projectKey } = useParams<{ projectKey?: string }>()
+  return <p data-testid="runs-list-probe">runs {projectKey}</p>
+}
+
 function renderRun(initialEntries: Parameters<typeof MemoryRouter>[0]['initialEntries'] = ['/runs/r1']) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
@@ -166,6 +174,7 @@ function renderRun(initialEntries: Parameters<typeof MemoryRouter>[0]['initialEn
         <Route path="/runs/:runKey" element={<RunPage />} />
         <Route path="/runs/:runKey/items/:caseKey" element={<ItemPageProbe />} />
         <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseLibraryProbe />} />
+        <Route path="/projects/:projectKey/runs" element={<RunsListProbe />} />
         <Route path="/login" element={<p>login stub</p>} />
       </Routes>
       </AuthProvider>
@@ -488,6 +497,58 @@ describe('Run lifecycle (open/closed)', () => {
 
     expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
     expect(mockGET.mock.calls.length).toBe(getCallsBeforeReopen)
+  })
+
+  // add-data-retention design.md D5: Delete run lives beside Close/Reopen,
+  // visible regardless of run status.
+  describe('Delete run (add-data-retention)', () => {
+    it('shows a Delete run action beside Close on an open run', async () => {
+      mockRunAPI([pendingItem])
+      renderRun()
+      expect(await screen.findByRole('button', { name: /close run/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /delete run/i })).toBeInTheDocument()
+    })
+
+    it('shows a Delete run action beside Reopen on a closed run', async () => {
+      mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+      renderRun()
+      expect(await screen.findByRole('button', { name: /reopen/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /delete run/i })).toBeInTheDocument()
+    })
+
+    it('hides Delete run when the caller lacks runDelete', async () => {
+      mockRunAPI([pendingItem], undefined, undefined, undefined, { ...fullPermissions, runDelete: false })
+      renderRun()
+      await screen.findByRole('button', { name: /close run/i })
+      expect(screen.queryByRole('button', { name: /delete run/i })).not.toBeInTheDocument()
+    })
+
+    it('shows a confirmation naming the run and its result count before deleting', async () => {
+      mockRunAPI([pendingItem], { runId: 'r1', total: 3, counts: { pending: 3 } })
+      const user = userEvent.setup()
+      renderRun()
+
+      await user.click(await screen.findByRole('button', { name: /delete run/i }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/delete "sprint 1"/i)).toBeInTheDocument()
+      expect(within(dialog).getByText(/3/)).toBeInTheDocument()
+    })
+
+    it('confirming calls DELETE and navigates to the runs list', async () => {
+      mockRunAPI([pendingItem])
+      mockDELETE.mockResolvedValue({ data: undefined, response: { ok: true, status: 204 } as Response })
+      const user = userEvent.setup()
+      renderRun()
+
+      await user.click(await screen.findByRole('button', { name: /delete run/i }))
+      const dialog = await screen.findByRole('dialog')
+      await user.click(within(dialog).getByRole('button', { name: /^delete run$/i }))
+
+      await waitFor(() =>
+        expect(mockDELETE).toHaveBeenCalledWith('/api/v1/runs/{runKey}', { params: { path: { runKey: 'r1' } } }),
+      )
+      expect(await screen.findByTestId('runs-list-probe')).toBeInTheDocument()
+    })
   })
 
   it('shows a disabled "Reopening…" state while the reopen request is in flight', async () => {
