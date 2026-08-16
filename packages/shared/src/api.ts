@@ -1012,6 +1012,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create the instance's first admin account (first-run setup)
+         * @description Unauthenticated, and only available while the instance has zero user accounts (add-first-run-setup) — the fallback for when TESTPULSE_ADMIN_EMAIL/PASSWORD were not both set at startup. The submitted email and password become the Tenant Admin's own, chosen directly rather than a temporary/generated one; on success the response is identical to a successful login (a session is created and its cookie set). Permanently unavailable once any user exists, regardless of the env vars' state.
+         */
+        post: operations["setupFirstAdmin"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -1872,6 +1892,8 @@ export interface components {
             publicProjectsEnabled: boolean;
             /** @description Self-service password recovery (add-forgot-password) is only available when the instance has SMTP fully configured (TESTPULSE_SMTP_* + TESTPULSE_PUBLIC_URL). The login page renders its "Forgot password?" link only when true, rather than showing it and failing at submit time. */
             passwordResetEnabled: boolean;
+            /** @description True while the instance has zero user accounts and startup did not bootstrap one from TESTPULSE_ADMIN_EMAIL/PASSWORD (add-first-run-setup). The frontend redirects every route to /setup while true; once any user exists this is permanently false, regardless of the env vars' state. */
+            setupRequired: boolean;
         };
         InstanceSettings: {
             publicProjectsEnabled: boolean;
@@ -2043,6 +2065,10 @@ export interface components {
             roleId: string;
         };
         LoginInput: {
+            email: string;
+            password: string;
+        };
+        SetupInput: {
             email: string;
             password: string;
         };
@@ -3886,6 +3912,32 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    setupFirstAdmin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupInput"];
+            };
+        };
+        responses: {
+            /** @description Admin account created; authenticated as it, a session cookie is set */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["User"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     logout: {

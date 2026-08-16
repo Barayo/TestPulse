@@ -32,6 +32,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/meta", handleMeta(svc))
+		r.Post("/setup", h.setupFirstAdmin)
 		mountAuth(r, h, loginRateLimitPerMinute, loginRateLimitBurst)
 		mountPublicAPI(r, h)
 
@@ -88,11 +89,17 @@ func handleMeta(svc *service.Service) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
+		hasAnyUser, err := svc.HasAnyUser(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
 			"name":                  "TestPulse",
 			"version":               "0.0.1",
 			"publicProjectsEnabled": settings.PublicProjectsEnabled,
 			"passwordResetEnabled":  svc.PasswordResetEnabled(),
+			"setupRequired":         !hasAnyUser,
 		})
 	}
 }

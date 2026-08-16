@@ -140,6 +140,55 @@ describe('useAuth', () => {
     expect(result.current.user?.avatarKey).toBe('ada-lovelace')
   })
 
+  it('resolves setupRequired from /api/v1/meta (add-first-run-setup)', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: true }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequired).toBe(true))
+  })
+
+  it('defaults setupRequired to false once any user exists', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.setupRequired).toBe(false)
+  })
+
+  // Regression guard: a hung /api/v1/meta must never block `loading` from
+  // resolving — a stuck setupRequired check must not stop the rest of the
+  // app (readiness display, every other route) from rendering.
+  it('does not block loading on a /api/v1/meta request that never resolves', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') return new Promise(() => {})
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.loading).toBe(false))
+    expect(result.current.setupRequired).toBe(false)
+  })
+
+  it('defaults setupRequired to false when the meta check errors', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') return Promise.reject(new Error('network down'))
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequired).toBe(false))
+  })
+
   it('throws when used outside an AuthProvider', () => {
     function Bad() {
       useAuth()

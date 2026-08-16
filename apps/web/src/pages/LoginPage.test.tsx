@@ -149,6 +149,42 @@ describe('LoginPage', () => {
     expect(await screen.findByText(/password updated/i)).toBeInTheDocument()
   })
 
+  // Generalized one-shot banner (add-first-run-setup): SetupPage reuses the
+  // same mechanism to show an arbitrary message after losing the first-run
+  // setup race, not just the hardcoded password-reset text.
+  it('shows an arbitrary router-state message via the same one-shot banner mechanism', async () => {
+    render(
+      <MemoryRouter
+        initialEntries={[
+          { pathname: '/login', state: { message: 'This instance has already been set up — log in with an existing account.' } },
+        ]}
+      >
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByText(/this instance has already been set up/i)).toBeInTheDocument()
+  })
+
+  it('clears the router-state message after dismissing, so a refresh does not re-show it', async () => {
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/login', state: { message: 'Some one-shot message.' } }]}>
+        <AuthProvider>
+          <LoginPage />
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+
+    const banner = await screen.findByText('Some one-shot message.')
+    const dismiss = screen.getByRole('button', { name: /dismiss/i })
+    const user = userEvent.setup()
+    await user.click(dismiss)
+
+    expect(banner).not.toBeInTheDocument()
+  })
+
   it('falls back to the projects root when there is no redirect-back location', async () => {
     mockPOST.mockResolvedValue({
       data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },

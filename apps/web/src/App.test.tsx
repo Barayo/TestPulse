@@ -451,6 +451,35 @@ describe('Required password change gate', () => {
   })
 })
 
+// add-first-run-setup: a fresh instance (zero users) redirects every route
+// to /setup, ahead of the ordinary /login redirect — checked on both
+// RequireAuth (account-only routes) and AllowAnonymous (`/` itself).
+describe('First-run setup redirect', () => {
+  function mockSetupRequired() {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/meta')
+        return Promise.resolve({ response: { ok: true }, data: { name: 'TestPulse', version: '0.0.1', setupRequired: true } })
+      if (path === '/api/v1/users/me') return Promise.resolve({ response: { ok: false }, data: undefined })
+      return Promise.resolve({ response: { ok: true }, data: [] })
+    })
+  }
+
+  it('redirects the anonymous root route to /setup when the instance has zero users', async () => {
+    mockSetupRequired()
+    render(<App />)
+    await waitFor(() => expect(window.location.pathname).toBe('/setup'))
+  })
+
+  it('redirects an account-only route to /setup when the instance has zero users', async () => {
+    mockSetupRequired()
+    window.history.pushState({}, '', '/settings/people')
+    render(<App />)
+    await waitFor(() => expect(window.location.pathname).toBe('/setup'))
+    window.history.pushState({}, '', '/')
+  })
+})
+
 // Old /public* URLs become plain redirects, not 404s (design.md D7,
 // unify-authenticated-and-public-views tasks.md 12.1/12.2) — someone who
 // already has a /public/{key} link (documented, potentially shared) should

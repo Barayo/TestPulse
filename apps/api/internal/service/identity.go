@@ -63,19 +63,90 @@ func (s *Service) Login(ctx context.Context, email, password string) (domain.Ses
 		return domain.Session{}, domain.User{}, unauthorized("invalid email or password")
 	}
 
-	id, err := randomSecret()
+	sess, err := s.createSession(ctx, user.ID)
 	if err != nil {
 		return domain.Session{}, domain.User{}, err
 	}
-	sess, err := s.store.Sessions.Create(ctx, hashToken(id), user.ID, time.Now().Add(sessionLifetime))
+	return sess, user, nil
+}
+
+// createSession is Login's session-creation step, factored out so
+// SetupFirstAdmin (add-first-run-setup) can log its newly-created account
+// in without duplicating it.
+func (s *Service) createSession(ctx context.Context, userID string) (domain.Session, error) {
+	id, err := randomSecret()
 	if err != nil {
-		return domain.Session{}, domain.User{}, err
+		return domain.Session{}, err
+	}
+	sess, err := s.store.Sessions.Create(ctx, hashToken(id), userID, time.Now().Add(sessionLifetime))
+	if err != nil {
+		return domain.Session{}, err
 	}
 	// The store only ever sees/returns the hash (backlog #116) — id is the
 	// one place the raw secret is known, so it's set here for the caller
 	// to put in the cookie.
 	sess.ID = id
+	return sess, nil
+}
+
+// SetupFirstAdmin creates the instance's very first user, as a Tenant
+// Admin, from an email and password chosen directly by whoever submits
+// this — never a temporary/generated one — and logs them in immediately
+// (add-first-run-setup). Unlike BootstrapAdmin (env-var driven, silent
+// no-op if either var is blank), this is the interactive fallback: it
+// SHALL fail with a ConflictError, creating nothing, once any user already
+// exists — CreateFirstAdmin's advisory lock makes that check-and-insert
+// atomic against concurrent callers (two people, or this racing
+// BootstrapAdmin at startup). The account is not flagged
+// must_change_password: there is nothing temporary about a password its
+// own owner just chose, unlike GenerateTemporaryPassword's fallback.
+func (s *Service) SetupFirstAdmin(ctx context.Context, email, password string) (domain.Session, domain.User, error) {
+	if err := domain.ValidateEmail(email); err != nil {
+		return domain.Session{}, domain.User{}, invalid("%s", err)
+	}
+	if err := domain.ValidatePassword(password); err != nil {
+		return domain.Session{}, domain.User{}, invalid("%s", err)
+	}
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return domain.Session{}, domain.User{}, err
+	}
+
+	user, err := s.store.Users.CreateFirstAdmin(ctx, email, string(hash))
+	if errors.Is(err, store.ErrAlreadySetUp) {
+		return domain.Session{}, domain.User{}, conflict("this instance has already been set up")
+	}
+	if err != nil {
+		return domain.Session{}, domain.User{}, err
+	}
+
+	// Same default-display-name treatment as any other CreateUser call —
+	// a real human filled out this form, unlike BootstrapAdmin's
+	// env-var-driven fixed "Admin" profile.
+	defaultName := domain.DefaultDisplayName(email)
+	user, err = s.store.Users.UpdateProfile(ctx, user.ID, domain.UserProfileUpdate{DisplayName: &defaultName})
+	if err != nil {
+		return domain.Session{}, domain.User{}, err
+	}
+
+	sess, err := s.createSession(ctx, user.ID)
+	if err != nil {
+		return domain.Session{}, domain.User{}, err
+	}
+	s.audit(ctx, "create", "user", user.ID)
 	return sess, user, nil
+}
+
+// HasAnyUser reports whether the instance has at least one user account,
+// bypassing RBAC entirely — there is no authenticated actor before the
+// first one exists. Backs GET /api/v1/meta's setupRequired field and
+// SetupFirstAdmin's own guard, mirroring HasAnyProject.
+func (s *Service) HasAnyUser(ctx context.Context) (bool, error) {
+	users, err := s.store.Users.List(ctx)
+	if err != nil {
+		return false, err
+	}
+	return len(users) > 0, nil
 }
 
 func (s *Service) Logout(ctx context.Context, sessionID string) error {

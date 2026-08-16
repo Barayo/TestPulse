@@ -13,12 +13,35 @@ export type AuthUser = {
 }
 
 type LoginResult = { ok: true; user: AuthUser } | { ok: false; error: string }
+type SetupResult = { ok: true; user: AuthUser } | { ok: false; error: string; alreadySetUp?: boolean }
 
 type AuthContextValue = {
   user: AuthUser | null
   loading: boolean
   sessionExpired: boolean
+  // True while the instance has zero user accounts (add-first-run-setup) —
+  // every route redirects to /setup while this is true. Resolved from
+  // GET /api/v1/meta alongside the /users/me check; defaults to false on
+  // any fetch failure, matching the ordinary case (an already-configured
+  // instance) rather than forcing every network hiccup into the setup flow.
+  setupRequired: boolean
+  // True until the setupRequired check above has resolved once. Deliberately
+  // separate from `loading` (which only reflects /users/me and must never
+  // block the rest of the app on a slow/hung /api/v1/meta — see the comment
+  // above `loading`'s state). SetupPage itself needs this: setupRequired's
+  // initial value is `false`, indistinguishable from "confirmed not
+  // required" until this resolves, so SetupPage must wait for it before
+  // trusting a `false` value enough to redirect away from itself.
+  setupRequiredLoading: boolean
   login: (email: string, password: string) => Promise<LoginResult>
+  // Creates the instance's first admin account and logs it in, in one
+  // request (add-first-run-setup) — updates both `user` and `setupRequired`
+  // on success, so navigating away doesn't leave RequireAuth/AllowAnonymous
+  // bouncing back to /setup on stale context state. alreadySetUp is set
+  // only on a 409 (another visitor, or the env-var bootstrap path, won the
+  // race) — SetupPage treats that case as a redirect to /login, not an
+  // inline form error.
+  setup: (email: string, password: string) => Promise<SetupResult>
   logout: () => Promise<void>
   refreshUser: () => Promise<void>
 }
@@ -31,6 +54,13 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null)
   const [loading, setLoading] = useState(true)
+  // Resolved independently of `loading` (below), which reflects only the
+  // /users/me check — a slow or hung /api/v1/meta fetch must never block
+  // the rest of the app from rendering (it already doesn't gate readiness
+  // display, see HealthBadge). setupRequired simply updates, and any route
+  // depending on it re-renders, whenever it resolves.
+  const [setupRequired, setSetupRequired] = useState(false)
+  const [setupRequiredLoading, setSetupRequiredLoading] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
   const userRef = useRef<AuthUser | null>(null)
   userRef.current = user
@@ -48,7 +78,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setLoading(false)
       }
     }
+    async function checkSetupRequired() {
+      try {
+        const { data, response } = await api.GET('/api/v1/meta')
+        if (cancelled) return
+        setSetupRequired(response.ok && data ? Boolean((data as { setupRequired?: boolean }).setupRequired) : false)
+      } catch {
+        if (!cancelled) setSetupRequired(false)
+      } finally {
+        if (!cancelled) setSetupRequiredLoading(false)
+      }
+    }
     void check()
+    void checkSetupRequired()
     return () => {
       cancelled = true
     }
@@ -73,6 +115,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true, user: authUser }
   }, [])
 
+  const setup = useCallback(async (email: string, password: string): Promise<SetupResult> => {
+    const { data, error, response } = await api.POST('/api/v1/setup', { body: { email, password } })
+    if (!response.ok || !data) {
+      if (response.status === 409) {
+        return { ok: false, error: 'This instance has already been set up — log in with an existing account.', alreadySetUp: true }
+      }
+      const message = (error as { error?: string } | undefined)?.error
+      return { ok: false, error: message ?? 'Could not create the admin account.' }
+    }
+    const authUser = data as AuthUser
+    setUser(authUser)
+    setSetupRequired(false)
+    return { ok: true, user: authUser }
+  }, [])
+
   const logout = useCallback(async () => {
     await api.POST('/api/v1/auth/logout')
     setUser(null)
@@ -87,7 +144,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   return (
-    <AuthContext.Provider value={{ user, loading, sessionExpired, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, sessionExpired, setupRequired, setupRequiredLoading, login, setup, logout, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   )

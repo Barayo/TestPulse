@@ -1111,6 +1111,33 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/User" }
         "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/setup:
+    post:
+      operationId: setupFirstAdmin
+      summary: Create the instance's first admin account (first-run setup)
+      description: >
+        Unauthenticated, and only available while the instance has zero
+        user accounts (add-first-run-setup) — the fallback for when
+        TESTPULSE_ADMIN_EMAIL/PASSWORD were not both set at startup. The
+        submitted email and password become the Tenant Admin's own,
+        chosen directly rather than a temporary/generated one; on success
+        the response is identical to a successful login (a session is
+        created and its cookie set). Permanently unavailable once any
+        user exists, regardless of the env vars' state.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupInput" }
+      responses:
+        "200":
+          description: Admin account created; authenticated as it, a session cookie is set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/auth/logout:
     post:
       operationId: logout
@@ -2258,7 +2285,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled, passwordResetEnabled]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired]
       properties:
         name:
           type: string
@@ -2283,6 +2310,14 @@ components:
             (TESTPULSE_SMTP_* + TESTPULSE_PUBLIC_URL). The login page
             renders its "Forgot password?" link only when true, rather
             than showing it and failing at submit time.
+        setupRequired:
+          type: boolean
+          description: >
+            True while the instance has zero user accounts and startup did
+            not bootstrap one from TESTPULSE_ADMIN_EMAIL/PASSWORD
+            (add-first-run-setup). The frontend redirects every route to
+            /setup while true; once any user exists this is permanently
+            false, regardless of the env vars' state.
     InstanceSettings:
       type: object
       required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, updatedAt]
@@ -2566,6 +2601,12 @@ components:
       properties:
         roleId: { type: string }
     LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    SetupInput:
       type: object
       required: [email, password]
       properties:

@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"time"
 
@@ -8,6 +9,7 @@ import (
 	"golang.org/x/time/rate"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
+	"github.com/Barayo/TestPulse/apps/api/internal/sampledata"
 )
 
 // mountAuth registers the unauthenticated auth routes — login is how a
@@ -81,6 +83,55 @@ func (h *api) login(w http.ResponseWriter, r *http.Request) {
 	}
 	setSessionCookie(w, r, sess)
 	h.respond(w, http.StatusOK, user, nil)
+}
+
+type setupInput struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
+// setupFirstAdmin is unauthenticated, like login — it's how a still-empty
+// instance gets its first session in the first place (add-first-run-setup).
+// Unlike login, it's also self-closing: Service.SetupFirstAdmin rejects
+// with a ConflictError (mapped to 409 by respond) once any user exists.
+func (h *api) setupFirstAdmin(w http.ResponseWriter, r *http.Request) {
+	in, err := decode[setupInput](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	sess, user, err := h.svc.SetupFirstAdmin(r.Context(), in.Email, in.Password)
+	if err != nil {
+		h.respond(w, http.StatusOK, nil, err)
+		return
+	}
+	setSessionCookie(w, r, sess)
+	h.seedSampleProjectIfEmpty(r.Context())
+	h.respond(w, http.StatusOK, user, nil)
+}
+
+// seedSampleProjectIfEmpty mirrors main.go's boot-time seed step (there,
+// gated on BootstrapAdmin instead) — an instance that reaches
+// first-run-setup has zero users at boot, so that boot-time attempt has
+// nobody to attribute the Sample Project to and never retries (it's a
+// one-shot startup check). Calling this again once an admin actually
+// exists closes that gap; HasAnyProject's own idempotency guard makes it
+// safe to call unconditionally. Failure is logged, never fatal — the same
+// as at boot.
+func (h *api) seedSampleProjectIfEmpty(ctx context.Context) {
+	has, err := h.svc.HasAnyProject(ctx)
+	if err != nil {
+		h.logger.Warn("checking for existing projects before seeding sample project", "error", err)
+		return
+	}
+	if has {
+		return
+	}
+	if err := sampledata.Seed(ctx, h.svc); err != nil {
+		h.logger.Warn("seeding sample project", "error", err)
+		return
+	}
+	h.logger.Info("sample project seeded")
 }
 
 type forgotPasswordInput struct {

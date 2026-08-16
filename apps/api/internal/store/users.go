@@ -13,6 +13,54 @@ type UserRepo struct {
 	pool *pgxpool.Pool
 }
 
+// ErrAlreadySetUp marks a CreateFirstAdmin call that lost the race — the
+// instance already has at least one user by the time its transaction ran.
+var ErrAlreadySetUp = errors.New("instance already has a user")
+
+// firstAdminSetupLockKey is an arbitrary, fixed Postgres advisory-lock key
+// (add-first-run-setup) — serializes concurrent CreateFirstAdmin calls
+// against each other for the lifetime of one transaction each, so "is the
+// instance still empty" and "insert the first user" happen atomically
+// instead of racing (two people, or the interactive path racing the
+// env-var BootstrapAdmin path, hitting it at the same moment). No schema
+// change needed: advisory locks are session/transaction state, not a row.
+const firstAdminSetupLockKey = 4271819
+
+// CreateFirstAdmin creates the very first user as a Tenant Admin, but only
+// if the users table is still empty by the time this transaction acquires
+// the advisory lock — returns ErrAlreadySetUp otherwise, and creates
+// nothing.
+func (r *UserRepo) CreateFirstAdmin(ctx context.Context, email, passwordHash string) (domain.User, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.User{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	if _, err := tx.Exec(ctx, `SELECT pg_advisory_xact_lock($1)`, firstAdminSetupLockKey); err != nil {
+		return domain.User{}, err
+	}
+
+	var count int
+	if err := tx.QueryRow(ctx, `SELECT count(*) FROM users`).Scan(&count); err != nil {
+		return domain.User{}, err
+	}
+	if count > 0 {
+		return domain.User{}, ErrAlreadySetUp
+	}
+
+	var u domain.User
+	err = tx.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, is_tenant_admin) VALUES ($1, $2, true)
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
+		email, passwordHash,
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	if err != nil {
+		return domain.User{}, err
+	}
+	return u, tx.Commit(ctx)
+}
+
 func (r *UserRepo) Create(ctx context.Context, email, passwordHash string, isTenantAdmin bool) (domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,

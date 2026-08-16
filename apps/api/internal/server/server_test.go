@@ -2,6 +2,7 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -118,5 +119,38 @@ func TestMetaEndpoint(t *testing.T) {
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
 	if rec.Code != http.StatusOK {
 		t.Errorf("GET /api/v1/meta = %d, want 200", rec.Code)
+	}
+}
+
+// TestMetaSetupRequiredReflectsInstanceState covers add-first-run-setup's
+// GET /api/v1/meta.setupRequired field: true on an empty instance, false
+// once any user exists — regardless of how that user was created.
+func TestMetaSetupRequiredReflectsInstanceState(t *testing.T) {
+	pool := testutil.Pool(t, "server_meta")
+	svc := service.New(store.New(pool))
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	var meta map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decoding meta response: %v", err)
+	}
+	if meta["setupRequired"] != true {
+		t.Errorf("setupRequired = %v on an empty instance, want true", meta["setupRequired"])
+	}
+
+	if err := svc.BootstrapAdmin(context.Background(), "admin@example.com", "correcthorse"); err != nil {
+		t.Fatalf("BootstrapAdmin: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	meta = nil
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decoding meta response: %v", err)
+	}
+	if meta["setupRequired"] != false {
+		t.Errorf("setupRequired = %v once a user exists, want false", meta["setupRequired"])
 	}
 }

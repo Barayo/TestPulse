@@ -75,6 +75,11 @@ make dev-api   # or docker compose, which already sets these for the
                # evaluation stack — see deploy/compose/docker-compose.yml
 ```
 
+If you skip this, `make dev-api` still starts — visit `/setup` to create
+the admin account interactively instead (`add-first-run-setup`). Fine for
+local dev; see [Deployment](deployment.md)'s network-exposure warning
+before relying on this for anything reachable by anyone else.
+
 Then log in at `/login` with those credentials, or via `curl`:
 
 ```bash

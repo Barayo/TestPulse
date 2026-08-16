@@ -3,8 +3,10 @@ package service_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -1195,6 +1197,115 @@ func TestBootstrapAdminSkipsWhenUsersExist(t *testing.T) {
 	users, _ := s.ListUsers(context.Background())
 	if len(users) != 1 {
 		t.Errorf("users = %+v, want unchanged (still 1)", users)
+	}
+}
+
+// --- HasAnyUser / first-run setup (add-first-run-setup) ---
+
+func TestHasAnyUserReflectsInstanceState(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+
+	has, err := s.HasAnyUser(ctx)
+	if err != nil {
+		t.Fatalf("HasAnyUser on empty instance: %v", err)
+	}
+	if has {
+		t.Error("HasAnyUser = true on an empty instance, want false")
+	}
+
+	mustCreateUser(t, s, "a@example.com", "correcthorse", false)
+
+	has, err = s.HasAnyUser(ctx)
+	if err != nil {
+		t.Fatalf("HasAnyUser after create: %v", err)
+	}
+	if !has {
+		t.Error("HasAnyUser = false after a user was created, want true")
+	}
+}
+
+func TestSetupFirstAdminCreatesTenantAdminAndSession(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+
+	sess, user, err := s.SetupFirstAdmin(ctx, "founder@example.com", "correcthorse")
+	if err != nil {
+		t.Fatalf("SetupFirstAdmin: %v", err)
+	}
+	if !user.IsTenantAdmin {
+		t.Error("SetupFirstAdmin user is not a Tenant Admin")
+	}
+	if user.MustChangePassword {
+		t.Error("SetupFirstAdmin user has MustChangePassword = true, want false — the password was chosen directly, nothing temporary about it")
+	}
+	if sess.UserID != user.ID || sess.ID == "" {
+		t.Errorf("session = %+v, user = %+v", sess, user)
+	}
+	if user.DisplayName == nil || *user.DisplayName != "Founder" {
+		t.Errorf("DisplayName = %v, want \"Founder\" (derived from email, not BootstrapAdmin's fixed \"Admin\")", user.DisplayName)
+	}
+}
+
+func TestSetupFirstAdminRejectedWhenUsersExist(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	mustCreateUser(t, s, "existing@example.com", "correcthorse", false)
+
+	_, _, err := s.SetupFirstAdmin(ctx, "founder@example.com", "correcthorse")
+	if err == nil {
+		t.Fatal("SetupFirstAdmin succeeded on an instance that already has a user, want error")
+	}
+	var cerr *service.ConflictError
+	if !errors.As(err, &cerr) {
+		t.Errorf("error = %v (%T), want *service.ConflictError", err, err)
+	}
+
+	users, _ := s.ListUsers(ctx)
+	if len(users) != 1 {
+		t.Errorf("users = %+v, want unchanged (still 1)", users)
+	}
+}
+
+// TestSetupFirstAdminRaceOnlyOneSucceeds reproduces two people (or the
+// interactive path racing the env-var bootstrap path) hitting first-run
+// setup at effectively the same time — exactly one call must create the
+// account, the other must be rejected, and the instance must never end up
+// with two accounts both believing they're the sole first admin.
+func TestSetupFirstAdminRaceOnlyOneSucceeds(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+
+	const attempts = 5
+	var wg sync.WaitGroup
+	results := make(chan error, attempts)
+	for i := range attempts {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			_, _, err := s.SetupFirstAdmin(ctx, fmt.Sprintf("founder%d@example.com", i), "correcthorse")
+			results <- err
+		}(i)
+	}
+	wg.Wait()
+	close(results)
+
+	successes := 0
+	for err := range results {
+		if err == nil {
+			successes++
+		}
+	}
+	if successes != 1 {
+		t.Errorf("successes = %d, want exactly 1", successes)
+	}
+
+	users, err := s.ListUsers(ctx)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	if len(users) != 1 {
+		t.Errorf("users = %+v, want exactly 1", users)
 	}
 }
 

@@ -16,6 +16,7 @@ import CaseDetailPage from '@/pages/CaseDetailPage'
 import RunPage from '@/pages/RunPage'
 import RunItemDetailPage from '@/pages/RunItemDetailPage'
 import LoginPage from '@/pages/LoginPage'
+import SetupPage from '@/pages/SetupPage'
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
 import ResetPasswordPage from '@/pages/ResetPasswordPage'
 import RequiredPasswordChangePage from '@/pages/RequiredPasswordChangePage'
@@ -33,10 +34,15 @@ import InstanceSettingsPage from '@/pages/InstanceSettingsPage'
 // originally requested path so LoginPage can return the user there (e.g.
 // a session timeout mid-task shouldn't lose their place).
 function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading, setupRequired } = useAuth()
   const location = useLocation()
 
   if (loading) return null
+  // Checked ahead of the session check below (add-first-run-setup): a
+  // fresh instance's very first visitor has no session yet either, and
+  // must land on /setup, not bounce to /login for an account that can't
+  // exist yet.
+  if (setupRequired) return <Navigate to="/setup" replace />
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />
   // A mandatory gate, not a redirect to a route of its own — rendered in
   // place of whatever was requested, for every RequireAuth-protected route
@@ -56,8 +62,13 @@ function RequireAuth({ children }: { children: ReactNode }) {
 // specific page's dual-mode migration has landed — until then, entries in
 // that list still render through RequireAuth like everything else.
 function AllowAnonymous({ children }: { children: ReactNode }) {
-  const { user, loading } = useAuth()
+  const { user, loading, setupRequired } = useAuth()
   if (loading) return null
+  // Same first-run redirect as RequireAuth, for the same reason — `/` is
+  // itself an anonymous route (PROJECT_CONTENT_ROUTES), so a fresh
+  // instance's very first visitor hits this wrapper directly, with no
+  // session to have resolved yet either (add-first-run-setup).
+  if (setupRequired) return <Navigate to="/setup" replace />
   // Same mandatory gate as RequireAuth, for the same reason — an
   // authenticated, flagged user must see it regardless of whether the
   // specific route they landed on would also work anonymously
@@ -130,6 +141,7 @@ function App() {
           <DataRevisionProvider>
             <SessionExpiredModal />
             <Routes>
+              <Route path="/setup" element={<SetupPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/forgot-password" element={<ForgotPasswordPage />} />
               <Route path="/reset-password" element={<ResetPasswordPage />} />

@@ -24,14 +24,20 @@ export default function LoginPage() {
       .catch(() => {})
   }, [])
 
-  // One-shot confirmation after navigating here from ResetPasswordPage on
-  // success — same idiom as RunPage's justCreated banner: read router
-  // state once, then clear it so a refresh doesn't re-show it.
-  const [showPasswordResetBanner, setShowPasswordResetBanner] = useState(
-    Boolean((location.state as { passwordReset?: boolean } | null)?.passwordReset),
+  // One-shot confirmation banner after navigating here from another page on
+  // success or a lost race — same idiom as RunPage's justCreated banner:
+  // read router state once, then clear it so a refresh doesn't re-show it.
+  // Generalized (add-first-run-setup) to carry an arbitrary `message`
+  // beyond the original password-reset-specific `passwordReset` flag —
+  // ResetPasswordPage still passes the latter, SetupPage passes the former.
+  const routerState = location.state as { passwordReset?: boolean; message?: string } | null
+  const [bannerMessage, setBannerMessage] = useState<string | undefined>(
+    routerState?.passwordReset
+      ? 'Password updated — log in with your new password'
+      : routerState?.message,
   )
   useEffect(() => {
-    if (!showPasswordResetBanner) return
+    if (!bannerMessage) return
     navigate(location.pathname, { replace: true, state: null })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -41,12 +47,9 @@ export default function LoginPage() {
       <div className="fixed right-6 top-6">
         <HealthBadge />
       </div>
-      {showPasswordResetBanner && (
+      {bannerMessage && (
         <div className="w-full max-w-sm">
-          <ConfirmBanner
-            message="Password updated — log in with your new password"
-            onDismiss={() => setShowPasswordResetBanner(false)}
-          />
+          <ConfirmBanner message={bannerMessage} onDismiss={() => setBannerMessage(undefined)} />
         </div>
       )}
       <Card className="w-full max-w-sm">

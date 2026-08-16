@@ -169,6 +169,7 @@ field alongside the report text, not inside it.
 
 | Method | Path | Description |
 |---|---|---|
+| POST | `/api/v1/setup` | Create the instance's first Tenant Admin (`email`/`password`, chosen directly) and log in as it, in one request — only available while the instance has zero users (`add-first-run-setup`); `409` once any user exists. Not rate-limited (self-closing after first use) |
 | POST | `/api/v1/auth/login` | Log in with `email`/`password`; sets an `HttpOnly` session cookie (30-day sliding expiry). Rate-limited per client IP (burst of 5, refilling at 5/minute by default — see `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`/`_BURST`, [Deployment](deployment.md#configuration-reference)) — returns `429` once exhausted |
 | POST | `/api/v1/auth/logout` | End the current session |
 | POST | `/api/v1/auth/forgot-password` | Request a password-reset email (`email`) — only available when the instance has SMTP configured (`passwordResetEnabled` on `GET /api/v1/meta`). Always returns `200` regardless of outcome (unknown email, deactivated account, SMTP not configured) — never leaks account existence or instance configuration. Rate-limited the same way as login |
@@ -298,7 +299,11 @@ object with action-specific before/after state — a case move records
 
 A fresh instance seeds one user as Tenant Admin from `TESTPULSE_ADMIN_EMAIL`
 / `TESTPULSE_ADMIN_PASSWORD` on first startup (skipped once any user exists
-— see [Development](development.md)).
+— see [Development](development.md)). If either is unset, `POST
+/api/v1/setup` (unauthenticated, only available while the instance has zero
+users) lets the first visitor create that account themselves instead
+(`add-first-run-setup`) — `GET /api/v1/meta`'s `setupRequired` field
+reports whether this is currently open.
 
 ## Versioning policy
 
