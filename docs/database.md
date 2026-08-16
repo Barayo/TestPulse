@@ -1,15 +1,15 @@
 # Database
 
-PostgreSQL 16+. **Pre-1.0.0**, the schema is a single file,
-[`apps/api/internal/db/schema.sql`](../apps/api/internal/db/schema.sql),
-embedded in the binary and edited directly in place — no incremental
-migration files (see CLAUDE.md's migration policy for why, and why this is
-temporary). **`schema.sql` is the source of truth**; this page is the
+PostgreSQL 16+. The schema is built from incremental migration files,
+[`apps/api/internal/db/migrations/`](../apps/api/internal/db/migrations/),
+embedded in the binary and applied at startup via goose — one file per
+change, never edited once merged (see CLAUDE.md's migration policy).
+**The migrations directory is the source of truth**; this page is the
 readable narrative on top of it, kept in sync with every schema-changing
-PR. It's applied once, automatically, to an empty database at API startup;
-a database that already has it applied is left alone (see
-[Deployment](deployment.md)) — changing `schema.sql` requires a manual
-database reset to pick up, there is no auto-upgrade path.
+PR. Pending migrations apply automatically, in order, at API startup —
+idempotent, so a restart or rolling deploy only applies what's still
+pending (see [Deployment](deployment.md)); no manual database reset is
+needed to pick up a new migration.
 
 ## Entity relationships
 

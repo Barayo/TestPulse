@@ -1,33 +1,26 @@
-// Package db owns PostgreSQL connectivity and schema application.
+// Package db owns PostgreSQL connectivity and schema migrations.
 //
-// Pre-1.0.0 only (replace-migrations-with-schema-sql): the schema is a
-// single schema.sql, applied once to an empty database. There is no
-// incremental migration history — see schema.sql's own header and
-// design.md for why this is safe to do before 1.0.0 ships with real
-// customer deployments to protect, and why it must not survive past that
-// point.
+// Incremental migrations (reinstate-incremental-migrations, permanent
+// policy): apps/api/internal/db/migrations/*.sql, one file per change,
+// applied via goose. Once a migration file has shipped, it is never edited
+// in place — CI (the "migrations" job) rejects a pull request that edits an
+// already-merged migration file. A subsequent schema change is always a new
+// file.
 package db
 
 import (
 	"context"
-	"crypto/sha256"
-	_ "embed"
-	"encoding/hex"
-	"errors"
+	"embed"
 	"fmt"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 )
 
-//go:embed schema.sql
-var schemaSQL string
-
-func schemaChecksum() string {
-	sum := sha256.Sum256([]byte(schemaSQL))
-	return hex.EncodeToString(sum[:])
-}
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
 
 // Connect opens a pgx connection pool and verifies connectivity.
 func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
@@ -45,57 +38,60 @@ func Connect(ctx context.Context, databaseURL string) (*pgxpool.Pool, error) {
 	return pool, nil
 }
 
-// ApplySchema applies schema.sql once, to an empty database, inside one
-// transaction. On a database that already has it applied (a schema_info
-// row exists), this is a no-op — repeated startups and rolling restarts
-// are safe. It never errors on a checksum mismatch between what's stored
-// and what the running binary expects — that's surfaced through
-// SchemaCurrent (which backs /readyz) instead, so a stale schema fails
-// readiness loudly rather than silently serving traffic against a schema
-// the binary doesn't actually match.
-func ApplySchema(ctx context.Context, pool *pgxpool.Pool) error {
-	var exists bool
-	err := pool.QueryRow(ctx,
-		`SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'schema_info')`,
-	).Scan(&exists)
-	if err != nil {
-		return fmt.Errorf("checking for schema_info table: %w", err)
-	}
-	if exists {
-		return nil
-	}
-
-	tx, err := pool.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if _, err := tx.Exec(ctx, schemaSQL); err != nil {
-		return fmt.Errorf("applying schema.sql: %w", err)
-	}
-	if _, err := tx.Exec(ctx,
-		`INSERT INTO schema_info (id, checksum) VALUES (true, $1)`, schemaChecksum(),
-	); err != nil {
-		return fmt.Errorf("recording schema checksum: %w", err)
-	}
-	return tx.Commit(ctx)
+// Migrate applies all pending migrations. Goose tracks applied versions in
+// the goose_db_version table, so repeated startups are no-ops.
+func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
+	return MigrateWithOptions(ctx, pool, false)
 }
 
-// SchemaCurrent reports whether the database's applied schema checksum
-// matches the running binary's schema.sql. False (with no error) on a
-// genuine mismatch; an error only if schema_info can't be read at all
-// (e.g. ApplySchema has never run).
-func SchemaCurrent(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
-	var checksum string
-	err := pool.QueryRow(ctx, `SELECT checksum FROM schema_info WHERE id = true`).Scan(&checksum)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return false, fmt.Errorf("schema_info has no row")
+// MigrateWithOptions is Migrate with an escape hatch for recovering from a
+// migration-history gap: allowMissing=true tells goose to apply any
+// migration whose version is below the database's recorded max version but
+// was never itself recorded as applied — rather than refuse to start, which
+// is goose's default (and correct) behavior, since that gap is normally a
+// sign of a genuinely broken deploy history (2026-08-03: a stale build that
+// didn't embed one migration file applied every version around it, leaving
+// that one version missing from the applied set forever after). This is a
+// deliberate, rarely-used recovery path — TESTPULSE_ALLOW_MISSING_MIGRATIONS
+// wires it up, off by default, so the safety check stays on for normal
+// operation.
+func MigrateWithOptions(ctx context.Context, pool *pgxpool.Pool, allowMissing bool) error {
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
 	}
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = sqlDB.Close() }()
+	var opts []goose.OptionsFunc
+	if allowMissing {
+		opts = append(opts, goose.WithAllowMissing())
+	}
+	return goose.UpContext(ctx, sqlDB, "migrations", opts...)
+}
+
+// MigrationsCurrent reports whether the database schema is at the latest
+// embedded migration version.
+func MigrationsCurrent(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return false, err
+	}
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = sqlDB.Close() }()
+
+	dbVersion, err := goose.GetDBVersionContext(ctx, sqlDB)
 	if err != nil {
 		return false, err
 	}
-	return checksum == schemaChecksum(), nil
+	migrations, err := goose.CollectMigrations("migrations", 0, goose.MaxVersion)
+	if err != nil {
+		return false, err
+	}
+	var latest int64
+	if len(migrations) > 0 {
+		latest = migrations[len(migrations)-1].Version
+	}
+	return dbVersion >= latest, nil
 }
 
 // Health checks dependency health for the readiness endpoint.
@@ -114,12 +110,12 @@ func (h *Health) Ready(ctx context.Context) error {
 	if err := h.pool.Ping(pingCtx); err != nil {
 		return fmt.Errorf("database unreachable: %w", err)
 	}
-	current, err := SchemaCurrent(ctx, h.pool)
+	current, err := MigrationsCurrent(ctx, h.pool)
 	if err != nil {
-		return fmt.Errorf("checking schema status: %w", err)
+		return fmt.Errorf("checking migration status: %w", err)
 	}
 	if !current {
-		return fmt.Errorf("database schema does not match the running binary's schema.sql")
+		return fmt.Errorf("database schema is not at the latest migration")
 	}
 	return nil
 }

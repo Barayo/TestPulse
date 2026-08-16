@@ -37,17 +37,19 @@ recorded in the OpenSpec change `establish-architecture` (see
   contract. The frontend consumes a TypeScript client generated from it
   (`openapi-typescript` + `openapi-fetch`); CI fails if the generated types
   drift from the spec.
-- **Schema applied at startup, pre-1.0.0 only.** The schema is a single
-  embedded file, `apps/api/internal/db/schema.sql`, applied once to an
-  empty database and never re-applied to one that already has it — no
-  incremental migration files (see CLAUDE.md's migration policy for why
-  this is a deliberate, temporary reversal of the incremental-migration
-  discipline the project used to run, and why it must return before
-  1.0.0). Readiness reports unready if the database's recorded schema
-  checksum doesn't match the running binary's `schema.sql` — the loud
-  failure mode that replaces goose's old silent-skip risk. There is no
-  auto-upgrade path from an older applied schema to a newer `schema.sql`;
-  changing it requires a manual database reset.
+- **Incremental migrations applied at startup.** The schema lives in
+  `apps/api/internal/db/migrations/*.sql`, embedded via `go:embed` and
+  applied with goose (`goose.UpContext`) — one file per change, never
+  edited once merged (CI's `migrations` job enforces this; see CLAUDE.md's
+  migration policy). Startup is idempotent: goose tracks applied versions
+  in its own `goose_db_version` table, so a restart or a rolling deploy
+  only applies whatever's still pending. Readiness reports unready if the
+  database's applied-migration state doesn't reconcile with what the
+  running binary's embedded migrations expect, rather than silently
+  serving traffic against a schema mismatch.
+  `TESTPULSE_ALLOW_MISSING_MIGRATIONS` is an off-by-default recovery
+  escape hatch for a migration-history-gap scenario — see
+  `internal/db.MigrateWithOptions`.
 - **In-process background workers, not a separate deployable.** Three
   goroutines started at server boot (`cmd/testpulse-api/main.go`), sharing
   the same signal-cancelled `context.Context` the HTTP server shuts down on
@@ -112,7 +114,7 @@ recorded in the OpenSpec change `establish-architecture` (see
 | Backend | Go 1.22+, chi, pgx | Tiny static binary (~20 MB image), K8s-ecosystem native, official MCP Go SDK |
 | Frontend | React + TypeScript + Vite, shadcn/ui | Modern interactive UI; largest ecosystem |
 | Database | PostgreSQL 16+ | Relational domain, JSONB for test steps, built-in FTS |
-| Schema | Single `schema.sql` (embedded), pre-1.0.0 | No incremental-migration overhead while the schema still settles — see CLAUDE.md |
+| Schema | Incremental migrations (goose, embedded) | Additive schema changes with no environment wipes — see CLAUDE.md |
 | Contract | OpenAPI 3 | One canonical surface for UI, agents, and connectors |
 | Images | distroless, multi-arch (amd64 + arm64) | Minimal attack surface, runs on x86 and ARM |
 | License | AGPLv3 + DCO | Open source as differentiator; protects a future hosted offering |

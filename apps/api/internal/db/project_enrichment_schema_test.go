@@ -15,8 +15,8 @@ import (
 func TestProjectsGainDescriptionColumn(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -58,8 +58,8 @@ func TestProjectsGainDescriptionColumn(t *testing.T) {
 func TestProjectFavoritesTableAndCascade(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 

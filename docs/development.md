@@ -94,11 +94,16 @@ in place of plain email text. A newly-created user has no project access until a
 Tenant Admin assigns them a role on a project (directly, or via a team) —
 see [Test management](test-management.md#project-roles-and-teams).
 
-Pre-1.0.0, the schema is a single file (`apps/api/internal/db/schema.sql`),
-edited directly in place — see CLAUDE.md's migration policy. Any change to
-it means an existing local/compose Postgres volume needs a full reset to
-pick it up: `docker compose down -v` before `make compose-up` again, or
-drop and recreate your local `dev-api` database.
+The schema is built from incremental migration files
+(`apps/api/internal/db/migrations/`) — see CLAUDE.md's migration policy. A
+new migration applies automatically on your next `make dev-api` /
+`make compose-up`, on top of whatever your local database already has; no
+volume reset needed for a normal schema change. The one exception was the
+one-time `reinstate-incremental-migrations` transition itself (2026-08-16),
+which — like any earlier `schema.sql` edit under the retired apply-once
+policy — required a full local reset (`docker compose down -v` before
+`make compose-up` again, or dropping and recreating your local `dev-api`
+database) to pick up goose's bookkeeping table.
 
 ## Testing password recovery locally
 

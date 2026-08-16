@@ -46,69 +46,45 @@ func TestConnectRejectsUnreachableHost(t *testing.T) {
 	}
 }
 
-func TestApplySchemaOnEmptyDatabaseReachesCurrent(t *testing.T) {
+func TestMigrateOnEmptyDatabaseReachesCurrent(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
 
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema on empty database: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate on empty database: %v", err)
 	}
-	current, err := SchemaCurrent(context.Background(), pool)
+	current, err := MigrationsCurrent(context.Background(), pool)
 	if err != nil {
-		t.Fatalf("SchemaCurrent: %v", err)
+		t.Fatalf("MigrationsCurrent: %v", err)
 	}
 	if !current {
-		t.Error("schema not current after applying to an empty database")
+		t.Error("schema not current after migrating an empty database")
 	}
 }
 
-func TestApplySchemaIsIdempotentOnRestart(t *testing.T) {
+func TestMigrateIsIdempotentOnRestart(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
 
 	for i := range 3 {
-		if err := ApplySchema(context.Background(), pool); err != nil {
-			t.Fatalf("ApplySchema run %d: %v", i+1, err)
+		if err := Migrate(context.Background(), pool); err != nil {
+			t.Fatalf("Migrate run %d: %v", i+1, err)
 		}
 	}
-	current, err := SchemaCurrent(context.Background(), pool)
+	current, err := MigrationsCurrent(context.Background(), pool)
 	if err != nil {
-		t.Fatalf("SchemaCurrent: %v", err)
+		t.Fatalf("MigrationsCurrent: %v", err)
 	}
 	if !current {
-		t.Error("schema not current after repeated ApplySchema calls")
+		t.Error("schema not current after repeated migrations")
 	}
 }
 
-func TestSchemaCurrentFalseOnChecksumMismatch(t *testing.T) {
+func TestReadyWhenMigratedAndReachable(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	ctx := context.Background()
-	if err := ApplySchema(ctx, pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
-	}
-
-	// Simulate a database whose applied schema no longer matches the
-	// running binary's schema.sql — the case a manual reset is required
-	// for, per design.md.
-	if _, err := pool.Exec(ctx, "UPDATE schema_info SET checksum = 'stale-checksum'"); err != nil {
-		t.Fatalf("simulating a stale checksum: %v", err)
-	}
-
-	current, err := SchemaCurrent(ctx, pool)
-	if err != nil {
-		t.Fatalf("SchemaCurrent: %v", err)
-	}
-	if current {
-		t.Error("SchemaCurrent = true with a mismatched checksum, want false")
-	}
-}
-
-func TestReadyWhenSchemaAppliedAndReachable(t *testing.T) {
-	pool := testPool(t)
-	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 
 	if err := NewHealth(pool).Ready(context.Background()); err != nil {
@@ -116,34 +92,45 @@ func TestReadyWhenSchemaAppliedAndReachable(t *testing.T) {
 	}
 }
 
-func TestNotReadyOnUnappliedDatabase(t *testing.T) {
+func TestNotReadyOnUnmigratedDatabase(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
 
-	// schema_info itself is missing, so readiness must fail.
+	// goose's version table itself is missing, so readiness must fail.
 	if err := NewHealth(pool).Ready(context.Background()); err == nil {
-		t.Error("Ready = nil on an unapplied database, want error")
+		t.Error("Ready = nil on unmigrated database, want error")
 	}
 
-	// Leave the database with the schema applied for any test that runs after.
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("re-applying: %v", err)
+	// Leave the database migrated for any test that runs after.
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("re-migrating: %v", err)
 	}
 }
 
-func TestNotReadyOnSchemaMismatch(t *testing.T) {
+// TestMigrateWithOptionsAllowMissingMatchesNormalMigrateWhenNoGapExists
+// verifies MigrateWithOptions(allowMissing=true) doesn't change behavior in
+// the common case (no history gap) — it's a narrow correctness check of the
+// wiring (env var -> Config.AllowMissingMigrations -> this flag), not a
+// reproduction of the full 2026-08-03 gap-recovery incident. That scenario
+// needs at least two embedded migrations where an earlier one was skipped;
+// with only 00001_baseline.sql present, there is nothing for a gap to be
+// below. Full end-to-end gap-recovery coverage is meaningful again once a
+// second real migration ships — the underlying detection/recovery logic
+// itself is goose's own, already covered by goose's test suite.
+func TestMigrateWithOptionsAllowMissingMatchesNormalMigrateWhenNoGapExists(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
 	ctx := context.Background()
-	if err := ApplySchema(ctx, pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
-	}
-	if _, err := pool.Exec(ctx, "UPDATE schema_info SET checksum = 'stale-checksum'"); err != nil {
-		t.Fatalf("simulating a stale checksum: %v", err)
-	}
 
-	if err := NewHealth(pool).Ready(ctx); err == nil {
-		t.Error("Ready = nil on a schema/database checksum mismatch, want error")
+	if err := MigrateWithOptions(ctx, pool, true); err != nil {
+		t.Fatalf("MigrateWithOptions(allowMissing=true) on empty database: %v", err)
+	}
+	current, err := MigrationsCurrent(ctx, pool)
+	if err != nil {
+		t.Fatalf("MigrationsCurrent: %v", err)
+	}
+	if !current {
+		t.Error("schema not current after MigrateWithOptions(allowMissing=true)")
 	}
 }
 

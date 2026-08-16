@@ -215,3 +215,28 @@ func TestPasswordResetEnabledRequiresAllVars(t *testing.T) {
 		}
 	}
 }
+
+func TestLoadAllowMissingMigrationsDefaultsFalse(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.AllowMissingMigrations {
+		t.Error("AllowMissingMigrations = true by default, want false")
+	}
+}
+
+func TestLoadAllowMissingMigrationsTrue(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":             "postgres://localhost/testpulse",
+		"TESTPULSE_ALLOW_MISSING_MIGRATIONS": "true",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.AllowMissingMigrations {
+		t.Error("AllowMissingMigrations = false with TESTPULSE_ALLOW_MISSING_MIGRATIONS=true, want true")
+	}
+}

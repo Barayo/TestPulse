@@ -1,25 +1,23 @@
--- TestPulse database schema — the single source of truth for the schema,
--- pre-1.0.0 (replace-migrations-with-schema-sql). Edited directly in place;
--- there is no per-change migration file and no immutability rule while the
--- schema is still settling. Applied once, in full, to an empty database by
--- Service (internal/db).ApplySchema — see that file for exactly how, and
--- design.md for why this is safe to do pre-1.0 (a schema/database checksum
--- mismatch fails readiness loudly, it is never silently ignored).
+-- +goose Up
+-- Baseline migration (reinstate-incremental-migrations): captures the full
+-- schema as it stood under the retired schema.sql-apply-once model, as the
+-- single starting point for goose's incremental history going forward. Not
+-- a reconstruction of the original pre-schema.sql migration history (last
+-- available in git history at commit 6bb287f^) — every live environment is
+-- already past all of that history plus everything schema.sql added since,
+-- so there is nothing left that would ever replay it from scratch. There is
+-- no schema_info table here: goose's own goose_db_version table replaces it
+-- as the applied-state bookkeeping mechanism.
 --
--- Generated via `pg_dump --schema-only` against a database that had every
--- migration this schema replaces applied, then hand-cleaned of pg_dump
--- boilerplate (session SET statements, ownership/privilege noise, and
--- goose's own bookkeeping table) — not manually reconstructed, so it is
--- byte-accurate to what was actually deployed.
---
--- 1.0.0 readiness: this file, and the apply-once/checksum-verify model it
--- depends on, are explicitly temporary. Before 1.0.0 ships with real
--- customer deployments to protect, the project must adopt a real
--- incremental-migration discipline again (see CLAUDE.md).
+-- Table bodies and the primary-key/unique/index/foreign-key sections below
+-- are carried over verbatim from the retired schema.sql (itself
+-- pg_dump-derived and verified byte-accurate to what was actually
+-- deployed), minus the schema_info table — all foreign keys are added via
+-- ALTER TABLE after every table exists, exactly as pg_dump emitted them, so
+-- table-creation order never has to match dependency order.
 
-CREATE FUNCTION public.create_project_defaults() RETURNS trigger
-    LANGUAGE plpgsql
-    AS $$
+-- +goose StatementBegin
+CREATE FUNCTION create_project_defaults() RETURNS trigger AS $$
 BEGIN
     INSERT INTO test_case_folders (project_id, parent_folder_id, name)
     VALUES (NEW.id, NULL, 'Root');
@@ -27,20 +25,12 @@ BEGIN
     VALUES (NEW.id, 'case', 1), (NEW.id, 'run', 1), (NEW.id, 'suite', 1);
     RETURN NEW;
 END;
-$$;
+$$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 -- --- Tables ---------------------------------------------------------------
 
--- schema_info: bookkeeping for ApplySchema itself, not application data —
--- one row, storing the checksum of the schema.sql that was applied.
-CREATE TABLE public.schema_info (
-    id boolean DEFAULT true NOT NULL,
-    checksum text NOT NULL,
-    applied_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT schema_info_id_check CHECK (id)
-);
-
-CREATE TABLE public.api_tokens (
+CREATE TABLE api_tokens (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     created_by uuid NOT NULL,
     name text NOT NULL,
@@ -54,7 +44,7 @@ CREATE TABLE public.api_tokens (
     CONSTRAINT api_tokens_scope_check CHECK (((project_id IS NULL) = (role_id IS NULL)))
 );
 
-CREATE TABLE public.audit_log (
+CREATE TABLE audit_log (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     actor_kind text NOT NULL,
     actor_id text NOT NULL,
@@ -67,7 +57,7 @@ CREATE TABLE public.audit_log (
     CONSTRAINT audit_log_actor_kind_check CHECK ((actor_kind = ANY (ARRAY['user'::text, 'agent'::text, 'system'::text])))
 );
 
-CREATE TABLE public.instance_settings (
+CREATE TABLE instance_settings (
     id boolean DEFAULT true NOT NULL,
     public_projects_enabled boolean DEFAULT true NOT NULL,
     run_retention_days integer DEFAULT 0 NOT NULL,
@@ -76,7 +66,7 @@ CREATE TABLE public.instance_settings (
     CONSTRAINT instance_settings_id_check CHECK (id)
 );
 
-CREATE TABLE public.password_reset_tokens (
+CREATE TABLE password_reset_tokens (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     user_id uuid NOT NULL,
     token_hash text NOT NULL,
@@ -85,32 +75,32 @@ CREATE TABLE public.password_reset_tokens (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE public.project_favorites (
+CREATE TABLE project_favorites (
     user_id uuid NOT NULL,
     project_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE public.project_key_counters (
+CREATE TABLE project_key_counters (
     project_id uuid NOT NULL,
     entity_type text NOT NULL,
     next_value integer DEFAULT 1 NOT NULL,
     CONSTRAINT project_key_counters_entity_type_check CHECK ((entity_type = ANY (ARRAY['case'::text, 'run'::text, 'suite'::text])))
 );
 
-CREATE TABLE public.project_members (
+CREATE TABLE project_members (
     project_id uuid NOT NULL,
     user_id uuid NOT NULL,
     role_id uuid NOT NULL
 );
 
-CREATE TABLE public.project_team_roles (
+CREATE TABLE project_team_roles (
     project_id uuid NOT NULL,
     team_id uuid NOT NULL,
     role_id uuid NOT NULL
 );
 
-CREATE TABLE public.projects (
+CREATE TABLE projects (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     key text NOT NULL,
     name text NOT NULL,
@@ -124,7 +114,7 @@ CREATE TABLE public.projects (
     CONSTRAINT projects_name_check CHECK ((name <> ''::text))
 );
 
-CREATE TABLE public.result_attachments (
+CREATE TABLE result_attachments (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     run_item_id uuid NOT NULL,
     result_id uuid,
@@ -134,7 +124,7 @@ CREATE TABLE public.result_attachments (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE public.roles (
+CREATE TABLE roles (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
     rank integer DEFAULT 0 NOT NULL,
@@ -155,31 +145,31 @@ CREATE TABLE public.roles (
     CONSTRAINT roles_name_check CHECK ((name <> ''::text))
 );
 
-CREATE TABLE public.sessions (
+CREATE TABLE sessions (
     session_hash text NOT NULL,
     user_id uuid NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     expires_at timestamp with time zone NOT NULL
 );
 
-CREATE TABLE public.suite_cases (
+CREATE TABLE suite_cases (
     suite_id uuid NOT NULL,
     case_id uuid NOT NULL
 );
 
-CREATE TABLE public.team_members (
+CREATE TABLE team_members (
     team_id uuid NOT NULL,
     user_id uuid NOT NULL
 );
 
-CREATE TABLE public.teams (
+CREATE TABLE teams (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     name text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT teams_name_check CHECK ((name <> ''::text))
 );
 
-CREATE TABLE public.test_case_folders (
+CREATE TABLE test_case_folders (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     project_id uuid NOT NULL,
     parent_folder_id uuid,
@@ -189,7 +179,7 @@ CREATE TABLE public.test_case_folders (
     CONSTRAINT test_case_folders_name_check CHECK ((name <> ''::text))
 );
 
-CREATE TABLE public.test_case_versions (
+CREATE TABLE test_case_versions (
     case_id uuid NOT NULL,
     version integer NOT NULL,
     title text NOT NULL,
@@ -210,7 +200,7 @@ CREATE TABLE public.test_case_versions (
     CONSTRAINT test_case_versions_version_check CHECK ((version >= 1))
 );
 
-CREATE TABLE public.test_cases (
+CREATE TABLE test_cases (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     key text NOT NULL,
     project_id uuid NOT NULL,
@@ -220,7 +210,7 @@ CREATE TABLE public.test_cases (
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE public.test_run_items (
+CREATE TABLE test_run_items (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     run_id uuid NOT NULL,
     case_id uuid NOT NULL,
@@ -234,7 +224,7 @@ CREATE TABLE public.test_run_items (
     CONSTRAINT test_run_items_current_status_check CHECK ((current_status = ANY (ARRAY['pending'::text, 'pass'::text, 'failed'::text, 'skipped'::text, 'blocked'::text, 'retest'::text])))
 );
 
-CREATE TABLE public.test_run_results (
+CREATE TABLE test_run_results (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     run_item_id uuid NOT NULL,
     actor text NOT NULL,
@@ -253,7 +243,7 @@ CREATE TABLE public.test_run_results (
     CONSTRAINT test_run_results_verdict_check CHECK ((verdict = ANY (ARRAY['pass'::text, 'failed'::text, 'skipped'::text, 'blocked'::text])))
 );
 
-CREATE TABLE public.test_runs (
+CREATE TABLE test_runs (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     key text NOT NULL,
     project_id uuid NOT NULL,
@@ -265,7 +255,7 @@ CREATE TABLE public.test_runs (
     CONSTRAINT test_runs_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))
 );
 
-CREATE TABLE public.test_suites (
+CREATE TABLE test_suites (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     key text NOT NULL,
     project_id uuid NOT NULL,
@@ -274,14 +264,14 @@ CREATE TABLE public.test_suites (
     CONSTRAINT test_suites_name_check CHECK ((name <> ''::text))
 );
 
-CREATE TABLE public.user_avatars (
+CREATE TABLE user_avatars (
     user_id uuid NOT NULL,
     image bytea NOT NULL,
     content_type text NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
-CREATE TABLE public.users (
+CREATE TABLE users (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     email text NOT NULL,
     password_hash text NOT NULL,
@@ -297,262 +287,256 @@ CREATE TABLE public.users (
 
 -- --- Primary keys / unique constraints -------------------------------------
 
-ALTER TABLE ONLY public.api_tokens
+ALTER TABLE ONLY api_tokens
     ADD CONSTRAINT api_tokens_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.api_tokens
+ALTER TABLE ONLY api_tokens
     ADD CONSTRAINT api_tokens_token_hash_key UNIQUE (token_hash);
 
-ALTER TABLE ONLY public.audit_log
+ALTER TABLE ONLY audit_log
     ADD CONSTRAINT audit_log_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.instance_settings
+ALTER TABLE ONLY instance_settings
     ADD CONSTRAINT instance_settings_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.password_reset_tokens
+ALTER TABLE ONLY password_reset_tokens
     ADD CONSTRAINT password_reset_tokens_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.password_reset_tokens
+ALTER TABLE ONLY password_reset_tokens
     ADD CONSTRAINT password_reset_tokens_token_hash_key UNIQUE (token_hash);
 
-ALTER TABLE ONLY public.project_favorites
+ALTER TABLE ONLY project_favorites
     ADD CONSTRAINT project_favorites_pkey PRIMARY KEY (user_id, project_id);
 
-ALTER TABLE ONLY public.project_key_counters
+ALTER TABLE ONLY project_key_counters
     ADD CONSTRAINT project_key_counters_pkey PRIMARY KEY (project_id, entity_type);
 
-ALTER TABLE ONLY public.project_members
+ALTER TABLE ONLY project_members
     ADD CONSTRAINT project_members_pkey PRIMARY KEY (project_id, user_id);
 
-ALTER TABLE ONLY public.project_team_roles
+ALTER TABLE ONLY project_team_roles
     ADD CONSTRAINT project_team_roles_pkey PRIMARY KEY (project_id, team_id);
 
-ALTER TABLE ONLY public.projects
+ALTER TABLE ONLY projects
     ADD CONSTRAINT projects_key_key UNIQUE (key);
 
-ALTER TABLE ONLY public.projects
+ALTER TABLE ONLY projects
     ADD CONSTRAINT projects_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.result_attachments
+ALTER TABLE ONLY result_attachments
     ADD CONSTRAINT result_attachments_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.roles
+ALTER TABLE ONLY roles
     ADD CONSTRAINT roles_name_key UNIQUE (name);
 
-ALTER TABLE ONLY public.roles
+ALTER TABLE ONLY roles
     ADD CONSTRAINT roles_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.sessions
+ALTER TABLE ONLY sessions
     ADD CONSTRAINT sessions_pkey PRIMARY KEY (session_hash);
 
-ALTER TABLE ONLY public.suite_cases
+ALTER TABLE ONLY suite_cases
     ADD CONSTRAINT suite_cases_pkey PRIMARY KEY (suite_id, case_id);
 
-ALTER TABLE ONLY public.team_members
+ALTER TABLE ONLY team_members
     ADD CONSTRAINT team_members_pkey PRIMARY KEY (team_id, user_id);
 
-ALTER TABLE ONLY public.teams
+ALTER TABLE ONLY teams
     ADD CONSTRAINT teams_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.test_case_folders
+ALTER TABLE ONLY test_case_folders
     ADD CONSTRAINT test_case_folders_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.test_case_versions
+ALTER TABLE ONLY test_case_versions
     ADD CONSTRAINT test_case_versions_pkey PRIMARY KEY (case_id, version);
 
-ALTER TABLE ONLY public.test_cases
+ALTER TABLE ONLY test_cases
     ADD CONSTRAINT test_cases_key_key UNIQUE (key);
 
-ALTER TABLE ONLY public.test_cases
+ALTER TABLE ONLY test_cases
     ADD CONSTRAINT test_cases_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.test_run_items
+ALTER TABLE ONLY test_run_items
     ADD CONSTRAINT test_run_items_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.test_run_items
+ALTER TABLE ONLY test_run_items
     ADD CONSTRAINT test_run_items_run_id_case_id_key UNIQUE (run_id, case_id);
 
-ALTER TABLE ONLY public.test_run_results
+ALTER TABLE ONLY test_run_results
     ADD CONSTRAINT test_run_results_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.test_runs
+ALTER TABLE ONLY test_runs
     ADD CONSTRAINT test_runs_key_key UNIQUE (key);
 
-ALTER TABLE ONLY public.test_runs
+ALTER TABLE ONLY test_runs
     ADD CONSTRAINT test_runs_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.test_suites
+ALTER TABLE ONLY test_suites
     ADD CONSTRAINT test_suites_key_key UNIQUE (key);
 
-ALTER TABLE ONLY public.test_suites
+ALTER TABLE ONLY test_suites
     ADD CONSTRAINT test_suites_pkey PRIMARY KEY (id);
 
-ALTER TABLE ONLY public.user_avatars
+ALTER TABLE ONLY user_avatars
     ADD CONSTRAINT user_avatars_pkey PRIMARY KEY (user_id);
 
-ALTER TABLE ONLY public.users
+ALTER TABLE ONLY users
     ADD CONSTRAINT users_email_key UNIQUE (email);
 
-ALTER TABLE ONLY public.users
+ALTER TABLE ONLY users
     ADD CONSTRAINT users_pkey PRIMARY KEY (id);
 
 -- --- Indexes ----------------------------------------------------------------
 
-CREATE INDEX api_tokens_created_by_idx ON public.api_tokens USING btree (created_by);
+CREATE INDEX api_tokens_created_by_idx ON api_tokens USING btree (created_by);
 
-CREATE INDEX audit_log_entity_idx ON public.audit_log USING btree (entity_type, entity_id, occurred_at);
+CREATE INDEX audit_log_entity_idx ON audit_log USING btree (entity_type, entity_id, occurred_at);
 
-CREATE INDEX password_reset_tokens_user_idx ON public.password_reset_tokens USING btree (user_id);
+CREATE INDEX password_reset_tokens_user_idx ON password_reset_tokens USING btree (user_id);
 
-CREATE INDEX result_attachments_result_id_idx ON public.result_attachments USING btree (result_id);
+CREATE INDEX result_attachments_result_id_idx ON result_attachments USING btree (result_id);
 
-CREATE INDEX result_attachments_run_item_id_idx ON public.result_attachments USING btree (run_item_id) WHERE (result_id IS NULL);
+CREATE INDEX result_attachments_run_item_id_idx ON result_attachments USING btree (run_item_id) WHERE (result_id IS NULL);
 
-CREATE INDEX sessions_user_idx ON public.sessions USING btree (user_id);
+CREATE INDEX sessions_user_idx ON sessions USING btree (user_id);
 
-CREATE UNIQUE INDEX test_case_folders_one_root_idx ON public.test_case_folders USING btree (project_id) WHERE (parent_folder_id IS NULL);
+CREATE UNIQUE INDEX test_case_folders_one_root_idx ON test_case_folders USING btree (project_id) WHERE (parent_folder_id IS NULL);
 
-CREATE INDEX test_case_folders_parent_idx ON public.test_case_folders USING btree (parent_folder_id) WHERE (NOT deleted);
+CREATE INDEX test_case_folders_parent_idx ON test_case_folders USING btree (parent_folder_id) WHERE (NOT deleted);
 
-CREATE INDEX test_case_folders_project_idx ON public.test_case_folders USING btree (project_id) WHERE (NOT deleted);
+CREATE INDEX test_case_folders_project_idx ON test_case_folders USING btree (project_id) WHERE (NOT deleted);
 
-CREATE INDEX test_cases_folder_idx ON public.test_cases USING btree (folder_id) WHERE (NOT deleted);
+CREATE INDEX test_cases_folder_idx ON test_cases USING btree (folder_id) WHERE (NOT deleted);
 
-CREATE INDEX test_cases_project_idx ON public.test_cases USING btree (project_id) WHERE (NOT deleted);
+CREATE INDEX test_cases_project_idx ON test_cases USING btree (project_id) WHERE (NOT deleted);
 
-CREATE INDEX test_run_items_case_version_idx ON public.test_run_items USING btree (case_id, case_version);
+CREATE INDEX test_run_items_case_version_idx ON test_run_items USING btree (case_id, case_version);
 
-CREATE INDEX test_run_items_run_idx ON public.test_run_items USING btree (run_id);
+CREATE INDEX test_run_items_run_idx ON test_run_items USING btree (run_id);
 
-CREATE INDEX test_run_results_item_idx ON public.test_run_results USING btree (run_item_id, created_at);
+CREATE INDEX test_run_results_item_idx ON test_run_results USING btree (run_item_id, created_at);
 
-CREATE INDEX test_runs_project_idx ON public.test_runs USING btree (project_id);
+CREATE INDEX test_runs_project_idx ON test_runs USING btree (project_id);
 
-CREATE INDEX test_suites_project_idx ON public.test_suites USING btree (project_id);
+CREATE INDEX test_suites_project_idx ON test_suites USING btree (project_id);
 
 -- --- Triggers -----------------------------------------------------------
 
-CREATE TRIGGER projects_create_defaults AFTER INSERT ON public.projects FOR EACH ROW EXECUTE FUNCTION public.create_project_defaults();
+CREATE TRIGGER projects_create_defaults AFTER INSERT ON projects FOR EACH ROW EXECUTE FUNCTION create_project_defaults();
 
 -- --- Foreign keys -----------------------------------------------------------
 
-ALTER TABLE ONLY public.api_tokens
-    ADD CONSTRAINT api_tokens_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY api_tokens
+    ADD CONSTRAINT api_tokens_created_by_fkey FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.api_tokens
-    ADD CONSTRAINT api_tokens_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY api_tokens
+    ADD CONSTRAINT api_tokens_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.api_tokens
-    ADD CONSTRAINT api_tokens_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
+ALTER TABLE ONLY api_tokens
+    ADD CONSTRAINT api_tokens_role_id_fkey FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.password_reset_tokens
-    ADD CONSTRAINT password_reset_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY password_reset_tokens
+    ADD CONSTRAINT password_reset_tokens_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_favorites
-    ADD CONSTRAINT project_favorites_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_favorites
+    ADD CONSTRAINT project_favorites_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_favorites
-    ADD CONSTRAINT project_favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_favorites
+    ADD CONSTRAINT project_favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_key_counters
-    ADD CONSTRAINT project_key_counters_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_key_counters
+    ADD CONSTRAINT project_key_counters_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_members
-    ADD CONSTRAINT project_members_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_members
+    ADD CONSTRAINT project_members_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_members
-    ADD CONSTRAINT project_members_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_members
+    ADD CONSTRAINT project_members_role_id_fkey FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_members
-    ADD CONSTRAINT project_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_members
+    ADD CONSTRAINT project_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_team_roles
-    ADD CONSTRAINT project_team_roles_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_team_roles
+    ADD CONSTRAINT project_team_roles_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_team_roles
-    ADD CONSTRAINT project_team_roles_role_id_fkey FOREIGN KEY (role_id) REFERENCES public.roles(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_team_roles
+    ADD CONSTRAINT project_team_roles_role_id_fkey FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.project_team_roles
-    ADD CONSTRAINT project_team_roles_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id) ON DELETE CASCADE;
+ALTER TABLE ONLY project_team_roles
+    ADD CONSTRAINT project_team_roles_team_id_fkey FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.result_attachments
-    ADD CONSTRAINT result_attachments_result_id_fkey FOREIGN KEY (result_id) REFERENCES public.test_run_results(id) ON DELETE CASCADE;
+ALTER TABLE ONLY result_attachments
+    ADD CONSTRAINT result_attachments_result_id_fkey FOREIGN KEY (result_id) REFERENCES test_run_results(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.result_attachments
-    ADD CONSTRAINT result_attachments_run_item_id_fkey FOREIGN KEY (run_item_id) REFERENCES public.test_run_items(id) ON DELETE CASCADE;
+ALTER TABLE ONLY result_attachments
+    ADD CONSTRAINT result_attachments_run_item_id_fkey FOREIGN KEY (run_item_id) REFERENCES test_run_items(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.sessions
-    ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY sessions
+    ADD CONSTRAINT sessions_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.suite_cases
-    ADD CONSTRAINT suite_cases_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.test_cases(id) ON DELETE CASCADE;
+ALTER TABLE ONLY suite_cases
+    ADD CONSTRAINT suite_cases_case_id_fkey FOREIGN KEY (case_id) REFERENCES test_cases(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.suite_cases
-    ADD CONSTRAINT suite_cases_suite_id_fkey FOREIGN KEY (suite_id) REFERENCES public.test_suites(id) ON DELETE CASCADE;
+ALTER TABLE ONLY suite_cases
+    ADD CONSTRAINT suite_cases_suite_id_fkey FOREIGN KEY (suite_id) REFERENCES test_suites(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.team_members
-    ADD CONSTRAINT team_members_team_id_fkey FOREIGN KEY (team_id) REFERENCES public.teams(id) ON DELETE CASCADE;
+ALTER TABLE ONLY team_members
+    ADD CONSTRAINT team_members_team_id_fkey FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.team_members
-    ADD CONSTRAINT team_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY team_members
+    ADD CONSTRAINT team_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.test_case_folders
-    ADD CONSTRAINT test_case_folders_parent_folder_id_fkey FOREIGN KEY (parent_folder_id) REFERENCES public.test_case_folders(id);
+ALTER TABLE ONLY test_case_folders
+    ADD CONSTRAINT test_case_folders_parent_folder_id_fkey FOREIGN KEY (parent_folder_id) REFERENCES test_case_folders(id);
 
-ALTER TABLE ONLY public.test_case_folders
-    ADD CONSTRAINT test_case_folders_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY test_case_folders
+    ADD CONSTRAINT test_case_folders_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.test_case_versions
-    ADD CONSTRAINT test_case_versions_case_id_fkey FOREIGN KEY (case_id) REFERENCES public.test_cases(id) ON DELETE CASCADE;
+ALTER TABLE ONLY test_case_versions
+    ADD CONSTRAINT test_case_versions_case_id_fkey FOREIGN KEY (case_id) REFERENCES test_cases(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.test_cases
-    ADD CONSTRAINT test_cases_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES public.test_case_folders(id);
+ALTER TABLE ONLY test_cases
+    ADD CONSTRAINT test_cases_folder_id_fkey FOREIGN KEY (folder_id) REFERENCES test_case_folders(id);
 
-ALTER TABLE ONLY public.test_cases
-    ADD CONSTRAINT test_cases_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY test_cases
+    ADD CONSTRAINT test_cases_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.test_run_items
-    ADD CONSTRAINT test_run_items_assignee_team_id_fkey FOREIGN KEY (assignee_team_id) REFERENCES public.teams(id) ON DELETE SET NULL;
+ALTER TABLE ONLY test_run_items
+    ADD CONSTRAINT test_run_items_assignee_team_id_fkey FOREIGN KEY (assignee_team_id) REFERENCES teams(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.test_run_items
-    ADD CONSTRAINT test_run_items_assignee_user_id_fkey FOREIGN KEY (assignee_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+ALTER TABLE ONLY test_run_items
+    ADD CONSTRAINT test_run_items_assignee_user_id_fkey FOREIGN KEY (assignee_user_id) REFERENCES users(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.test_run_items
-    ADD CONSTRAINT test_run_items_case_id_case_version_fkey FOREIGN KEY (case_id, case_version) REFERENCES public.test_case_versions(case_id, version);
+ALTER TABLE ONLY test_run_items
+    ADD CONSTRAINT test_run_items_case_id_case_version_fkey FOREIGN KEY (case_id, case_version) REFERENCES test_case_versions(case_id, version);
 
-ALTER TABLE ONLY public.test_run_items
-    ADD CONSTRAINT test_run_items_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.test_runs(id) ON DELETE CASCADE;
+ALTER TABLE ONLY test_run_items
+    ADD CONSTRAINT test_run_items_run_id_fkey FOREIGN KEY (run_id) REFERENCES test_runs(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.test_run_results
-    ADD CONSTRAINT test_run_results_run_item_id_fkey FOREIGN KEY (run_item_id) REFERENCES public.test_run_items(id) ON DELETE CASCADE;
+ALTER TABLE ONLY test_run_results
+    ADD CONSTRAINT test_run_results_run_item_id_fkey FOREIGN KEY (run_item_id) REFERENCES test_run_items(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.test_runs
-    ADD CONSTRAINT test_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY test_runs
+    ADD CONSTRAINT test_runs_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.test_runs
-    ADD CONSTRAINT test_runs_suite_id_fkey FOREIGN KEY (suite_id) REFERENCES public.test_suites(id) ON DELETE SET NULL;
+ALTER TABLE ONLY test_runs
+    ADD CONSTRAINT test_runs_suite_id_fkey FOREIGN KEY (suite_id) REFERENCES test_suites(id) ON DELETE SET NULL;
 
-ALTER TABLE ONLY public.test_suites
-    ADD CONSTRAINT test_suites_project_id_fkey FOREIGN KEY (project_id) REFERENCES public.projects(id) ON DELETE CASCADE;
+ALTER TABLE ONLY test_suites
+    ADD CONSTRAINT test_suites_project_id_fkey FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE;
 
-ALTER TABLE ONLY public.user_avatars
-    ADD CONSTRAINT user_avatars_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
+ALTER TABLE ONLY user_avatars
+    ADD CONSTRAINT user_avatars_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE;
 
 -- --- Seed data ---------------------------------------------------------
--- pg_dump --schema-only excludes table data by design, so the seed
--- INSERTs the old migrations carried inline (00011, 00003, 00013) have to
--- be reproduced explicitly here — not something pg_dump could verify for
--- us. `schema_info` is NOT seeded here: its row is inserted by
--- ApplySchema itself, since the checksum it stores is only known at
--- runtime.
 
-INSERT INTO public.instance_settings (id) VALUES (true);
+INSERT INTO instance_settings (id) VALUES (true);
 
 -- Seeded defaults reproduce the four fixed roles' net permissions exactly
 -- (design.md D11/D2 of add-project-rbac / add-scoped-api-tokens) — an
 -- instance that never opens the Roles admin page sees identical behavior
 -- to before those flags existed.
-INSERT INTO public.roles (
+INSERT INTO roles (
     name, rank, can_read, can_case_create, can_case_edit, can_case_delete,
     can_section_create, can_section_delete, can_suite_create,
     can_suite_edit_membership, can_run_create, can_run_record_result, can_manage_project,
@@ -562,3 +546,10 @@ INSERT INTO public.roles (
     ('Tester',        1, true, false, false, false, false, false, false, false, true,  true,  false, false, false),
     ('Contributor',   2, true, true,  true,  false, true,  false, true,  true,  true,  true,  false, false, false),
     ('Project Admin', 3, true, true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true,  true);
+
+-- +goose Down
+-- This baseline is not meant to be rolled back — it represents everything
+-- the schema.sql-apply-once model had already applied to every live
+-- environment before this change. A real down-migration would mean
+-- dropping the entire database's schema.
+SELECT 1;

@@ -71,34 +71,32 @@ dev-web / generate / sync-web / compose-up`. See `docs/development.md`.
 
 ## Architecture constraints (from establish-architecture)
 
-- Modular monolith: one Go binary (chi, pgx, single `schema.sql` in
-  `apps/api/internal/db/`), web bundle embedded via `apps/api/internal/web`
-  (placeholder `dist/index.html` stays committed).
-- **Migration policy, pre-1.0.0 only: no incremental migration files —
-  `apps/api/internal/db/schema.sql` is the single source of truth, edited
-  directly in place (`replace-migrations-with-schema-sql`).** This is a
-  deliberate *reversal* of the incremental-migration discipline the project
-  ran before (goose, one file per change, never edit an already-applied
-  one) — that discipline existed because of a real production outage
-  (2026-07-25: an edited `00002_core_domain.sql` broke run creation/listing
-  on `testpulse.fly.dev` site-wide, since goose tracked applied migrations
-  by version number, not content, and silently skipped the edit). This
-  reversal does not repeat that failure mode: there is no version-tracked
-  history to silently skip. `ApplySchema` (`internal/db`) applies
-  `schema.sql` once, to an empty database, and records its checksum; on a
-  database that already has it applied, a checksum mismatch fails
-  `/readyz` *loudly* rather than serving traffic against a schema the
-  binary doesn't match. There are no real customer deployments yet to
-  protect the cost of incremental migrations exists for — `testpulse.fly.dev`
-  is evaluation data, not customer data. **Local dev volumes, CI's ephemeral
-  test DB, and E2E's compose volume all need a one-time wipe to pick up a
-  `schema.sql` change** (`docker compose down -v` or equivalent) — there is
-  no auto-upgrade path from an old schema to a new one, by design.
-  **This is explicitly temporary: before 1.0.0 ships with real customer
-  deployments, the project must adopt a real incremental-migration
-  discipline again** (goose or otherwise, plus an equivalent CI
-  immutability gate) — don't let this policy silently outlive its reason
-  for existing.
+- Modular monolith: one Go binary (chi, pgx, incremental migrations in
+  `apps/api/internal/db/migrations/`), web bundle embedded via
+  `apps/api/internal/web` (placeholder `dist/index.html` stays committed).
+- **Migration policy, permanent: incremental migration files, applied via
+  goose (`apps/api/internal/db/migrations/*.sql`, embedded via `go:embed`,
+  applied with `goose.UpContext`).** One file per change; once a migration
+  file has shipped, it is **never edited in place** — CI's `migrations` job
+  (`.github/workflows/ci.yml`) fails the build if an already-merged
+  migration file is edited, rather than relying on the policy as prose.
+  This exists because of a real production outage (2026-07-25: an edited
+  `00002_core_domain.sql` broke run creation/listing on
+  `testpulse.fly.dev` site-wide, since goose tracks applied migrations by
+  version number, not content, and silently skipped the edit) — the CI
+  gate is what actually closes that failure mode, not just the stated
+  policy. The project briefly reversed this (`replace-migrations-with-
+  schema-sql`, 2026-08-13: a single `schema.sql` applied once to an empty
+  database, checksum-verified thereafter) to avoid incremental-migration
+  overhead while there were no real customer deployments to protect — but
+  every schema edit under that model required a manual wipe-and-redeploy
+  of any environment with existing data (local dev volumes, CI's ephemeral
+  test DB, the E2E compose volume, `testpulse.fly.dev`), which turned out
+  costlier than the discipline it replaced (`reinstate-incremental-
+  migrations`, 2026-08-16, moved up from its originally planned "before
+  1.0.0" trigger). `TESTPULSE_ALLOW_MISSING_MIGRATIONS` is a deliberate,
+  off-by-default recovery escape hatch for a migration-history-gap
+  incident (2026-08-03) — see `internal/db.MigrateWithOptions`.
 - Contract-first: edit `packages/shared/openapi.yaml` together with Go
   handlers, then `make generate`; CI fails on drift.
 - Config only via `TESTPULSE_*` env vars; required values fail fast by name.

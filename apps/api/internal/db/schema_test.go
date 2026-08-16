@@ -37,8 +37,8 @@ func rootFolder(t *testing.T, pool *pgxpool.Pool, projectID string) string {
 func TestCoreDomainTablesExist(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 
 	for _, table := range domainTables {
@@ -59,8 +59,8 @@ func TestCoreDomainTablesExist(t *testing.T) {
 func TestRunItemStatusConstraint(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -112,8 +112,8 @@ func TestRunItemStatusConstraint(t *testing.T) {
 func TestResultVerdictConstraint(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -152,8 +152,8 @@ func TestResultVerdictConstraint(t *testing.T) {
 func TestResultActorKindConstraint(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -213,8 +213,8 @@ func TestResultActorKindConstraint(t *testing.T) {
 func TestProjectCreationCreatesRootFolder(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -246,8 +246,8 @@ func TestProjectCreationCreatesRootFolder(t *testing.T) {
 func TestFolderSoftDeleteColumnAndFilteredIndexes(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -294,8 +294,8 @@ func TestFolderSoftDeleteColumnAndFilteredIndexes(t *testing.T) {
 func TestCaseFolderIsMandatoryAndNested(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 

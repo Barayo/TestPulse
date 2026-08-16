@@ -26,6 +26,13 @@
 //	                        legitimate logins in quick succession (e.g. the
 //	                        E2E suite) should raise these rather than defeat
 //	                        the limiter globally.
+//	TESTPULSE_ALLOW_MISSING_MIGRATIONS
+//	                        (default "false") recovery escape hatch — see
+//	                        internal/db.MigrateWithOptions. Only set this
+//	                        temporarily, to unblock a startup after a
+//	                        migration-history gap; leave it off otherwise,
+//	                        since it's the check that catches that gap in
+//	                        the first place.
 package config
 
 import (
@@ -47,6 +54,7 @@ type Config struct {
 	PublicURL               string
 	LoginRateLimitPerMinute float64
 	LoginRateLimitBurst     int
+	AllowMissingMigrations  bool
 }
 
 // PasswordResetEnabled reports whether enough is configured to send a
@@ -62,17 +70,18 @@ func (c Config) PasswordResetEnabled() bool {
 // has no default.
 func Load(getenv func(string) string) (Config, error) {
 	cfg := Config{
-		DatabaseURL:     getenv("TESTPULSE_DATABASE_URL"),
-		Addr:            withDefault(getenv("TESTPULSE_ADDR"), ":8080"),
-		LogLevel:        withDefault(getenv("TESTPULSE_LOG_LEVEL"), "info"),
-		AdminEmail:      getenv("TESTPULSE_ADMIN_EMAIL"),
-		AdminPassword:   getenv("TESTPULSE_ADMIN_PASSWORD"),
-		SMTPHost:        getenv("TESTPULSE_SMTP_HOST"),
-		SMTPPort:        getenv("TESTPULSE_SMTP_PORT"),
-		SMTPUsername:    getenv("TESTPULSE_SMTP_USERNAME"),
-		SMTPPassword:    getenv("TESTPULSE_SMTP_PASSWORD"),
-		SMTPFromAddress: getenv("TESTPULSE_SMTP_FROM_ADDRESS"),
-		PublicURL:       getenv("TESTPULSE_PUBLIC_URL"),
+		DatabaseURL:            getenv("TESTPULSE_DATABASE_URL"),
+		Addr:                   withDefault(getenv("TESTPULSE_ADDR"), ":8080"),
+		LogLevel:               withDefault(getenv("TESTPULSE_LOG_LEVEL"), "info"),
+		AdminEmail:             getenv("TESTPULSE_ADMIN_EMAIL"),
+		AdminPassword:          getenv("TESTPULSE_ADMIN_PASSWORD"),
+		SMTPHost:               getenv("TESTPULSE_SMTP_HOST"),
+		SMTPPort:               getenv("TESTPULSE_SMTP_PORT"),
+		SMTPUsername:           getenv("TESTPULSE_SMTP_USERNAME"),
+		SMTPPassword:           getenv("TESTPULSE_SMTP_PASSWORD"),
+		SMTPFromAddress:        getenv("TESTPULSE_SMTP_FROM_ADDRESS"),
+		PublicURL:              getenv("TESTPULSE_PUBLIC_URL"),
+		AllowMissingMigrations: getenv("TESTPULSE_ALLOW_MISSING_MIGRATIONS") == "true",
 	}
 
 	if cfg.DatabaseURL == "" {

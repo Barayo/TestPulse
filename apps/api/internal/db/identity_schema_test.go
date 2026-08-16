@@ -17,8 +17,8 @@ var identityTables = []string{
 func TestIdentityTablesExist(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 
 	for _, table := range identityTables {
@@ -39,8 +39,8 @@ func TestIdentityTablesExist(t *testing.T) {
 func TestUserIsTenantAdminDefaultsFalse(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -62,8 +62,8 @@ func TestUserIsTenantAdminDefaultsFalse(t *testing.T) {
 func TestApiTokenHashUniqueAndAuditActorKindConstraint(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 
@@ -100,8 +100,8 @@ func TestApiTokenHashUniqueAndAuditActorKindConstraint(t *testing.T) {
 func TestAuditEntrySurvivesUserDeletion(t *testing.T) {
 	pool := testPool(t)
 	resetSchema(t, pool)
-	if err := ApplySchema(context.Background(), pool); err != nil {
-		t.Fatalf("ApplySchema: %v", err)
+	if err := Migrate(context.Background(), pool); err != nil {
+		t.Fatalf("Migrate: %v", err)
 	}
 	ctx := context.Background()
 

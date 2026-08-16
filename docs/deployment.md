@@ -13,18 +13,20 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_ADMIN_EMAIL`, `TESTPULSE_ADMIN_PASSWORD` | no | — | Seed one Tenant Admin on first startup, only if the `users` table is empty; ignored on any later startup once users exist |
 | `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`, `TESTPULSE_LOGIN_RATE_LIMIT_BURST` | no | `5`, `5` | Login attempts allowed per client IP (backlog #113) — sustained rate and burst size. The defaults are a real brute-force mitigation; raise them only for a same-process environment that legitimately logs in often in quick succession (e.g. an E2E suite), never to relax production |
 | `TESTPULSE_SMTP_HOST`, `TESTPULSE_SMTP_PORT`, `TESTPULSE_SMTP_FROM_ADDRESS`, `TESTPULSE_PUBLIC_URL` | no | — | Enable self-service password recovery (add-forgot-password) — all four required together, plus optionally `TESTPULSE_SMTP_USERNAME`/`_PASSWORD` (may be left blank for an unauthenticated relay, e.g. Mailpit). `TESTPULSE_PUBLIC_URL` builds the absolute link in the reset email (e.g. `https://testpulse.example.com`). Reported as `passwordResetEnabled` on `GET /api/v1/meta`; the login page's "Forgot password?" link only renders when true |
+| `TESTPULSE_ALLOW_MISSING_MIGRATIONS` | no | `false` | Recovery escape hatch for a migration-history gap — see [Database](database.md). Only set temporarily to unblock a startup after that specific failure; leave off otherwise |
 
 The process exits immediately with an error naming the variable if a required
-value is missing. The schema (`apps/api/internal/db/schema.sql`, pre-1.0.0 —
-see [Database](database.md)) applies automatically to an empty database at
-startup; a database that already has it applied is left alone.
+value is missing. Pending migrations (`apps/api/internal/db/migrations/` —
+see [Database](database.md)) apply automatically at startup, in order;
+already-applied migrations are skipped, so a restart or rolling deploy is
+always safe.
 
 ## Health endpoints
 
 | Endpoint | Meaning | Use for |
 |---|---|---|
 | `GET /healthz` | Process is alive; never depends on the database | Kubernetes liveness probe |
-| `GET /readyz` | Database reachable **and** applied schema matches this binary's `schema.sql` (503 otherwise) | Kubernetes readiness probe, load balancer checks |
+| `GET /readyz` | Database reachable **and** at the latest applied migration (503 otherwise) | Kubernetes readiness probe, load balancer checks |
 
 ## Container images
 

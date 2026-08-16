@@ -19,7 +19,7 @@ the root because infrastructure expects them there.
 | Method | Path | Description |
 |---|---|---|
 | GET | `/healthz` | Liveness: process health only; `200` even when the database is down |
-| GET | `/readyz` | Readiness: `200` when the database is reachable and the applied schema matches this binary's `schema.sql`, `503 {"status":"unavailable","reason":"..."}` otherwise |
+| GET | `/readyz` | Readiness: `200` when the database is reachable and at the latest applied migration, `503 {"status":"unavailable","reason":"..."}` otherwise |
 | GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` (see below) and `passwordResetEnabled` — whether self-service password recovery is available (SMTP configured) |
 | GET | `/api/v1/instance-settings` | Read instance-wide settings (`publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`) — Tenant Admin only |
 | PATCH | `/api/v1/instance-settings` | Update instance-wide settings — `publicProjectsEnabled`, `runRetentionDays`, and/or `autoArchiveInactiveDays` (`add-data-retention` — days of run/project inactivity before auto-deletion/auto-archiving respectively, `0` meaning each policy is off; any subset of the three fields may be set together) — Tenant Admin only |

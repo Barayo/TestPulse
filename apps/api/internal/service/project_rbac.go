@@ -99,8 +99,8 @@ func (s *Service) RoleDeletionPreview(ctx context.Context, actor domain.Actor, r
 	return domain.RoleDeletionPreview{DirectUserCount: directUsers, TeamCount: teams, ProjectCount: projects}, nil
 }
 
-// defaultRoles mirrors the seed data in schema.sql exactly — keep both in
-// sync. Used by ResetRolesToDefaults below.
+// defaultRoles mirrors the seed data in the baseline migration exactly —
+// keep both in sync. Used by ResetRolesToDefaults below.
 var defaultRoles = []domain.Role{
 	{Name: "Tester", Rank: 1, CanRead: true, CanRunCreate: true, CanRunRecordResult: true},
 	{
