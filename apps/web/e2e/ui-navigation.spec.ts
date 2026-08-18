@@ -273,6 +273,24 @@ test.describe('Requirement: Library with two-pane navigation', () => {
     await expect(content(page).getByText('Transfers')).toBeVisible()
   })
 
+  test('Scenario: Resized tree width persists across reloads', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-87' })
+    await createProject(page, 'Resize Persist Project')
+    await openFolderExplorer(page)
+    const tree = page.getByRole('navigation', { name: 'Section tree' })
+    const handle = page.getByRole('separator', { name: /resize section tree/i })
+    const before = await tree.evaluate((el) => el.getBoundingClientRect().width)
+
+    await handle.focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    const widened = before + 32
+    await expect(tree).toHaveJSProperty('offsetWidth', widened)
+
+    await page.reload()
+    await expect(page.getByRole('navigation', { name: 'Section tree' })).toHaveJSProperty('offsetWidth', widened)
+  })
+
   test('Scenario: Breadcrumbs cover upward navigation on mobile', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-43' })
     await createProject(page, 'Mobile Breadcrumb Nav Project')
@@ -378,6 +396,11 @@ test.describe('Requirement: Library with two-pane navigation', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^pass$/i }).click()
+    // recordVerdict (RunItemDetailPage.tsx) keeps the verdict buttons
+    // disabled until the POST and its follow-up refetches finish — wait for
+    // that real completion signal before the hard page.goto below, which
+    // otherwise races (and under load, can cancel) the in-flight write.
+    await expect(page.getByRole('button', { name: /^pass$/i })).toBeEnabled()
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await page.getByLabel(/^name$/i).fill('Run fail')
@@ -388,6 +411,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
     await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
     await page.getByLabel(/record on behalf of/i).fill('ana')
     await page.getByRole('button', { name: /^failed$/i }).click()
+    await expect(page.getByRole('button', { name: /^failed$/i })).toBeEnabled()
 
     await page.goto(`/projects/${projectId}/library`)
     const row = content(page).getByText('Login works').locator('xpath=ancestor::li')
@@ -842,6 +866,27 @@ test.describe('Requirement: Run creation', () => {
 })
 
 test.describe('Requirement: Suites index and detail page', () => {
+  test('Scenario: Resizing the case picker\'s section tree', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-88' })
+    await createSuiteWithOneCase(page, 'Suite Rail Resize Project', 'Regression', 'Checkout works')
+
+    const rail = page.getByRole('tree', { name: 'Sections' }).locator('..')
+    const handle = page.getByRole('separator', { name: /resize section tree/i })
+    const before = await rail.evaluate((el) => el.getBoundingClientRect().width)
+
+    await handle.focus()
+    await page.keyboard.press('ArrowRight')
+    await page.keyboard.press('ArrowRight')
+    const widened = before + 32
+    await expect(rail).toHaveJSProperty('offsetWidth', widened)
+
+    await page.reload()
+    await expect(page.getByRole('tree', { name: 'Sections' }).locator('..')).toHaveJSProperty('offsetWidth', widened)
+
+    await page.getByRole('button', { name: /^hide$/i }).click()
+    await expect(page.getByRole('separator', { name: /resize section tree/i })).not.toBeVisible()
+  })
+
   test('Scenario: Running a suite from its detail page', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-64' })
     await createSuiteWithOneCase(page, 'Suite Quick Run Project', 'Regression', 'Checkout works')

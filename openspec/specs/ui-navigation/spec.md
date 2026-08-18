@@ -161,21 +161,25 @@ in the content list), or via a "Move to…" action that opens a folder picker �
 the same underlying move. On viewports narrower than 768px, the section tree SHALL NOT be
 shown alongside the content list; the content list SHALL render at full width, upward
 navigation SHALL be available via the breadcrumb trail, and a "Browse sections" action SHALL
-open the same folder-picker used by "Move to…" for navigating to any section directly. Every
-section row, in the tree and in the content list, SHALL show its direct (non-recursive) case
-count without requiring the section to be opened, and a critical-priority indicator when at
-least one of its direct cases is `critical` priority. The content list's section rows SHALL
-additionally show an automation-coverage meter (the fraction of direct cases marked
-automated, or an explicit "empty" state for a section with no direct cases) — a single-tone
-indicator, not a pass/fail health band, since automation coverage is not an execution-health
-signal. Every case row SHALL show its priority, platform, test type, and automated/manual
-status as compact badges without requiring the case to be opened, with the priority badge
-tinted by severity (low/medium/high/critical, low→high reusing the app's existing neutral/
-progress/risk status bands, critical reusing the same destructive tint as the section row's
-critical-priority indicator) rather than flat/uncolored, plus a "Stale" indicator in place of
-its relative last-updated time once the case has gone unedited for 90 or more days, and a
-distinct flaky indicator when the case's current version is currently flaky (per the
-`flaky-detection` capability), shown alongside — not instead of — its other badges.
+open the same folder-picker used by "Move to…" for navigating to any section directly. On
+viewports 768px and wider, the section tree's width SHALL be resizable by dragging a divider
+between it and the content list, or via the keyboard when the divider has focus, clamped
+between 200px and 480px and defaulting to 256px; the chosen width SHALL persist per-device
+across reloads and navigation. Every section row, in the tree and in the content list, SHALL
+show its direct (non-recursive) case count without requiring the section to be opened, and a
+critical-priority indicator when at least one of its direct cases is `critical` priority. The
+content list's section rows SHALL additionally show an automation-coverage meter (the
+fraction of direct cases marked automated, or an explicit "empty" state for a section with no
+direct cases) — a single-tone indicator, not a pass/fail health band, since automation
+coverage is not an execution-health signal. Every case row SHALL show its priority, platform,
+test type, and automated/manual status as compact badges without requiring the case to be
+opened, with the priority badge tinted by severity (low/medium/high/critical, low→high
+reusing the app's existing neutral/progress/risk status bands, critical reusing the same
+destructive tint as the section row's critical-priority indicator) rather than flat/uncolored,
+plus a "Stale" indicator in place of its relative last-updated time once the case has gone
+unedited for 90 or more days, and a distinct flaky indicator when the case's current version
+is currently flaky (per the `flaky-detection` capability), shown alongside — not instead of —
+its other badges.
 The content list SHALL provide title search and tag/priority/platform/test-type/automated/
 flaky filtering scoped to the currently selected section by default, with an explicit toggle to
 search and filter across every section in the project; a cross-project match SHALL be
@@ -218,8 +222,20 @@ indentation) and its direct case count.
 - **THEN** the content list updates to show that section's contents
 
 #### Scenario: A truncated section name is still readable
-- **WHEN** a section's name is too long to fit the tree pane's fixed width and is visually truncated
+- **WHEN** a section's name is too long to fit the tree pane's current width and is visually truncated
 - **THEN** the full name is available on hover
+
+#### Scenario: Resizing the section tree by dragging
+- **WHEN** a user on a viewport 768px or wider drags the divider between the section tree and the content list
+- **THEN** the tree pane's width updates live, clamped between 200px and 480px
+
+#### Scenario: Resizing the section tree via keyboard
+- **WHEN** a user focuses the resize divider and presses the Left or Right arrow key
+- **THEN** the tree pane's width changes by 16px in that direction, clamped between 200px and 480px, and Home/End set it directly to the minimum or maximum
+
+#### Scenario: Resized tree width persists across reloads
+- **WHEN** a user resizes the section tree and then reloads the page or navigates away and back
+- **THEN** the tree pane renders at the same width they last set, on that device
 
 #### Scenario: Section rows show their direct case count
 - **WHEN** the Library renders a section, whether in the tree or in the content list
@@ -457,7 +473,13 @@ regardless of how many cases are visible, including the unscoped/unfiltered defa
 state. Each index card SHALL offer the same Run suite/Rename/Delete actions via a
 right-click context menu (and a visible "⋯" trigger), matching the context-menu
 pattern already used by folder rows, case rows, and run item rows elsewhere in the
-app, without requiring navigation into the suite's own detail page first.
+app, without requiring navigation into the suite's own detail page first. When the
+case list's section tree ("Sections" rail) is expanded (not collapsed via its own
+"Hide"/"Show sections" toggle), its width SHALL be resizable by dragging a divider
+between it and the case list, or via the keyboard when the divider has focus, clamped
+between 200px and 480px and defaulting to 224px; the chosen width SHALL persist
+per-device across reloads and navigation, independently of the Library section tree's
+own width preference.
 
 #### Scenario: Suite index card shows health at a glance
 - **WHEN** a user views the suites index and a suite has at least one run
@@ -523,6 +545,13 @@ app, without requiring navigation into the suite's own detail page first.
 - **WHEN** a user renames, deletes, or runs a suite from an index card's context menu
 - **THEN** the effect (name change, removal, run creation) is identical to performing the same action from the suite's own detail page
 
+#### Scenario: Resizing the case picker's section tree
+- **WHEN** a user drags the divider between the case picker's expanded "Sections" rail and the case list, or focuses the divider and presses Left/Right/Home/End
+- **THEN** the rail's width updates live, clamped between 200px and 480px, and persists per-device across reloads
+
+#### Scenario: No resize handle while the section rail is collapsed
+- **WHEN** a user collapses the case picker's "Sections" rail via its "Hide" toggle
+- **THEN** no resize divider is shown, since there is nothing to resize while the rail itself isn't rendered
 ### Requirement: Run creation
 The Runs page SHALL show the project's runs as the primary content, grouped into two
 sections — Open, then Closed — each ordered newest-first, with a "+ New run" button

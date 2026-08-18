@@ -22,6 +22,22 @@ function renderPicker(overrides: Partial<Parameters<typeof CasePicker>[0]> = {})
   return { onToggle }
 }
 
+describe('CasePicker resizable Sections rail (add-resizable-library-tree)', () => {
+  it('renders the rail at a width-driven inline style, and a resize handle while expanded', () => {
+    renderPicker()
+    const rail = screen.getByRole('tree', { name: 'Sections' }).parentElement as HTMLElement
+    expect(rail).toHaveStyle({ width: '224px' })
+    expect(screen.getByRole('separator', { name: /resize section tree/i })).toBeInTheDocument()
+  })
+
+  it('hides the resize handle once the rail is collapsed', async () => {
+    renderPicker()
+    await userEvent.click(screen.getByRole('button', { name: /^hide$/i }))
+    expect(screen.queryByRole('separator', { name: /resize section tree/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('tree', { name: 'Sections' })).not.toBeInTheDocument()
+  })
+})
+
 describe('CasePicker', () => {
   it('renders one row per case, unchecked by default', () => {
     renderPicker()

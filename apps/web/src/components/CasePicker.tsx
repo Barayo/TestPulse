@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
 import { PRIORITIES, type Priority } from '@/components/ClassificationEditor'
 import { ClassificationPills, distinctValues, tagPills } from '@/components/Pills'
+import { ResizeHandle } from '@/components/ResizeHandle'
+import { useResizableWidth } from '@/lib/useResizableWidth'
 
 export type CasePickerFolder = { id: string; name: string; parentFolderId?: string }
 
@@ -180,6 +182,7 @@ export function CasePicker({
   const [scope, setScope] = useState<string | null>(null)
   const [selectedOnly, setSelectedOnly] = useState(false)
   const [railCollapsed, setRailCollapsed] = useState(false)
+  const railWidth = useResizableWidth({ storageKey: 'testpulse.casePickerRailWidth', defaultWidth: 224, min: 200, max: 480 })
   const [scrollTop, setScrollTop] = useState(0)
   const viewportRef = useRef<HTMLDivElement>(null)
 
@@ -342,38 +345,47 @@ export function CasePicker({
 
       <div className="flex overflow-hidden rounded-md border">
         {!railCollapsed && (
-          <div className="w-56 shrink-0 border-r">
-            <div className="flex items-center justify-between px-2 py-1.5">
-              <span className="tp-label">Sections</span>
-              <button type="button" className="text-xs text-primary" onClick={() => setRailCollapsed(true)}>
-                Hide
-              </button>
-            </div>
-            <div role="tree" aria-label="Sections" className="max-h-96 overflow-y-auto px-1 pb-2">
-              <div
-                role="treeitem"
-                aria-selected={scope === null}
-                aria-label={`All sections (${cases.length} ${cases.length === 1 ? 'case' : 'cases'})`}
-                tabIndex={0}
-                className={`flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-sm font-medium ${scope === null ? 'bg-accent text-primary' : 'hover:bg-accent'}`}
-                onClick={clearScope}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    clearScope()
-                  }
-                }}
-              >
-                <span aria-hidden="true">All sections</span>
-                <span className="text-xs text-muted-foreground" aria-hidden="true">
-                  {cases.length}
-                </span>
+          <>
+            <div className="shrink-0 border-r" style={{ width: railWidth.width }}>
+              <div className="flex items-center justify-between px-2 py-1.5">
+                <span className="tp-label">Sections</span>
+                <button type="button" className="text-xs text-primary" onClick={() => setRailCollapsed(true)}>
+                  Hide
+                </button>
               </div>
-              {tree.topLevelIds.map((id) => (
-                <TreeNode key={id} folderId={id} depth={0} tree={tree} cases={cases} scope={scope} onSelectScope={selectScope} />
-              ))}
+              <div role="tree" aria-label="Sections" className="max-h-96 overflow-y-auto px-1 pb-2">
+                <div
+                  role="treeitem"
+                  aria-selected={scope === null}
+                  aria-label={`All sections (${cases.length} ${cases.length === 1 ? 'case' : 'cases'})`}
+                  tabIndex={0}
+                  className={`flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-sm font-medium ${scope === null ? 'bg-accent text-primary' : 'hover:bg-accent'}`}
+                  onClick={clearScope}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      clearScope()
+                    }
+                  }}
+                >
+                  <span aria-hidden="true">All sections</span>
+                  <span className="text-xs text-muted-foreground" aria-hidden="true">
+                    {cases.length}
+                  </span>
+                </div>
+                {tree.topLevelIds.map((id) => (
+                  <TreeNode key={id} folderId={id} depth={0} tree={tree} cases={cases} scope={scope} onSelectScope={selectScope} />
+                ))}
+              </div>
             </div>
-          </div>
+            <ResizeHandle
+              width={railWidth.width}
+              min={200}
+              max={480}
+              onResize={railWidth.setWidth}
+              onKeyDown={railWidth.onKeyDown}
+            />
+          </>
         )}
         {railCollapsed && (
           <button

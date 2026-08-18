@@ -144,6 +144,7 @@ function mockViewport(matches: boolean) {
 
 beforeEach(() => {
   vi.resetAllMocks()
+  window.localStorage.clear()
   // useMediaQuery('(min-width: 768px)') defaults to matches:false (the
   // shared jsdom matchMedia stub in src/test/setup.ts), which reads as
   // "mobile" for a min-width query — the opposite of useIsMobile's
@@ -491,6 +492,52 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       await screen.findByRole('list', { name: 'Section contents' })
       expect(screen.queryByRole('button', { name: /browse sections/i })).not.toBeInTheDocument()
+    })
+  })
+
+  describe('resizable section tree (add-resizable-library-tree)', () => {
+    it('renders a resize handle only at ≥768px', async () => {
+      mockViewport(true)
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.getByRole('separator', { name: /resize section tree/i })).toBeInTheDocument()
+    })
+
+    it('does not render a resize handle below 768px', async () => {
+      mockViewport(false)
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByRole('separator', { name: /resize section tree/i })).not.toBeInTheDocument()
+    })
+
+    it('widens the tree panel when the resize handle is dragged', async () => {
+      mockViewport(true)
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      const handle = screen.getByRole('separator', { name: /resize section tree/i })
+      const tree = screen.getByRole('navigation', { name: 'Section tree' })
+      expect(tree).toHaveStyle({ width: '256px' })
+
+      fireEvent.pointerDown(handle, { clientX: 100 })
+      fireEvent.pointerMove(window, { clientX: 150 })
+      fireEvent.pointerUp(window, { clientX: 150 })
+
+      expect(tree).toHaveStyle({ width: '306px' })
+    })
+
+    it('resizes the tree panel via the keyboard when the handle has focus', async () => {
+      mockViewport(true)
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      const handle = screen.getByRole('separator', { name: /resize section tree/i })
+      const tree = screen.getByRole('navigation', { name: 'Section tree' })
+
+      fireEvent.keyDown(handle, { key: 'ArrowRight' })
+      expect(tree).toHaveStyle({ width: '272px' })
     })
   })
 

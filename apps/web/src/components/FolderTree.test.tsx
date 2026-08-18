@@ -28,6 +28,22 @@ describe('FolderTree', () => {
     expect(screen.queryByText('Nacionales')).not.toBeInTheDocument()
   })
 
+  it('renders at the given width instead of a fixed size (add-resizable-library-tree)', () => {
+    render(
+      <FolderTree
+        folders={folders}
+        rootId="root"
+        selectedId="transferencias"
+        expanded={new Set()}
+        onSelect={vi.fn()}
+        onToggle={vi.fn()}
+        onNewSubfolder={vi.fn()}
+        width={320}
+      />,
+    )
+    expect(screen.getByRole('navigation', { name: 'Section tree' })).toHaveStyle({ width: '320px' })
+  })
+
   it('shows a folder’s children once it is expanded', () => {
     render(
       <FolderTree

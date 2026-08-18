@@ -31,6 +31,10 @@ type Props = {
   // defaulting to shown — FolderExplorerPage (the only real caller)
   // always passes it explicitly either way.
   canCreate?: boolean
+  // Fixed at 256px until add-resizable-library-tree; now controlled by the
+  // caller (FolderExplorerPage's useResizableWidth) so a drag/keyboard
+  // resize can adjust it live.
+  width?: number
 }
 
 // Shared with FolderExplorerPage's case rows and its inline subsection
@@ -221,10 +225,11 @@ export function FolderTree({
   onDropCase,
   folderStats,
   canCreate = true,
+  width = 256,
 }: Props) {
   const topLevel = folders.filter((f) => f.parentFolderId === rootId)
   return (
-    <nav aria-label="Section tree" className="w-64 shrink-0 border-r py-2">
+    <nav aria-label="Section tree" className="relative shrink-0 border-r py-2" style={{ width }}>
       {topLevel.map((folder) => (
         <TreeNode
           key={folder.id}

@@ -5,6 +5,8 @@ import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
+import { ResizeHandle } from '@/components/ResizeHandle'
+import { useResizableWidth } from '@/lib/useResizableWidth'
 import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
@@ -264,6 +266,8 @@ export default function FolderExplorerPage() {
   const [filters, setFilters] = useState({ tag: '', priority: '', platform: '', testType: '', automated: '', flaky: '' })
   const [searchEntireLibrary, setSearchEntireLibrary] = useState(false)
 
+  const treeWidth = useResizableWidth({ storageKey: 'testpulse.libraryTreeWidth', defaultWidth: 256, min: 200, max: 480 })
+
   const permissions = useProjectPermissions(projectKey)
   const { user, loading: authLoading } = useAuth()
   const access = useProjectReadAccess(projectKey, user, authLoading)
@@ -476,42 +480,52 @@ export default function FolderExplorerPage() {
     <div className="space-y-4">
       <Breadcrumbs segments={breadcrumbSegments} />
 
-      <div className="flex gap-4">
+      <div className="flex">
         {isDesktop && (
-          <FolderTree
-            folders={folders.map((f) => ({ id: f.id, name: f.name, parentFolderId: f.parentFolderId }))}
-            rootId={root.id}
-            selectedId={selectedFolderId}
-            expanded={expanded}
-            folderStats={folderStats}
-            onSelect={(id) => navigate(`/projects/${projectKey}/library/${id}`)}
-            onToggle={(id) =>
-              setExpanded((prev) => {
-                const next = new Set(prev)
-                if (next.has(id)) next.delete(id)
-                else next.add(id)
-                return next
-              })
-            }
-            onNewSubfolder={(parentId) => {
-              setExpanded((prev) => new Set(prev).add(parentId))
-              setTreeCreatingIn(parentId)
-              setNewFolderName('')
-            }}
-            creatingIn={treeCreatingIn}
-            newFolderValue={newFolderName}
-            onNewFolderValueChange={setNewFolderName}
-            onConfirmNewFolder={() => {
-              if (treeCreatingIn) void createFolder(treeCreatingIn, newFolderName)
-              setTreeCreatingIn(null)
-            }}
-            onCancelNewFolder={() => setTreeCreatingIn(null)}
-            onDropCase={(caseKey, folderId) => void moveCase(caseKey, folderId)}
-            canCreate={Boolean(permissions?.sectionCreate)}
-          />
+          <>
+            <FolderTree
+              folders={folders.map((f) => ({ id: f.id, name: f.name, parentFolderId: f.parentFolderId }))}
+              rootId={root.id}
+              selectedId={selectedFolderId}
+              expanded={expanded}
+              folderStats={folderStats}
+              onSelect={(id) => navigate(`/projects/${projectKey}/library/${id}`)}
+              onToggle={(id) =>
+                setExpanded((prev) => {
+                  const next = new Set(prev)
+                  if (next.has(id)) next.delete(id)
+                  else next.add(id)
+                  return next
+                })
+              }
+              onNewSubfolder={(parentId) => {
+                setExpanded((prev) => new Set(prev).add(parentId))
+                setTreeCreatingIn(parentId)
+                setNewFolderName('')
+              }}
+              creatingIn={treeCreatingIn}
+              newFolderValue={newFolderName}
+              onNewFolderValueChange={setNewFolderName}
+              onConfirmNewFolder={() => {
+                if (treeCreatingIn) void createFolder(treeCreatingIn, newFolderName)
+                setTreeCreatingIn(null)
+              }}
+              onCancelNewFolder={() => setTreeCreatingIn(null)}
+              onDropCase={(caseKey, folderId) => void moveCase(caseKey, folderId)}
+              canCreate={Boolean(permissions?.sectionCreate)}
+              width={treeWidth.width}
+            />
+            <ResizeHandle
+              width={treeWidth.width}
+              min={200}
+              max={480}
+              onResize={treeWidth.setWidth}
+              onKeyDown={treeWidth.onKeyDown}
+            />
+          </>
         )}
 
-        <div className="flex-1 space-y-3">
+        <div className={`min-w-0 flex-1 space-y-3 ${isDesktop ? 'pl-3' : ''}`}>
           <div className="flex items-center justify-end gap-2">
             {!isDesktop && (
               <Button
