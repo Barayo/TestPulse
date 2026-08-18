@@ -65,6 +65,22 @@ describe('ProfilePage', () => {
     expect(screen.getByRole('radio', { name: /generated default/i })).toBeInTheDocument()
   })
 
+  // User-reported: the picker grid renders preset thumbnails via a raw
+  // <img>, a second, independent rendering path from Avatar.tsx — the
+  // instance-wide retint fix (add-color-theme-customization follow-up)
+  // only touched Avatar.tsx, so every thumbnail in this grid stayed
+  // permanently Teal-tinted regardless of the active palette while the
+  // single "current selection" preview (which does use Avatar.tsx)
+  // correctly retinted, an inconsistency visible in the same screenshot.
+  it('applies the instance-wide --avatar-photo-filter token to every preset thumbnail in the picker grid', async () => {
+    mockMe()
+    renderPage()
+    await screen.findByLabelText(/display name/i)
+
+    const thumbnail = screen.getByRole('radio', { name: /ada lovelace/i }).closest('label')?.querySelector('img')
+    expect(thumbnail).toHaveStyle({ filter: 'var(--avatar-photo-filter, none)' })
+  })
+
   it('saving calls PATCH /api/v1/users/me and reflects the update', async () => {
     mockMe()
     mockPATCH.mockResolvedValue({

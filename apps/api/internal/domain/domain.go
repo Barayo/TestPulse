@@ -292,16 +292,48 @@ type InstanceSettings struct {
 	// inactivity threshold (in days) past which a non-exempt project is
 	// automatically archived by ProjectAutoArchiveWorker (design.md D9 of
 	// add-data-retention). 0 means the policy is off.
-	AutoArchiveInactiveDays int       `json:"autoArchiveInactiveDays"`
-	UpdatedAt               time.Time `json:"updatedAt"`
+	AutoArchiveInactiveDays int `json:"autoArchiveInactiveDays"`
+	// ColorTheme is one of "teal" (default), "indigo", "ocean", "forest",
+	// or "custom" (add-color-theme-customization design.md).
+	ColorTheme    string         `json:"colorTheme"`
+	CustomPalette *CustomPalette `json:"customPalette,omitempty"`
+	UpdatedAt     time.Time      `json:"updatedAt"`
 }
 
 // InstanceSettingsUpdate is a partial update to InstanceSettings — nil
-// fields are left unchanged (design.md D8/D9 of add-data-retention).
+// fields are left unchanged (design.md D8/D9 of add-data-retention;
+// ColorTheme/CustomPalette added by add-color-theme-customization).
 type InstanceSettingsUpdate struct {
 	PublicProjectsEnabled   *bool
 	RunRetentionDays        *int
 	AutoArchiveInactiveDays *int
+	ColorTheme              *string
+	CustomPalette           *CustomPalette
+}
+
+// CustomPaletteMode is the 10 admin-editable tokens for one light/dark
+// mode of a custom palette (add-color-theme-customization design.md) — the
+// exact fields that vary between presets today; every other CSS custom
+// property is derived from these by copying, matching how every shipped
+// preset is already structured.
+type CustomPaletteMode struct {
+	Background        string `json:"background"`
+	Foreground        string `json:"foreground"`
+	Card              string `json:"card"`
+	Primary           string `json:"primary"`
+	PrimaryForeground string `json:"primaryForeground"`
+	Muted             string `json:"muted"`
+	MutedForeground   string `json:"mutedForeground"`
+	Accent            string `json:"accent"`
+	Border            string `json:"border"`
+	Input             string `json:"input"`
+}
+
+// CustomPalette is a Tenant-Admin-authored palette, stored only when
+// InstanceSettings.ColorTheme is "custom" (add-color-theme-customization).
+type CustomPalette struct {
+	Light CustomPaletteMode `json:"light"`
+	Dark  CustomPaletteMode `json:"dark"`
 }
 
 type TestCase struct {

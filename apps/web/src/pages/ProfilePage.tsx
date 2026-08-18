@@ -221,10 +221,10 @@ export default function ProfilePage() {
                       onChange={() => setAvatarKey(preset.key)}
                       aria-label={preset.name}
                     />
-                    <img
-                      src={preset.image}
-                      alt={preset.name}
-                      className={`size-10 rounded-full border-2 object-cover ${
+                    <Avatar
+                      seed={preset.name}
+                      avatarKey={preset.key}
+                      className={`size-10 rounded-full border-2 ${
                         avatarKey === preset.key ? 'border-primary' : 'border-transparent'
                       }`}
                     />

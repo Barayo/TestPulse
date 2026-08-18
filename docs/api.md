@@ -20,9 +20,9 @@ the root because infrastructure expects them there.
 |---|---|---|
 | GET | `/healthz` | Liveness: process health only; `200` even when the database is down |
 | GET | `/readyz` | Readiness: `200` when the database is reachable and at the latest applied migration, `503 {"status":"unavailable","reason":"..."}` otherwise |
-| GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` (see below) and `passwordResetEnabled` — whether self-service password recovery is available (SMTP configured) |
-| GET | `/api/v1/instance-settings` | Read instance-wide settings (`publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`) — Tenant Admin only |
-| PATCH | `/api/v1/instance-settings` | Update instance-wide settings — `publicProjectsEnabled`, `runRetentionDays`, and/or `autoArchiveInactiveDays` (`add-data-retention` — days of run/project inactivity before auto-deletion/auto-archiving respectively, `0` meaning each policy is off; any subset of the three fields may be set together) — Tenant Admin only |
+| GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` (see below), `passwordResetEnabled` — whether self-service password recovery is available (SMTP configured), and `colorTheme`/`customPalette` (see below) |
+| GET | `/api/v1/instance-settings` | Read instance-wide settings (`publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`, `colorTheme`, `customPalette`) — Tenant Admin only |
+| PATCH | `/api/v1/instance-settings` | Update instance-wide settings — `publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`, `colorTheme`, and/or `customPalette` (`add-data-retention` for the first three — days of run/project inactivity before auto-deletion/auto-archiving respectively, `0` meaning each policy is off; `add-color-theme-customization` for the color theme — see below; any subset of the fields may be set together) — Tenant Admin only |
 
 Everything else under `/` serves the embedded web UI (with SPA fallback).
 
@@ -304,6 +304,19 @@ A fresh instance seeds one user as Tenant Admin from `TESTPULSE_ADMIN_EMAIL`
 users) lets the first visitor create that account themselves instead
 (`add-first-run-setup`) — `GET /api/v1/meta`'s `setupRequired` field
 reports whether this is currently open.
+
+A Tenant Admin sets the instance's color theme via `PATCH
+/api/v1/instance-settings`' `colorTheme` field — one of `teal` (default),
+`indigo`, `ocean`, `forest`, or `custom`. Setting `custom` additionally
+requires `customPalette`, a `{light, dark}` object with 10 `#RRGGBB` hex
+fields per mode (`background`, `foreground`, `card`, `primary`,
+`primaryForeground`, `muted`, `mutedForeground`, `accent`, `border`,
+`input`); every other visual token is derived from these. The active
+theme applies instance-wide — to every authenticated user and anonymous
+public-project visitor, not just the admin who set it — so `GET
+/api/v1/meta` carries `colorTheme` (and `customPalette`, when active)
+unauthenticated, the same reasoning `publicProjectsEnabled` is exposed
+there for (`add-color-theme-customization`).
 
 ## Versioning policy
 

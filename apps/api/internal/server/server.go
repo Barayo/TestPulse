@@ -94,13 +94,18 @@ func handleMeta(svc *service.Service) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
+		body := map[string]any{
 			"name":                  "TestPulse",
 			"version":               "0.0.1",
 			"publicProjectsEnabled": settings.PublicProjectsEnabled,
 			"passwordResetEnabled":  svc.PasswordResetEnabled(),
 			"setupRequired":         !hasAnyUser,
-		})
+			"colorTheme":            settings.ColorTheme,
+		}
+		if settings.ColorTheme == "custom" && settings.CustomPalette != nil {
+			body["customPalette"] = settings.CustomPalette
+		}
+		writeJSON(w, http.StatusOK, body)
 	}
 }
 

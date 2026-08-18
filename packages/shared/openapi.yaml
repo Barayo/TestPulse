@@ -2285,7 +2285,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme]
       properties:
         name:
           type: string
@@ -2318,9 +2318,51 @@ components:
             (add-first-run-setup). The frontend redirects every route to
             /setup while true; once any user exists this is permanently
             false, regardless of the env vars' state.
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+        customPalette:
+          allOf: [{ $ref: '#/components/schemas/CustomPalette' }]
+          nullable: true
+          description: >
+            Present only when colorTheme is "custom" — every visitor,
+            including anonymous ones, needs the full palette to render it
+            (add-color-theme-customization), the same reasoning that already
+            put publicProjectsEnabled here for non-admin visibility.
+    ColorTheme:
+      type: string
+      enum: [teal, indigo, ocean, forest, custom]
+      description: >
+        The instance-wide color palette (add-color-theme-customization).
+        "teal" is the unchanged default; indigo/ocean/forest are built-in
+        presets; "custom" means the Tenant-Admin-authored CustomPalette is
+        active.
+    CustomPaletteMode:
+      type: object
+      required: [background, foreground, card, primary, primaryForeground, muted, mutedForeground, accent, border, input]
+      description: >
+        The 10 admin-editable tokens for one light/dark mode of a custom
+        palette — every other CSS custom property is derived from these by
+        copying, matching how every built-in preset is already structured.
+      properties:
+        background: &hexColor { type: string, pattern: '^#[0-9A-Fa-f]{6}$', example: '#F8F7FA' }
+        foreground: *hexColor
+        card: *hexColor
+        primary: *hexColor
+        primaryForeground: *hexColor
+        muted: *hexColor
+        mutedForeground: *hexColor
+        accent: *hexColor
+        border: *hexColor
+        input: *hexColor
+    CustomPalette:
+      type: object
+      required: [light, dark]
+      properties:
+        light: { $ref: '#/components/schemas/CustomPaletteMode' }
+        dark: { $ref: '#/components/schemas/CustomPaletteMode' }
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, updatedAt]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt]
       properties:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays:
@@ -2338,6 +2380,11 @@ components:
             (in days) past which a non-exempt project is automatically
             archived. 0 (the default) means the policy is off. Archiving is
             reversible; unlike runRetentionDays, this never destroys data.
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+        customPalette:
+          allOf: [{ $ref: '#/components/schemas/CustomPalette' }]
+          nullable: true
         updatedAt: { type: string, format: date-time }
     InstanceSettingsUpdate:
       type: object
@@ -2346,6 +2393,10 @@ components:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays: { type: integer, minimum: 0 }
         autoArchiveInactiveDays: { type: integer, minimum: 0 }
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+        customPalette:
+          $ref: '#/components/schemas/CustomPalette'
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]

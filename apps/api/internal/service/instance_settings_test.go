@@ -87,6 +87,78 @@ func TestUpdateInstanceSettingsAppliesOnlyRunRetentionDays(t *testing.T) {
 	}
 }
 
+func TestUpdateInstanceSettingsRejectsUnknownColorTheme(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-theme-bad@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	theme := "sunset"
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{ColorTheme: &theme}); err == nil {
+		t.Fatal(`UpdateInstanceSettings(ColorTheme: "sunset"): want error, got nil`)
+	}
+}
+
+func TestUpdateInstanceSettingsAppliesColorTheme(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-theme-ok@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	theme := "forest"
+	got, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{ColorTheme: &theme})
+	if err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+	if got.ColorTheme != "forest" {
+		t.Errorf("ColorTheme = %q, want \"forest\"", got.ColorTheme)
+	}
+}
+
+func validCustomPalette() *domain.CustomPalette {
+	side := domain.CustomPaletteMode{
+		Background: "#F8F7FA", Foreground: "#160B2E", Card: "#FFFFFF",
+		Primary: "#4514B8", PrimaryForeground: "#FFFFFF", Muted: "#EFEDF5",
+		MutedForeground: "#605B6B", Accent: "#EFEDF5", Border: "#E0DCEC", Input: "#E0DCEC",
+	}
+	return &domain.CustomPalette{Light: side, Dark: side}
+}
+
+func TestUpdateInstanceSettingsRejectsMalformedCustomPaletteHex(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-palette-bad@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	theme := "custom"
+	palette := validCustomPalette()
+	palette.Dark.Primary = "not-a-hex-color"
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{ColorTheme: &theme, CustomPalette: palette}); err == nil {
+		t.Fatal("UpdateInstanceSettings with malformed custom palette hex: want error, got nil")
+	}
+
+	got, err := s.InstanceSettings(ctx)
+	if err != nil {
+		t.Fatalf("InstanceSettings: %v", err)
+	}
+	if got.ColorTheme == "custom" {
+		t.Error("ColorTheme = \"custom\", want unchanged — rejected update must not partially apply")
+	}
+}
+
+func TestUpdateInstanceSettingsAppliesValidCustomPalette(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-palette-ok@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	theme := "custom"
+	palette := validCustomPalette()
+	got, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{ColorTheme: &theme, CustomPalette: palette})
+	if err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+	if got.ColorTheme != "custom" || got.CustomPalette == nil || *got.CustomPalette != *palette {
+		t.Errorf("got ColorTheme=%q CustomPalette=%+v, want \"custom\" and %+v", got.ColorTheme, got.CustomPalette, palette)
+	}
+}
+
 func TestInstanceSettingsDefaultsToPublicProjectsEnabled(t *testing.T) {
 	s := testService(t)
 	got, err := s.InstanceSettings(context.Background())

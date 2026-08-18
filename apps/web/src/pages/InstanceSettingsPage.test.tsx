@@ -15,6 +15,7 @@ function mockAsTenantAdmin(
   publicProjectsEnabled = true,
   runRetentionDays = 0,
   autoArchiveInactiveDays = 0,
+  colorTheme = 'teal',
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
@@ -22,7 +23,7 @@ function mockAsTenantAdmin(
     }
     if (path === '/api/v1/instance-settings') {
       return Promise.resolve({
-        data: { publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, updatedAt: '' },
+        data: { publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt: '' },
         response: { ok: true },
       })
     }
@@ -228,6 +229,162 @@ describe('InstanceSettingsPage', () => {
           body: { autoArchiveInactiveDays: 365 },
         }),
       )
+    })
+  })
+
+  describe('Appearance', () => {
+    function appearanceSection() {
+      return within(screen.getByRole('group', { name: 'Color theme' }))
+    }
+
+    it('groups the palette picker under an "Appearance" section label with a "Color theme" card', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      await screen.findByRole('switch', { name: /public project access/i })
+      expect(screen.getByText('Appearance')).toBeInTheDocument()
+      expect(screen.getByText('Color theme')).toBeInTheDocument()
+    })
+
+    it('renders four preset swatches: Teal, Indigo, Ocean, Forest', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+      for (const name of ['Teal', 'Indigo', 'Ocean', 'Forest']) {
+        expect(appearanceSection().getByRole('button', { name })).toBeInTheDocument()
+      }
+    })
+
+    it('indicates the current selection', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'ocean')
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+      expect(appearanceSection().getByRole('button', { name: 'Ocean' })).toHaveAttribute('aria-pressed', 'true')
+      expect(appearanceSection().getByRole('button', { name: 'Teal' })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('selecting a different preset saves immediately, with no separate Save step, and updates the indicated selection', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal')
+      mockPATCH.mockResolvedValue({
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'indigo', updatedAt: '' },
+        response: { ok: true },
+      })
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Indigo' }))
+
+      await waitFor(() =>
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', {
+          body: { colorTheme: 'indigo' },
+        }),
+      )
+      expect(appearanceSection().getByRole('button', { name: 'Indigo' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    // Regression guard: selecting a preset must re-theme the admin's own
+    // page immediately (design.md: "applies instantly"), not just persist
+    // server-side for the next full load. ThemeProvider reads colorTheme
+    // from AuthProvider's context, not by fetching itself, so saving here
+    // must trigger a fresh GET /api/v1/meta to update that context — found
+    // via manual browser testing, where the swatch UI updated but
+    // data-palette/--primary on <html> never changed until a reload.
+    it('refetches /api/v1/meta after selecting a preset, so the instance palette context updates immediately', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal')
+      mockPATCH.mockResolvedValue({
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'ocean', updatedAt: '' },
+        response: { ok: true },
+      })
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+      const metaCallsBefore = mockGET.mock.calls.filter((c) => c[0] === '/api/v1/meta').length
+
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Ocean' }))
+
+      await waitFor(() => {
+        const metaCallsAfter = mockGET.mock.calls.filter((c) => c[0] === '/api/v1/meta').length
+        expect(metaCallsAfter).toBeGreaterThan(metaCallsBefore)
+      })
+    })
+
+    it('renders a fifth "Custom" swatch, revealing the editor when selected', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal')
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+      expect(screen.queryByRole('button', { name: 'Save custom palette' })).not.toBeInTheDocument()
+
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Custom' }))
+
+      expect(screen.getByRole('button', { name: 'Save custom palette' })).toBeInTheDocument()
+    })
+
+    // User-reported: clicking Custom should visually mark it as the active
+    // selection immediately — the editor being open already communicates
+    // "you're working in Custom," so the swatch itself shouldn't lag behind
+    // and require an actual save (a server round-trip) before it agrees.
+    it('marks Custom as selected as soon as it is opened, before any save, and un-marks the previous preset', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal')
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+      expect(appearanceSection().getByRole('button', { name: 'Teal' })).toHaveAttribute('aria-pressed', 'true')
+
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Custom' }))
+
+      expect(appearanceSection().getByRole('button', { name: 'Custom' })).toHaveAttribute('aria-pressed', 'true')
+      expect(appearanceSection().getByRole('button', { name: 'Teal' })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('saving a custom palette calls PATCH with colorTheme "custom" and the edited values', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal')
+      mockPATCH.mockResolvedValue({
+        data: {
+          publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'custom', updatedAt: '',
+        },
+        response: { ok: true },
+      })
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Custom' }))
+
+      await userEvent.clear(screen.getByLabelText('Primary'))
+      await userEvent.type(screen.getByLabelText('Primary'), '#123456')
+      await userEvent.click(screen.getByRole('button', { name: 'Save custom palette' }))
+
+      await waitFor(() => expect(mockPATCH).toHaveBeenCalled())
+      const call = mockPATCH.mock.calls[0]
+      expect(call[0]).toBe('/api/v1/instance-settings')
+      const options = call[1] as { body: { colorTheme: string; customPalette: { light: { primary: string } } } }
+      expect(options.body.colorTheme).toBe('custom')
+      expect(options.body.customPalette.light.primary).toBe('#123456')
+    })
+
+    // Regression guard: reported directly by manual testing — server-side
+    // state ended up genuinely corrupted (a nonsensical dark.background
+    // value matching no known preset or prior save) after opening Custom,
+    // switching to a preset, then reopening Custom. Root cause: selecting a
+    // preset never hid the editor, so it stayed mounted with stale internal
+    // draft state that a later Save could silently persist over the
+    // server's real data.
+    it('hides the custom editor when a preset is selected, and reopening Custom starts fresh from that preset', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal')
+      mockPATCH.mockResolvedValue({
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'ocean', updatedAt: '' },
+        response: { ok: true },
+      })
+      renderPage()
+      await screen.findByRole('group', { name: 'Color theme' })
+
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Custom' }))
+      await userEvent.clear(screen.getByLabelText('Primary'))
+      await userEvent.type(screen.getByLabelText('Primary'), '#123456')
+      expect(screen.getByLabelText('Primary')).toHaveValue('#123456')
+
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Ocean' }))
+      expect(screen.queryByRole('button', { name: 'Save custom palette' })).not.toBeInTheDocument()
+
+      await userEvent.click(appearanceSection().getByRole('button', { name: 'Custom' }))
+      // Fresh mount seeded from Ocean (the now-active preset), not the
+      // abandoned #123456 draft from before switching away.
+      expect(screen.getByLabelText('Primary')).toHaveValue('#1453B8')
     })
   })
 })

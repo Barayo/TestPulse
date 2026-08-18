@@ -12,6 +12,23 @@ export type AuthUser = {
   mustChangePassword?: boolean
 }
 
+// The 10 admin-editable tokens for one light/dark mode of a custom palette
+// (add-color-theme-customization) — mirrors domain.CustomPaletteMode.
+export type CustomPaletteMode = {
+  background: string
+  foreground: string
+  card: string
+  primary: string
+  primaryForeground: string
+  muted: string
+  mutedForeground: string
+  accent: string
+  border: string
+  input: string
+}
+
+export type CustomPalette = { light: CustomPaletteMode; dark: CustomPaletteMode }
+
 type LoginResult = { ok: true; user: AuthUser } | { ok: false; error: string }
 type SetupResult = { ok: true; user: AuthUser } | { ok: false; error: string; alreadySetUp?: boolean }
 
@@ -33,6 +50,24 @@ type AuthContextValue = {
   // required" until this resolves, so SetupPage must wait for it before
   // trusting a `false` value enough to redirect away from itself.
   setupRequiredLoading: boolean
+  // Re-fetches GET /api/v1/meta and updates colorTheme/customPalette
+  // (add-color-theme-customization) — called after InstanceSettingsPage
+  // saves a new palette, so ThemeProvider (which reads these from context,
+  // not by fetching itself) re-themes the admin's own view immediately,
+  // the same "applies live" guarantee every other instance setting already
+  // has. Without this, the admin wouldn't see their own change until a
+  // full page reload re-ran the mount-time meta fetch.
+  refreshColorTheme: () => Promise<void>
+  // The instance-wide color palette (add-color-theme-customization),
+  // resolved from the same GET /api/v1/meta fetch as setupRequired.
+  // Defaults to "teal" — indistinguishable from a fresh instance's real
+  // default, so no separate loading flag is needed the way
+  // setupRequiredLoading is: rendering "teal" for a moment before the real
+  // value resolves is never wrong in a way a stale setupRequired redirect
+  // would be.
+  colorTheme: string
+  // Present only when colorTheme is "custom".
+  customPalette: CustomPalette | null
   login: (email: string, password: string) => Promise<LoginResult>
   // Creates the instance's first admin account and logs it in, in one
   // request (add-first-run-setup) — updates both `user` and `setupRequired`
@@ -61,6 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // depending on it re-renders, whenever it resolves.
   const [setupRequired, setSetupRequired] = useState(false)
   const [setupRequiredLoading, setSetupRequiredLoading] = useState(true)
+  const [colorTheme, setColorTheme] = useState('teal')
+  const [customPalette, setCustomPalette] = useState<CustomPalette | null>(null)
   const [sessionExpired, setSessionExpired] = useState(false)
   const userRef = useRef<AuthUser | null>(null)
   userRef.current = user
@@ -82,9 +119,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const { data, response } = await api.GET('/api/v1/meta')
         if (cancelled) return
-        setSetupRequired(response.ok && data ? Boolean((data as { setupRequired?: boolean }).setupRequired) : false)
+        const meta = data as { setupRequired?: boolean; colorTheme?: string; customPalette?: CustomPalette } | undefined
+        setSetupRequired(response.ok && meta ? Boolean(meta.setupRequired) : false)
+        setColorTheme(response.ok && meta?.colorTheme ? meta.colorTheme : 'teal')
+        setCustomPalette(response.ok && meta?.customPalette ? meta.customPalette : null)
       } catch {
-        if (!cancelled) setSetupRequired(false)
+        if (!cancelled) {
+          setSetupRequired(false)
+          setColorTheme('teal')
+          setCustomPalette(null)
+        }
       } finally {
         if (!cancelled) setSetupRequiredLoading(false)
       }
@@ -130,6 +174,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { ok: true, user: authUser }
   }, [])
 
+  const refreshColorTheme = useCallback(async () => {
+    try {
+      const { data, response } = await api.GET('/api/v1/meta')
+      const meta = data as { colorTheme?: string; customPalette?: CustomPalette } | undefined
+      setColorTheme(response.ok && meta?.colorTheme ? meta.colorTheme : 'teal')
+      setCustomPalette(response.ok && meta?.customPalette ? meta.customPalette : null)
+    } catch {
+      setColorTheme('teal')
+      setCustomPalette(null)
+    }
+  }, [])
+
   const logout = useCallback(async () => {
     await api.POST('/api/v1/auth/logout')
     setUser(null)
@@ -145,7 +201,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, loading, sessionExpired, setupRequired, setupRequiredLoading, login, setup, logout, refreshUser }}
+      value={{
+        user,
+        loading,
+        sessionExpired,
+        setupRequired,
+        setupRequiredLoading,
+        colorTheme,
+        customPalette,
+        refreshColorTheme,
+        login,
+        setup,
+        logout,
+        refreshUser,
+      }}
     >
       {children}
     </AuthContext.Provider>

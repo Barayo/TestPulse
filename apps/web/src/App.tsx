@@ -133,39 +133,51 @@ const ACCOUNT_ONLY_ROUTES: RouteEntry[] = [
 
 export { PROJECT_CONTENT_ROUTES, ACCOUNT_ONLY_ROUTES, AllowAnonymous }
 
+// Reads colorTheme/customPalette from AuthProvider's context and passes
+// them into ThemeProvider as props (add-color-theme-customization) —
+// ThemeProvider itself stays prop-driven, not a useAuth() consumer, so it
+// remains usable/testable standalone (ThemeProvider.test.tsx) even though
+// AuthProvider is now its ancestor here.
+function ThemedApp() {
+  const { colorTheme, customPalette } = useAuth()
+  return (
+    <ThemeProvider colorTheme={colorTheme} customPalette={customPalette}>
+      <DataRevisionProvider>
+        <SessionExpiredModal />
+        <Routes>
+          <Route path="/setup" element={<SetupPage />} />
+          <Route path="/login" element={<LoginPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/public" element={<Navigate to="/" replace />} />
+          <Route path="/public/:projectKey" element={<RedirectToProject />} />
+          {/* The only two sources of a route below `/login`/`/public*` — see
+              design.md D9. A route added directly here instead of to one of
+              the two arrays above would bypass the manifest test in
+              App.test.tsx; don't do that. */}
+          {PROJECT_CONTENT_ROUTES.map(({ path, element, anonymous }) =>
+            anonymous ? (
+              <Route key={path} path={path} element={<AllowAnonymous>{element}</AllowAnonymous>} />
+            ) : (
+              <Route key={path} path={path} element={<RequireAuth>{element}</RequireAuth>} />
+            ),
+          )}
+          {ACCOUNT_ONLY_ROUTES.map(({ path, element }) => (
+            <Route key={path} path={path} element={<RequireAuth>{element}</RequireAuth>} />
+          ))}
+        </Routes>
+      </DataRevisionProvider>
+    </ThemeProvider>
+  )
+}
+
 function App() {
   return (
-    <ThemeProvider>
-      <BrowserRouter>
-        <AuthProvider>
-          <DataRevisionProvider>
-            <SessionExpiredModal />
-            <Routes>
-              <Route path="/setup" element={<SetupPage />} />
-              <Route path="/login" element={<LoginPage />} />
-              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-              <Route path="/reset-password" element={<ResetPasswordPage />} />
-              <Route path="/public" element={<Navigate to="/" replace />} />
-              <Route path="/public/:projectKey" element={<RedirectToProject />} />
-              {/* The only two sources of a route below `/login`/`/public*` — see
-                  design.md D9. A route added directly here instead of to one of
-                  the two arrays above would bypass the manifest test in
-                  App.test.tsx; don't do that. */}
-              {PROJECT_CONTENT_ROUTES.map(({ path, element, anonymous }) =>
-                anonymous ? (
-                  <Route key={path} path={path} element={<AllowAnonymous>{element}</AllowAnonymous>} />
-                ) : (
-                  <Route key={path} path={path} element={<RequireAuth>{element}</RequireAuth>} />
-                ),
-              )}
-              {ACCOUNT_ONLY_ROUTES.map(({ path, element }) => (
-                <Route key={path} path={path} element={<RequireAuth>{element}</RequireAuth>} />
-              ))}
-            </Routes>
-          </DataRevisionProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </ThemeProvider>
+    <BrowserRouter>
+      <AuthProvider>
+        <ThemedApp />
+      </AuthProvider>
+    </BrowserRouter>
   )
 }
 

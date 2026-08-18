@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 	"github.com/Barayo/TestPulse/apps/api/internal/testutil"
@@ -152,5 +153,74 @@ func TestMetaSetupRequiredReflectsInstanceState(t *testing.T) {
 	}
 	if meta["setupRequired"] != false {
 		t.Errorf("setupRequired = %v once a user exists, want false", meta["setupRequired"])
+	}
+}
+
+// TestMetaColorThemeDefaultsToTealAndCarriesCustomPaletteWhenActive covers
+// add-color-theme-customization's GET /api/v1/meta.colorTheme/customPalette
+// fields — visible to every visitor, not only Tenant Admins, since a
+// palette re-themes the app for everyone.
+func TestMetaColorThemeDefaultsToTealAndCarriesCustomPaletteWhenActive(t *testing.T) {
+	pool := testutil.Pool(t, "server_meta")
+	svc := service.New(store.New(pool))
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5)
+
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	var meta map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decoding meta response: %v", err)
+	}
+	if meta["colorTheme"] != "teal" {
+		t.Errorf("colorTheme = %v on a fresh instance, want \"teal\"", meta["colorTheme"])
+	}
+	if meta["customPalette"] != nil {
+		t.Errorf("customPalette = %v on a fresh instance, want absent/null", meta["customPalette"])
+	}
+
+	side := domain.CustomPaletteMode{
+		Background: "#F8F7FA", Foreground: "#160B2E", Card: "#FFFFFF",
+		Primary: "#4514B8", PrimaryForeground: "#FFFFFF", Muted: "#EFEDF5",
+		MutedForeground: "#605B6B", Accent: "#EFEDF5", Border: "#E0DCEC", Input: "#E0DCEC",
+	}
+	theme := "custom"
+	if _, err := svc.UpdateInstanceSettings(context.Background(), domain.InstanceSettingsUpdate{
+		ColorTheme:    &theme,
+		CustomPalette: &domain.CustomPalette{Light: side, Dark: side},
+	}); err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	meta = nil
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decoding meta response: %v", err)
+	}
+	if meta["colorTheme"] != "custom" {
+		t.Errorf("colorTheme = %v, want \"custom\"", meta["colorTheme"])
+	}
+	customPalette, _ := meta["customPalette"].(map[string]any)
+	light, _ := customPalette["light"].(map[string]any)
+	if light["primary"] != "#4514B8" {
+		t.Errorf("customPalette.light.primary = %v, want \"#4514B8\"", light["primary"])
+	}
+
+	// Switching back to a preset must stop surfacing customPalette in Meta
+	// — it's still stored (re-opening the custom editor later pre-fills
+	// from it), but Meta only needs it while colorTheme is actually
+	// "custom"; leaving it in the payload otherwise is stale/misleading.
+	tealTheme := "teal"
+	if _, err := svc.UpdateInstanceSettings(context.Background(), domain.InstanceSettingsUpdate{ColorTheme: &tealTheme}); err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	meta = nil
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decoding meta response: %v", err)
+	}
+	if _, present := meta["customPalette"]; present {
+		t.Errorf("customPalette = %v present after switching to teal, want absent", meta["customPalette"])
 	}
 }

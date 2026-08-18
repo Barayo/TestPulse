@@ -1894,6 +1894,41 @@ export interface components {
             passwordResetEnabled: boolean;
             /** @description True while the instance has zero user accounts and startup did not bootstrap one from TESTPULSE_ADMIN_EMAIL/PASSWORD (add-first-run-setup). The frontend redirects every route to /setup while true; once any user exists this is permanently false, regardless of the env vars' state. */
             setupRequired: boolean;
+            colorTheme: components["schemas"]["ColorTheme"];
+            /** @description Present only when colorTheme is "custom" — every visitor, including anonymous ones, needs the full palette to render it (add-color-theme-customization), the same reasoning that already put publicProjectsEnabled here for non-admin visibility. */
+            customPalette?: components["schemas"]["CustomPalette"] | null;
+        };
+        /**
+         * @description The instance-wide color palette (add-color-theme-customization). "teal" is the unchanged default; indigo/ocean/forest are built-in presets; "custom" means the Tenant-Admin-authored CustomPalette is active.
+         * @enum {string}
+         */
+        ColorTheme: "teal" | "indigo" | "ocean" | "forest" | "custom";
+        /** @description The 10 admin-editable tokens for one light/dark mode of a custom palette — every other CSS custom property is derived from these by copying, matching how every built-in preset is already structured. */
+        CustomPaletteMode: {
+            /** @example #F8F7FA */
+            background: string;
+            /** @example #F8F7FA */
+            foreground: string;
+            /** @example #F8F7FA */
+            card: string;
+            /** @example #F8F7FA */
+            primary: string;
+            /** @example #F8F7FA */
+            primaryForeground: string;
+            /** @example #F8F7FA */
+            muted: string;
+            /** @example #F8F7FA */
+            mutedForeground: string;
+            /** @example #F8F7FA */
+            accent: string;
+            /** @example #F8F7FA */
+            border: string;
+            /** @example #F8F7FA */
+            input: string;
+        };
+        CustomPalette: {
+            light: components["schemas"]["CustomPaletteMode"];
+            dark: components["schemas"]["CustomPaletteMode"];
         };
         InstanceSettings: {
             publicProjectsEnabled: boolean;
@@ -1901,6 +1936,8 @@ export interface components {
             runRetentionDays: number;
             /** @description Instance-wide, Tenant-Admin-configurable inactivity threshold (in days) past which a non-exempt project is automatically archived. 0 (the default) means the policy is off. Archiving is reversible; unlike runRetentionDays, this never destroys data. */
             autoArchiveInactiveDays: number;
+            colorTheme: components["schemas"]["ColorTheme"];
+            customPalette?: components["schemas"]["CustomPalette"] | null;
             /** Format: date-time */
             updatedAt: string;
         };
@@ -1909,6 +1946,8 @@ export interface components {
             publicProjectsEnabled?: boolean;
             runRetentionDays?: number;
             autoArchiveInactiveDays?: number;
+            colorTheme?: components["schemas"]["ColorTheme"];
+            customPalette?: components["schemas"]["CustomPalette"];
         };
         User: {
             id: string;

@@ -480,6 +480,26 @@ describe('First-run setup redirect', () => {
   })
 })
 
+// add-color-theme-customization: end-to-end wiring from GET /api/v1/meta
+// through useAuth into ThemeProvider, applied to the real document root —
+// each layer's own tests (useAuth.test.tsx, ThemeProvider.test.tsx) cover
+// the pieces in isolation; this confirms App.tsx actually wires them
+// together (AuthProvider now an ancestor of ThemeProvider so it can read
+// colorTheme/customPalette from context).
+describe('Instance color theme', () => {
+  it('applies the resolved preset as a data-palette attribute on first render', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/meta')
+        return Promise.resolve({ response: { ok: true }, data: { name: 'TestPulse', version: '0.0.1', colorTheme: 'forest' } })
+      if (path === '/api/v1/users/me') return Promise.resolve({ response: { ok: false }, data: undefined })
+      return Promise.resolve({ response: { ok: true }, data: [] })
+    })
+    render(<App />)
+    await waitFor(() => expect(document.documentElement.getAttribute('data-palette')).toBe('forest'))
+  })
+})
+
 // Old /public* URLs become plain redirects, not 404s (design.md D7,
 // unify-authenticated-and-public-views tasks.md 12.1/12.2) — someone who
 // already has a /public/{key} link (documented, potentially shared) should

@@ -1,21 +1,32 @@
 import { useEffect, useState } from 'react'
-import { DatabaseIcon, GlobeIcon, LockIcon, TriangleAlertIcon } from 'lucide-react'
+import { DatabaseIcon, GlobeIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { AdminShell } from '@/components/AdminShell'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { RetentionPillSelector } from '@/components/RetentionPillSelector'
+import { PaletteSwatch, PRESETS } from '@/components/PaletteSwatchSelector'
+import { CustomPaletteEditor } from '@/components/CustomPaletteEditor'
+import { PRESET_PALETTES } from '@/lib/presetPalettes'
 import { Switch } from '@/components/ui/switch'
+import type { CustomPalette } from '@/lib/useAuth'
+import type { components } from '@testpulse/shared/api'
+
+type ColorTheme = components['schemas']['ColorTheme']
 
 // Tenant-Admin-only instance-wide settings (enable-public-project-access,
 // add-data-retention). Self-gates the same way RolesPage.tsx/PeoplePage.tsx
 // do — a client-side check, not just the route-level RequireAuth — since a
 // non-admin logged-in user can still navigate here directly.
 export default function InstanceSettingsPage() {
-  const { user: me } = useAuth()
+  const { user: me, refreshColorTheme } = useAuth()
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState<boolean>()
   const [runRetentionDays, setRunRetentionDays] = useState<number>()
   const [autoArchiveInactiveDays, setAutoArchiveInactiveDays] = useState<number>()
+  const [colorTheme, setColorTheme] = useState<string>()
+  const [customPalette, setCustomPalette] = useState<CustomPalette>()
+  const [showCustomEditor, setShowCustomEditor] = useState(false)
+  const [savingCustomPalette, setSavingCustomPalette] = useState(false)
 
   useEffect(() => {
     if (!me?.isTenantAdmin) return
@@ -24,6 +35,9 @@ export default function InstanceSettingsPage() {
       setPublicProjectsEnabled(data.publicProjectsEnabled)
       setRunRetentionDays(data.runRetentionDays)
       setAutoArchiveInactiveDays(data.autoArchiveInactiveDays)
+      setColorTheme(data.colorTheme)
+      setCustomPalette(data.customPalette ?? undefined)
+      if (data.colorTheme === 'custom') setShowCustomEditor(true)
     })
   }, [me])
 
@@ -46,6 +60,33 @@ export default function InstanceSettingsPage() {
   async function selectAutoArchive(days: number) {
     const { data } = await api.PATCH('/api/v1/instance-settings', { body: { autoArchiveInactiveDays: days } })
     if (data) setAutoArchiveInactiveDays(data.autoArchiveInactiveDays)
+  }
+
+  async function selectColorTheme(theme: ColorTheme) {
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { colorTheme: theme } })
+    if (data) {
+      setColorTheme(data.colorTheme)
+      // Hides (unmounts) the custom editor so it doesn't keep showing —
+      // or, worse, silently saving over the server with — stale draft
+      // state from before this preset was chosen. Reopening Custom later
+      // remounts it fresh, re-seeded from whatever preset/custom palette
+      // is active at that point (found via manual testing: cycling
+      // Custom → preset → Custom left the editor mounted the whole time,
+      // and a later Save could persist a corrupted mix of old drafts).
+      setShowCustomEditor(false)
+      await refreshColorTheme()
+    }
+  }
+
+  async function saveCustomPalette(palette: CustomPalette) {
+    setSavingCustomPalette(true)
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { colorTheme: 'custom', customPalette: palette } })
+    setSavingCustomPalette(false)
+    if (data) {
+      setColorTheme(data.colorTheme)
+      setCustomPalette(data.customPalette ?? palette)
+      await refreshColorTheme()
+    }
   }
 
   return (
@@ -145,6 +186,60 @@ export default function InstanceSettingsPage() {
                   ? 'Off — projects are never automatically archived.'
                   : `Projects inactive for ${autoArchiveInactiveDays} day${autoArchiveInactiveDays === 1 ? '' : 's'} are archived automatically. Reversible any time from the project's own Settings.`}
             </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <PaletteIcon className="size-3.5" aria-hidden="true" />
+          Appearance
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Color theme</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div role="group" aria-label="Color theme" className="flex flex-wrap gap-3">
+              {PRESETS.map((preset) => (
+                <PaletteSwatch
+                  key={preset.key}
+                  presetKey={preset.key}
+                  label={preset.label}
+                  light={preset.light}
+                  lightPrimary={preset.lightPrimary}
+                  dark={preset.dark}
+                  darkPrimary={preset.darkPrimary}
+                  selected={!showCustomEditor && colorTheme === preset.key}
+                  onSelect={() => void selectColorTheme(preset.key)}
+                />
+              ))}
+              <PaletteSwatch
+                presetKey="custom"
+                label="Custom"
+                light="#FFFFFF"
+                lightPrimary="#94A3B8"
+                dark="#0B0B0B"
+                darkPrimary="#94A3B8"
+                // Marked selected the moment the editor opens — showing it
+                // as "selected" shouldn't wait on an actual save/server
+                // round-trip, since opening the editor already means the
+                // admin is working in Custom mode (user-reported).
+                selected={showCustomEditor || colorTheme === 'custom'}
+                onSelect={() => setShowCustomEditor(true)}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Applies instantly, instance-wide — every signed-in and public-project visitor sees it the next time
+              their page loads.
+            </p>
+            {showCustomEditor && (
+              <CustomPaletteEditor
+                initial={customPalette ?? PRESET_PALETTES[colorTheme ?? 'teal'] ?? PRESET_PALETTES.teal}
+                saving={savingCustomPalette}
+                onSave={(palette) => void saveCustomPalette(palette)}
+              />
+            )}
           </CardContent>
         </Card>
       </section>

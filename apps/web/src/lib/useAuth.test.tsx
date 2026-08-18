@@ -189,6 +189,68 @@ describe('useAuth', () => {
     await waitFor(() => expect(result.current.setupRequired).toBe(false))
   })
 
+  it('resolves colorTheme from /api/v1/meta, defaulting to teal (add-color-theme-customization)', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false, colorTheme: 'teal' }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequiredLoading).toBe(false))
+    expect(result.current.colorTheme).toBe('teal')
+    expect(result.current.customPalette).toBeNull()
+  })
+
+  it('resolves customPalette from /api/v1/meta when colorTheme is custom', async () => {
+    const customPalette = {
+      light: {
+        background: '#F8F7FA', foreground: '#160B2E', card: '#FFFFFF', primary: '#4514B8',
+        primaryForeground: '#FFFFFF', muted: '#EFEDF5', mutedForeground: '#605B6B',
+        accent: '#EFEDF5', border: '#E0DCEC', input: '#E0DCEC',
+      },
+      dark: {
+        background: '#140B2A', foreground: '#EAE6F5', card: '#1D1440', primary: '#5F2DD4',
+        primaryForeground: '#EAE6F5', muted: '#241A4D', mutedForeground: '#9D8FBD',
+        accent: '#241A4D', border: '#2E2358', input: '#2E2358',
+      },
+    }
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false, colorTheme: 'custom', customPalette }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.colorTheme).toBe('custom'))
+    expect(result.current.customPalette).toEqual(customPalette)
+  })
+
+  it('refreshColorTheme re-fetches /api/v1/meta and updates colorTheme/customPalette in context (add-color-theme-customization)', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false, colorTheme: 'teal' }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+    await waitFor(() => expect(result.current.colorTheme).toBe('teal'))
+
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false, colorTheme: 'ocean' }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    await act(async () => {
+      await result.current.refreshColorTheme()
+    })
+
+    expect(result.current.colorTheme).toBe('ocean')
+  })
+
   it('throws when used outside an AuthProvider', () => {
     function Bad() {
       useAuth()

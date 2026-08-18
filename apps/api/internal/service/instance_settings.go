@@ -3,10 +3,42 @@ package service
 import (
 	"context"
 	"errors"
+	"regexp"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
 )
+
+var (
+	validColorThemes = map[string]bool{
+		"teal": true, "indigo": true, "ocean": true, "forest": true, "custom": true,
+	}
+	hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+)
+
+// validateCustomPalette rejects any field not matching #RRGGBB, naming the
+// specific field (add-color-theme-customization design.md: "rejects, not
+// coerces").
+func validateCustomPalette(p *domain.CustomPalette) error {
+	fields := map[string]string{
+		"light.background": p.Light.Background, "light.foreground": p.Light.Foreground,
+		"light.card": p.Light.Card, "light.primary": p.Light.Primary,
+		"light.primaryForeground": p.Light.PrimaryForeground, "light.muted": p.Light.Muted,
+		"light.mutedForeground": p.Light.MutedForeground, "light.accent": p.Light.Accent,
+		"light.border": p.Light.Border, "light.input": p.Light.Input,
+		"dark.background": p.Dark.Background, "dark.foreground": p.Dark.Foreground,
+		"dark.card": p.Dark.Card, "dark.primary": p.Dark.Primary,
+		"dark.primaryForeground": p.Dark.PrimaryForeground, "dark.muted": p.Dark.Muted,
+		"dark.mutedForeground": p.Dark.MutedForeground, "dark.accent": p.Dark.Accent,
+		"dark.border": p.Dark.Border, "dark.input": p.Dark.Input,
+	}
+	for name, value := range fields {
+		if !hexColorPattern.MatchString(value) {
+			return invalid("customPalette.%s must be a #RRGGBB hex color", name)
+		}
+	}
+	return nil
+}
 
 // InstanceSettings returns the single instance-wide settings row
 // (enable-public-project-access). Unauthenticated callers may read it (it
@@ -26,6 +58,14 @@ func (s *Service) UpdateInstanceSettings(ctx context.Context, upd domain.Instanc
 	}
 	if upd.AutoArchiveInactiveDays != nil && *upd.AutoArchiveInactiveDays < 0 {
 		return domain.InstanceSettings{}, invalid("autoArchiveInactiveDays must not be negative")
+	}
+	if upd.ColorTheme != nil && !validColorThemes[*upd.ColorTheme] {
+		return domain.InstanceSettings{}, invalid("colorTheme must be one of teal, indigo, ocean, forest, custom")
+	}
+	if upd.CustomPalette != nil {
+		if err := validateCustomPalette(upd.CustomPalette); err != nil {
+			return domain.InstanceSettings{}, err
+		}
 	}
 	settings, err := s.store.InstanceSettings.Update(ctx, upd)
 	if err != nil {

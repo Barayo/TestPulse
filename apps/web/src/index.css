@@ -193,6 +193,279 @@
     --avatar-6-bg: #243318; --avatar-6-fg: #B7D69A;
 }
 
+/*
+ * Preset instance-wide palettes (add-color-theme-customization) — applied
+ * via a data-palette attribute on <html>, sibling to the .dark class
+ * toggled by ThemeProvider.tsx, so the personal light/dark axis and the
+ * instance palette axis stay fully independent. Teal needs no block here
+ * (it's the :root/.dark blocks above, i.e. data-palette's absence).
+ *
+ * Every preset derives its varying tokens (background/foreground/card/
+ * primary/primary-foreground/muted/muted-foreground/accent/border/input)
+ * by rotating Teal's hue at each token while holding saturation/lightness
+ * constant (design.md), with popover/card-foreground/popover-foreground/
+ * accent-foreground/ring/chart-1/sidebar* derived by copying from those,
+ * exactly like Teal's own blocks above already relate to each other.
+ * secondary/destructive/chart-2..5 stay frozen, identical to Teal in every
+ * preset — they're the chart pass/fail semantics, not brand color.
+ */
+
+[data-palette="indigo"] {
+    --background: #F8F7FA;
+    --foreground: #160B2E;
+    --card: #FFFFFF;
+    --card-foreground: #160B2E;
+    --popover: #FFFFFF;
+    --popover-foreground: #160B2E;
+    --primary: #4514B8;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A;
+    --secondary-foreground: #0B2E2C;
+    --muted: #F0F0F3;
+    --muted-foreground: #605B6B;
+    --accent: #EEEAFA;
+    --accent-foreground: #160B2E;
+    --destructive: #E8553F;
+    --border: #E3E1E8;
+    --input: #DCD8E4;
+    --ring: #4514B8;
+    --chart-1: #4514B8;
+    --chart-2: #F5C84A;
+    --chart-3: #E8553F;
+    --chart-4: #0B2E2C;
+    --chart-5: #5B6B6A;
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #160B2E;
+    --sidebar-primary: #4514B8;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #EEEAFA;
+    --sidebar-accent-foreground: #160B2E;
+    --sidebar-border: #E3E1E8;
+    --sidebar-ring: #4514B8;
+    /* Derived from Teal's own avatar set by deriveAvatarPalette
+       (avatarPalette.ts) — hue-rotated toward this preset's primary, with
+       foreground lightness solved for guaranteed AA contrast, not a
+       hand-picked or blindly-rotated copy. Regenerate via
+       generate-avatars script if Teal's base set or the primary hex ever
+       changes. */
+    --avatar-1-bg: #D7CFEF; --avatar-1-fg: #571FE0;
+    --avatar-2-bg: #FADCFB; --avatar-2-fg: #A623B3;
+    --avatar-3-bg: #FBE2EA; --avatar-3-fg: #A74261;
+    --avatar-4-bg: #D0F5D1; --avatar-4-fg: #1D771A;
+    --avatar-5-bg: #F5FBE1; --avatar-5-fg: #69742A;
+    --avatar-6-bg: #DDEEEE; --avatar-6-fg: #356F6E;
+    /* Retints the preset avatar photos' fixed Teal duotone toward this
+       preset's own primary hue (Pepe design review) — same Teal→target
+       hue delta as everything else in this block, applied as a filter
+       since these are baked JPG pixels, not a token. */
+    --avatar-photo-filter: hue-rotate(85deg);
+}
+
+[data-palette="indigo"].dark {
+    --background: #140B2A;
+    --foreground: #EAE6F5;
+    --card: #221240;
+    --card-foreground: #EAE6F5;
+    --popover: #221240;
+    --popover-foreground: #EAE6F5;
+    --primary: #5F2DD4;
+    --primary-foreground: #EAE6F5;
+    --secondary: #FBBF24;
+    --secondary-foreground: #0B2A28;
+    --muted: #22163A;
+    --muted-foreground: #9D8FBD;
+    --accent: #23163F;
+    --accent-foreground: #EAE6F5;
+    --destructive: #FF9484;
+    --border: #2E1D52;
+    --input: #2E1D52;
+    --ring: #5F2DD4;
+    --chart-1: #5F2DD4;
+    --chart-2: #FBBF24;
+    --chart-3: #FF9484;
+    --chart-4: #E6F5F3;
+    --chart-5: #8FBDB8;
+    --sidebar: #221240;
+    --sidebar-foreground: #EAE6F5;
+    --sidebar-primary: #5F2DD4;
+    --sidebar-primary-foreground: #EAE6F5;
+    --sidebar-accent: #23163F;
+    --sidebar-accent-foreground: #EAE6F5;
+    --sidebar-border: #2E1D52;
+    --sidebar-ring: #5F2DD4;
+    --avatar-1-bg: #1D0F3B; --avatar-1-fg: #9072DD;
+    --avatar-2-bg: #4F1253; --avatar-2-fg: #E565E9;
+    --avatar-3-bg: #49212E; --avatar-3-fg: #EC7095;
+    --avatar-4-bg: #103A14; --avatar-4-fg: #1CE32B;
+    --avatar-5-bg: #333A1A; --avatar-5-fg: #B6DF21;
+    --avatar-6-bg: #183332; --avatar-6-fg: #4AB5AF;
+    --avatar-photo-filter: hue-rotate(85deg);
+}
+
+[data-palette="ocean"] {
+    --background: #F7F8FA;
+    --foreground: #0B182E;
+    --card: #FFFFFF;
+    --card-foreground: #0B182E;
+    --popover: #FFFFFF;
+    --popover-foreground: #0B182E;
+    --primary: #1453B8;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A;
+    --secondary-foreground: #0B2E2C;
+    --muted: #F0F2F3;
+    --muted-foreground: #5B616B;
+    --accent: #EAF1FA;
+    --accent-foreground: #0B182E;
+    --destructive: #E8553F;
+    --border: #E1E4E8;
+    --input: #D8DCE4;
+    --ring: #1453B8;
+    --chart-1: #1453B8;
+    --chart-2: #F5C84A;
+    --chart-3: #E8553F;
+    --chart-4: #0B2E2C;
+    --chart-5: #5B6B6A;
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #0B182E;
+    --sidebar-primary: #1453B8;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #EAF1FA;
+    --sidebar-accent-foreground: #0B182E;
+    --sidebar-border: #E1E4E8;
+    --sidebar-ring: #1453B8;
+    --avatar-1-bg: #CFDDEF; --avatar-1-fg: #1A59BD;
+    --avatar-2-bg: #E4DCFB; --avatar-2-fg: #4F29D6;
+    --avatar-3-bg: #FBE2FB; --avatar-3-fg: #9F3E9D;
+    --avatar-4-bg: #E8F5D0; --avatar-4-fg: #597219;
+    --avatar-5-bg: #FBEFE1; --avatar-5-fg: #915F34;
+    --avatar-6-bg: #DDEEE2; --avatar-6-fg: #377248;
+    --avatar-photo-filter: hue-rotate(44deg);
+}
+
+[data-palette="ocean"].dark {
+    --background: #0B172A;
+    --foreground: #E6ECF5;
+    --card: #122240;
+    --card-foreground: #E6ECF5;
+    --popover: #122240;
+    --popover-foreground: #E6ECF5;
+    --primary: #2D6DD4;
+    --primary-foreground: #E6ECF5;
+    --secondary: #FBBF24;
+    --secondary-foreground: #0B2A28;
+    --muted: #16223A;
+    --muted-foreground: #8FA1BD;
+    --accent: #16253F;
+    --accent-foreground: #E6ECF5;
+    --destructive: #FF9484;
+    --border: #1D3152;
+    --input: #1D3152;
+    --ring: #2D6DD4;
+    --chart-1: #2D6DD4;
+    --chart-2: #FBBF24;
+    --chart-3: #FF9484;
+    --chart-4: #E6F5F3;
+    --chart-5: #8FBDB8;
+    --sidebar: #122240;
+    --sidebar-foreground: #E6ECF5;
+    --sidebar-primary: #2D6DD4;
+    --sidebar-primary-foreground: #E6ECF5;
+    --sidebar-accent: #16253F;
+    --sidebar-accent-foreground: #E6ECF5;
+    --sidebar-border: #1D3152;
+    --sidebar-ring: #2D6DD4;
+    --avatar-1-bg: #0F1F3B; --avatar-1-fg: #588BD6;
+    --avatar-2-bg: #221253; --avatar-2-fg: #9776EB;
+    --avatar-3-bg: #492149; --avatar-3-fg: #EB66E8;
+    --avatar-4-bg: #293A10; --avatar-4-fg: #95E31C;
+    --avatar-5-bg: #3A2B1A; --avatar-5-fg: #DF8621;
+    --avatar-6-bg: #183320; --avatar-6-fg: #4AB566;
+    --avatar-photo-filter: hue-rotate(44deg);
+}
+
+[data-palette="forest"] {
+    --background: #F7FAF8;
+    --foreground: #0B2E18;
+    --card: #FFFFFF;
+    --card-foreground: #0B2E18;
+    --popover: #FFFFFF;
+    --popover-foreground: #0B2E18;
+    --primary: #14B850;
+    --primary-foreground: #FFFFFF;
+    --secondary: #F5C84A;
+    --secondary-foreground: #0B2E2C;
+    --muted: #F0F3F0;
+    --muted-foreground: #5B6B61;
+    --accent: #EAFAEF;
+    --accent-foreground: #0B2E18;
+    --destructive: #E8553F;
+    --border: #E1E8E3;
+    --input: #D8E4DD;
+    --ring: #14B850;
+    --chart-1: #14B850;
+    --chart-2: #F5C84A;
+    --chart-3: #E8553F;
+    --chart-4: #0B2E2C;
+    --chart-5: #5B6B6A;
+    --sidebar: #FFFFFF;
+    --sidebar-foreground: #0B2E18;
+    --sidebar-primary: #14B850;
+    --sidebar-primary-foreground: #FFFFFF;
+    --sidebar-accent: #EAFAEF;
+    --sidebar-accent-foreground: #0B2E18;
+    --sidebar-border: #E1E8E3;
+    --sidebar-ring: #14B850;
+    --avatar-1-bg: #CFEFD9; --avatar-1-fg: #107434;
+    --avatar-2-bg: #DCFAFB; --avatar-2-fg: #177876;
+    --avatar-3-bg: #E2E8FB; --avatar-3-fg: #4760B4;
+    --avatar-4-bg: #F5D4D0; --avatar-4-fg: #AF2A26;
+    --avatar-5-bg: #FBE1F4; --avatar-5-fg: #A53B8E;
+    --avatar-6-bg: #EDEEDD; --avatar-6-fg: #696B33;
+    --avatar-photo-filter: hue-rotate(-31deg);
+}
+
+[data-palette="forest"].dark {
+    --background: #0B2A16;
+    --foreground: #E6F5EB;
+    --card: #124025;
+    --card-foreground: #E6F5EB;
+    --popover: #124025;
+    --popover-foreground: #E6F5EB;
+    --primary: #2DD46A;
+    --primary-foreground: #0B2A16;
+    --secondary: #FBBF24;
+    --secondary-foreground: #0B2A28;
+    --muted: #163A25;
+    --muted-foreground: #8FBDA0;
+    --accent: #163F26;
+    --accent-foreground: #E6F5EB;
+    --destructive: #FF9484;
+    --border: #1D5231;
+    --input: #1D5231;
+    --ring: #2DD46A;
+    --chart-1: #2DD46A;
+    --chart-2: #FBBF24;
+    --chart-3: #FF9484;
+    --chart-4: #E6F5F3;
+    --chart-5: #8FBDB8;
+    --sidebar: #124025;
+    --sidebar-foreground: #E6F5EB;
+    --sidebar-primary: #2DD46A;
+    --sidebar-primary-foreground: #0B2A16;
+    --sidebar-accent: #163F26;
+    --sidebar-accent-foreground: #E6F5EB;
+    --sidebar-border: #1D5231;
+    --sidebar-ring: #2DD46A;
+    --avatar-1-bg: #0F3B20; --avatar-1-fg: #32CD68;
+    --avatar-2-bg: #125353; --avatar-2-fg: #20D9DF;
+    --avatar-3-bg: #212B49; --avatar-3-fg: #7793ED;
+    --avatar-4-bg: #3A1710; --avatar-4-fg: #E96049;
+    --avatar-5-bg: #3A1A31; --avatar-5-fg: #E758BE;
+    --avatar-6-bg: #323318; --avatar-6-fg: #B5B54A;
+    --avatar-photo-filter: hue-rotate(-31deg);
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;

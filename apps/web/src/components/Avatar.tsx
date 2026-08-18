@@ -31,7 +31,21 @@ export function Avatar({
   }
   const image = avatarPresetImage(avatarKey)
   if (image) {
-    return <img src={image} alt={seed} className={`shrink-0 object-cover ${className ?? ''}`} />
+    // Preset images are a fixed Teal duotone baked into the JPG pixels
+    // (assets/avatars/ATTRIBUTION.md) — retinted live via the same
+    // instance-wide hue-rotate the rest of the palette system already
+    // computes (add-color-theme-customization follow-up, Pepe design
+    // review), so they don't clash on a non-Teal palette. Defaults to a
+    // no-op on Teal itself. Never applied to an uploaded custom photo —
+    // see the branch above, which returns before reaching this one.
+    return (
+      <img
+        src={image}
+        alt={seed}
+        className={`shrink-0 object-cover ${className ?? ''}`}
+        style={{ filter: 'var(--avatar-photo-filter, none)' }}
+      />
+    )
   }
   return (
     <span

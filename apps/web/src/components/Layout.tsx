@@ -48,9 +48,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <header className="border-b">
           <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 px-4 py-3 sm:px-6 sm:py-4">
             <div className="flex min-w-0 items-baseline gap-1.5 sm:gap-2">
-              {/* Matches assets/brand/testpulse-icon.svg (icon tile, EKG
-                  stroke) and testpulse-logo-horizontal.svg (Test/Pulse color
-                  split) — the header brand mark previously matched neither. */}
+              {/* Shape matches assets/brand/testpulse-icon.svg (icon tile,
+                  EKG stroke) and testpulse-logo-horizontal.svg (Test/Pulse
+                  color split) — the header brand mark previously matched
+                  neither. Color intentionally diverges from those static
+                  assets on any non-Teal instance palette: the gradient
+                  tracks --primary (add-color-theme-customization) so the
+                  in-app wordmark follows the active theme, while the
+                  standalone brand files stay the canonical Teal mark. */}
               {/* -ml-5: a partial hanging indent — pulling the icon fully
                   flush with the page content below it clipped it against the
                   header's own padding, so this closes most (not all) of the
@@ -72,9 +77,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 >
                   <rect x="0" y="0" width="200" height="200" rx="44" ry="44" fill="url(#tp-wordmark-gradient)" />
                   <defs>
+                    {/* Tracks --primary (add-color-theme-customization) instead
+                        of Teal's own hex values, so the wordmark follows
+                        whichever instance palette is active rather than being
+                        the one piece of brand chrome pinned to one preset.
+                        The second stop uses color-mix for a darker shade of
+                        the same hue — no separate "dark primary" token exists
+                        per palette, and this needs no new one. */}
                     <linearGradient id="tp-wordmark-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                      <stop offset="0%" stopColor="#14B8A6" />
-                      <stop offset="100%" stopColor="#0D6E6A" />
+                      <stop offset="0%" stopColor="var(--primary)" />
+                      <stop offset="100%" stopColor="color-mix(in oklch, var(--primary), black 25%)" />
                     </linearGradient>
                   </defs>
                   <path

@@ -40,4 +40,24 @@ describe('Avatar', () => {
     expect(screen.getByText('A')).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
   })
+
+  // add-color-theme-customization follow-up (Pepe design review): preset
+  // images are a fixed Teal duotone baked into the JPG pixels, so they
+  // clash on a non-Teal instance palette unless retinted live. The filter
+  // rides the same instance-wide --avatar-photo-filter token every other
+  // derived value uses, defaulting to a no-op on Teal.
+  it('applies the instance-wide --avatar-photo-filter token to a preset image', () => {
+    render(<Avatar seed="ana@example.com" avatarKey="ada-lovelace" className="size-6 rounded-full" />)
+    const img = screen.getByRole('img')
+    expect(img).toHaveStyle({ filter: 'var(--avatar-photo-filter, none)' })
+  })
+
+  // A real uploaded photo is a person's actual face — recoloring it to
+  // match the brand palette would be bizarre and is explicitly out of
+  // scope (Pepe design review). Only preset images get the filter.
+  it('does NOT apply the photo filter to an uploaded custom photo', () => {
+    render(<Avatar seed="ana@example.com" avatarKey="custom" userId="u1" className="size-6 rounded-full" />)
+    const img = screen.getByRole('img')
+    expect(img.style.filter).toBe('')
+  })
 })

@@ -56,4 +56,17 @@ describe('Layout', () => {
     expect(screen.queryByText(/viewing this without an account/i)).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /log in/i })).not.toBeInTheDocument()
   })
+
+  // add-color-theme-customization follow-up: the wordmark icon's gradient
+  // previously hardcoded Teal's own hex values, so it stayed teal on every
+  // other palette — the one piece of brand chrome that didn't follow the
+  // instance theme. It should track --primary like everything else instead
+  // of being pinned to one preset's exact color.
+  it("derives the wordmark icon's gradient from the --primary token, not a hardcoded teal hex", async () => {
+    renderLayout()
+    await screen.findByText('page content')
+    const gradientStop = document.querySelector('#tp-wordmark-gradient stop')
+    expect(gradientStop).not.toHaveAttribute('stop-color', '#14B8A6')
+    expect(gradientStop?.getAttribute('stop-color')).toMatch(/var\(--primary\)/)
+  })
 })

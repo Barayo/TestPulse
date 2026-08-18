@@ -156,6 +156,46 @@ individual project's page already takes. Logging in from any project page
 returns the visitor to that same page, now authenticated, instead of
 always landing on the projects root.
 
+## Color theme
+
+A Tenant Admin can set the instance's color theme at `/settings/instance`
+under **Appearance** (`add-color-theme-customization`): four built-in
+presets — Teal (the default), Indigo, Ocean, Forest — shown as swatches
+that apply immediately, instance-wide, with no separate save step. This
+applies to every visitor, not just admins: a signed-in user of any role
+and an anonymous public-project visitor both see it, the next time their
+page loads. The choice is independent of, and composes with, each
+person's own personal Light/Dark preference (see [Finding your way
+around](#finding-your-way-around)) — any combination of instance palette
+and personal light/dark mode renders correctly.
+
+A fifth **Custom** option opens a full palette editor: 10 color fields for
+Light mode and 10 for Dark (background, foreground, card, primary, primary
+text, muted, muted text, accent, border, input — every other visual token
+is derived from these), each with a live WCAG contrast-ratio readout
+against its real-world pairing, and a live preview panel showing how the
+values render on an actual button, card, and a few other real surfaces.
+Custom requires an explicit **Save custom palette** step rather than
+applying per keystroke, unlike the presets — typing a color value
+shouldn't flash a half-finished palette to every visitor. The contrast
+readouts are informational, not a blocking gate: an admin can save a
+low-contrast combination if they choose to.
+
+Chart pass/fail colors and status-pill colors are unaffected by the
+instance theme, preset or custom — they carry meaning (a failed test, an
+at-risk project) that should stay consistent regardless of which brand
+palette is active.
+
+Per-person avatar colors, unlike those, *do* follow the instance theme —
+each of the 6 avatar identity colors is derived from the palette's brand
+primary color, rather than pinned to Teal's own hues. This is computed,
+never something an admin sets directly: for a built-in preset it's
+generated once and shipped as static styling; for a custom palette it's
+derived at render time from whichever primary color the admin chose.
+Every derived color is guaranteed to meet WCAG AA contrast regardless of
+the source hue. A person's assignment to one of the 6 identity slots (by
+name/email) never changes — only which colors that slot renders as.
+
 ## Projects
 
 Everything lives inside a project. A Tenant Admin creates one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet — both are hidden for everyone else, since project creation is Tenant-Admin-only. Projects can be renamed, described, and archived/unarchived (Project Admin or above) via an **Archive project** switch on the project's Settings page — archiving is a soft flag, never a delete, and fully reversible: flipping it back off restores the project exactly as it was, with no lingering "archived" residue. An archived project shows an **Archived** badge on its card and next to its name wherever it's referenced.

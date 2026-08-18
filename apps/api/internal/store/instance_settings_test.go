@@ -84,6 +84,77 @@ func TestInstanceSettingsGetReturnsAutoArchiveInactiveDaysDefaultingToZero(t *te
 	}
 }
 
+func TestInstanceSettingsGetReturnsColorThemeDefaultingToTeal(t *testing.T) {
+	// add-color-theme-customization: 'teal' is the seeded default, matching
+	// index.css's unchanged :root/.dark blocks.
+	s := testStore(t)
+	ctx := context.Background()
+
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ColorTheme != "teal" {
+		t.Errorf("ColorTheme = %q, want \"teal\" (seeded default)", got.ColorTheme)
+	}
+	if got.CustomPalette != nil {
+		t.Errorf("CustomPalette = %+v, want nil (seeded default)", got.CustomPalette)
+	}
+}
+
+func TestInstanceSettingsUpdateAppliesColorThemeIndependently(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	theme := "indigo"
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{ColorTheme: &theme}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ColorTheme != "indigo" {
+		t.Errorf("ColorTheme = %q, want \"indigo\"", got.ColorTheme)
+	}
+	if !got.PublicProjectsEnabled {
+		t.Errorf("PublicProjectsEnabled = %v, want unchanged true (not touched by this update)", got.PublicProjectsEnabled)
+	}
+}
+
+func TestInstanceSettingsUpdateAppliesCustomPaletteAndRoundTripsAllFields(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	side := domain.CustomPaletteMode{
+		Background:        "#F8F7FA",
+		Foreground:        "#160B2E",
+		Card:              "#FFFFFF",
+		Primary:           "#4514B8",
+		PrimaryForeground: "#FFFFFF",
+		Muted:             "#EFEDF5",
+		MutedForeground:   "#605B6B",
+		Accent:            "#EFEDF5",
+		Border:            "#E0DCEC",
+		Input:             "#E0DCEC",
+	}
+	palette := &domain.CustomPalette{Light: side, Dark: side}
+	theme := "custom"
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{ColorTheme: &theme, CustomPalette: palette}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.ColorTheme != "custom" {
+		t.Errorf("ColorTheme = %q, want \"custom\"", got.ColorTheme)
+	}
+	if got.CustomPalette == nil || *got.CustomPalette != *palette {
+		t.Errorf("CustomPalette = %+v, want %+v", got.CustomPalette, palette)
+	}
+}
+
 func TestInstanceSettingsUpdateAppliesAutoArchiveInactiveDaysIndependently(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
