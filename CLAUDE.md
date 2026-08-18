@@ -48,6 +48,12 @@ when in doubt.
 
 - Features start as OpenSpec changes (proposal → design → specs → tasks) via
   the `/opsx:*` skills; implementation follows the tasks and checks them off.
+- GitHub Project board: move the corresponding card to **"In progress"** the
+  moment implementation actually starts (first code/test written) — not
+  retroactively, not only at the end. Once a change is committed, pushed,
+  archived, and CI is green, move its card to **"To Review"** — never
+  straight to "Done" and never before all four of those have happened. The
+  user moves it to "Done" themselves after their own review.
 - The release ladder and per-version scope live in `ROADMAP.md`. Settled v0.1
   design decisions (versioning, run model, MCP tool surface, UI thickness) are
   recorded there — don't re-litigate them.
