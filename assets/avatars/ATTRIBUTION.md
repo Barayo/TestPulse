@@ -1,8 +1,9 @@
 # Avatar preset attribution
 
-Twenty-two preset avatars (`add-user-profile`), all sourced from Wikimedia
-Commons and individually license-checked at the time of sourcing
-(2026-08-02, expanded 2026-08-03, re-sourced 2026-08-04). Each image is
+Thirty preset avatars (`add-user-profile`; expanded to thirty by
+`diversify-avatar-preset-gallery`), all sourced from Wikimedia Commons and
+individually license-checked at the time of sourcing (2026-08-02, expanded
+2026-08-03, re-sourced 2026-08-04, expanded again 2026-08-18). Each image is
 square-cropped from the original (crop region chosen manually per image)
 and re-encoded; none are resold or used for any commercial endorsement,
 and none depict a living person's likeness for a purpose implying their
@@ -71,6 +72,14 @@ a stylized illustration.
 | `srinivasa-ramanujan` | Srinivasa Ramanujan, photograph, Oberwolfach Photo Collection, photographer Konrad Jacobs | [Commons](https://commons.wikimedia.org/wiki/File:Srinivasa_Ramanujan_-_OPC_-_2_(cleaned).jpg) | PD-India / PD-1923 | No |
 | `hideyo-noguchi` | Hideyo Noguchi, photograph, before 1928, from a Japanese biography (National Diet Library digitization) | [Commons](https://commons.wikimedia.org/wiki/File:Dr._Noguchi_Hideyo.jpg) | PD-Japan-oldphoto | No |
 | `confucius` | Confucius, album leaf, anonymous artist, Yuan dynasty (1279–1368), National Palace Museum, Taipei — "Half Portraits of the Great Sage and Virtuous Men of Old" | [Commons](https://commons.wikimedia.org/wiki/File:Half_Portraits_of_the_Great_Sage_and_Virtuous_Men_of_Old_-_Confucius.jpg) | PD-1923 | No |
+| `hypatia` | Hypatia, wood engraving, mid-19th century (imagined likeness — no contemporary depiction exists, same caveat as `archimedes`/`leonardo-da-vinci` below) | [Commons](https://commons.wikimedia.org/wiki/File:Hypatia_-_mid_19th_century_engraving.jpg) | CC-PD-Mark | No |
+| `sophie-germain` | Sophie Germain, engraved bust portrait, from *Œuvres philosophiques*, 1896 | [Commons](https://commons.wikimedia.org/wiki/File:Germain_-_Œuvres_philosophiques,_1896_(Illustration_page_4).jpg) | CC-PD-Mark / PD-old | No |
+| `caroline-herschel` | Caroline Herschel, aged 92, stipple engraving by Joseph Brown, frontispiece to her 1876 memoir | [Commons](https://commons.wikimedia.org/wiki/File:Caroline_Herschel-1876-Memoir-frontispiece.jpeg) | PD-old-100 / CC-PD-Mark | No |
+| `mary-somerville` | Mary Somerville, wood engraving, *Illustrated London News*, 1872, Library of Congress | [Commons](https://commons.wikimedia.org/wiki/File:Mary_Fairfax_Somerville,_1780-1872,_bust_portrait,_facing_left_LCCN2005691459.jpg) | CC-PD-Mark / PD-old | No |
+| `henrietta-swan-leavitt` | Henrietta Swan Leavitt, studio photograph, c. 1898, Library of Congress | [Commons](https://commons.wikimedia.org/wiki/File:Henrietta_Swan_Leavitt.jpg) | Public domain (pre-1931 publication) | No |
+| `nettie-stevens` | Nettie Stevens, studio portrait, c. 1904, Bryn Mawr College Archives (Adam Cuerden restoration; Commons featured picture) | [Commons](https://commons.wikimedia.org/wiki/File:Nettie_Maria_Stevens_(cropped).jpg) | PD-1923 | No |
+| `lise-meitner` | Lise Meitner, 1953, USIS photo, Austrian National Library holding | [Commons](https://commons.wikimedia.org/wiki/File:Lise_Meitner_(1878–1968)_1953_OeNB_USIS_2955727.jpg) | Public domain (US federal government work) | No |
+| `agnes-pockels` | Agnes Pockels, painted portrait, artist unknown, c. 1892 | [Commons](https://commons.wikimedia.org/wiki/File:Agnes_Pockels_ca1892.jpg) | Public domain (CC-PD-Mark, PD-old, anonymous author) | No |
 
 Two notes on authenticity, not licensing (both images are unambiguously
 clean to use): the `archimedes` and `leonardo-da-vinci` images are both
@@ -124,6 +133,34 @@ any file published after 2024-09-10; excluded to avoid a second,
 differently-sourced attribution obligation on top of the one
 `john-von-neumann`/`richard-feynman` already carry. Worth adding later
 if there's appetite for the extra credit-line bookkeeping.
+
+Originally considered and **rejected** (`diversify-avatar-preset-gallery`,
+2026-08-18, expanding the roster to address issue #125's gender skew):
+**Dorothy Hodgkin** — every real photograph in her Commons category (36
+files checked) has a busy background (a wood-paneled door with a visible
+handle, in the two most commonly used ones), shows other people, or is a
+medal/insignia close-up rather than a photo of her; the one
+clean-background alternative is a 2021 digital illustration by a living
+artist, stylistically inconsistent with this roster's period-photo/
+painting/engraving convention. **Agnes Pockels** substituted instead.
+**Chien-Shiung Wu** — her one well-composed candidate (a 1930s university
+student portrait) has unresolved US public-domain status (a China-PD tag
+only, no confirmed US tag, and too vague a date to confirm the pre-1931
+US cutoff) — the same class of problem that sank Rosalind Franklin above,
+not worth the exposure. Two further physics candidates were tried in her
+place and also rejected: **Marietta Blau** has no photograph on Commons
+at all (only modern illustrations and a commemorative-plaque photo);
+**Katharine Burr Blodgett**'s only Commons photo (a 1938 GE publicity
+shot) has her flanked by lab apparatus, bottles, and cabinets on both
+sides; **Cecilia Payne-Gaposchkin** has 15 files in her category (8 of
+them actual photographs), every one either a busy background (a stone
+building wall, a file-cabinet-lined office, a home interior with a china
+cabinet) or a modern photographer's stylistically-inconsistent portrait.
+No replacement was found for the physics slot after two research rounds
+(5 names total); the roster ships with 8 new presets instead of the
+originally-targeted 9, 14 women of 30 total rather than 15 of 31 — see
+`openspec/changes/archive/*-diversify-avatar-preset-gallery/design.md`
+for the full research trail if this is ever revisited.
 
 **Four images require an in-app attribution credit, not yet added**:
 `john-von-neumann` and `richard-feynman` (both "PD LosAlamos" — Los

@@ -317,7 +317,10 @@ chose.
 An authenticated user SHALL be able to view and update their own display
 name, avatar, and timezone, independent of the admin-only user
 management capability that manages other users' role and deactivation
-status.
+status. The preset avatar roster SHALL include at least 14 women out of
+at least 30 total presets — a floor, not a ceiling, kept as a regression
+guard against the roster drifting back toward the skew flagged in issue
+#125 (originally 6 women of 21) as future presets are added.
 
 #### Scenario: Updating display name and timezone
 - **WHEN** a user submits a new display name and/or timezone for their own account
@@ -335,3 +338,6 @@ status.
 - **WHEN** a user attempts to update display name, avatar, or timezone for an account that is not their own
 - **THEN** the request is rejected — self-service profile editing is scoped to the authenticated user's own account only
 
+#### Scenario: Preset avatar roster meets the gender-balance floor
+- **WHEN** the preset avatar roster is inspected (e.g. by a unit test over `AVATAR_PRESETS`)
+- **THEN** it includes at least 14 women out of at least 30 total presets

@@ -25,6 +25,14 @@ import michaelFaraday from '@/assets/avatars/michael-faraday.jpg'
 import srinivasaRamanujan from '@/assets/avatars/srinivasa-ramanujan.jpg'
 import hideyoNoguchi from '@/assets/avatars/hideyo-noguchi.jpg'
 import confucius from '@/assets/avatars/confucius.jpg'
+import sophieGermain from '@/assets/avatars/sophie-germain.jpg'
+import carolineHerschel from '@/assets/avatars/caroline-herschel.jpg'
+import marySomerville from '@/assets/avatars/mary-somerville.jpg'
+import henriettaSwanLeavitt from '@/assets/avatars/henrietta-swan-leavitt.jpg'
+import nettieStevens from '@/assets/avatars/nettie-stevens.jpg'
+import liseMeitner from '@/assets/avatars/lise-meitner.jpg'
+import agnesPockels from '@/assets/avatars/agnes-pockels.jpg'
+import hypatia from '@/assets/avatars/hypatia.jpg'
 
 export type AvatarPresetKey =
   | 'ada-lovelace'
@@ -49,6 +57,14 @@ export type AvatarPresetKey =
   | 'srinivasa-ramanujan'
   | 'hideyo-noguchi'
   | 'confucius'
+  | 'sophie-germain'
+  | 'caroline-herschel'
+  | 'mary-somerville'
+  | 'henrietta-swan-leavitt'
+  | 'nettie-stevens'
+  | 'lise-meitner'
+  | 'agnes-pockels'
+  | 'hypatia'
 
 export const AVATAR_PRESETS: { key: AvatarPresetKey; name: string; image: string }[] = [
   { key: 'ada-lovelace', name: 'Ada Lovelace', image: adaLovelace },
@@ -73,6 +89,14 @@ export const AVATAR_PRESETS: { key: AvatarPresetKey; name: string; image: string
   { key: 'srinivasa-ramanujan', name: 'Srinivasa Ramanujan', image: srinivasaRamanujan },
   { key: 'hideyo-noguchi', name: 'Hideyo Noguchi', image: hideyoNoguchi },
   { key: 'confucius', name: 'Confucius', image: confucius },
+  { key: 'sophie-germain', name: 'Sophie Germain', image: sophieGermain },
+  { key: 'caroline-herschel', name: 'Caroline Herschel', image: carolineHerschel },
+  { key: 'mary-somerville', name: 'Mary Somerville', image: marySomerville },
+  { key: 'henrietta-swan-leavitt', name: 'Henrietta Swan Leavitt', image: henriettaSwanLeavitt },
+  { key: 'nettie-stevens', name: 'Nettie Stevens', image: nettieStevens },
+  { key: 'lise-meitner', name: 'Lise Meitner', image: liseMeitner },
+  { key: 'agnes-pockels', name: 'Agnes Pockels', image: agnesPockels },
+  { key: 'hypatia', name: 'Hypatia', image: hypatia },
 ]
 
 const AVATAR_PRESET_MAP: Record<string, string> = Object.fromEntries(
