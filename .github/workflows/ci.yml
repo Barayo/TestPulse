@@ -5,13 +5,46 @@ on:
   push:
     branches: [main]
 
+# A new push to the same PR/branch supersedes the previous one — no reason to
+# let both finish and pay for both (reduce-ci-actions-usage).
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
+  # Feeds helm/migrations below, the two jobs cheap enough to skip outright
+  # when their own files didn't change (reduce-ci-actions-usage) — api/web/e2e
+  # stay unconditional on path, since app code can affect either indirectly.
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      helm: ${{ steps.filter.outputs.helm }}
+      migrations: ${{ steps.filter.outputs.migrations }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            helm:
+              - 'deploy/helm/**'
+            migrations:
+              - 'apps/api/internal/db/migrations/**'
+
   api:
     name: API (Go)
     runs-on: ubuntu-latest
+    # A push to main was already validated by the PR that merged it —
+    # re-running here would just spend minutes confirming the same commit
+    # again (reduce-ci-actions-usage). e2e is the one exception: it also
+    # reports results to the dogfood instance on main, so it keeps running
+    # on both triggers.
+    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: apps/api
@@ -55,6 +88,7 @@ jobs:
   web:
     name: Web (TypeScript)
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -133,6 +167,8 @@ jobs:
   helm:
     name: Helm chart
     runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.helm == 'true'
     steps:
       - uses: actions/checkout@v4
       - name: Lint chart
@@ -170,6 +206,8 @@ jobs:
   migrations:
     name: Migrations
     runs-on: ubuntu-latest
+    needs: changes
+    if: github.event_name == 'pull_request' && needs.changes.outputs.migrations == 'true'
     steps:
       - uses: actions/checkout@v4
         with:
