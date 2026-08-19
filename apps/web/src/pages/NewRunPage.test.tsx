@@ -212,6 +212,18 @@ describe('NewRunPage', () => {
     expect(screen.getByLabelText(/^name$/i)).toHaveValue('Smoke run')
   })
 
+  it('focuses and selects the seeded name so it reads as something to confirm', async () => {
+    mockNewRunAPI([caseA, caseB], [smokeSuite])
+    renderNewRun([
+      { pathname: '/projects/p1/runs/new', state: { seedFromSuiteKey: 'p1-S1', seedName: 'Smoke run' } },
+    ])
+    const nameInput = (await screen.findByLabelText(/^name$/i)) as HTMLInputElement
+    await waitFor(() => expect(nameInput).toHaveValue('Smoke run'))
+    expect(nameInput).toHaveFocus()
+    expect(nameInput.selectionStart).toBe(0)
+    expect(nameInput.selectionEnd).toBe('Smoke run'.length)
+  })
+
   it('shows a not-found message instead of an empty, interactive project when the project does not exist', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/projects/{projectKey}')

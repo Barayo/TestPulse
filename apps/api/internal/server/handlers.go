@@ -86,6 +86,10 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/items", h.listRunItems)
 		r.With(h.requirePermission(domain.PermRunCreate, projectIDFromRun)).Post("/items", h.addRunItem)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/summary", h.runSummary)
+		r.Route("/compare/{otherRunKey}", func(r chi.Router) {
+			r.Use(h.resolveKey("otherRunKey", h.svc.RunIDByKey))
+			r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.compareRuns)
+		})
 	})
 	r.Route("/items/{itemID}", func(r chi.Router) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/results", h.listResults)
@@ -558,6 +562,11 @@ func (h *api) addRunItem(w http.ResponseWriter, r *http.Request) {
 func (h *api) runSummary(w http.ResponseWriter, r *http.Request) {
 	sum, err := h.svc.RunSummary(r.Context(), resolvedID(r, "runKey"))
 	h.respond(w, http.StatusOK, sum, err)
+}
+
+func (h *api) compareRuns(w http.ResponseWriter, r *http.Request) {
+	cmp, err := h.svc.CompareRuns(r.Context(), resolvedID(r, "runKey"), resolvedID(r, "otherRunKey"))
+	h.respond(w, http.StatusOK, cmp, err)
 }
 
 func (h *api) suiteTrend(w http.ResponseWriter, r *http.Request) {

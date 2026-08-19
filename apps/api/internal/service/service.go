@@ -752,3 +752,109 @@ func isProjectMemberTeam(m domain.ProjectMembership, teamID string) bool {
 func (s *Service) RunSummary(ctx context.Context, runID string) (domain.RunSummary, error) {
 	return s.store.Runs.Summary(ctx, runID)
 }
+
+func summaryPoint(run domain.Run, items []domain.RunItem) domain.SuiteTrendPoint {
+	point := domain.SuiteTrendPoint{
+		RunKey: run.Key, RunName: run.Name, CreatedAt: run.CreatedAt,
+		Counts: map[domain.Status]int{},
+	}
+	for _, it := range items {
+		point.Counts[it.CurrentStatus]++
+		point.Total++
+	}
+	return point
+}
+
+func isBadVerdictStatus(st domain.Status) bool {
+	return st == domain.StatusFailed || st == domain.StatusBlocked
+}
+
+// CompareRuns returns the categorized item-level diff between two closed
+// runs from the same project, joined by case key (add-run-comparison-view).
+// Older/newer is resolved by each run's CreatedAt, independent of which run
+// ID is supplied first.
+func (s *Service) CompareRuns(ctx context.Context, runID, otherRunID string) (domain.RunComparison, error) {
+	runA, err := s.store.Runs.Get(ctx, runID)
+	if err != nil {
+		return domain.RunComparison{}, err
+	}
+	runB, err := s.store.Runs.Get(ctx, otherRunID)
+	if err != nil {
+		return domain.RunComparison{}, err
+	}
+	if runA.ProjectID != runB.ProjectID {
+		return domain.RunComparison{}, invalid("both runs must belong to the same project")
+	}
+	if runA.Status != domain.RunStatusClosed || runB.Status != domain.RunStatusClosed {
+		return domain.RunComparison{}, invalid("both runs must be closed")
+	}
+
+	older, newer := runA, runB
+	if newer.CreatedAt.Before(older.CreatedAt) {
+		older, newer = newer, older
+	}
+
+	olderItems, err := s.store.Runs.Items(ctx, older.ID, "")
+	if err != nil {
+		return domain.RunComparison{}, err
+	}
+	newerItems, err := s.store.Runs.Items(ctx, newer.ID, "")
+	if err != nil {
+		return domain.RunComparison{}, err
+	}
+
+	olderByCase := make(map[string]domain.RunItem, len(olderItems))
+	for _, it := range olderItems {
+		olderByCase[it.CaseKey] = it
+	}
+	newerByCase := make(map[string]domain.RunItem, len(newerItems))
+	for _, it := range newerItems {
+		newerByCase[it.CaseKey] = it
+	}
+
+	cmp := domain.RunComparison{
+		OlderRun: summaryPoint(older, olderItems),
+		NewerRun: summaryPoint(newer, newerItems),
+		// Initialized non-nil so an empty category marshals as `[]`, matching
+		// the openapi schema's non-nullable array — a nil slice would
+		// otherwise encode as JSON `null` and break a client that assumes
+		// an array (e.g. calling `.length` on the response field).
+		Regressed: []domain.RunComparisonItem{},
+		Improved:  []domain.RunComparisonItem{},
+		Unchanged: []domain.RunComparisonItem{},
+		Added:     []domain.RunComparisonItem{},
+		Removed:   []domain.RunComparisonItem{},
+	}
+
+	for caseKey, oldItem := range olderByCase {
+		newItem, stillPresent := newerByCase[caseKey]
+		if !stillPresent {
+			os := oldItem.CurrentStatus
+			cmp.Removed = append(cmp.Removed, domain.RunComparisonItem{
+				CaseKey: caseKey, CaseTitle: oldItem.Content.Title, StatusOlder: &os,
+			})
+			continue
+		}
+		os, ns := oldItem.CurrentStatus, newItem.CurrentStatus
+		item := domain.RunComparisonItem{CaseKey: caseKey, CaseTitle: newItem.Content.Title, StatusOlder: &os, StatusNewer: &ns}
+		switch {
+		case os == domain.StatusPass && isBadVerdictStatus(ns):
+			cmp.Regressed = append(cmp.Regressed, item)
+		case isBadVerdictStatus(os) && ns == domain.StatusPass:
+			cmp.Improved = append(cmp.Improved, item)
+		default:
+			cmp.Unchanged = append(cmp.Unchanged, item)
+		}
+	}
+	for caseKey, newItem := range newerByCase {
+		if _, existedBefore := olderByCase[caseKey]; existedBefore {
+			continue
+		}
+		ns := newItem.CurrentStatus
+		cmp.Added = append(cmp.Added, domain.RunComparisonItem{
+			CaseKey: caseKey, CaseTitle: newItem.Content.Title, StatusNewer: &ns,
+		})
+	}
+
+	return cmp, nil
+}

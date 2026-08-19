@@ -483,9 +483,15 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await page.getByLabel(/suite name/i).fill('Smoke')
     await page.getByRole('button', { name: /^create$/i }).click()
     await expect(page.getByRole('heading', { name: 'Smoke' })).toBeVisible()
+    // Suite detail defaults to view mode (rework-suite-run-flow) — the
+    // case-selection grid only renders once "Edit cases" is clicked.
+    await page.getByRole('button', { name: /edit cases/i }).click()
     await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: /save changes/i }).click()
-    await expect(page.getByRole('checkbox', { name: 'Login works' })).toBeChecked()
+    // Saving returns to view mode, where the checkbox no longer renders —
+    // the sidebar's case count is the view-mode-visible proof of the save.
+    await expect(page.getByRole('button', { name: /edit cases/i })).toBeVisible()
+    await expect(page.getByTestId('suite-sidebar').getByText('1', { exact: true })).toBeVisible()
 
     // Two entries back: the suite detail page (pushed on create), then the
     // Suites index, landing back on the project page.
@@ -788,13 +794,17 @@ async function createSuiteWithOneCase(page: Page, projectLabel: string, suiteNam
   await page.getByLabel(/suite name/i).fill(suiteName)
   await page.getByRole('button', { name: /^create$/i }).click()
   await expect(page.getByRole('heading', { name: suiteName })).toBeVisible()
+  // Suite detail defaults to view mode (rework-suite-run-flow) — the
+  // case-selection grid only renders once "Edit cases" is clicked.
+  await page.getByRole('button', { name: /edit cases/i }).click()
   await page.getByRole('checkbox', { name: caseTitle }).check()
   await page.getByRole('button', { name: /save changes/i }).click()
-  // The checkbox being checked is true immediately (it's local state, set
-  // before the click) — it does not prove the PUT actually completed. Wait
-  // for the round trip: after a successful save, the button re-disables
-  // itself once the reloaded suite's baseline matches the selection again.
-  await expect(page.getByRole('button', { name: /save changes/i })).toBeDisabled()
+  // Saving returns to view mode automatically, at which point the grid (and
+  // its "Save changes" button) is gone entirely — waiting for "Edit cases"
+  // to reappear is proof the save round-trip actually completed, not just
+  // that the button became disabled (which no longer happens; the button
+  // itself unmounts).
+  await expect(page.getByRole('button', { name: /edit cases/i })).toBeVisible()
   return projectId
 }
 
@@ -840,11 +850,11 @@ test.describe('Requirement: Run creation', () => {
     await page.getByRole('button', { name: /create run/i }).click()
 
     await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
-    await expect(page.getByText(/run created successfully/i)).toBeVisible()
+    await expect(page.getByText('Run "Smoke run" created.')).toBeVisible()
 
     // One-shot: refreshing the same URL does not re-show the banner.
     await page.reload()
-    await expect(page.getByText(/run created successfully/i)).not.toBeVisible()
+    await expect(page.getByText('Run "Smoke run" created.')).not.toBeVisible()
   })
 
   test('Scenario: Selecting a suite in the New run form seeds the case selection', async ({ page }) => {
@@ -869,6 +879,8 @@ test.describe('Requirement: Suites index and detail page', () => {
   test('Scenario: Resizing the case picker\'s section tree', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-88' })
     await createSuiteWithOneCase(page, 'Suite Rail Resize Project', 'Regression', 'Checkout works')
+    // The case picker (and its section tree) only renders in edit mode.
+    await page.getByRole('button', { name: /edit cases/i }).click()
 
     const rail = page.getByRole('tree', { name: 'Sections' }).locator('..')
     const handle = page.getByRole('separator', { name: /resize section tree/i })
@@ -880,7 +892,11 @@ test.describe('Requirement: Suites index and detail page', () => {
     const widened = before + 32
     await expect(rail).toHaveJSProperty('offsetWidth', widened)
 
+    // A reload lands back in view mode (isEditing is local state, not
+    // persisted) — re-enter edit mode to confirm the width itself survived
+    // the reload independent of the mode toggle.
     await page.reload()
+    await page.getByRole('button', { name: /edit cases/i }).click()
     await expect(page.getByRole('tree', { name: 'Sections' }).locator('..')).toHaveJSProperty('offsetWidth', widened)
 
     await page.getByRole('button', { name: /^hide$/i }).click()
@@ -896,19 +912,18 @@ test.describe('Requirement: Suites index and detail page', () => {
     await page.getByRole('button', { name: /^run suite$/i }).click()
     await expect(page.getByText(/1 case from regression/i)).toBeVisible()
     await page.getByRole('button', { name: /^create run$/i }).click()
-
-    // Dialog closes before the properties refresh finishes (same ordering as
-    // Rename/Delete elsewhere on this page) — both "Never run" rows (pass
-    // rate, last run) go to 0 once the reload lands; toHaveCount tolerates
-    // the multi-match locator without a strict-mode violation while it
-    // settles, unlike a bare not.toBeVisible() on an ambiguous locator.
     await expect(page.getByRole('button', { name: /^create run$/i })).not.toBeVisible()
-    await expect(sidebar.getByText(/never run/i)).toHaveCount(0, { timeout: 10000 })
 
-    // rework-runs-list-ux: the quick-run action now leaves an inline
-    // confirmation banner with a link to the new run instead of just
-    // reloading silently.
-    const viewRunLink = page.getByRole('link', { name: /view run/i })
+    // The sidebar's "Pass rate" property reflects the suite's most recent
+    // CLOSED run, not just its most recent run (rework-suite-run-flow D10)
+    // — a freshly-created, still-open run must not turn "Never run" off,
+    // since nothing has actually settled yet.
+    await expect(sidebar.getByText(/never run/i).first()).toBeVisible()
+
+    // rework-runs-list-ux: the quick-run action now leaves a confirmation
+    // toast naming the run, with a link to it, instead of just reloading
+    // silently.
+    const viewRunLink = page.getByRole('link', { name: /view it/i })
     await expect(viewRunLink).toBeVisible()
     await viewRunLink.click()
     await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
@@ -964,5 +979,278 @@ test.describe('Requirement: Suites index and detail page', () => {
     await page.getByRole('button', { name: /confirm delete/i }).click()
 
     await expect(page.getByText(/no suites yet/i)).toBeVisible()
+  })
+
+  test('Scenario: Suite detail page defaults to view mode', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-93' })
+    await createSuiteWithOneCase(page, 'Suite View Mode Project', 'Smoke', 'Login works')
+
+    await expect(page.getByRole('checkbox')).toHaveCount(0)
+    await expect(page.getByText('Stability')).toBeVisible()
+    await expect(page.getByText('Run history')).toBeVisible()
+  })
+
+  test('Scenario: Toggling Edit cases / View cases and back', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-94' })
+    await createSuiteWithOneCase(page, 'Suite Mode Toggle Project', 'Smoke', 'Login works')
+
+    await page.getByRole('button', { name: /edit cases/i }).click()
+    await expect(page.getByRole('checkbox', { name: 'Login works' })).toBeVisible()
+    await expect(page.getByText('Stability')).not.toBeVisible()
+
+    await page.getByRole('button', { name: /^cancel$/i }).click()
+    await expect(page.getByRole('checkbox')).toHaveCount(0)
+    await expect(page.getByText('Stability')).toBeVisible()
+    await expect(page.getByRole('button', { name: /edit cases/i })).toBeVisible()
+  })
+
+  test('Scenario: Confirmation toast is visible without scrolling', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-95' })
+    await createSuiteWithOneCase(page, 'Suite Toast Visibility Project', 'Smoke', 'Login works')
+
+    // rework-suite-run-flow D1: the confirmation used to render inline,
+    // above the fold, invisible whenever the page happened to be scrolled
+    // when it fired — it's now a fixed, viewport-anchored toast instead.
+    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByRole('button', { name: /^create run$/i }).click()
+
+    const toast = page.getByRole('status')
+    await expect(toast).toBeVisible()
+    await expect(toast).toHaveText(/^Run "Smoke run" created\./)
+    await expect(toast).toHaveCSS('position', 'fixed')
+  })
+
+  test('Scenario: Stability\'s "Closed runs"/"Open + closed" toggle switches views, distinguishing an open run\'s point', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-97' })
+    await createSuiteWithOneCase(page, 'Stability Toggle Project', 'Smoke', 'Login works')
+
+    // First run: close it, so there's real closed-run history.
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByLabel('Name').fill('Closed run')
+    await page.getByRole('button', { name: /^create run$/i }).click()
+    await page.getByRole('link', { name: /view it/i }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByRole('button', { name: /^close run$/i }).click()
+    await expect(page.getByRole('button', { name: /^reopen$/i })).toBeVisible()
+
+    // Second run: leave it open.
+    await page.getByRole('link', { name: /^from suite:/i }).click()
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByLabel('Name').fill('Open run')
+    await page.getByRole('button', { name: /^create run$/i }).click()
+
+    await expect(page.getByRole('button', { name: /^closed runs$/i })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByText(/only closed runs/i)).toBeVisible()
+
+    await page.getByRole('button', { name: /^open \+ closed$/i }).click()
+    await expect(page.getByRole('button', { name: /^open \+ closed$/i })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByText(/will keep moving/i)).toBeVisible()
+    await expect(page.locator('[data-testid^="suite-trend-point-"][data-open="true"]')).toHaveCount(1)
+  })
+
+  test('Scenario: Latest closed run property reflects the closed run, not a fresh open run\'s "0%"', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-99' })
+    await createSuiteWithOneCase(page, 'Stability Headline Project', 'Smoke', 'Login works')
+
+    // Closed run: the sole case passes, so the closed history is 100%.
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByLabel('Name').fill('Closed run')
+    await page.getByRole('button', { name: /^create run$/i }).click()
+    await page.getByRole('link', { name: /view it/i }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
+    await page.getByRole('button', { name: /^pass$/i }).click()
+    await expect(page.getByRole('button', { name: /^pass$/i })).toBeEnabled()
+    await page.getByRole('link', { name: /^back to /i }).click()
+    await page.getByRole('button', { name: /^close run$/i }).click()
+    await expect(page.getByRole('button', { name: /^reopen$/i })).toBeVisible()
+
+    // Fresh open run: nothing recorded yet — would show 0% if "latest closed
+    // run" naively tracked the newest point instead of the newest closed one
+    // (rework-suite-run-flow D8/D11).
+    await page.getByRole('link', { name: /^from suite:/i }).click()
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByLabel('Name').fill('Fresh open run')
+    await page.getByRole('button', { name: /^create run$/i }).click()
+
+    const latestClosed = page.getByTestId('suite-latest-closed-run')
+    await expect(latestClosed.getByText('100%', { exact: true })).toBeVisible()
+    await expect(latestClosed.getByText(/in progress/i)).toBeVisible()
+    await expect(latestClosed.getByText('1 run')).toBeVisible()
+
+    // The chart's own endpoint label is a separate, deliberately per-POINT
+    // fact (design.md D11) — it's fine, and expected, for it to show the
+    // open run's own "0%" (attached to that specific hollow/dashed marker),
+    // since it no longer carries the misleading "this is the suite's overall
+    // health" framing the removed headline number used to.
+    const stabilityCard = page.locator('[data-slot="card"]', { has: page.getByText('Stability') })
+    await stabilityCard.getByRole('button', { name: /^open \+ closed$/i }).click()
+    await expect(stabilityCard.getByTestId('suite-trend-endpoint-label')).toHaveText('0%')
+  })
+})
+
+// Two closed runs of the same suite, one case regressing (pass -> failed)
+// between them — the data add-run-comparison-view's scenarios need.
+async function createTwoClosedRunsWithRegression(
+  page: Page,
+  projectLabel: string,
+  suiteName: string,
+  caseTitle: string,
+): Promise<{ projectId: string; run2Key: string }> {
+  const projectId = await createSuiteWithOneCase(page, projectLabel, suiteName, caseTitle)
+  const suiteKey = new URL(page.url()).pathname.split('/').pop()!
+
+  async function runOnce(name: string, verdict: 'pass' | 'failed'): Promise<string> {
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByLabel('Name').fill(name)
+    await page.getByRole('button', { name: /^create run$/i }).click()
+    await page.getByRole('link', { name: /view it/i }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    const runKey = page.url().split('/runs/')[1]
+    await page.getByText(caseTitle).first().click()
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
+    await page.getByRole('button', { name: new RegExp(`^${verdict}$`, 'i') }).click()
+    await expect(page.getByRole('button', { name: new RegExp(`^${verdict}$`, 'i') })).toBeEnabled()
+    await page.getByRole('link', { name: /^back to /i }).click()
+    await page.getByRole('button', { name: /^close run$/i }).click()
+    // The button flips to "Reopen" only once the close request completes
+    // and the page's own state has refreshed — waiting for that (rather
+    // than navigating away immediately) avoids the same race class already
+    // found and fixed for the verdict-recording buttons elsewhere in this
+    // suite: a hard navigation can cancel an in-flight request.
+    await expect(page.getByRole('button', { name: /^reopen$/i })).toBeVisible()
+    return runKey
+  }
+
+  await runOnce('Run 1', 'pass')
+  await page.goto(`/projects/${projectId}/suites/${suiteKey}`)
+  const run2Key = await runOnce('Run 2', 'failed')
+
+  return { projectId, run2Key }
+}
+
+test.describe('Requirement: Run comparison', () => {
+  test('Scenario: Comparing two runs shows both status charts', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-89' })
+    await createTwoClosedRunsWithRegression(page, 'Run Compare Charts Project', 'Regression', 'Login works')
+    await page.getByRole('link', { name: /compare to previous run/i }).click()
+    await page.waitForURL(/\/runs\/compare\//)
+    await expect(page.getByText('Run 1')).toBeVisible()
+    await expect(page.getByText('Run 2')).toBeVisible()
+  })
+
+  test('Scenario: Item-level diff is categorized into five sections', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-90' })
+    await createTwoClosedRunsWithRegression(page, 'Run Compare Diff Project', 'Regression', 'Login works')
+    await page.getByRole('link', { name: /compare to previous run/i }).click()
+    await page.waitForURL(/\/runs\/compare\//)
+    await expect(page.getByText(/regressed · 1/i)).toBeVisible()
+    await expect(page.getByText('Login works')).toBeVisible()
+  })
+
+  test('Scenario: "Compare to previous run" appears only when a prior closed run exists', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-91' })
+    const projectId = await createSuiteWithOneCase(page, 'Run Compare First Project', 'Regression', 'Login works')
+    const suiteKey = new URL(page.url()).pathname.split('/').pop()!
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByRole('button', { name: /^create run$/i }).click()
+    await page.getByRole('link', { name: /view it/i }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await expect(page.getByRole('link', { name: /compare to previous run/i })).not.toBeVisible()
+    await page.getByRole('button', { name: /^close run$/i }).click()
+
+    await page.goto(`/projects/${projectId}/suites/${suiteKey}`)
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByRole('button', { name: /^create run$/i }).click()
+    await page.getByRole('link', { name: /view it/i }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    // The link requires the current run to itself be closed, not just a
+    // prior closed run to exist (rework-suite-run-flow D6 — comparing
+    // always rejects an open run, so a still-open second run must not offer
+    // the link yet even though a prior closed run now exists).
+    await expect(page.getByRole('link', { name: /compare to previous run/i })).not.toBeVisible()
+    await page.getByRole('button', { name: /^close run$/i }).click()
+    await expect(page.getByRole('link', { name: /compare to previous run/i })).toBeVisible()
+  })
+
+  test('Scenario: The explicit picker only offers closed runs from the same project', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-92' })
+    const { projectId } = await createTwoClosedRunsWithRegression(page, 'Run Compare Picker Project', 'Regression', 'Login works')
+    await page.goto(`/projects/${projectId}/runs/compare`)
+    const firstTrigger = page.getByLabel('First run')
+    await firstTrigger.click()
+    const firstListbox = page.getByRole('listbox', { name: 'First run' })
+    await expect(firstListbox.getByRole('option', { name: /Run 1/i })).toHaveCount(1)
+    await expect(firstListbox.getByRole('option', { name: /Run 2/i })).toHaveCount(1)
+    await firstListbox.getByRole('option', { name: /Run 1/i }).click()
+    await page.getByLabel('Second run').click()
+    await page.getByRole('listbox', { name: 'Second run' }).getByRole('option', { name: /Run 2/i }).click()
+    await page.getByRole('button', { name: /^compare$/i }).click()
+    await page.waitForURL(/\/runs\/compare\//)
+  })
+
+  test('Scenario: "Compare…" from a run row\'s context menu pre-selects that run in the picker', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-96' })
+    const { projectId } = await createTwoClosedRunsWithRegression(page, 'Run Compare Row Menu Project', 'Regression', 'Login works')
+
+    await page.goto(`/projects/${projectId}/runs`)
+    await page.getByRole('button', { name: /actions for run 2/i }).click()
+    await page.getByRole('menuitem', { name: /^compare…$/i }).click()
+
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/runs/compare$`))
+    await expect(page.getByLabel('First run')).toContainText('Run 2')
+    await expect(page.getByLabel('Second run')).toContainText('Select a closed run…')
+  })
+
+  test('Scenario: Same-named runs are distinguishable in the picker, and picking one removes it from the other side', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-98' })
+    // Deliberately avoids the word "Name" in the fixture project title — it
+    // collides with every other test's getByLabel('Name') on the create-
+    // project dialog's own field, since a previously-created project's Star
+    // button ("Star <title> ...") also matches that fuzzy substring lookup
+    // once it's sitting in the project list (found live: a full-suite run
+    // failed dozens of unrelated tests after this fixture's title lingered
+    // in the dev DB from an earlier partial run).
+    const projectId = await createSuiteWithOneCase(page, 'Run Compare Duplicate Title Project', 'Nightly', 'Login works')
+    const suiteKey = new URL(page.url()).pathname.split('/').pop()!
+
+    async function closedRun(): Promise<void> {
+      await page.getByRole('button', { name: /^run suite$/i }).click()
+      await page.getByLabel('Name').fill('Nightly run')
+      await page.getByRole('button', { name: /^create run$/i }).click()
+      await page.getByRole('link', { name: /view it/i }).click()
+      await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+      await page.getByText('Login works').first().click()
+      await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+      await page.getByLabel(/record on behalf of/i).fill('ana')
+      await page.getByRole('button', { name: /^pass$/i }).click()
+      await expect(page.getByRole('button', { name: /^pass$/i })).toBeEnabled()
+      await page.getByRole('link', { name: /^back to /i }).click()
+      await page.getByRole('button', { name: /^close run$/i }).click()
+      await expect(page.getByRole('button', { name: /^reopen$/i })).toBeVisible()
+      await page.goto(`/projects/${projectId}/suites/${suiteKey}`)
+    }
+
+    await closedRun()
+    await closedRun()
+
+    await page.goto(`/projects/${projectId}/runs/compare`)
+    await page.getByLabel('First run').click()
+    const firstListbox = page.getByRole('listbox', { name: 'First run' })
+    const firstOptions = firstListbox.getByRole('option', { name: /nightly run/i })
+    await expect(firstOptions).toHaveCount(2)
+    // Same name, but each option carries its own date + pass-rate health,
+    // so the two rows aren't literally identical text (rework-suite-run-flow D9).
+    await expect(firstOptions.first().getByText('100%')).toBeVisible()
+    await firstOptions.first().click()
+
+    await page.getByLabel('Second run').click()
+    // The run just picked on the first side is gone from the second side's
+    // options — a run can't be compared against itself.
+    await expect(page.getByRole('listbox', { name: 'Second run' }).getByRole('option', { name: /nightly run/i })).toHaveCount(1)
   })
 })

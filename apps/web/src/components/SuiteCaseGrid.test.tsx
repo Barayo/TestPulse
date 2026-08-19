@@ -21,6 +21,7 @@ const cases: SuiteCaseGridCase[] = [
 function renderGrid(overrides: Partial<Parameters<typeof SuiteCaseGrid>[0]> = {}) {
   const onToggle = vi.fn()
   const onCommit = vi.fn()
+  const onExit = vi.fn()
   render(
     <SuiteCaseGrid
       cases={cases}
@@ -30,10 +31,11 @@ function renderGrid(overrides: Partial<Parameters<typeof SuiteCaseGrid>[0]> = {}
       commitLabel="Create suite (0)"
       commitDisabled
       onCommit={onCommit}
+      onExit={onExit}
       {...overrides}
     />,
   )
-  return { onToggle, onCommit }
+  return { onToggle, onCommit, onExit }
 }
 
 describe('SuiteCaseGrid', () => {
@@ -80,5 +82,19 @@ describe('SuiteCaseGrid', () => {
     expect(screen.getByRole('checkbox', { name: /login succeeds/i })).toBeDisabled()
     expect(screen.queryByText(/selected/)).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /create suite|save changes/i })).not.toBeInTheDocument()
+  })
+
+  it('shows a lone "Done" control when readOnly, calling onExit when clicked', async () => {
+    const { onExit } = renderGrid({ readOnly: true })
+    const doneButton = screen.getByRole('button', { name: /^done$/i })
+    await userEvent.click(doneButton)
+    expect(onExit).toHaveBeenCalled()
+  })
+
+  it('shows a "Cancel" control alongside the commit button when editable, calling onExit when clicked', async () => {
+    const { onExit, onCommit } = renderGrid({ commitLabel: 'Save changes', commitDisabled: false })
+    await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
+    expect(onExit).toHaveBeenCalled()
+    expect(onCommit).not.toHaveBeenCalled()
   })
 })

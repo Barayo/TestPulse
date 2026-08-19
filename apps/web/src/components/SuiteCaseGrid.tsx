@@ -24,6 +24,7 @@ export function SuiteCaseGrid({
   commitLabel,
   commitDisabled,
   onCommit,
+  onExit,
   readOnly = false,
 }: {
   cases: SuiteCaseGridCase[]
@@ -33,6 +34,10 @@ export function SuiteCaseGrid({
   commitLabel: string
   commitDisabled: boolean
   onCommit: () => void
+  // Returns the caller to whatever "view" state it came from, discarding any
+  // uncommitted selection changes (rework-suite-run-flow design.md D3) — the
+  // grid otherwise has no way to be left once entered.
+  onExit: () => void
   // Disables the picker's checkboxes and hides the selection-count/commit
   // footer entirely — there's nothing to commit if the caller can't edit
   // (unify-authenticated-and-public-views tasks.md 2.2).
@@ -42,14 +47,25 @@ export function SuiteCaseGrid({
     <div className="space-y-3">
       <CasePicker cases={cases} folders={folders} selected={selected} onToggle={onToggle} readOnly={readOnly} />
 
-      {!readOnly && (
+      {readOnly ? (
+        <div className="flex justify-end rounded-md border bg-accent px-4 py-2.5">
+          <Button type="button" variant="outline" onClick={onExit}>
+            Done
+          </Button>
+        </div>
+      ) : (
         <div className="flex items-center justify-between rounded-md border bg-accent px-4 py-2.5">
           <span className="text-sm font-medium">
             {selected.size === 0 ? 'No cases selected' : `${selected.size} selected`}
           </span>
-          <Button type="button" disabled={commitDisabled} onClick={onCommit}>
-            {commitLabel}
-          </Button>
+          <div className="flex gap-2">
+            <Button type="button" variant="outline" onClick={onExit}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={commitDisabled} onClick={onCommit}>
+              {commitLabel}
+            </Button>
+          </div>
         </div>
       )}
     </div>

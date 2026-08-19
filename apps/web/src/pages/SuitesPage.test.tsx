@@ -197,7 +197,7 @@ describe('SuitesPage', () => {
     expect(navigatedTo).toBeUndefined()
   })
 
-  it('running a suite from the index menu shows the confirmation banner', async () => {
+  it('running a suite from the index menu shows a confirmation toast naming the run', async () => {
     mockSuitesAPI(projectQA, [
       { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null, lastRunAt: null },
     ])
@@ -211,8 +211,8 @@ describe('SuitesPage', () => {
     await userEvent.click(screen.getByRole('menuitem', { name: /run suite/i }))
     await userEvent.click(screen.getByRole('button', { name: /^create run$/i }))
 
-    expect(await screen.findByText(/run created/i)).toBeInTheDocument()
-    const link = screen.getByRole('link', { name: /view run/i })
+    expect(await screen.findByText('Run "Smoke run" created.')).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /view it/i })
     expect(link).toHaveAttribute('href', '/runs/p1-R1')
   })
 

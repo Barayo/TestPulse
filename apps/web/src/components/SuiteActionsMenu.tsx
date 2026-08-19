@@ -25,10 +25,10 @@ type Props = {
   // Called after a rename, a delete on the index, or a quick-run succeeds,
   // so the caller can refetch whatever list/detail data it owns.
   onChanged: () => void | Promise<void>
-  // Called with the new run's key after a successful quick-run, so a caller
-  // that shows an inline "Run created" banner (SuiteDetailPage, SuitesPage)
-  // can do so — optional since not every future caller needs it.
-  onRunCreated?: (runKey: string) => void
+  // Called with the new run's key and name after a successful quick-run, so
+  // a caller that shows a confirmation toast (SuiteDetailPage, SuitesPage)
+  // can name the run in it — optional since not every future caller needs it.
+  onRunCreated?: (run: { key: string; name: string }) => void
   // The caller's own effective permissions (useProjectPermissions) — hides
   // (not disables) Run suite/Rename/Delete individually per flag, the same
   // "hide entirely, don't rely on the server 403" rule the rest of the app
@@ -75,7 +75,7 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
     })
     setRunningQuick(false)
     bumpLanding()
-    if (data) onRunCreated?.(data.key)
+    if (data) onRunCreated?.({ key: data.key, name: data.name })
     await onChanged()
   }
 
@@ -185,6 +185,7 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
             <Input
               id={`quick-run-name-${suite.key}`}
               autoFocus
+              onFocus={(e) => e.currentTarget.select()}
               value={quickRunName}
               onChange={(e) => setQuickRunName(e.target.value)}
             />

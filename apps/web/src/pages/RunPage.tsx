@@ -194,6 +194,7 @@ export default function RunPage() {
   const [access, setAccess] = useState<'member' | 'public'>('public')
   const [project, setProject] = useState<Project>()
   const [suite, setSuite] = useState<Suite>()
+  const [priorRunKey, setPriorRunKey] = useState<string>()
   const [items, setItems] = useState<RunItem[]>([])
   const [summary, setSummary] = useState<RunSummary>()
   const [lifecycleError, setLifecycleError] = useState<string>()
@@ -300,6 +301,39 @@ export default function RunPage() {
       : api.GET('/api/v1/public/suites/{suiteKey}', { params: { path: { suiteKey } } })
     request.then(({ data }) => setSuite(data)).catch(() => setSuite(undefined))
   }, [suiteKey, access, authLoading])
+
+  // "Compare to previous run" (add-run-comparison-view): the suite trend
+  // (#77) already lists only closed runs, oldest→newest — the most recent
+  // one created before this run is the "previous closed run" the quick
+  // action needs. Resolved by creation time, not list position: this run
+  // itself isn't in the trend at all while it's still open (the common
+  // case right after creating it), so a position-based lookup would miss
+  // it — date comparison against the run's own createdAt works either way.
+  const runCreatedAt = run?.createdAt
+  useEffect(() => {
+    // Comparing always rejects an open run (test-execution's "Comparing an
+    // open run is rejected") — a run that hasn't itself been closed yet has
+    // no valid comparison to offer, regardless of what its suite's trend
+    // contains (rework-suite-run-flow design.md D6: without this check, an
+    // open run whose suite happened to have an earlier closed run showed a
+    // link that always led to "Comparison not found").
+    if (!suiteKey || !runKey || !runCreatedAt || authLoading || run?.status !== 'closed') {
+      setPriorRunKey(undefined)
+      return
+    }
+    const request = access === 'member'
+      ? api.GET('/api/v1/suites/{suiteKey}/trend', { params: { path: { suiteKey } } })
+      : api.GET('/api/v1/public/suites/{suiteKey}/trend', { params: { path: { suiteKey } } })
+    request
+      .then(({ data }) => {
+        const thisRunTime = new Date(runCreatedAt).getTime()
+        const prior = (data?.points ?? [])
+          .filter((p) => p.runKey !== runKey && new Date(p.createdAt).getTime() < thisRunTime)
+          .at(-1)
+        setPriorRunKey(prior?.runKey)
+      })
+      .catch(() => setPriorRunKey(undefined))
+  }, [suiteKey, runKey, runCreatedAt, run?.status, access, authLoading])
 
   useEffect(() => {
     void load()
@@ -496,8 +530,8 @@ export default function RunPage() {
           run?.name,
         )}
       />
-      {showCreatedBanner && (
-        <ConfirmBanner message="Run created successfully" onDismiss={() => setShowCreatedBanner(false)} />
+      {showCreatedBanner && run && (
+        <ConfirmBanner message={`Run "${run.name}" created.`} onDismiss={() => setShowCreatedBanner(false)} />
       )}
       <Card>
         <CardHeader>
@@ -505,6 +539,17 @@ export default function RunPage() {
             <CardTitle className="tp-heading">{run?.name ?? 'Run'}</CardTitle>
             {run && (
               <div className="flex items-center gap-2">
+                {run.status === 'closed' && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      navigate(`/projects/${run.projectKey}/runs/compare`, { state: { seedRunKey: run.key } })
+                    }
+                  >
+                    Compare…
+                  </Button>
+                )}
                 <Badge variant={run.status === 'open' ? 'secondary' : 'outline'}>{run.status}</Badge>
                 {run.status === 'open'
                   ? canRecord && (
@@ -541,6 +586,14 @@ export default function RunPage() {
               )}
               <span aria-hidden="true">&middot;</span>
               <span>Created {new Date(run.createdAt).toLocaleDateString()}</span>
+              {priorRunKey && (
+                <>
+                  <span aria-hidden="true">&middot;</span>
+                  <Link to={`/runs/compare/${priorRunKey}/${run.key}`} className="font-medium text-primary hover:underline">
+                    Compare to previous run
+                  </Link>
+                </>
+              )}
             </div>
           )}
           {summary && <RunStatusBreakdown total={summary.total} counts={summary.counts} />}

@@ -83,6 +83,15 @@ describe('SuiteActionsMenu', () => {
       expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument()
     })
 
+    it('selects the full suggested name so it reads as something to confirm, not an inert prefill', async () => {
+      renderMenu({ variant: 'buttons' })
+      await userEvent.click(screen.getByRole('button', { name: /run suite/i }))
+      const nameInput = screen.getByLabelText(/^name$/i) as HTMLInputElement
+      expect(nameInput.selectionStart).toBe(0)
+      expect(nameInput.selectionEnd).toBe(nameInput.value.length)
+      expect(nameInput.value.length).toBeGreaterThan(0)
+    })
+
     it('confirming Run suite creates a run and calls onChanged and onRunCreated', async () => {
       mockPOST.mockResolvedValue({
         data: { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Smoke run', createdAt: '' },
@@ -105,7 +114,7 @@ describe('SuiteActionsMenu', () => {
         )
       })
       await waitFor(() => expect(onChanged).toHaveBeenCalled())
-      expect(onRunCreated).toHaveBeenCalledWith('p1-R1')
+      expect(onRunCreated).toHaveBeenCalledWith({ key: 'p1-R1', name: 'Smoke run' })
     })
 
     it('Customize selection navigates to the New run route pre-seeded with this suite', async () => {

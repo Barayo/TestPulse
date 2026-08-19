@@ -37,7 +37,7 @@ function SuiteCard({
   projectKey: string
   navigate: NavigateFunction
   onChanged: () => void | Promise<void>
-  onRunCreated: (runKey: string) => void
+  onRunCreated: (run: { key: string; name: string }) => void
   permissions: Permissions | undefined
 }) {
   const menuRef = useRef<SuiteActionsMenuHandle>(null)
@@ -96,7 +96,7 @@ export default function SuitesPage() {
   const [suites, setSuites] = useState<Suite[]>([])
   const [creating, setCreating] = useState(false)
   const [suiteName, setSuiteName] = useState('')
-  const [createdRunKey, setCreatedRunKey] = useState<string>()
+  const [createdRun, setCreatedRun] = useState<{ key: string; name: string }>()
 
   const load = useCallback(async () => {
     // Waits for the session check and confirmed project read access before
@@ -172,12 +172,12 @@ export default function SuitesPage() {
         )}
       />
 
-      {createdRunKey && (
+      {createdRun && (
         <ConfirmBanner
-          message="Run created"
-          linkTo={`/runs/${createdRunKey}`}
-          linkLabel="View run →"
-          onDismiss={() => setCreatedRunKey(undefined)}
+          message={`Run "${createdRun.name}" created.`}
+          linkTo={`/runs/${createdRun.key}`}
+          linkLabel="View it →"
+          onDismiss={() => setCreatedRun(undefined)}
         />
       )}
 
@@ -208,7 +208,7 @@ export default function SuitesPage() {
                   projectKey={projectKey}
                   navigate={navigate}
                   onChanged={load}
-                  onRunCreated={setCreatedRunKey}
+                  onRunCreated={setCreatedRun}
                   permissions={permissions}
                 />
               ))}

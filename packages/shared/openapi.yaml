@@ -775,6 +775,26 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/RunSummary" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/runs/{runKey}/compare/{otherRunKey}:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+      - { name: otherRunKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: compareRuns
+      summary: >-
+        Categorized item-level diff between two closed runs from the same
+        project (regressed/improved/unchanged/added/removed), joined by
+        case key. Order of the two run keys in the URL doesn't matter —
+        older/newer is resolved by each run's creation time.
+      tags: [runs]
+      responses:
+        "200":
+          description: Comparison
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunComparison" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/suites/{suiteKey}:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
@@ -1048,6 +1068,21 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/RunItem" }
+  /api/v1/public/runs/{runKey}/compare/{otherRunKey}:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+      - { name: otherRunKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: comparePublicRuns
+      summary: Categorized item-level diff between two closed runs, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Comparison
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunComparison" }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/runs/{runKey}/summary:
     parameters:
@@ -2239,6 +2274,41 @@ components:
         points:
           type: array
           items: { $ref: "#/components/schemas/SuiteTrendPoint" }
+    RunComparisonItem:
+      type: object
+      required: [caseKey, caseTitle]
+      properties:
+        caseKey: { type: string }
+        caseTitle: { type: string }
+        statusOlder:
+          allOf: [{ $ref: "#/components/schemas/Status" }]
+          nullable: true
+          description: Absent for an item categorized as added (it has no older-run status).
+        statusNewer:
+          allOf: [{ $ref: "#/components/schemas/Status" }]
+          nullable: true
+          description: Absent for an item categorized as removed (it has no newer-run status).
+    RunComparison:
+      type: object
+      required: [olderRun, newerRun, regressed, improved, unchanged, added, removed]
+      properties:
+        olderRun: { $ref: "#/components/schemas/SuiteTrendPoint" }
+        newerRun: { $ref: "#/components/schemas/SuiteTrendPoint" }
+        regressed:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        improved:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        unchanged:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        added:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        removed:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
     FlakyCase:
       type: object
       required: [caseKey, caseTitle, currentVersion, rate]

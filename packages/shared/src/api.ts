@@ -634,6 +634,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{runKey}/compare/{otherRunKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+                otherRunKey: string;
+            };
+            cookie?: never;
+        };
+        /** Categorized item-level diff between two closed runs from the same project (regressed/improved/unchanged/added/removed), joined by case key. Order of the two run keys in the URL doesn't matter — older/newer is resolved by each run's creation time. */
+        get: operations["compareRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/suites/{suiteKey}": {
         parameters: {
             query?: never;
@@ -930,6 +950,26 @@ export interface paths {
         };
         /** List run items with pinned content, from a public project */
         get: operations["listPublicRunItems"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/runs/{runKey}/compare/{otherRunKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+                otherRunKey: string;
+            };
+            cookie?: never;
+        };
+        /** Categorized item-level diff between two closed runs, from a public project */
+        get: operations["comparePublicRuns"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1853,6 +1893,23 @@ export interface components {
             suiteId: string;
             suiteKey: string;
             points: components["schemas"]["SuiteTrendPoint"][];
+        };
+        RunComparisonItem: {
+            caseKey: string;
+            caseTitle: string;
+            /** @description Absent for an item categorized as added (it has no older-run status). */
+            statusOlder?: components["schemas"]["Status"] | null;
+            /** @description Absent for an item categorized as removed (it has no newer-run status). */
+            statusNewer?: components["schemas"]["Status"] | null;
+        };
+        RunComparison: {
+            olderRun: components["schemas"]["SuiteTrendPoint"];
+            newerRun: components["schemas"]["SuiteTrendPoint"];
+            regressed: components["schemas"]["RunComparisonItem"][];
+            improved: components["schemas"]["RunComparisonItem"][];
+            unchanged: components["schemas"]["RunComparisonItem"][];
+            added: components["schemas"]["RunComparisonItem"][];
+            removed: components["schemas"]["RunComparisonItem"][];
         };
         FlakyCase: {
             caseKey: string;
@@ -3443,6 +3500,31 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    compareRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+                otherRunKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunComparison"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     getSuite: {
         parameters: {
             query?: never;
@@ -3854,6 +3936,30 @@ export interface operations {
                     "application/json": components["schemas"]["RunItem"][];
                 };
             };
+        };
+    };
+    comparePublicRuns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+                otherRunKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Comparison */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunComparison"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
         };
     };

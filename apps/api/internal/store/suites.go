@@ -108,31 +108,48 @@ func (r *SuiteRepo) Get(ctx context.Context, suiteID string) (domain.Suite, erro
 	return s, nil
 }
 
-// latestRunStats returns the pass rate and created-at of a single suite's
-// most recently created run (open or closed — same "latest run" semantic
-// ProjectSummary already uses), or nil/nil if it has never had a run.
+// latestRunStats returns a single suite's PassRate and LastRunAt.
+// LastRunAt reflects the most recently created run regardless of status —
+// a true "last activity" signal, same "latest run" semantic ProjectSummary
+// uses. PassRate deliberately does NOT share that semantic: it reflects the
+// most recently CLOSED run, or nil if the suite has no closed run yet — a
+// fresh, still-open run's own (often barely-started) rate must never
+// override a settled closed result or manufacture a misleading number out
+// of one that isn't settled at all (rework-suite-run-flow D10, mirroring
+// the Stability card's own D8 fix — found live when this property showed
+// "0%" right beside a Stability card correctly showing "100%").
 func (r *SuiteRepo) latestRunStats(ctx context.Context, suiteID string) (*int, *time.Time, error) {
 	var lastRunAt time.Time
-	var total, passCount int
 	err := r.pool.QueryRow(ctx,
-		`SELECT r.created_at, count(i.id), count(i.id) FILTER (WHERE i.current_status = 'pass')
-		 FROM (
-		     SELECT id, created_at FROM test_runs
-		     WHERE suite_id = $1 ORDER BY created_at DESC LIMIT 1
-		 ) r
-		 LEFT JOIN test_run_items i ON i.run_id = r.id
-		 GROUP BY r.created_at`, suiteID,
-	).Scan(&lastRunAt, &total, &passCount)
+		`SELECT created_at FROM test_runs WHERE suite_id = $1 ORDER BY created_at DESC LIMIT 1`, suiteID,
+	).Scan(&lastRunAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil, nil
 	}
 	if err != nil {
 		return nil, nil, err
 	}
+
+	var total, passCount int
+	err = r.pool.QueryRow(ctx,
+		`SELECT count(i.id), count(i.id) FILTER (WHERE i.current_status = 'pass')
+		 FROM (
+		     SELECT id FROM test_runs
+		     WHERE suite_id = $1 AND status = 'closed' ORDER BY created_at DESC LIMIT 1
+		 ) r
+		 LEFT JOIN test_run_items i ON i.run_id = r.id
+		 GROUP BY r.id`, suiteID,
+	).Scan(&total, &passCount)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, &lastRunAt, nil
+	}
+	if err != nil {
+		return nil, nil, err
+	}
 	var rate *int
 	if total > 0 {
-		r := int(float64(passCount) / float64(total) * 100)
-		rate = &r
+		rt := int(float64(passCount) / float64(total) * 100)
+		rate = &rt
 	}
 	return rate, &lastRunAt, nil
 }
@@ -176,16 +193,28 @@ func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite,
 	// Batched "latest run per suite" — one grouped query for every suite in
 	// the project, not one query per suite (mirrors ProjectRepo.Summaries;
 	// see rework-suites-landing-ux/design.md's revised Decisions).
+	// last_run_at comes from the true latest run per suite (any status);
+	// the pass-rate aggregation comes from a separate "latest CLOSED run
+	// per suite" pick — same PassRate/LastRunAt split as latestRunStats
+	// above, batched (rework-suite-run-flow D10).
 	statsRows, err := r.pool.Query(ctx,
-		`SELECT r.suite_id, r.created_at, count(i.id), count(i.id) FILTER (WHERE i.current_status = 'pass')
-		 FROM (
-		     SELECT DISTINCT ON (suite_id) id, suite_id, created_at
+		`WITH latest_any AS (
+		     SELECT DISTINCT ON (suite_id) suite_id, created_at
 		     FROM test_runs
 		     WHERE suite_id = ANY($1)
 		     ORDER BY suite_id, created_at DESC
-		 ) r
-		 LEFT JOIN test_run_items i ON i.run_id = r.id
-		 GROUP BY r.suite_id, r.created_at`, order)
+		 ), latest_closed AS (
+		     SELECT DISTINCT ON (suite_id) suite_id, id
+		     FROM test_runs
+		     WHERE suite_id = ANY($1) AND status = 'closed'
+		     ORDER BY suite_id, created_at DESC
+		 )
+		 SELECT la.suite_id, la.created_at,
+		        count(i.id), count(i.id) FILTER (WHERE i.current_status = 'pass')
+		 FROM latest_any la
+		 LEFT JOIN latest_closed lc ON lc.suite_id = la.suite_id
+		 LEFT JOIN test_run_items i ON i.run_id = lc.id
+		 GROUP BY la.suite_id, la.created_at`, order)
 	if err != nil {
 		return nil, err
 	}

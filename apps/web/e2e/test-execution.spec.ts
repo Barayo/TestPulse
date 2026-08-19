@@ -113,9 +113,12 @@ test.describe('Requirement: Run execution board', () => {
     await page.getByLabel(/suite name/i).fill('Regression')
     await page.getByRole('button', { name: /^create$/i }).click()
     await expect(page.getByRole('heading', { name: 'Regression' })).toBeVisible()
+    // Suite detail defaults to view mode (rework-suite-run-flow) — the
+    // case-selection grid only renders once "Edit cases" is clicked.
+    await page.getByRole('button', { name: /edit cases/i }).click()
     await page.getByRole('checkbox', { name: 'Login works' }).check()
     await page.getByRole('button', { name: /save changes/i }).click()
-    await expect(page.getByRole('button', { name: /save changes/i })).toBeDisabled()
+    await expect(page.getByRole('button', { name: /edit cases/i })).toBeVisible()
 
     await page.getByRole('button', { name: /^run suite$/i }).click()
     await page.getByRole('button', { name: /^create run$/i }).click()

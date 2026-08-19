@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useParams } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router'
 import RunPage from './RunPage'
 import { api } from '@/lib/api'
 import { useBumpDataRevision } from '@/lib/DataRevision'
@@ -76,6 +76,7 @@ function mockRunAPI(
   suiteOverride?: unknown,
   permissions: unknown = fullPermissions,
   anonymous = false,
+  trendOverride?: unknown,
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me')
@@ -87,6 +88,7 @@ function mockRunAPI(
     const summaryPath = anonymous ? '/api/v1/public/runs/{runKey}/summary' : '/api/v1/runs/{runKey}/summary'
     const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
     const suitePath = anonymous ? '/api/v1/public/suites/{suiteKey}' : '/api/v1/suites/{suiteKey}'
+    const trendPath = anonymous ? '/api/v1/public/suites/{suiteKey}/trend' : '/api/v1/suites/{suiteKey}/trend'
     if (path === runPath) return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
     if (path === itemsPath) return Promise.resolve({ data: items, response: { ok: true } })
     if (path === summaryPath)
@@ -102,6 +104,11 @@ function mockRunAPI(
     if (path === suitePath)
       return Promise.resolve({
         data: suiteOverride ?? { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Regression', caseIds: [], createdAt: '', passRate: null, lastRunAt: null },
+        response: { ok: true },
+      })
+    if (path === trendPath)
+      return Promise.resolve({
+        data: trendOverride ?? { suiteId: 's1', suiteKey: 'p1-S1', points: [] },
         response: { ok: true },
       })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
@@ -166,6 +173,13 @@ function RunsListProbe() {
   return <p data-testid="runs-list-probe">runs {projectKey}</p>
 }
 
+function ComparePickerProbe() {
+  const { projectKey } = useParams<{ projectKey?: string }>()
+  const location = useLocation()
+  const state = location.state as { seedRunKey?: string } | null
+  return <p data-testid="compare-picker-probe">compare {projectKey} {state?.seedRunKey}</p>
+}
+
 function renderRun(initialEntries: Parameters<typeof MemoryRouter>[0]['initialEntries'] = ['/runs/r1']) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
@@ -175,6 +189,7 @@ function renderRun(initialEntries: Parameters<typeof MemoryRouter>[0]['initialEn
         <Route path="/runs/:runKey/items/:caseKey" element={<ItemPageProbe />} />
         <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseLibraryProbe />} />
         <Route path="/projects/:projectKey/runs" element={<RunsListProbe />} />
+        <Route path="/projects/:projectKey/runs/compare" element={<ComparePickerProbe />} />
         <Route path="/login" element={<p>login stub</p>} />
       </Routes>
       </AuthProvider>
@@ -307,6 +322,85 @@ describe('Suite linkage and metadata (rework-run-detail-ux)', () => {
     renderRun()
     await screen.findByText('Login works')
     expect(screen.getByText(new RegExp(new Date('2026-07-24T00:00:00Z').toLocaleDateString()))).toBeInTheDocument()
+  })
+})
+
+describe('Compare to previous run (add-run-comparison-view)', () => {
+  it('shows "Compare to previous run" when this run is closed and the suite trend has a closed run immediately before it', async () => {
+    mockRunAPI(
+      [pendingItem],
+      undefined,
+      { ...run, key: 'r2', status: 'closed', suiteKey: 'p1-S1', createdAt: '2026-01-08T00:00:00Z' },
+      undefined,
+      undefined,
+      false,
+      {
+        suiteId: 's1',
+        suiteKey: 'p1-S1',
+        points: [{ runKey: 'r1', runName: 'Sprint 0', createdAt: '2026-01-01T00:00:00Z', total: 1, counts: { pass: 1 } }],
+      },
+    )
+    renderRun(['/runs/r2'])
+    const link = await screen.findByRole('link', { name: /compare to previous run/i })
+    expect(link).toHaveAttribute('href', '/runs/compare/r1/r2')
+  })
+
+  it('does not show "Compare to previous run" when there is no prior closed run', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed', suiteKey: 'p1-S1', createdAt: '2026-01-01T00:00:00Z' }, undefined, undefined, false, {
+      suiteId: 's1',
+      suiteKey: 'p1-S1',
+      points: [{ runKey: 'r1', runName: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z', total: 1, counts: { pass: 1 } }],
+    })
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('link', { name: /compare to previous run/i })).not.toBeInTheDocument()
+  })
+
+  // Real bug found live: the link only checked the suite's trend for a
+  // prior closed run — it never checked that THIS run was itself closed.
+  // Comparing always rejects an open run, so this combination produced a
+  // link that led straight to "Comparison not found."
+  it('does not show "Compare to previous run" when this run is still open, even with an earlier closed run', async () => {
+    mockRunAPI(
+      [pendingItem],
+      undefined,
+      { ...run, key: 'r2', status: 'open', suiteKey: 'p1-S1', createdAt: '2026-01-08T00:00:00Z' },
+      undefined,
+      undefined,
+      false,
+      {
+        suiteId: 's1',
+        suiteKey: 'p1-S1',
+        points: [{ runKey: 'r1', runName: 'Sprint 0', createdAt: '2026-01-01T00:00:00Z', total: 1, counts: { pass: 1 } }],
+      },
+    )
+    renderRun(['/runs/r2'])
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('link', { name: /compare to previous run/i })).not.toBeInTheDocument()
+  })
+
+  it('does not show "Compare to previous run" when the run has no suite', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, suiteKey: null })
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('link', { name: /compare to previous run/i })).not.toBeInTheDocument()
+  })
+})
+
+describe('Compare… button (rework-suite-run-flow)', () => {
+  it('shows a "Compare…" button for a closed run, navigating to the picker seeded with this run', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    renderRun()
+    await userEvent.click(await screen.findByRole('button', { name: /^compare…$/i }))
+    const probe = await screen.findByTestId('compare-picker-probe')
+    expect(probe).toHaveTextContent(`compare ${run.projectKey} ${run.key}`)
+  })
+
+  it('does not show "Compare…" for an open run', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'open' })
+    renderRun()
+    await screen.findByText('Login works')
+    expect(screen.queryByRole('button', { name: /^compare…$/i })).not.toBeInTheDocument()
   })
 })
 
@@ -573,17 +667,23 @@ describe('Run lifecycle (open/closed)', () => {
     await waitFor(() => expect(mockBump).toHaveBeenCalled())
   })
 
-  it('shows a one-shot "Run created" banner when arriving via the justCreated router state', async () => {
+  it('shows a one-shot banner naming the run when arriving via the justCreated router state', async () => {
     mockRunAPI([pendingItem])
     renderRun([{ pathname: '/runs/r1', state: { justCreated: true } }])
-    expect(await screen.findByText(/run created successfully/i)).toBeInTheDocument()
+    expect(await screen.findByText(`Run "${run.name}" created.`)).toBeInTheDocument()
   })
 
   it('does not show the "Run created" banner on a normal visit', async () => {
     mockRunAPI([pendingItem])
     renderRun()
     await screen.findAllByText(run.name)
-    expect(screen.queryByText(/run created successfully/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(`Run "${run.name}" created.`)).not.toBeInTheDocument()
+  })
+
+  it('does not render the banner before the run has finished loading, even if justCreated is set', () => {
+    mockGET.mockReturnValue(new Promise(() => {})) // never resolves — simulates in-flight load
+    renderRun([{ pathname: '/runs/r1', state: { justCreated: true } }])
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
   })
 
 })

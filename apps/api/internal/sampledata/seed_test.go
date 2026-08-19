@@ -381,6 +381,130 @@ func TestSeedContentEndsOnAHealthyRun(t *testing.T) {
 	}
 }
 
+// TestSeedContentHasARunComparisonShowcase covers add-run-comparison-view:
+// the Sample Project must contain two closed, suite-linked runs of the same
+// suite with a genuine case-level regression and recovery between them, so
+// both comparison entry points ("Compare to previous run" and the explicit
+// picker) have real data to demonstrate.
+func TestSeedContentHasARunComparisonShowcase(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var older, newer *domain.Run
+	for i, r := range runs {
+		switch r.Name {
+		case "Release 1.1 regression":
+			older = &runs[i]
+		case "Release 1.1.1 hotfix verification":
+			newer = &runs[i]
+		}
+	}
+	if older == nil || newer == nil {
+		t.Fatal("missing one or both of the suite-linked regression/hotfix runs")
+	}
+	if older.Status != domain.RunStatusClosed || newer.Status != domain.RunStatusClosed {
+		t.Fatalf("older.Status=%q newer.Status=%q, want both closed", older.Status, newer.Status)
+	}
+
+	cmp, err := svc.CompareRuns(actorCtx, older.ID, newer.ID)
+	if err != nil {
+		t.Fatalf("CompareRuns: %v", err)
+	}
+	if len(cmp.Regressed) == 0 {
+		t.Error("Regressed is empty, want at least one case that flipped pass -> failed")
+	}
+	if len(cmp.Improved) == 0 {
+		t.Error("Improved is empty, want at least one case that flipped failed -> pass")
+	}
+	if len(cmp.Unchanged) == 0 {
+		t.Error("Unchanged is empty, want at least one case that held steady")
+	}
+}
+
+// TestSeedContentHasAnOpenRunAmongClosedSuiteHistory covers
+// rework-suite-run-flow D7: the Stability card's "Open + closed" view needs
+// a suite with a real mix of closed history AND a trailing open run to
+// demonstrate its open-endpoint (hollow/dashed) treatment against actual
+// prior points — not just an isolated single point on an otherwise-unused
+// suite.
+func TestSeedContentHasAnOpenRunAmongClosedSuiteHistory(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	suites, err := svc.ListSuites(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListSuites: %v", err)
+	}
+	var regression *domain.Suite
+	for i, s := range suites {
+		if s.Name == "Regression" {
+			regression = &suites[i]
+		}
+	}
+	if regression == nil {
+		t.Fatal("no Regression suite seeded")
+	}
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var closedCount, openCount int
+	for _, r := range runs {
+		if r.SuiteKey == nil || *r.SuiteKey != regression.Key {
+			continue
+		}
+		if r.Status == domain.RunStatusClosed {
+			closedCount++
+		} else {
+			openCount++
+		}
+	}
+	if closedCount == 0 {
+		t.Error("Regression suite has no closed runs — nothing for the 'Closed runs' view to show")
+	}
+	if openCount == 0 {
+		t.Error("Regression suite has no open run — nothing for the 'Open + closed' view's trailing point to show")
+	}
+
+	// Showcases D10: the Regression suite's Properties sidebar PassRate
+	// must match its most recent CLOSED run, not the trailing open run
+	// seeded above — the exact live scenario the fix addresses.
+	var mostRecentClosed *domain.Run
+	for i := range runs {
+		r := &runs[i]
+		if r.SuiteKey == nil || *r.SuiteKey != regression.Key || r.Status != domain.RunStatusClosed {
+			continue
+		}
+		if mostRecentClosed == nil || r.CreatedAt.After(mostRecentClosed.CreatedAt) {
+			mostRecentClosed = r
+		}
+	}
+	if mostRecentClosed == nil {
+		t.Fatal("no closed run found for Regression suite")
+	}
+	if regression.PassRate == nil || mostRecentClosed.PassRate == nil || *regression.PassRate != *mostRecentClosed.PassRate {
+		t.Errorf("Regression suite PassRate = %v, want %v (the most recent closed run's rate, not the trailing open run's)",
+			regression.PassRate, mostRecentClosed.PassRate)
+	}
+}
+
 func TestSeedContentCoversRunLifecycleAndImport(t *testing.T) {
 	svc := seededService(t)
 	ctx := context.Background()

@@ -66,6 +66,10 @@ func mountPublicAPI(r chi.Router, h *api) {
 			r.With(h.requirePublicProject(projectIDFromRun)).Get("/", h.getRun)
 			r.With(h.requirePublicProject(projectIDFromRun)).Get("/items", h.listRunItems)
 			r.With(h.requirePublicProject(projectIDFromRun)).Get("/summary", h.runSummary)
+			r.Route("/compare/{otherRunKey}", func(r chi.Router) {
+				r.Use(h.resolveKey("otherRunKey", h.svc.RunIDByKey))
+				r.With(h.requirePublicProject(projectIDFromRun)).Get("/", h.compareRuns)
+			})
 		})
 		r.Route("/items/{itemID}", func(r chi.Router) {
 			r.With(h.requirePublicProject(projectIDFromItem)).Get("/results", h.listResults)

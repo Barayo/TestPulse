@@ -510,7 +510,15 @@ func TestSuitePassRateNullWithNoRuns(t *testing.T) {
 	}
 }
 
-func TestSuitePassRateReflectsLatestRunOnly(t *testing.T) {
+// PassRate reflects the suite's most recently CLOSED run, not simply its
+// most recently created one — a fresh, still-open run's own (often
+// barely-started) rate must never override a settled closed result
+// (rework-suite-run-flow D10; mirrors the Stability card's own D8 fix,
+// found live when a suite's Properties sidebar showed "0%" for a suite
+// whose Stability card, right next to it, correctly showed "100%").
+// LastRunAt is a different, deliberately unfiltered "last activity" signal
+// and keeps reflecting the true latest run regardless of status.
+func TestSuitePassRateReflectsMostRecentClosedRun(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	p := mustProject(t, s)
@@ -520,21 +528,39 @@ func TestSuitePassRateReflectsLatestRunOnly(t *testing.T) {
 		t.Fatalf("create suite: %v", err)
 	}
 
-	oldRun, err := s.Runs.CreateWithSuite(ctx, p.ID, "old run", suite.ID, []string{c.ID})
+	oldClosed, err := s.Runs.CreateWithSuite(ctx, p.ID, "old closed run", suite.ID, []string{c.ID})
 	if err != nil {
-		t.Fatalf("create old run: %v", err)
+		t.Fatalf("create old closed run: %v", err)
 	}
-	oldItems, _ := s.Runs.Items(ctx, oldRun.ID, "")
+	oldItems, _ := s.Runs.Items(ctx, oldClosed.ID, "")
 	if _, err := s.Runs.AppendResult(ctx, oldItems[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
-
-	newRun, err := s.Runs.CreateWithSuite(ctx, p.ID, "new run", suite.ID, []string{c.ID})
-	if err != nil {
-		t.Fatalf("create new run: %v", err)
+	if err := s.Runs.Close(ctx, oldClosed.ID); err != nil {
+		t.Fatal(err)
 	}
-	newItems, _ := s.Runs.Items(ctx, newRun.ID, "")
+
+	newClosed, err := s.Runs.CreateWithSuite(ctx, p.ID, "new closed run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create new closed run: %v", err)
+	}
+	newItems, _ := s.Runs.Items(ctx, newClosed.ID, "")
 	if _, err := s.Runs.AppendResult(ctx, newItems[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Runs.Close(ctx, newClosed.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	// Newest run overall, but left OPEN and recorded as failing — must not
+	// override newClosed's 100% in PassRate, but it IS the true latest
+	// activity for LastRunAt.
+	trailingOpen, err := s.Runs.CreateWithSuite(ctx, p.ID, "trailing open run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create trailing open run: %v", err)
+	}
+	openItems, _ := s.Runs.Items(ctx, trailingOpen.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, openItems[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
 
@@ -543,15 +569,15 @@ func TestSuitePassRateReflectsLatestRunOnly(t *testing.T) {
 		t.Fatalf("Get: %v", err)
 	}
 	if got.PassRate == nil || *got.PassRate != 100 {
-		t.Errorf("Get PassRate = %v, want 100 (from the newer run only)", got.PassRate)
+		t.Errorf("Get PassRate = %v, want 100 (from the most recent CLOSED run, not the trailing open one)", got.PassRate)
 	}
 
-	newRunFull, err := s.Runs.Get(ctx, newRun.ID)
+	trailingOpenFull, err := s.Runs.Get(ctx, trailingOpen.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.LastRunAt == nil || !got.LastRunAt.Equal(newRunFull.CreatedAt) {
-		t.Errorf("Get LastRunAt = %v, want %v", got.LastRunAt, newRunFull.CreatedAt)
+	if got.LastRunAt == nil || !got.LastRunAt.Equal(trailingOpenFull.CreatedAt) {
+		t.Errorf("Get LastRunAt = %v, want %v (the true latest run, regardless of status)", got.LastRunAt, trailingOpenFull.CreatedAt)
 	}
 
 	list, err := s.Suites.List(ctx, p.ID)
@@ -560,6 +586,52 @@ func TestSuitePassRateReflectsLatestRunOnly(t *testing.T) {
 	}
 	if list[0].PassRate == nil || *list[0].PassRate != 100 {
 		t.Errorf("List PassRate = %v, want 100", list[0].PassRate)
+	}
+	if list[0].LastRunAt == nil || !list[0].LastRunAt.Equal(trailingOpenFull.CreatedAt) {
+		t.Errorf("List LastRunAt = %v, want %v", list[0].LastRunAt, trailingOpenFull.CreatedAt)
+	}
+}
+
+// No closed run at all — even though the suite's only run has recorded
+// results — shows a nil PassRate (the API layer renders this as a
+// placeholder), not a misleadingly "settled" number from a run that's
+// still in progress. Matches the Stability card's own D8 placeholder rule.
+func TestSuitePassRateNilWhenNoClosedRunExists(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "one")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	run, err := s.Runs.CreateWithSuite(ctx, p.ID, "open run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := s.Suites.Get(ctx, suite.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.PassRate != nil {
+		t.Errorf("Get PassRate = %v, want nil (no closed run exists yet)", got.PassRate)
+	}
+	if got.LastRunAt == nil {
+		t.Error("Get LastRunAt = nil, want the open run's created_at")
+	}
+
+	list, err := s.Suites.List(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	if list[0].PassRate != nil {
+		t.Errorf("List PassRate = %v, want nil", list[0].PassRate)
 	}
 }
 
@@ -583,6 +655,9 @@ func TestSuitePassRateIndependentAcrossSuites(t *testing.T) {
 	}
 	itemsA, _ := s.Runs.Items(ctx, runA.ID, "")
 	if _, err := s.Runs.AppendResult(ctx, itemsA[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Runs.Close(ctx, runA.ID); err != nil {
 		t.Fatal(err)
 	}
 

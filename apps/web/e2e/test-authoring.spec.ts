@@ -122,6 +122,9 @@ test.describe('Requirement: Test suite grouping', () => {
     await page.getByLabel(/suite name/i).fill('Smoke')
     await page.getByRole('button', { name: /^create$/i }).click()
     await expect(page.getByRole('heading', { name: 'Smoke' })).toBeVisible()
+    // Suite detail defaults to view mode (rework-suite-run-flow) — the
+    // case-selection grid only renders once "Edit cases" is clicked.
+    await page.getByRole('button', { name: /edit cases/i }).click()
 
     // Scoping to "Checkout" narrows the grid to Case B only.
     await expect(page.getByRole('checkbox', { name: 'Case A' })).toBeVisible()
@@ -132,7 +135,9 @@ test.describe('Requirement: Test suite grouping', () => {
 
     await page.getByRole('checkbox', { name: 'Case A' }).check()
     await page.getByRole('button', { name: /save changes/i }).click()
-    await expect(page.getByRole('checkbox', { name: 'Case A' })).toBeChecked()
+    // Saving returns to view mode, where the checkbox no longer renders —
+    // "Edit cases" reappearing is the view-mode-visible proof of the save.
+    await expect(page.getByRole('button', { name: /edit cases/i })).toBeVisible()
 
     await page.getByRole('link', { name: 'Suites', exact: true }).click()
     await expect(page.getByRole('list', { name: 'Suites' }).getByText('Smoke')).toBeVisible()
@@ -140,13 +145,17 @@ test.describe('Requirement: Test suite grouping', () => {
 
     // Membership lives on the suite's own detail page, not a list-level dialog.
     await page.getByText('Smoke').click()
+    await page.getByRole('button', { name: /edit cases/i }).click()
     await expect(page.getByRole('checkbox', { name: 'Case A' })).toBeChecked()
     await page.getByRole('checkbox', { name: 'Case A' }).uncheck()
     await page.getByRole('button', { name: /save changes/i }).click()
 
     // Case A still exists in the project — it's still a selectable (just
     // unchecked) row, not gone from the grid entirely.
+    await expect(page.getByRole('button', { name: /edit cases/i })).toBeVisible()
+    await page.getByRole('button', { name: /edit cases/i }).click()
     await expect(page.getByRole('checkbox', { name: 'Case A' })).not.toBeChecked()
+    await page.getByRole('button', { name: /^cancel$/i }).click()
     await page.getByRole('link', { name: 'Suites', exact: true }).click()
     await expect(page.getByRole('list', { name: 'Suites' }).getByText(/^0 cases$/)).toBeVisible()
   })

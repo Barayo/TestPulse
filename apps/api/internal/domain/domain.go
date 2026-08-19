@@ -381,9 +381,12 @@ type Suite struct {
 	Name      string    `json:"name"`
 	CaseIDs   []string  `json:"caseIds"`
 	CreatedAt time.Time `json:"createdAt"`
-	// PassRate and LastRunAt reflect the suite's most recently created run,
-	// regardless of open/closed status — the same "latest run" semantic
-	// ProjectSummary already uses (rework-suites-landing-ux), computed via
+	// LastRunAt reflects the suite's most recently created run, regardless
+	// of open/closed status — the same "latest run" semantic ProjectSummary
+	// already uses (rework-suites-landing-ux). PassRate does NOT share that
+	// semantic: it reflects the most recently CLOSED run, or nil if none
+	// exists yet, so a fresh open run never overrides or manufactures a
+	// settled-looking number (rework-suite-run-flow D10). Both computed via
 	// one batched query per List/Get call, not one query per suite.
 	PassRate  *int       `json:"passRate"`
 	LastRunAt *time.Time `json:"lastRunAt"`
@@ -540,6 +543,31 @@ type SuiteTrend struct {
 	SuiteID  string            `json:"suiteId"`
 	SuiteKey string            `json:"suiteKey"`
 	Points   []SuiteTrendPoint `json:"points"`
+}
+
+// RunComparisonItem is one case's status transition between two compared
+// runs (add-run-comparison-view). StatusOlder is nil for an added item
+// (present only in the newer run); StatusNewer is nil for a removed item
+// (present only in the older run).
+type RunComparisonItem struct {
+	CaseKey     string  `json:"caseKey"`
+	CaseTitle   string  `json:"caseTitle"`
+	StatusOlder *Status `json:"statusOlder,omitempty"`
+	StatusNewer *Status `json:"statusNewer,omitempty"`
+}
+
+// RunComparison is the categorized item-level diff between two closed runs
+// from the same project, joined by case key (add-run-comparison-view).
+// OlderRun/NewerRun are ordered by actual creation time, independent of
+// which run key was supplied first in the request.
+type RunComparison struct {
+	OlderRun  SuiteTrendPoint     `json:"olderRun"`
+	NewerRun  SuiteTrendPoint     `json:"newerRun"`
+	Regressed []RunComparisonItem `json:"regressed"`
+	Improved  []RunComparisonItem `json:"improved"`
+	Unchanged []RunComparisonItem `json:"unchanged"`
+	Added     []RunComparisonItem `json:"added"`
+	Removed   []RunComparisonItem `json:"removed"`
 }
 
 // FlakyCase is a case whose current version's executions include both a

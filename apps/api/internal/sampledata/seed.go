@@ -556,6 +556,48 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: closing run: %w", err)
 	}
 
+	// 3.5. A second closed run of the same Regression suite: a hotfix
+	// verification pass, so the run comparison view (add-run-comparison-view)
+	// has real suite-linked data to demonstrate from both its entry points
+	// ("Compare to previous run" on this run's page, and the explicit
+	// picker). Relative to "Release 1.1 regression" above: "Login with valid
+	// credentials" genuinely regresses (pass -> failed, a hotfix side
+	// effect), and "Reset password" genuinely recovers (failed -> pass, the
+	// fix it was meant to verify) — everything else holds steady.
+	hotfixRunName := "Release 1.1.1 hotfix verification"
+	if err := RunFromSuiteWithVerdicts(ctx, svc, p.ID, regressionSuite.ID, hotfixRunName, regressionCaseIDs,
+		[]domain.Verdict{
+			domain.VerdictFailed, domain.VerdictPass, domain.VerdictPass, domain.VerdictPass,
+			domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,
+		}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	hotfixRun, err := runByName(ctx, svc, p.ID, hotfixRunName)
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := svc.CloseRun(ctx, hotfixRun.ID); err != nil {
+		return fmt.Errorf("sampledata: closing run: %w", err)
+	}
+
+	// 3.6. A third run of the Regression suite, deliberately left OPEN
+	// (fully executed, just not yet formally closed — a real, common state,
+	// not a contrived one) — the trailing point the Stability card's
+	// "Open + closed" view (rework-suite-run-flow D7) needs to demonstrate
+	// its hollow/dashed open-endpoint treatment against real closed-run
+	// history, rather than an isolated single point on a suite with no
+	// other runs. checkoutValid fails here too, reinforcing (not
+	// contradicting) its established flaky story below; notifOptOut
+	// recovers relative to the two runs above.
+	patchRunName := "Release 1.1.2 patch verification"
+	if err := RunFromSuiteWithVerdicts(ctx, svc, p.ID, regressionSuite.ID, patchRunName, regressionCaseIDs,
+		[]domain.Verdict{
+			domain.VerdictPass, domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed,
+			domain.VerdictPass, domain.VerdictPass, domain.VerdictPass, domain.VerdictPass,
+		}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
 	// 4. Open nightly run — automated cases. checkoutValid fails here,
 	// deliberately, having passed in runs 1 and 2 above: same pinned
 	// version, mixed verdicts, no edit in between — a genuinely flaky case.

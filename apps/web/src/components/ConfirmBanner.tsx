@@ -1,12 +1,11 @@
-import { useEffect } from 'react'
+import { XIcon } from 'lucide-react'
 import { Link } from 'react-router'
 
 // A small, dependency-free stand-in for toast infrastructure the app
 // doesn't have (rework-runs-list-ux design.md) — two call sites don't
-// justify a library. Auto-dismisses so it doesn't linger indefinitely, but
-// stays dismissable manually too.
-const AUTO_DISMISS_MS = 4000
-
+// justify a library. Fixed/viewport-anchored so it's visible regardless of
+// scroll position when it fires (rework-suite-run-flow design.md D1) —
+// dismissed only by the user or by the host page unmounting on navigation.
 export function ConfirmBanner({
   message,
   linkTo,
@@ -18,30 +17,29 @@ export function ConfirmBanner({
   linkLabel?: string
   onDismiss: () => void
 }) {
-  useEffect(() => {
-    const timer = window.setTimeout(onDismiss, AUTO_DISMISS_MS)
-    return () => window.clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
     <div
       role="status"
-      className="flex items-center gap-3 rounded-lg border border-primary/30 bg-primary/10 px-4 py-2.5 text-sm"
+      className="fixed inset-x-4 bottom-4 z-50 flex items-start gap-2.5 rounded-xl bg-card px-4 py-3.5 text-sm shadow-lg ring-1 ring-foreground/10 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-96"
     >
-      <span>{message}</span>
-      {linkTo && linkLabel && (
-        <Link to={linkTo} className="font-semibold text-primary underline">
-          {linkLabel}
-        </Link>
-      )}
+      <span className="flex-1 leading-snug">
+        {message}
+        {linkTo && linkLabel && (
+          <>
+            {' '}
+            <Link to={linkTo} className="font-semibold text-primary underline">
+              {linkLabel}
+            </Link>
+          </>
+        )}
+      </span>
       <button
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss"
-        className="ml-auto text-muted-foreground hover:text-foreground"
+        className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
       >
-        ✕
+        <XIcon className="size-4" aria-hidden="true" />
       </button>
     </div>
   )

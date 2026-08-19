@@ -86,6 +86,8 @@ function mockDetailAPI(
   cases: unknown[] = [case1, case2],
   permissions: unknown = fullPermissions,
   anonymous = false,
+  trendPoints: unknown[] = [],
+  runs: unknown[] = [],
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me')
@@ -96,10 +98,15 @@ function mockDetailAPI(
     const casesPath = anonymous ? '/api/v1/public/projects/{projectKey}/cases' : '/api/v1/projects/{projectKey}/cases'
     const foldersPath = anonymous ? '/api/v1/public/projects/{projectKey}/folders' : '/api/v1/projects/{projectKey}/folders'
     const suitePath = anonymous ? '/api/v1/public/suites/{suiteKey}' : '/api/v1/suites/{suiteKey}'
+    const trendPath = anonymous ? '/api/v1/public/suites/{suiteKey}/trend' : '/api/v1/suites/{suiteKey}/trend'
+    const runsPath = anonymous ? '/api/v1/public/projects/{projectKey}/runs' : '/api/v1/projects/{projectKey}/runs'
     if (path === projectPath) return Promise.resolve({ data: projectQA, response: { ok: true } })
     if (path === casesPath) return Promise.resolve({ data: cases, response: { ok: true } })
     if (path === foldersPath) return Promise.resolve({ data: folders, response: { ok: true } })
     if (path === suitePath) return Promise.resolve({ data: suite, response: { ok: true } })
+    if (path === trendPath)
+      return Promise.resolve({ data: { suiteId: 's1', suiteKey: 'p1-S1', points: trendPoints }, response: { ok: true } })
+    if (path === runsPath) return Promise.resolve({ data: runs, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -118,6 +125,10 @@ function renderDetail() {
   )
 }
 
+async function enterEdit() {
+  await userEvent.click(await screen.findByRole('button', { name: /edit cases/i }))
+}
+
 beforeEach(() => {
   vi.resetAllMocks()
 })
@@ -132,22 +143,33 @@ describe('SuiteDetailPage', () => {
     expect(nav).not.toHaveTextContent('Smoke')
   })
 
-  it('shows the case grid pre-checked with current members', async () => {
+  it('defaults to view mode: no case grid, Stability and Run history shown instead', async () => {
     mockDetailAPI()
     renderDetail()
+    await screen.findByRole('heading', { name: 'Smoke' })
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    expect(screen.getByText('Stability')).toBeInTheDocument()
+    expect(screen.getByText('Run history')).toBeInTheDocument()
+  })
+
+  it('editing shows the case grid pre-checked with current members', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await enterEdit()
     expect(await screen.findByRole('checkbox', { name: /login works/i })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: /checkout works/i })).not.toBeChecked()
   })
 
-  it('shows sidebar properties: case count, pass rate, last run, created', async () => {
+  it('shows sidebar properties: case count, pass rate, created — no standalone "Last run" once Run history exists', async () => {
     mockDetailAPI()
     renderDetail()
     const sidebar = within(await screen.findByTestId('suite-sidebar'))
     expect(sidebar.getByText('1')).toBeInTheDocument() // case count
     expect(sidebar.getByText('90%')).toBeInTheDocument()
+    expect(sidebar.queryByText(/last run/i)).not.toBeInTheDocument()
   })
 
-  it('shows "Never run" in the sidebar for a suite with no runs', async () => {
+  it('shows "Never run" in the sidebar pass-rate property for a suite with no runs', async () => {
     mockDetailAPI({ ...smokeSuite, passRate: null, lastRunAt: null })
     renderDetail()
     expect(await screen.findAllByText(/never run/i)).not.toHaveLength(0)
@@ -156,6 +178,7 @@ describe('SuiteDetailPage', () => {
   it('scopes the case grid to a section using the project\'s real folder hierarchy', async () => {
     mockDetailAPI()
     renderDetail()
+    await enterEdit()
 
     expect(await screen.findByRole('checkbox', { name: /login works/i })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('treeitem', { name: /^checkout/i }))
@@ -168,6 +191,7 @@ describe('SuiteDetailPage', () => {
     mockPUT.mockResolvedValue({ response: { ok: true } })
     mockDELETE.mockResolvedValue({ response: { ok: true } })
     renderDetail()
+    await enterEdit()
 
     const saveBtn = await screen.findByRole('button', { name: /save changes/i })
     expect(saveBtn).toBeDisabled()
@@ -193,6 +217,7 @@ describe('SuiteDetailPage', () => {
     mockDetailAPI({ ...smokeSuite, caseIds: ['c1', 'orphan-id'] })
     mockPUT.mockResolvedValue({ response: { ok: true } })
     renderDetail()
+    await enterEdit()
 
     expect(await screen.findByRole('checkbox', { name: /login works/i })).toBeChecked()
     await userEvent.click(screen.getByRole('checkbox', { name: /checkout works/i }))
@@ -207,7 +232,20 @@ describe('SuiteDetailPage', () => {
     expect(mockDELETE).not.toHaveBeenCalled()
   })
 
-  it('shows an inline confirmation banner with a link to the new run after Run suite', async () => {
+  it('"Cancel" in edit mode discards uncommitted changes and returns to view mode', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await enterEdit()
+
+    await userEvent.click(await screen.findByRole('checkbox', { name: /checkout works/i }))
+    await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
+
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+    await enterEdit()
+    expect(screen.getByRole('checkbox', { name: /checkout works/i })).not.toBeChecked()
+  })
+
+  it('shows a confirmation toast naming the new run, with a link to it, after Run suite', async () => {
     mockDetailAPI()
     mockPOST.mockResolvedValue({
       data: { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Smoke run', createdAt: '' },
@@ -218,8 +256,8 @@ describe('SuiteDetailPage', () => {
     await userEvent.click(await screen.findByRole('button', { name: /run suite/i }))
     await userEvent.click(screen.getByRole('button', { name: /^create run$/i }))
 
-    expect(await screen.findByText(/run created/i)).toBeInTheDocument()
-    const link = screen.getByRole('link', { name: /view run/i })
+    expect(await screen.findByText('Run "Smoke run" created.')).toBeInTheDocument()
+    const link = screen.getByRole('link', { name: /view it/i })
     expect(link).toHaveAttribute('href', '/runs/p1-R1')
   })
 
@@ -227,7 +265,7 @@ describe('SuiteDetailPage', () => {
   // tasks.md 2.1/2.2): a caller without the matching permission must not
   // see the write controls at all — not disabled, absent — since this page
   // will also render for anonymous visitors on a public project.
-  it('hides Run suite/Rename/Delete and disables the case picker for a caller with no permissions', async () => {
+  it('hides Run suite/Rename/Delete for a caller with no permissions, and labels the entry "View cases"', async () => {
     // read: true (a real member always has it — the /permissions endpoint
     // itself requires it, design.md D11) with everything else false, not
     // `null`: a signed-in caller who can reach this page at all has
@@ -238,19 +276,161 @@ describe('SuiteDetailPage', () => {
     mockDetailAPI(smokeSuite, [case1, case2], noPermissions)
     renderDetail()
 
-    expect(await screen.findByRole('checkbox', { name: /login works/i })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: /view cases/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^edit cases$/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /run suite/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /rename/i })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
   })
 
-  it('shows only the case list, still selected correctly, when read-only', async () => {
+  it('shows only the case list read-only, with a "Done" control, for a non-editor', async () => {
     mockDetailAPI(smokeSuite, [case1, case2], { ...fullPermissions, suiteEditMembership: false })
     renderDetail()
 
+    await userEvent.click(await screen.findByRole('button', { name: /view cases/i }))
     expect(await screen.findByRole('checkbox', { name: /login works/i })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: /login works/i })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^done$/i }))
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
+  })
+
+  it('renders the suite pass-rate trend in the Stability section', async () => {
+    const points = [
+      { runKey: 'p1-R1', runName: 'Run 1', createdAt: '2026-01-01T00:00:00Z', total: 4, counts: { pass: 3, failed: 1 } },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points)
+    renderDetail()
+    await screen.findByText('Stability')
+    // SuitePassRateTrend's own tests cover its rendering in detail; here we
+    // only need proof it's fed real data, not an always-empty placeholder.
+    expect(screen.queryByTestId('suite-trend-placeholder')).not.toBeInTheDocument()
+  })
+
+  it('shows the trend\'s own empty state in Stability when the suite has no closed runs', async () => {
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [])
+    renderDetail()
+    await screen.findByText('Stability')
+    expect(screen.getByTestId('suite-trend-placeholder')).toBeInTheDocument()
+  })
+
+  it('defaults the Stability card to "Closed runs", showing only closed-run points', async () => {
+    const points = [{ runKey: 'p1-R1', runName: 'Run 1', createdAt: '2026-01-01T00:00:00Z', total: 4, counts: { pass: 3, failed: 1 } }]
+    const runs = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', passRate: 75, createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2 (open)', status: 'open', suiteKey: 'p1-S1', passRate: 20, createdAt: '2026-01-02T00:00:00Z' },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points, runs)
+    renderDetail()
+    await screen.findByText('Stability')
+
+    expect(screen.getByRole('button', { name: /^closed runs$/i })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /^open \+ closed$/i })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByTestId('suite-trend-point-p1-R1')).toBeInTheDocument()
+    expect(screen.queryByTestId('suite-trend-point-p1-R2')).not.toBeInTheDocument()
+  })
+
+  it('switching to "Open + closed" shows every run, including still-open ones', async () => {
+    const points = [{ runKey: 'p1-R1', runName: 'Run 1', createdAt: '2026-01-01T00:00:00Z', total: 4, counts: { pass: 3, failed: 1 } }]
+    const runs = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', passRate: 75, createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2 (open)', status: 'open', suiteKey: 'p1-S1', passRate: 20, createdAt: '2026-01-02T00:00:00Z' },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points, runs)
+    renderDetail()
+    await screen.findByText('Stability')
+
+    await userEvent.click(screen.getByRole('button', { name: /^open \+ closed$/i }))
+    expect(screen.getByTestId('suite-trend-point-p1-R1')).toBeInTheDocument()
+    expect(screen.getByTestId('suite-trend-point-p1-R2')).toBeInTheDocument()
+    expect(screen.getByTestId('suite-trend-point-p1-R2')).toHaveAttribute('data-open', 'true')
+  })
+
+  it('each Stability view states what it counts', async () => {
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], [])
+    renderDetail()
+    await screen.findByText('Stability')
+    expect(screen.getByText(/only closed runs/i)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^open \+ closed$/i }))
+    expect(screen.getByText(/will keep moving/i)).toBeInTheDocument()
+  })
+
+  it('shows the latest closed run above the Stability toggle, unchanged by which view is selected', async () => {
+    const runs = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', passRate: 75, createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2 (open)', status: 'open', suiteKey: 'p1-S1', passRate: 20, createdAt: '2026-01-02T00:00:00Z' },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    await screen.findByText('Stability')
+
+    const latestClosed = screen.getByTestId('suite-latest-closed-run')
+    expect(within(latestClosed).getByText(/latest closed run/i)).toBeInTheDocument()
+    expect(within(latestClosed).getByText('75%')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: /^open \+ closed$/i }))
+    expect(within(latestClosed).getByText(/latest closed run/i)).toBeInTheDocument()
+    expect(within(latestClosed).getByText('75%')).toBeInTheDocument()
+  })
+
+  it('shows an "in progress" indicator when a newer open run trails the latest closed run', async () => {
+    const runs = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', passRate: 75, createdAt: '2026-01-01T00:00:00Z' },
+      { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2 (open)', status: 'open', suiteKey: 'p1-S1', passRate: 20, createdAt: '2026-01-02T00:00:00Z' },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    await screen.findByText('Stability')
+    expect(screen.getByText(/in progress/i)).toBeInTheDocument()
+  })
+
+  it('shows no "in progress" row when there is no trailing open run', async () => {
+    const runs = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', passRate: 75, createdAt: '2026-01-01T00:00:00Z' },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    await screen.findByText('Stability')
+    expect(screen.queryByText(/in progress/i)).not.toBeInTheDocument()
+  })
+
+  it('shows a placeholder for latest closed run when the suite has no closed runs at all', async () => {
+    const runs = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1 (open)', status: 'open', suiteKey: 'p1-S1', passRate: 20, createdAt: '2026-01-01T00:00:00Z' },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    await screen.findByText('Stability')
+    expect(screen.getByText(/latest closed run/i)).toBeInTheDocument()
+    expect(screen.getByText('—')).toBeInTheDocument()
+    expect(screen.getByText(/in progress/i)).toBeInTheDocument()
+  })
+
+  it('lists the suite\'s own runs in Run history, and shows an empty state with none', async () => {
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], [])
+    renderDetail()
+    await screen.findByText('Run history')
+    expect(screen.getByText(/no runs yet/i)).toBeInTheDocument()
+  })
+
+  it('offers an unseeded "Compare runs" link in Run history with at least two closed runs', async () => {
+    const runs = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', createdAt: '' },
+      { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2', status: 'closed', suiteKey: 'p1-S1', createdAt: '' },
+    ]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    const link = await screen.findByRole('link', { name: /^compare runs$/i })
+    expect(link).toHaveAttribute('href', '/projects/p1/runs/compare')
+  })
+
+  it('hides "Compare runs" in Run history with fewer than two closed runs', async () => {
+    const runs = [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'open', suiteKey: 'p1-S1', createdAt: '' }]
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    await screen.findByText('Run history')
+    expect(screen.queryByRole('link', { name: /^compare runs$/i })).not.toBeInTheDocument()
   })
 
   it('shows a not-found message for an unknown suite key', async () => {
@@ -288,12 +468,10 @@ describe('SuiteDetailPage', () => {
       // that to undefined via its own catch branch.
       mockDetailAPI(smokeSuite, [case1, case2], null, true)
       renderDetail()
-      expect(await screen.findByRole('checkbox', { name: /login works/i })).toBeChecked()
-      expect(screen.getByRole('checkbox', { name: /login works/i })).toBeDisabled()
+      expect(await screen.findByRole('button', { name: /view cases/i })).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /run suite/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /rename/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /^delete$/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /save changes/i })).not.toBeInTheDocument()
     })
 
     it('fires no request while the session check is still in flight', async () => {
@@ -325,6 +503,9 @@ describe('SuiteDetailPage', () => {
         if (path === '/api/v1/public/projects/{projectKey}/folders')
           return Promise.resolve({ data: folders, response: { ok: true } })
         if (path === '/api/v1/public/suites/{suiteKey}') return Promise.resolve({ data: smokeSuite, response: { ok: true } })
+        if (path === '/api/v1/public/suites/{suiteKey}/trend')
+          return Promise.resolve({ data: { suiteId: 's1', suiteKey: 'p1-S1', points: [] }, response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/runs') return Promise.resolve({ data: [], response: { ok: true } })
         return Promise.resolve({ data: undefined, response: { ok: false } })
       })
       renderDetail()

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -50,6 +50,8 @@ export default function NewRunPage() {
   const [selectedSuiteKey, setSelectedSuiteKey] = useState('')
   const [seededFromSuiteName, setSeededFromSuiteName] = useState('')
   const [loaded, setLoaded] = useState(false)
+  const nameInputRef = useRef<HTMLInputElement>(null)
+  const justSeededNameRef = useRef(false)
 
   const load = useCallback(async () => {
     if (!projectKey) return
@@ -90,10 +92,25 @@ export default function NewRunPage() {
     const state = location.state as NewRunLocationState
     if (!state?.seedFromSuiteKey) return
     seedSelectionFromSuite(state.seedFromSuiteKey)
-    if (state.seedName) setRunName(state.seedName)
+    if (state.seedName) {
+      setRunName(state.seedName)
+      justSeededNameRef.current = true
+    }
     navigate(location.pathname, { replace: true, state: null })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loaded])
+
+  // Focus + select the seeded name once it's actually committed to the DOM
+  // (rework-suite-run-flow design.md D5) — the value arrives via the effect
+  // above, after mount, so selecting immediately there would race React's
+  // commit and select the input's still-empty previous value. Guarded so a
+  // later run-of-the-mill edit to `runName` (typing) never re-triggers this.
+  useEffect(() => {
+    if (!justSeededNameRef.current) return
+    justSeededNameRef.current = false
+    nameInputRef.current?.focus()
+    nameInputRef.current?.select()
+  }, [runName])
 
   function seedSelectionFromSuite(suiteKey: string) {
     const suite = suites.find((s) => s.key === suiteKey)
@@ -188,6 +205,7 @@ export default function NewRunPage() {
                 <Label htmlFor="run-name">Name</Label>
                 <Input
                   id="run-name"
+                  ref={nameInputRef}
                   value={runName}
                   onChange={(e) => setRunName(e.target.value)}
                   placeholder="Sprint 1"

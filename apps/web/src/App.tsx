@@ -15,6 +15,8 @@ import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import CaseDetailPage from '@/pages/CaseDetailPage'
 import RunPage from '@/pages/RunPage'
 import RunItemDetailPage from '@/pages/RunItemDetailPage'
+import RunComparePage from '@/pages/RunComparePage'
+import RunComparePickerPage from '@/pages/RunComparePickerPage'
 import LoginPage from '@/pages/LoginPage'
 import SetupPage from '@/pages/SetupPage'
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
@@ -114,6 +116,8 @@ const PROJECT_CONTENT_ROUTES: RouteEntry[] = [
   { path: '/projects/:projectKey/cases/:caseKey', element: <CaseDetailPage />, anonymous: true },
   { path: '/runs/:runKey', element: <RunPage />, anonymous: true },
   { path: '/runs/:runKey/items/:caseKey', element: <RunItemDetailPage />, anonymous: true },
+  { path: '/runs/compare/:runKeyA/:runKeyB', element: <RunComparePage />, anonymous: true },
+  { path: '/projects/:projectKey/runs/compare', element: <RunComparePickerPage />, anonymous: true },
 ]
 
 // Every other authenticated route — no public equivalent exists or should

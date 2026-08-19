@@ -31,13 +31,24 @@ describe('ConfirmBanner', () => {
     expect(onDismiss).toHaveBeenCalled()
   })
 
-  it('auto-dismisses after a few seconds', () => {
+  it('does not auto-dismiss', () => {
     vi.useFakeTimers()
     const onDismiss = vi.fn()
     render(<ConfirmBanner message="Run created" onDismiss={onDismiss} />)
+    vi.advanceTimersByTime(60_000)
     expect(onDismiss).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(5000)
-    expect(onDismiss).toHaveBeenCalled()
     vi.useRealTimers()
+  })
+
+  it('is positioned as a fixed, viewport-anchored toast', () => {
+    render(<ConfirmBanner message="Run created" onDismiss={vi.fn()} />)
+    expect(screen.getByRole('status')).toHaveClass('fixed')
+  })
+
+  it('renders an icon-based dismiss control, not a raw glyph', () => {
+    render(<ConfirmBanner message="Run created" onDismiss={vi.fn()} />)
+    const dismiss = screen.getByRole('button', { name: /dismiss/i })
+    expect(dismiss.querySelector('svg')).toBeInTheDocument()
+    expect(dismiss).not.toHaveTextContent('✕')
   })
 })

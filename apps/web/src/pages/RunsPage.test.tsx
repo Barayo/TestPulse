@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router'
+import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router'
 import RunsPage from './RunsPage'
 import { api } from '@/lib/api'
 import { AuthProvider } from '@/lib/useAuth'
@@ -76,12 +76,20 @@ function mockRunsAPI(runs: RunFixture[] = [], permissions: unknown = fullPermiss
   })
 }
 
+function ComparePickerProbe() {
+  const { projectKey } = useParams<{ projectKey?: string }>()
+  const location = useLocation()
+  const state = location.state as { seedRunKey?: string } | null
+  return <p data-testid="compare-picker-probe">compare {projectKey} {state ? JSON.stringify(state) : 'no-state'}</p>
+}
+
 function renderRuns() {
   return render(
     <MemoryRouter initialEntries={['/projects/p1/runs']}>
       <AuthProvider>
         <Routes>
           <Route path="/projects/:projectKey/runs" element={<RunsPage />} />
+          <Route path="/projects/:projectKey/runs/compare" element={<ComparePickerProbe />} />
           <Route path="/login" element={<p>login stub</p>} />
         </Routes>
       </AuthProvider>
@@ -121,6 +129,20 @@ describe('RunsPage', () => {
     renderRuns()
     const link = await screen.findByRole('link', { name: /\+ new run/i })
     expect(link).toHaveAttribute('href', '/projects/p1/runs/new')
+  })
+
+  it('offers an unseeded "Compare runs" button when the project has at least two closed runs', async () => {
+    mockRunsAPI([run({ name: 'Release 1.0', status: 'closed' }), run({ name: 'Release 1.1', status: 'closed' })])
+    renderRuns()
+    await userEvent.click(await screen.findByRole('button', { name: /^compare runs$/i }))
+    expect(await screen.findByTestId('compare-picker-probe')).toHaveTextContent('compare p1 no-state')
+  })
+
+  it('hides "Compare runs" with fewer than two closed runs', async () => {
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' }), run({ name: 'Release 1.0', status: 'closed' })])
+    renderRuns()
+    await screen.findByRole('link', { name: /sprint 1/i })
+    expect(screen.queryByRole('button', { name: /^compare runs$/i })).not.toBeInTheDocument()
   })
 
   it('groups runs into Open and Closed sections, each labeled with a count', async () => {
