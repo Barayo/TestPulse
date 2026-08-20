@@ -335,7 +335,9 @@ that version, with a Flaky indicator when both a pass and a fail/blocked executi
 for the same version. Each listed execution SHALL link to that execution's own run item
 page. Each entry in the version history SHALL offer a restore action, gated behind a
 confirmation explaining that restoring creates a new current version rather than altering
-history.
+history. When the case has recorded execution history, the Results section SHALL show its
+windowed success rate, a bar per recent execution colored by verdict, and the date of its
+most recent execution — not just the empty-state placeholder.
 
 #### Scenario: Opening a case navigates to its own route
 - **WHEN** a user selects a test case from the library content list
@@ -368,6 +370,14 @@ history.
 #### Scenario: Results section shows a designed empty state
 - **WHEN** a user views a case for which no result-history data is available
 - **THEN** the Results section still renders its label and placeholder chart chrome with a one-line explanation, rather than being omitted
+
+#### Scenario: Results section shows recent execution history
+- **WHEN** a user views a case that has recorded executions
+- **THEN** the Results section shows a windowed success-rate percentage, a bar per recent execution (most recent last) colored by verdict, a legend naming each verdict present, and the date of the most recent execution
+
+#### Scenario: Results bars represent every recorded verdict, not just pass/fail/skipped
+- **WHEN** a case's recent executions include a blocked or retest-marked result
+- **THEN** the Results section renders a distinctly colored (or textured, for retest) bar for it rather than omitting it or miscoloring it as pass, fail, or skipped
 
 #### Scenario: Steps section shows a real empty state, not a bare sentence
 - **WHEN** a user views a case with no steps defined
