@@ -1,26 +1,18 @@
-// add-case-result-history (a follow-up change) owns fetching real result
-// history; this component owns rendering it once fetched. Until then,
-// CaseDetailPage passes no `data` and this renders the empty-state chrome
-// only — the section never disappears when there's nothing to show.
+// CaseDetailPage fetches the case's last N executions and passes them as
+// `data`; when omitted, this renders the empty-state chrome only — the
+// section never disappears when there's nothing to show.
 // No section title here — the hosting CaseSidebarSection owns that, so this
 // panel can be dropped into any titled section without a duplicate heading.
+import type { components } from '@testpulse/shared/api'
+import { STATUS_COLOR, STATUS_LABEL, STATUS_ORDER, RETEST_TEXTURE } from './RunStatusBreakdown'
 
-export type Verdict = 'pass' | 'failed' | 'skipped'
+export type Verdict = components['schemas']['Status']
 
 export type CaseResultsData = {
   successRate: number
   lastRunAt: string
   recent: { verdict: Verdict; date: string }[]
 }
-
-// Reuses the app's existing status semantics (--chart-1/2/3, the same
-// colors StatusBadge/StatusPill already use) — no new hues invented.
-const VERDICT_COLOR: Record<Verdict, string> = {
-  pass: 'var(--chart-1)',
-  skipped: 'var(--chart-2)',
-  failed: 'var(--chart-3)',
-}
-const VERDICT_LABEL: Record<Verdict, string> = { pass: 'Pass', skipped: 'Skipped', failed: 'Fail' }
 
 export function CaseResultsPanel({ data }: { data?: CaseResultsData }) {
   if (!data) {
@@ -42,9 +34,12 @@ export function CaseResultsPanel({ data }: { data?: CaseResultsData }) {
 
   // Verdict is a discrete status, not a magnitude — bars stay uniform
   // height so nothing implies a value difference between runs that isn't
-  // there. Identity is never color-alone: every bar has a text tooltip,
-  // and a legend + plain-text breakdown back it up regardless of hover.
-  const presentVerdicts = Array.from(new Set(data.recent.map((r) => r.verdict)))
+  // there. Identity is never color-alone: every bar has an accessible name
+  // (aria-label) plus a hover/focus tooltip, and a legend with counts backs
+  // it up regardless of hover.
+  const presentVerdicts = STATUS_ORDER.filter((v) => data.recent.some((r) => r.verdict === v))
+  const counts: Partial<Record<Verdict, number>> = {}
+  for (const r of data.recent) counts[r.verdict] = (counts[r.verdict] ?? 0) + 1
 
   return (
     <div className="space-y-2">
@@ -52,25 +47,43 @@ export function CaseResultsPanel({ data }: { data?: CaseResultsData }) {
         <span className="text-2xl font-black tracking-tight">{data.successRate}%</span>
         <span className="text-xs text-muted-foreground">success · last {data.recent.length} runs</span>
       </div>
-      <div className="flex h-8 items-end gap-1">
+      <div className="flex h-9 items-stretch gap-[3px]">
         {data.recent.map((r, i) => (
-          <span
+          <button
             key={i}
+            type="button"
             data-testid="case-result-bar"
-            title={`${VERDICT_LABEL[r.verdict]} · ${r.date}`}
-            className="h-full flex-1 rounded-t"
-            style={{ background: VERDICT_COLOR[r.verdict] }}
-          />
+            aria-label={`${STATUS_LABEL[r.verdict]} · ${r.date}`}
+            className="group relative flex-1 rounded-t-[5px] rounded-b-sm outline-none transition-transform duration-150 ease-out hover:-translate-y-0.5 hover:brightness-110 focus-visible:-translate-y-0.5 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:brightness-110"
+            style={{
+              background: STATUS_COLOR[r.verdict],
+              backgroundImage: r.verdict === 'retest' ? RETEST_TEXTURE : undefined,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute bottom-[calc(100%+6px)] left-1/2 z-10 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-lg border bg-popover px-2.5 py-1.5 text-left text-[11px] leading-tight text-popover-foreground opacity-0 shadow-lg transition-[opacity,transform] duration-100 ease-out group-hover:translate-y-0 group-hover:opacity-100 group-focus-visible:translate-y-0 group-focus-visible:opacity-100"
+            >
+              <span className="font-semibold">{STATUS_LABEL[r.verdict]}</span>
+              <br />
+              {r.date}
+            </span>
+          </button>
         ))}
       </div>
-      <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+      <ul aria-label="Status breakdown" className="flex flex-wrap gap-x-3 gap-y-1.5 text-xs text-muted-foreground">
         {presentVerdicts.map((v) => (
-          <span key={v} className="flex items-center gap-1.5">
-            <span className="size-2 rounded-sm" style={{ background: VERDICT_COLOR[v] }} aria-hidden="true" />
-            {VERDICT_LABEL[v]}
-          </span>
+          <li key={v} className="flex items-center gap-1.5">
+            <span
+              aria-hidden="true"
+              className="size-2 rounded-sm"
+              style={{ background: STATUS_COLOR[v], backgroundImage: v === 'retest' ? RETEST_TEXTURE : undefined }}
+            />
+            <span>{STATUS_LABEL[v]}</span>
+            <span className="font-medium text-foreground">{counts[v]}</span>
+          </li>
         ))}
-      </div>
+      </ul>
       <p className="text-xs text-muted-foreground">Last run {data.lastRunAt}</p>
     </div>
   )

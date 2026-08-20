@@ -496,6 +496,36 @@ func (r *RunRepo) ExecutionsByCase(ctx context.Context, caseID string) ([]domain
 	return execs, rows.Err()
 }
 
+// ExecutionsByCaseRecent lists a case's most recent executions across every
+// run, strictly ordered by created_at descending — not by pinned
+// case_version, which is not a proxy for recency once a version has been
+// restored (add-case-result-history). Bounded by limit so a caller never
+// needs to fetch the case's full history for a short recent-activity
+// window.
+func (r *RunRepo) ExecutionsByCaseRecent(ctx context.Context, caseID string, limit int) ([]domain.CaseExecution, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT i.id, i.run_id, tr.key, tr.name, i.case_version, i.current_status, i.created_at
+		 FROM test_run_items i
+		 JOIN test_runs tr ON tr.id = i.run_id
+		 WHERE i.case_id = $1
+		 ORDER BY i.created_at DESC
+		 LIMIT $2`, caseID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	execs := []domain.CaseExecution{}
+	for rows.Next() {
+		var e domain.CaseExecution
+		if err := rows.Scan(&e.RunItemID, &e.RunID, &e.RunKey, &e.RunName, &e.CaseVersion, &e.Status, &e.CreatedAt); err != nil {
+			return nil, err
+		}
+		execs = append(execs, e)
+	}
+	return execs, rows.Err()
+}
+
 // AppendResult inserts into the append-only log and updates the item's
 // current status in the same transaction (D3). actorKind/actorRefID are the
 // resolved real actor behind the result (link-result-actor-to-identity D2) —

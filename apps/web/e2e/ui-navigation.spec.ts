@@ -649,6 +649,45 @@ test.describe('Requirement: Viewing an existing test case', () => {
     await expect(page.getByText(/no result history yet/i)).toBeVisible()
   })
 
+  test('Scenario: Results section shows recent execution history', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-100' })
+    await createProject(page, 'Results History Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await expect(content(page).getByText('Login works')).toBeVisible()
+    const projectId = new URL(page.url()).pathname.split('/')[2]
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await page.getByLabel(/^name$/i).fill('Run 1')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
+    await page.getByRole('button', { name: /^pass$/i }).click()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('pass')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await page.getByLabel(/^name$/i).fill('Run 2')
+    await page.getByRole('checkbox', { name: 'Login works' }).check()
+    await page.getByRole('button', { name: 'Create run' }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
+    await page.getByRole('button', { name: /^failed$/i }).click()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('failed')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/library`)
+    await page.getByText('Login works').click()
+    await page.waitForURL(/\/cases\//)
+
+    await expect(page.getByText(/no result history yet/i)).not.toBeVisible()
+    await expect(page.getByText(/^\d+%$/)).toBeVisible()
+    await expect(page.getByTestId('case-result-bar')).toHaveCount(2)
+  })
+
   test('Scenario: Sidebar collapses to stacked sections on narrow viewports', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-58' })
     await createProject(page, 'Mobile Sidebar Project')

@@ -664,9 +664,16 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// Deliberately created before, not after, the final run below — the
 	// project's shown pass rate is driven by whichever run was created
 	// LAST, and this one must never become that.
+	// login is deliberately `blocked` (not `pass`) here — its execution
+	// history is otherwise only pass/failed, and add-case-result-history's
+	// Results panel needs at least one seeded case exercising a third
+	// verdict color to showcase the full status vocabulary, not just
+	// pass/fail. login was already flaky before this change (mixed
+	// pass/failed on its one and only version), so this doesn't change
+	// that signal — it only adds a color.
 	scratchRunName := "Scratch run — safe to delete"
 	if err := RunWithVerdicts(ctx, svc, p.ID, scratchRunName,
-		[]string{login.ID}, []domain.Verdict{domain.VerdictPass}); err != nil {
+		[]string{login.ID}, []domain.Verdict{domain.VerdictBlocked}); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	scratchRun, err := runByName(ctx, svc, p.ID, scratchRunName)

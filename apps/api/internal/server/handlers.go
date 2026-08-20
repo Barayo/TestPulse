@@ -334,8 +334,28 @@ func (h *api) restoreCaseVersion(w http.ResponseWriter, r *http.Request) {
 	h.respond(w, http.StatusCreated, c, err)
 }
 
+// listCaseExecutions serves both the version-grouped default (no params)
+// and the bounded, recency-ordered mode (order=recent&limit=N) over the
+// same route (add-case-result-history design.md: one endpoint, additive
+// query params, not a new endpoint). public_handlers.go routes here too.
 func (h *api) listCaseExecutions(w http.ResponseWriter, r *http.Request) {
-	execs, err := h.svc.CaseExecutions(r.Context(), resolvedID(r, "caseKey"))
+	order := r.URL.Query().Get("order")
+	limitStr := r.URL.Query().Get("limit")
+	if order != "recent" {
+		if limitStr != "" {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit requires order=recent"})
+			return
+		}
+		execs, err := h.svc.CaseExecutions(r.Context(), resolvedID(r, "caseKey"))
+		h.respond(w, http.StatusOK, execs, err)
+		return
+	}
+	limit, err := strconv.Atoi(limitStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "limit is required and must be an integer when order=recent"})
+		return
+	}
+	execs, err := h.svc.RecentCaseExecutions(r.Context(), resolvedID(r, "caseKey"), limit)
 	h.respond(w, http.StatusOK, execs, err)
 }
 

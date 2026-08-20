@@ -62,6 +62,7 @@ function mockDetailAPI(options?: {
   v1Content?: typeof limitCase.content
   versions?: unknown[]
   users?: unknown[]
+  executions?: unknown[]
   // pass `null` (not `undefined` — a default parameter would silently
   // override it) to simulate no permissions data at all.
   permissions?: unknown
@@ -104,7 +105,7 @@ function mockDetailAPI(options?: {
         data: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
         response: { ok: true },
       })
-    if (path === executionsPath) return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === executionsPath) return Promise.resolve({ data: options?.executions ?? [], response: { ok: true } })
     if (path === '/api/v1/users' && !anon) return Promise.resolve({ data: options?.users ?? [], response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anon) {
       const permissions = options && 'permissions' in options ? options.permissions : fullPermissions
@@ -502,6 +503,33 @@ describe('CaseDetailPage', () => {
     await screen.findByRole('heading', { name: 'Daily transfer limit' })
     expect(screen.getByText('Results')).toBeInTheDocument()
     expect(screen.getByText(/no result history yet/i)).toBeInTheDocument()
+  })
+
+  it('wires real execution history into the Results section, most recent last', async () => {
+    // API returns order=recent (most-recent-first); the page must present
+    // the bars oldest→newest (most recent last), matching CaseResultsPanel's
+    // own "last bar = most recent" convention.
+    mockDetailAPI({
+      executions: [
+        { runItemId: 'i3', runId: 'r3', runKey: 'R-3', runName: 'run 3', caseVersion: 2, status: 'pass', createdAt: '2026-07-20T10:00:00Z' },
+        { runItemId: 'i2', runId: 'r2', runKey: 'R-2', runName: 'run 2', caseVersion: 2, status: 'failed', createdAt: '2026-07-19T10:00:00Z' },
+        { runItemId: 'i1', runId: 'r1', runKey: 'R-1', runName: 'run 1', caseVersion: 1, status: 'pass', createdAt: '2026-07-18T10:00:00Z' },
+      ],
+    })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+    expect(screen.queryByText(/no result history yet/i)).not.toBeInTheDocument()
+    expect(screen.getByText('67%')).toBeInTheDocument()
+
+    const bars = screen.getAllByTestId('case-result-bar')
+    expect(bars).toHaveLength(3)
+    expect(bars[0]).toHaveAttribute('aria-label', expect.stringContaining('Pass'))
+    expect(bars[1]).toHaveAttribute('aria-label', expect.stringContaining('Failed'))
+    expect(bars[2]).toHaveAttribute('aria-label', expect.stringContaining('Pass'))
+
+    const lastRun = new Date('2026-07-20T10:00:00Z').toLocaleDateString()
+    expect(screen.getByText(new RegExp(`Last run.*${lastRun.replace(/\//g, '\\/')}`))).toBeInTheDocument()
   })
 
   it('shows the sidebar sections as expandable, closed groups below 768px', async () => {

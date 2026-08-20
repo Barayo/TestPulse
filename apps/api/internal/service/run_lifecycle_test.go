@@ -382,3 +382,52 @@ func TestFlakyCasesResolvesFromProjectID(t *testing.T) {
 		t.Errorf("FlakyCases = %+v, want exactly case %q", flaky, c.Key)
 	}
 }
+
+// TestRecentCaseExecutionsIsAThinPassthrough covers add-case-result-history's
+// bounded recency query at the service layer: a thin wrapper over the store
+// call, no aggregation logic here.
+func TestRecentCaseExecutionsIsAThinPassthrough(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "run 1", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	items, err := s.RunItems(ctx, run.ID, "")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("RunItems: %d, %v", len(items), err)
+	}
+	if _, err := s.RecordResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+		t.Fatalf("RecordResult: %v", err)
+	}
+
+	execs, err := s.RecentCaseExecutions(ctx, c.ID, 5)
+	if err != nil {
+		t.Fatalf("RecentCaseExecutions: %v", err)
+	}
+	if len(execs) != 1 || execs[0].RunID != run.ID {
+		t.Errorf("RecentCaseExecutions = %+v, want the single execution from %q", execs, run.ID)
+	}
+}
+
+// TestRecentCaseExecutionsValidatesLimit covers the "rejects an unbounded or
+// excessive limit" scenario: limit <= 0 or limit > 50 is rejected before
+// ever reaching the store, so the param can never become an unbounded-fetch
+// escape hatch.
+func TestRecentCaseExecutionsValidatesLimit(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+
+	for _, limit := range []int{0, -1, 51, 1000} {
+		_, err := s.RecentCaseExecutions(ctx, c.ID, limit)
+		var verr *service.ValidationError
+		if !errors.As(err, &verr) {
+			t.Errorf("RecentCaseExecutions(limit=%d) error = %v (%T), want *ValidationError", limit, err, err)
+		}
+	}
+}

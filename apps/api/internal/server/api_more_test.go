@@ -131,3 +131,42 @@ func TestScenario_CaseExecutionsGroupedByVersionOverHTTP(t *testing.T) {
 		t.Errorf("execs[1] = %+v", execs[1])
 	}
 }
+
+// TestScenario_CaseRecentExecutionsOverHTTP covers add-case-result-history's
+// bounded, recency-ordered query mode over HTTP: order=recent&limit=N
+// returns capped, recency-ordered results; limit without order=recent and
+// limit above the max are both rejected; omitting both params leaves the
+// existing version-grouped default untouched.
+func TestScenario_CaseRecentExecutionsOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c, run1, run2, run3 struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "Login works"}, 201, &c)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 1", "caseKeys": []string{c.Key}}, 201, &run1)
+	call(t, h, "PUT", "/api/v1/cases/"+c.Key, jmap{"title": "Login works v2"}, 200, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 2", "caseKeys": []string{c.Key}}, 201, &run2)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 3", "caseKeys": []string{c.Key}}, 201, &run3)
+
+	var recent []struct {
+		RunName string `json:"runName"`
+	}
+	call(t, h, "GET", "/api/v1/cases/"+c.Key+"/executions?order=recent&limit=2", nil, 200, &recent)
+	if len(recent) != 2 {
+		t.Fatalf("recent executions = %d, want 2: %+v", len(recent), recent)
+	}
+	if recent[0].RunName != "run 3" || recent[1].RunName != "run 2" {
+		t.Errorf("recent = %+v, want [run 3, run 2] most-recent-first", recent)
+	}
+
+	call(t, h, "GET", "/api/v1/cases/"+c.Key+"/executions?limit=2", nil, 400, nil)
+	call(t, h, "GET", "/api/v1/cases/"+c.Key+"/executions?order=recent&limit=51", nil, 400, nil)
+
+	var defaultOrder []struct {
+		CaseVersion int `json:"caseVersion"`
+	}
+	call(t, h, "GET", "/api/v1/cases/"+c.Key+"/executions", nil, 200, &defaultOrder)
+	if len(defaultOrder) != 3 || defaultOrder[0].CaseVersion != 1 {
+		t.Errorf("default-order executions = %+v, want 3 items still grouped by version starting at v1", defaultOrder)
+	}
+}

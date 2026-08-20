@@ -75,6 +75,7 @@ internal `id` in paths — they aren't in scope for this scheme.
 | DELETE | `/api/v1/cases/{caseKey}` | Soft delete (versions stay readable in past runs) |
 | GET | `/api/v1/cases/{caseKey}/versions` | Full version history, oldest first |
 | POST | `/api/v1/cases/{caseKey}/versions/{version}/restore` | Restore an old version's content as a **new** current version — never rewinds `currentVersion` in place |
+| GET | `/api/v1/cases/{caseKey}/executions` | Every execution that has pinned this case, across all runs. Default: grouped by pinned version, then time. `?order=recent&limit=N` (N ≤ 50): the N most recent executions strictly by recency, bounded server-side. `limit` without `order=recent`, or `limit` above 50, is rejected with 400. |
 
 **Folders** — project-level, orthogonal to suites; every case belongs to
 exactly one folder, defaulting to the project's root; see
@@ -125,7 +126,7 @@ public, doesn't exist, or the switch is off (see
 |---|---|---|
 | GET | `/api/v1/public/projects/{projectKey}` | Get a public project |
 | GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` | List, same shapes as the authenticated equivalents |
-| GET | `/api/v1/public/cases/{caseKey}` \| `/versions` \| `/executions` | A case, its version history, its execution history |
+| GET | `/api/v1/public/cases/{caseKey}` \| `/versions` \| `/executions` | A case, its version history, its execution history — `/executions` supports the same `order=recent&limit=N` params as the authenticated route |
 | GET | `/api/v1/public/suites/{suiteKey}` \| `/trend` | A suite, its pass-rate trend |
 | GET | `/api/v1/public/runs/{runKey}` \| `/items` \| `/summary` | A run, its items, its status counts |
 | GET | `/api/v1/public/items/{itemId}/results` | A run item's result log |

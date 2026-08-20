@@ -16,7 +16,7 @@ export const STATUS_COLOR: Record<Status, string> = {
   pending: 'var(--chart-5)',
   retest: 'var(--chart-5)',
 }
-const RETEST_TEXTURE =
+export const RETEST_TEXTURE =
   'repeating-linear-gradient(135deg, transparent, transparent 3px, color-mix(in srgb, var(--background) 45%, transparent) 3px, color-mix(in srgb, var(--background) 45%, transparent) 6px)'
 
 export const STATUS_LABEL: Record<Status, string> = {

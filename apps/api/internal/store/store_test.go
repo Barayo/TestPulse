@@ -1578,6 +1578,64 @@ func TestExecutionsByCaseGroupedByVersion(t *testing.T) {
 	}
 }
 
+func backdateRunItemCreatedAt(t *testing.T, pool *pgxpool.Pool, itemID string, ageDays int) {
+	t.Helper()
+	if _, err := pool.Exec(context.Background(),
+		`UPDATE test_run_items SET created_at = now() - make_interval(days => $2) WHERE id = $1`, itemID, ageDays); err != nil {
+		t.Fatalf("backdate run item: %v", err)
+	}
+}
+
+// TestExecutionsByCaseRecentOrdersByRecencyAndCaps covers
+// add-case-result-history's "Requesting recent executions ordered by
+// recency" and "capped" scenarios: sorting is strictly by created_at, not
+// by pinned case_version (a low version number does not imply an old
+// timestamp), and the limit bounds the result set to the most recent rows.
+func TestExecutionsByCaseRecentOrdersByRecencyAndCaps(t *testing.T) {
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+
+	runV1, _ := s.Runs.Create(ctx, p.ID, "run v1", []string{c.ID})
+	itemsV1, _ := s.Runs.Items(ctx, runV1.ID, "")
+
+	edited := c.Content
+	edited.Title = "Login works (edited)"
+	if _, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	runV2a, _ := s.Runs.Create(ctx, p.ID, "run v2 a", []string{c.ID})
+	itemsV2a, _ := s.Runs.Items(ctx, runV2a.ID, "")
+	runV2b, _ := s.Runs.Create(ctx, p.ID, "run v2 b", []string{c.ID})
+	itemsV2b, _ := s.Runs.Items(ctx, runV2b.ID, "")
+
+	// Simulate a version restore: the v1-pinned item is the most recent by
+	// timestamp despite its lower pinned version number, while the two
+	// v2-pinned items are older, one older than the other.
+	if len(itemsV2a) != 1 || len(itemsV2b) != 1 {
+		t.Fatalf("expected 1 item per run, got %d and %d", len(itemsV2a), len(itemsV2b))
+	}
+	backdateRunItemCreatedAt(t, pool, itemsV2a[0].ID, 5)
+	backdateRunItemCreatedAt(t, pool, itemsV2b[0].ID, 2)
+
+	execs, err := s.Runs.ExecutionsByCaseRecent(ctx, c.ID, 2)
+	if err != nil {
+		t.Fatalf("ExecutionsByCaseRecent: %v", err)
+	}
+	if len(execs) != 2 {
+		t.Fatalf("ExecutionsByCaseRecent(limit=2) = %d executions, want 2: %+v", len(execs), execs)
+	}
+	if execs[0].RunItemID != itemsV1[0].ID {
+		t.Errorf("execs[0] = %+v, want most recent (v1-pinned, backdated v2 items) run item %q", execs[0], itemsV1[0].ID)
+	}
+	if execs[1].RunItemID != itemsV2b[0].ID {
+		t.Errorf("execs[1] = %+v, want second-most-recent run item %q", execs[1], itemsV2b[0].ID)
+	}
+}
+
 // --- Run deletion (add-data-retention design.md D1) ---
 
 func TestDeleteRunCascadesToItemsAndResults(t *testing.T) {

@@ -315,6 +315,49 @@ func TestSeedContentHasAFlakyVersion(t *testing.T) {
 	}
 }
 
+// TestSeedFlagshipCaseShowcasesMultipleVerdictColors covers
+// add-case-result-history: the Sample Project's most prominent case ("User
+// can log in with valid credentials", the natural first thing a new user
+// clicks into) must show more than just pass/failed in its recent-execution
+// window, so CaseResultsPanel's full 6-color vocabulary has something real
+// to demonstrate rather than a 2-color history.
+func TestSeedFlagshipCaseShowcasesMultipleVerdictColors(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var login *domain.TestCase
+	for i, c := range cases {
+		if c.Content.Title == "User can log in with valid credentials" {
+			login = &cases[i]
+		}
+	}
+	if login == nil {
+		t.Fatal("no case titled \"User can log in with valid credentials\" seeded")
+	}
+
+	execs, err := svc.RecentCaseExecutions(actorCtx, login.ID, 7)
+	if err != nil {
+		t.Fatalf("RecentCaseExecutions: %v", err)
+	}
+	distinct := map[domain.Status]bool{}
+	for _, e := range execs {
+		distinct[e.Status] = true
+	}
+	if len(distinct) < 3 {
+		t.Errorf("login case's last 7 executions show only %d distinct verdict(s) (%+v), want at least 3", len(distinct), distinct)
+	}
+}
+
 // TestSeedContentSurfacesAFlakyCase covers add-flaky-test-detection's
 // showcase: the same seeded flaky version (checkoutValid — passes in three
 // runs, fails in a fourth, all on its one and only version) must also

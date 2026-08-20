@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import { CaseResultsPanel } from './CaseResultsPanel'
 
 describe('CaseResultsPanel', () => {
@@ -34,14 +34,15 @@ describe('CaseResultsPanel', () => {
       expect(screen.getByText('82%')).toBeInTheDocument()
     })
 
-    it('never encodes verdict by color alone — every bar carries a text tooltip and a legend backs it up', () => {
+    it('never encodes verdict by color alone — every bar carries an accessible name and a legend backs it up', () => {
       render(<CaseResultsPanel data={data} />)
       const bars = screen.getAllByTestId('case-result-bar')
       expect(bars).toHaveLength(3)
-      expect(bars[1]).toHaveAttribute('title', expect.stringContaining('Fail'))
+      expect(bars[1]).toHaveAttribute('aria-label', expect.stringContaining('Failed'))
       // Legend: identity is never color-only.
-      expect(screen.getByText('Pass')).toBeInTheDocument()
-      expect(screen.getByText('Fail')).toBeInTheDocument()
+      const legend = screen.getByRole('list', { name: 'Status breakdown' })
+      expect(within(legend).getByText('Pass')).toBeInTheDocument()
+      expect(within(legend).getByText('Failed')).toBeInTheDocument()
     })
 
     it('shows the last-run date', () => {
@@ -52,6 +53,59 @@ describe('CaseResultsPanel', () => {
     it('does not fall back to the empty state when data is present', () => {
       render(<CaseResultsPanel data={data} />)
       expect(screen.queryByText(/no result history yet/i)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('the full 6-status verdict vocabulary', () => {
+    const data = {
+      successRate: 40,
+      lastRunAt: '20/07/2026',
+      recent: [
+        { verdict: 'pass' as const, date: '15 Jul' },
+        { verdict: 'blocked' as const, date: '16 Jul' },
+        { verdict: 'pending' as const, date: '17 Jul' },
+        { verdict: 'retest' as const, date: '18 Jul' },
+        { verdict: 'failed' as const, date: '19 Jul' },
+      ],
+    }
+
+    it('renders a blocked execution with --chart-4', () => {
+      render(<CaseResultsPanel data={data} />)
+      const bars = screen.getAllByTestId('case-result-bar')
+      expect(bars[1]).toHaveStyle({ background: 'var(--chart-4)' })
+    })
+
+    it('renders a pending execution with --chart-5', () => {
+      render(<CaseResultsPanel data={data} />)
+      const bars = screen.getAllByTestId('case-result-bar')
+      expect(bars[2]).toHaveStyle({ background: 'var(--chart-5)' })
+    })
+
+    it('renders a retest execution with the same diagonal texture RunStatusBreakdown uses', () => {
+      render(<CaseResultsPanel data={data} />)
+      const bars = screen.getAllByTestId('case-result-bar')
+      expect(bars[3].style.backgroundImage).toContain('repeating-linear-gradient')
+    })
+  })
+
+  describe('keyboard accessibility', () => {
+    const data = {
+      successRate: 82,
+      lastRunAt: '20/07/2026',
+      recent: [
+        { verdict: 'pass' as const, date: '18 Jul' },
+        { verdict: 'failed' as const, date: '19 Jul' },
+      ],
+    }
+
+    it('each result bar is a real button, reachable via Tab, with an accessible name carrying verdict and date', () => {
+      render(<CaseResultsPanel data={data} />)
+      const bars = screen.getAllByTestId('case-result-bar')
+      for (const bar of bars) {
+        expect(bar.tagName).toBe('BUTTON')
+        expect(bar).toHaveAttribute('type', 'button')
+      }
+      expect(bars[1]).toHaveAccessibleName('Failed · 19 Jul')
     })
   })
 })

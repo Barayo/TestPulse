@@ -405,6 +405,20 @@ func (s *Service) CaseExecutions(ctx context.Context, caseID string) ([]domain.C
 	return s.store.Runs.ExecutionsByCase(ctx, caseID)
 }
 
+// MaxRecentCaseExecutionsLimit bounds the `limit` param on
+// RecentCaseExecutions so it can never become an unbounded-fetch escape
+// hatch (add-case-result-history).
+const MaxRecentCaseExecutionsLimit = 50
+
+// RecentCaseExecutions is a thin passthrough to the store's bounded,
+// recency-ordered query — no aggregation logic here, per design.md.
+func (s *Service) RecentCaseExecutions(ctx context.Context, caseID string, limit int) ([]domain.CaseExecution, error) {
+	if limit <= 0 || limit > MaxRecentCaseExecutionsLimit {
+		return nil, invalid("limit must be between 1 and %d", MaxRecentCaseExecutionsLimit)
+	}
+	return s.store.Runs.ExecutionsByCaseRecent(ctx, caseID, limit)
+}
+
 func (s *Service) DeleteCase(ctx context.Context, caseID string) error {
 	if err := s.store.Cases.SoftDelete(ctx, caseID); err != nil {
 		return err

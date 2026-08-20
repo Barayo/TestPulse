@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } f
 import { Avatar } from '@/components/Avatar'
 import { PropertyRow } from '@/components/PropertyRow'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
-import { CaseResultsPanel } from '@/components/CaseResultsPanel'
+import { CaseResultsPanel, type CaseResultsData } from '@/components/CaseResultsPanel'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { ClassificationEditor, type Priority } from '@/components/ClassificationEditor'
 import { ClassificationPills, AutomationPill } from '@/components/Pills'
@@ -30,6 +30,25 @@ type Project = components['schemas']['Project']
 type Folder = components['schemas']['Folder']
 type CaseVersion = components['schemas']['CaseVersion']
 type Suite = components['schemas']['Suite']
+type CaseExecution = components['schemas']['CaseExecution']
+
+const RECENT_EXECUTIONS_LIMIT = 7
+
+// order=recent returns most-recent-first; CaseResultsPanel draws its bar
+// row oldest→newest (last bar = most recent), so this reverses on the way
+// in rather than asking the panel to know about the API's own ordering.
+function toResultsData(executions: CaseExecution[]): CaseResultsData | undefined {
+  if (executions.length === 0) return undefined
+  const passCount = executions.filter((e) => e.status === 'pass').length
+  return {
+    successRate: Math.round((passCount / executions.length) * 100),
+    lastRunAt: new Date(executions[0].createdAt).toLocaleDateString(),
+    recent: executions
+      .slice()
+      .reverse()
+      .map((e) => ({ verdict: e.status, date: new Date(e.createdAt).toLocaleDateString() })),
+  }
+}
 
 function firstNameOf(displayName: string): string {
   return displayName.split(' ')[0]
@@ -58,6 +77,7 @@ export default function CaseDetailPage() {
   const [testCase, setTestCase] = useState<TestCase>()
   const [versions, setVersions] = useState<CaseVersion[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
+  const [resultsData, setResultsData] = useState<CaseResultsData>()
   const [notFound, setNotFound] = useState(false)
   // Resolves a version's actor to a display name + avatar (link-case-version-actor-to-identity)
   // — actorRefId -> {displayName, avatarKey}, the same client-side lookup pattern
@@ -89,13 +109,16 @@ export default function CaseDetailPage() {
     if (!projectKey || !caseKey || access === 'loading') return
     setNotFound(false)
     if (access === 'member') {
-      const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }] = await Promise.all([
+      const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }, { data: execs }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
         api.GET('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } }),
         api.GET('/api/v1/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
         api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
         api.GET('/api/v1/users'),
+        api.GET('/api/v1/cases/{caseKey}/executions', {
+          params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
+        }),
       ])
       if (!p || !c) {
         setNotFound(true)
@@ -106,6 +129,7 @@ export default function CaseDetailPage() {
       setTestCase(c)
       setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
       setSuites(s ?? [])
+      setResultsData(toResultsData(execs ?? []))
       setUserIdentities(
         Object.fromEntries(
           (users ?? []).map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
@@ -116,12 +140,15 @@ export default function CaseDetailPage() {
     // Anonymous: GET /api/v1/users has no public equivalent and never
     // gets one (design.md D1/D10) — version-history rows simply show no
     // author name, since userIdentities stays empty here.
-    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }] = await Promise.all([
+    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: execs }] = await Promise.all([
       api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
       api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
       api.GET('/api/v1/public/cases/{caseKey}', { params: { path: { caseKey } } }),
       api.GET('/api/v1/public/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
       api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/public/cases/{caseKey}/executions', {
+        params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
+      }),
     ])
     if (!p || !c) {
       setNotFound(true)
@@ -132,6 +159,7 @@ export default function CaseDetailPage() {
     setTestCase(c)
     setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
     setSuites(s ?? [])
+    setResultsData(toResultsData(execs ?? []))
     setUserIdentities({})
   }, [projectKey, caseKey, access])
 
@@ -396,7 +424,7 @@ export default function CaseDetailPage() {
           </CaseSidebarSection>
 
           <CaseSidebarSection title="Results">
-            <CaseResultsPanel />
+            <CaseResultsPanel data={resultsData} />
           </CaseSidebarSection>
 
           <CaseSidebarSection title="Version history">

@@ -393,18 +393,29 @@ paths:
   /api/v1/cases/{caseKey}/executions:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
+      - name: order
+        in: query
+        required: false
+        schema: { type: string, enum: [recent] }
+        description: Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`.
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 50 }
+        description: Only valid paired with order=recent; caps the number of executions returned.
     get:
       operationId: listCaseExecutions
-      summary: Every execution that has pinned this case, across all runs, grouped by version
+      summary: Every execution that has pinned this case, across all runs — grouped by version by default, or the most recent N ordered by recency
       tags: [cases]
       responses:
         "200":
-          description: Executions ordered by pinned version, then by when they ran
+          description: Executions ordered by pinned version then time (default), or strictly by recency and capped (order=recent&limit=N)
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CaseExecution" }
+        "400": { $ref: "#/components/responses/ValidationError" }
   /api/v1/projects/{projectKey}/flaky-cases:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -995,18 +1006,29 @@ paths:
   /api/v1/public/cases/{caseKey}/executions:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
+      - name: order
+        in: query
+        required: false
+        schema: { type: string, enum: [recent] }
+        description: Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`.
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 50 }
+        description: Only valid paired with order=recent; caps the number of executions returned.
     get:
       operationId: listPublicCaseExecutions
-      summary: Every execution that has pinned this case, from a public project
+      summary: Every execution that has pinned this case, from a public project — grouped by version by default, or the most recent N ordered by recency
       tags: [public]
       responses:
         "200":
-          description: Executions ordered by pinned version, then by when they ran
+          description: Executions ordered by pinned version then time (default), or strictly by recency and capped (order=recent&limit=N)
           content:
             application/json:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/CaseExecution" }
+        "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/suites/{suiteKey}:
     parameters:

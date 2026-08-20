@@ -320,14 +320,19 @@ export interface paths {
     };
     "/api/v1/cases/{caseKey}/executions": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`. */
+                order?: "recent";
+                /** @description Only valid paired with order=recent; caps the number of executions returned. */
+                limit?: number;
+            };
             header?: never;
             path: {
                 caseKey: string;
             };
             cookie?: never;
         };
-        /** Every execution that has pinned this case, across all runs, grouped by version */
+        /** Every execution that has pinned this case, across all runs — grouped by version by default, or the most recent N ordered by recency */
         get: operations["listCaseExecutions"];
         put?: never;
         post?: never;
@@ -865,14 +870,19 @@ export interface paths {
     };
     "/api/v1/public/cases/{caseKey}/executions": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`. */
+                order?: "recent";
+                /** @description Only valid paired with order=recent; caps the number of executions returned. */
+                limit?: number;
+            };
             header?: never;
             path: {
                 caseKey: string;
             };
             cookie?: never;
         };
-        /** Every execution that has pinned this case, from a public project */
+        /** Every execution that has pinned this case, from a public project — grouped by version by default, or the most recent N ordered by recency */
         get: operations["listPublicCaseExecutions"];
         put?: never;
         post?: never;
@@ -2871,7 +2881,12 @@ export interface operations {
     };
     listCaseExecutions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`. */
+                order?: "recent";
+                /** @description Only valid paired with order=recent; caps the number of executions returned. */
+                limit?: number;
+            };
             header?: never;
             path: {
                 caseKey: string;
@@ -2880,7 +2895,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Executions ordered by pinned version, then by when they ran */
+            /** @description Executions ordered by pinned version then time (default), or strictly by recency and capped (order=recent&limit=N) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2889,6 +2904,7 @@ export interface operations {
                     "application/json": components["schemas"]["CaseExecution"][];
                 };
             };
+            400: components["responses"]["ValidationError"];
         };
     };
     listFlakyCases: {
@@ -3826,7 +3842,12 @@ export interface operations {
     };
     listPublicCaseExecutions: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`. */
+                order?: "recent";
+                /** @description Only valid paired with order=recent; caps the number of executions returned. */
+                limit?: number;
+            };
             header?: never;
             path: {
                 caseKey: string;
@@ -3835,7 +3856,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Executions ordered by pinned version, then by when they ran */
+            /** @description Executions ordered by pinned version then time (default), or strictly by recency and capped (order=recent&limit=N) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -3844,6 +3865,7 @@ export interface operations {
                     "application/json": components["schemas"]["CaseExecution"][];
                 };
             };
+            400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
         };
     };
