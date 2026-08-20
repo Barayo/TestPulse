@@ -59,6 +59,9 @@ function mockAPI({
     if (path === '/api/v1/projects/summaries') {
       return Promise.resolve({ data: resolvedSummaries, response: { ok: true } })
     }
+    if (path === '/api/v1/projects/{projectKey}/custom-fields') {
+      return Promise.resolve({ data: [], response: { ok: true } })
+    }
     if (path === '/api/v1/instance-settings') {
       return isTenantAdmin
         ? Promise.resolve({
@@ -93,6 +96,13 @@ describe('ProjectSettingsPage', () => {
     renderPage()
     expect(await screen.findByText(/not authorized/i)).toBeInTheDocument()
     expect(screen.queryByText(/public access/i)).not.toBeInTheDocument()
+  })
+
+  it('renders the Custom fields card', async () => {
+    mockAPI({ manageProject: true })
+    renderPage()
+    expect(await screen.findByText('Custom fields')).toBeInTheDocument()
+    expect(await screen.findByText(/no custom fields yet/i)).toBeInTheDocument()
   })
 
   it('renders the public access toggle off by default and a copyable link once enabled', async () => {

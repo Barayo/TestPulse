@@ -30,6 +30,7 @@ type Store struct {
 	Attachments         *AttachmentRepo
 	InstanceSettings    *InstanceSettingsRepo
 	PasswordResetTokens *PasswordResetTokenRepo
+	CustomFields        *CustomFieldRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -50,6 +51,7 @@ func New(pool *pgxpool.Pool) *Store {
 		Attachments:         &AttachmentRepo{pool: pool},
 		InstanceSettings:    &InstanceSettingsRepo{pool: pool},
 		PasswordResetTokens: &PasswordResetTokenRepo{pool: pool},
+		CustomFields:        &CustomFieldRepo{pool: pool},
 	}
 }
 
@@ -57,13 +59,23 @@ func New(pool *pgxpool.Pool) *Store {
 var ErrNotFound = fmt.Errorf("not found")
 
 // contentColumns is the shared SELECT list for test_case_versions content.
-const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated"
+const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields"
 
 func marshalSteps(steps []domain.Step) ([]byte, error) {
 	if steps == nil {
 		steps = []domain.Step{}
 	}
 	return json.Marshal(steps)
+}
+
+// marshalCustomFields marshals a possibly-nil custom field value map to the
+// same "always a JSON object, never null" shape the custom_fields column's
+// NOT NULL DEFAULT '{}' expects (add-case-custom-fields).
+func marshalCustomFields(fields map[string]string) ([]byte, error) {
+	if fields == nil {
+		fields = map[string]string{}
+	}
+	return json.Marshal(fields)
 }
 
 // claimEntityKey claims the next per-project, per-type sequential number
@@ -89,11 +101,17 @@ func claimEntityKey(ctx context.Context, tx pgx.Tx, projectID, entityType, forma
 	return fmt.Sprintf(format, projectKey, n), nil
 }
 
-func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool) func() (domain.CaseContent, error) {
+func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool, customFieldsJSON *[]byte) func() (domain.CaseContent, error) {
 	return func() (domain.CaseContent, error) {
 		var steps []domain.Step
 		if err := json.Unmarshal(*stepsJSON, &steps); err != nil {
 			return domain.CaseContent{}, fmt.Errorf("decoding steps: %w", err)
+		}
+		customFields := map[string]string{}
+		if len(*customFieldsJSON) > 0 {
+			if err := json.Unmarshal(*customFieldsJSON, &customFields); err != nil {
+				return domain.CaseContent{}, fmt.Errorf("decoding custom fields: %w", err)
+			}
 		}
 		return domain.CaseContent{
 			Title:          *title,
@@ -105,6 +123,7 @@ func scanContent(title, description *string, stepsJSON *[]byte, expected *string
 			Platform:       *platform,
 			TestType:       *testType,
 			Automated:      *automated,
+			CustomFields:   customFields,
 		}, nil
 	}
 }

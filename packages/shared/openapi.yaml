@@ -524,6 +524,130 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProjectStatusSummary" }
+  /api/v1/projects/{projectKey}/custom-fields:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCustomFields
+      summary: List a project's custom field definitions, ordered by their admin-set position
+      tags: [customFields]
+      responses:
+        "200":
+          description: Custom fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CustomField" }
+    post:
+      operationId: createCustomField
+      summary: Define a new custom field
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldInput" }
+      responses:
+        "201":
+          description: Created field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomField" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/projects/{projectKey}/custom-fields/order:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: reorderCustomFields
+      summary: Set the display order of a project's custom fields
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldOrderInput" }
+      responses:
+        "204": { description: Reordered }
+  /api/v1/custom-fields/{fieldId}:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: renameCustomField
+      summary: Rename a custom field (its type cannot change after creation)
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldRenameInput" }
+      responses:
+        "200":
+          description: Renamed field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomField" }
+    delete:
+      operationId: deleteCustomField
+      summary: Delete a custom field — does not rewrite any case version's recorded history
+      tags: [customFields]
+      responses:
+        "204": { description: Deleted }
+  /api/v1/custom-fields/{fieldId}/deletion-preview:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: customFieldDeletionPreview
+      summary: How many of the project's current cases have a value set for this field
+      tags: [customFields]
+      responses:
+        "200":
+          description: Deletion preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomFieldDeletionPreview" }
+  /api/v1/custom-fields/{fieldId}/options:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: addCustomFieldOption
+      summary: Add an option to a select-type custom field
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldOptionInput" }
+      responses:
+        "201":
+          description: Created option
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomFieldOption" }
+  /api/v1/custom-fields/{fieldId}/options/order:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: reorderCustomFieldOptions
+      summary: Set the display order of a select field's options
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldOptionOrderInput" }
+      responses:
+        "204": { description: Reordered }
+  /api/v1/custom-fields/{fieldId}/options/{optionId}:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+      - { name: optionId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: removeCustomFieldOption
+      summary: Remove an option from a select-type custom field
+      tags: [customFields]
+      responses:
+        "204": { description: Removed }
   /api/v1/projects/{projectKey}/imports:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -999,6 +1123,22 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProjectStatusSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/custom-fields:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCustomFields
+      summary: List a public project's custom field definitions
+      tags: [public]
+      responses:
+        "200":
+          description: Custom fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CustomField" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/cases/{caseKey}:
     parameters:
@@ -1923,6 +2063,13 @@ components:
         automated:
           type: boolean
           description: Defaults to false — every case is manual until marked otherwise.
+        customFields:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            The project's custom field values, keyed by field id (a select
+            field's value is one of its option ids). Sparse — a field with
+            no recorded value is simply absent, not a default (add-case-custom-fields).
     CaseCreateInput:
       allOf:
         - $ref: "#/components/schemas/CaseContent"
@@ -2374,6 +2521,70 @@ components:
         caseTitle: { type: string }
         currentVersion: { type: integer }
         rate: { type: integer, description: "0-100 percentage: min(pass, failedOrBlocked) / (pass + failedOrBlocked)" }
+    CustomFieldType:
+      type: string
+      enum: [text, select]
+    CustomFieldOption:
+      type: object
+      required: [id, value]
+      properties:
+        id: { type: string }
+        value: { type: string }
+    CustomField:
+      type: object
+      required: [id, name, fieldType, createdAt]
+      description: >-
+        A project-scoped custom field definition (add-case-custom-fields).
+        fieldType is fixed at creation and never changes.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        fieldType: { $ref: "#/components/schemas/CustomFieldType" }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/CustomFieldOption" }
+          description: Populated only for a `select` field, ordered by its admin-set position.
+        createdAt: { type: string, format: date-time }
+    CustomFieldInput:
+      type: object
+      required: [name, fieldType]
+      properties:
+        name: { type: string }
+        fieldType: { $ref: "#/components/schemas/CustomFieldType" }
+    CustomFieldRenameInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    CustomFieldOptionInput:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string }
+    CustomFieldOrderInput:
+      type: object
+      required: [fieldIds]
+      properties:
+        fieldIds:
+          type: array
+          items: { type: string }
+    CustomFieldOptionOrderInput:
+      type: object
+      required: [optionIds]
+      properties:
+        optionIds:
+          type: array
+          items: { type: string }
+    CustomFieldDeletionPreview:
+      type: object
+      required: [caseCount]
+      description: >-
+        Real count of what deleting a custom field would affect, mirroring
+        RoleDeletionPreview's counts-only pattern.
+      properties:
+        caseCount:
+          type: integer
+          description: The project's current cases with a value set for this field.
     ProjectSummary:
       type: object
       required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite, archived]

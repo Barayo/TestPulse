@@ -10,6 +10,7 @@ import type { components } from '@testpulse/shared/api'
 
 type CaseVersion = components['schemas']['CaseVersion']
 type CaseExecution = components['schemas']['CaseExecution']
+type CustomField = components['schemas']['CustomField']
 
 // Reuses CaseResultsPanel's verdict semantics — no new status vocabulary.
 const VERDICT_COLOR: Record<string, string> = {
@@ -31,9 +32,10 @@ type Props = {
   // down rather than re-derived here — avoids a second, redundant
   // /permissions fetch for the same decision (design.md D11).
   access: ProjectReadAccess
+  customFieldDefs?: CustomField[]
 }
 
-export function VersionDetailDialog({ open, onOpenChange, caseKey, version, versions, access }: Props) {
+export function VersionDetailDialog({ open, onOpenChange, caseKey, version, versions, access, customFieldDefs = [] }: Props) {
   const [executions, setExecutions] = useState<CaseExecution[]>([])
 
   useEffect(() => {
@@ -53,7 +55,7 @@ export function VersionDetailDialog({ open, onOpenChange, caseKey, version, vers
 
   const current = versions.find((v) => v.version === version)
   const previous = versions.find((v) => v.version === version - 1)
-  const diff = current && previous ? diffContent(previous.content, current.content) : null
+  const diff = current && previous ? diffContent(previous.content, current.content, customFieldDefs) : null
   const versionExecutions = executions.filter((e) => e.caseVersion === version)
   const isFlaky =
     versionExecutions.some((e) => e.status === 'pass') &&

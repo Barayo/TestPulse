@@ -323,6 +323,9 @@ func (s *Service) CreateCase(ctx context.Context, projectID, folderID string, co
 	if err := content.Validate(); err != nil {
 		return domain.TestCase{}, invalid("%s", err)
 	}
+	if err := s.validateCustomFieldValues(ctx, projectID, content.CustomFields); err != nil {
+		return domain.TestCase{}, err
+	}
 	actorKind, actorRefID := resolveActor(ctx)
 	c, err := s.store.Cases.Create(ctx, projectID, folderID, content, actorKind, actorRefID)
 	if err != nil {
@@ -350,6 +353,15 @@ func (s *Service) MoveCase(ctx context.Context, caseID, folderID string) error {
 func (s *Service) EditCase(ctx context.Context, caseID string, content domain.CaseContent) (domain.TestCase, error) {
 	if err := content.Validate(); err != nil {
 		return domain.TestCase{}, invalid("%s", err)
+	}
+	if len(content.CustomFields) > 0 {
+		projectID, err := s.store.Cases.ProjectID(ctx, caseID)
+		if err != nil {
+			return domain.TestCase{}, err
+		}
+		if err := s.validateCustomFieldValues(ctx, projectID, content.CustomFields); err != nil {
+			return domain.TestCase{}, err
+		}
 	}
 	actorKind, actorRefID := resolveActor(ctx)
 	c, err := s.store.Cases.NewVersion(ctx, caseID, content, actorKind, actorRefID)

@@ -43,6 +43,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 			mountIdentity(r, h)
 			mountTeams(r, h)
 			mountRoles(r, h)
+			mountCustomFields(r, h)
 			r.With(requireTenantAdmin).Get("/instance-settings", h.getInstanceSettings)
 			r.With(requireTenantAdmin).Patch("/instance-settings", h.updateInstanceSettings)
 		})

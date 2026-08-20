@@ -145,6 +145,10 @@ func projectIDFromItem(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForItem(r.Context(), chi.URLParam(r, "itemID"))
 }
 
+func projectIDFromCustomField(h *api, r *http.Request) (string, error) {
+	return h.svc.ProjectIDForCustomField(r.Context(), chi.URLParam(r, "fieldID"))
+}
+
 func projectIDFromResult(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForResult(r.Context(), chi.URLParam(r, "resultID"))
 }

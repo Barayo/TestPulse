@@ -8,6 +8,7 @@ export type RowActionMenuItem = {
   icon?: ReactNode
   danger?: boolean
   dividerBefore?: boolean
+  disabled?: boolean
 }
 
 export type RowActionMenuHandle = {
@@ -85,7 +86,8 @@ export const RowActionMenu = forwardRef<
             <button
               type="button"
               role="menuitem"
-              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-accent ${
+              disabled={item.disabled}
+              className={`flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-accent disabled:pointer-events-none disabled:opacity-40 ${
                 item.danger ? 'text-destructive' : ''
               }`}
               onClick={() => {

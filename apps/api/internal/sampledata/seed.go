@@ -697,6 +697,48 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	// 7. Custom fields (add-case-custom-fields): one text field and one
+	// select field, with values on a few real cases — the showroom for
+	// this capability. Deliberately after every run above, since setting
+	// a value here creates a new case version and this project's health
+	// indicator/last-run signal must keep reflecting the go/no-go run,
+	// not this edit.
+	automationOwner, err := svc.CreateCustomField(ctx, p.ID, "Automation Owner", domain.CustomFieldTypeText)
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	component, err := svc.CreateCustomField(ctx, p.ID, "Component", domain.CustomFieldTypeSelect)
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	authOption, err := svc.AddCustomFieldOption(ctx, component.ID, "Auth")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	checkoutOption, err := svc.AddCustomFieldOption(ctx, component.ID, "Checkout")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := svc.AddCustomFieldOption(ctx, component.ID, "Notifications"); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	loginContent := login.Content
+	loginContent.CustomFields = map[string]string{automationOwner.ID: "Priya Shah", component.ID: authOption.ID}
+	if _, err := svc.EditCase(ctx, login.ID, loginContent); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	badPasswordContent := badPassword.Content
+	badPasswordContent.CustomFields = map[string]string{component.ID: authOption.ID}
+	if _, err := svc.EditCase(ctx, badPassword.ID, badPasswordContent); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	checkoutValidContent := checkoutValid.Content
+	checkoutValidContent.CustomFields = map[string]string{automationOwner.ID: "Marcus Webb", component.ID: checkoutOption.ID}
+	if _, err := svc.EditCase(ctx, checkoutValid.ID, checkoutValidContent); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
 	return nil
 }
 

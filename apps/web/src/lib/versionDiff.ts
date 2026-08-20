@@ -20,8 +20,24 @@ const SCALAR_FIELDS: ScalarField[] = [
   { label: 'Automated', get: (c) => (c.automated ? 'Yes' : 'No') },
 ]
 
-export function diffContent(before: CaseContent, after: CaseContent): ContentDiff {
-  const fields = SCALAR_FIELDS.filter((f) => f.get(before) !== f.get(after)).map((f) => ({
+// customFieldDefs is the project's *live* field definitions only — a
+// version's customFields value for a since-deleted field id simply has no
+// matching def and is silently excluded from the diff (add-case-custom-fields
+// design.md D6: deleting a field drops it from historical diffs too, not
+// just future ones).
+export function diffContent(
+  before: CaseContent,
+  after: CaseContent,
+  customFieldDefs: { id: string; name: string }[] = [],
+): ContentDiff {
+  const allFields: ScalarField[] = [
+    ...SCALAR_FIELDS,
+    ...customFieldDefs.map((def) => ({
+      label: def.name,
+      get: (c: CaseContent) => c.customFields?.[def.id] ?? '',
+    })),
+  ]
+  const fields = allFields.filter((f) => f.get(before) !== f.get(after)).map((f) => ({
     label: f.label,
     before: f.get(before),
     after: f.get(after),

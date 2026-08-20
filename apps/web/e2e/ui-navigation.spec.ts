@@ -1368,3 +1368,82 @@ test.describe('Requirement: Run comparison', () => {
     await expect(page.getByRole('listbox', { name: 'Second run' }).getByRole('option', { name: /nightly run/i })).toHaveCount(1)
   })
 })
+
+test.describe('Requirement: Project-scoped custom field definitions', () => {
+  // add-case-custom-fields
+  test('Scenario: A text and a select field are defined, reordered, and used on a case', async ({ page }) => {
+    await createProject(page, 'Custom Fields Project')
+    const projectId = new URL(page.url()).pathname.split('/')[2]
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await expect(page.getByText('Login works')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/settings`)
+    await expect(page.getByText('No custom fields yet.')).toBeVisible()
+
+    await page.getByRole('button', { name: /new field/i }).click()
+    await page.getByLabel(/field name/i).fill('Automation Owner')
+    await page.getByRole('button', { name: /^create field$/i }).click()
+    await expect(page.getByText('Automation Owner')).toBeVisible()
+
+    await page.getByRole('button', { name: /new field/i }).click()
+    await page.getByLabel(/field name/i).fill('Component')
+    await page.getByLabel(/field type/i).selectOption('select')
+    await page.getByRole('button', { name: /^create field$/i }).click()
+    await expect(page.getByText('Component')).toBeVisible()
+
+    const componentRow = page.getByText('Component', { exact: true }).locator('xpath=ancestor::li[1]')
+    await componentRow.getByPlaceholder(/add option/i).fill('API')
+    await componentRow.getByPlaceholder(/add option/i).press('Enter')
+    await expect(componentRow.getByText('API')).toBeVisible()
+
+    // Reorder via the non-drag fallback: Component moves above Automation Owner.
+    const ownerRow = page.getByText('Automation Owner', { exact: true }).locator('xpath=ancestor::li[1]')
+    await ownerRow.getByRole('button', { name: /actions for automation owner/i }).click()
+    await page.getByRole('menuitem', { name: /move down/i }).click()
+
+    // Use both fields while editing the case.
+    await page.goto(`/projects/${projectId}/library`)
+    await page.getByText('Login works').click()
+    await page.getByRole('button', { name: /^edit$/i }).click()
+    await page.getByLabel('Automation Owner').fill('ana')
+    await page.getByLabel('Component').selectOption({ label: 'API' })
+    await page.getByRole('button', { name: /save changes/i }).click()
+
+    const sidebar = page.getByTestId('case-sidebar')
+    await expect(sidebar.getByText('ana')).toBeVisible()
+    await expect(sidebar.getByText('API')).toBeVisible()
+  })
+
+  test('Scenario: Deleting a field shows how many cases have a value, and removes it from the case afterward', async ({ page }) => {
+    await createProject(page, 'Delete Custom Field Project')
+    const projectId = new URL(page.url()).pathname.split('/')[2]
+    await openFolderExplorer(page)
+    await createCase(page, 'Login works')
+    await expect(page.getByText('Login works')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/settings`)
+    await page.getByRole('button', { name: /new field/i }).click()
+    await page.getByLabel(/field name/i).fill('Automation Owner')
+    await page.getByRole('button', { name: /^create field$/i }).click()
+
+    await page.goto(`/projects/${projectId}/library`)
+    await page.getByText('Login works').click()
+    await page.getByRole('button', { name: /^edit$/i }).click()
+    await page.getByLabel('Automation Owner').fill('ana')
+    await page.getByRole('button', { name: /save changes/i }).click()
+    await expect(page.getByTestId('case-sidebar').getByText('ana')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/settings`)
+    const ownerRow = page.getByText('Automation Owner', { exact: true }).locator('xpath=ancestor::li[1]')
+    await ownerRow.getByRole('button', { name: /delete automation owner/i }).click()
+    await expect(page.getByText(/1 case currently has a value set/i)).toBeVisible()
+    await page.getByRole('button', { name: /delete field/i }).click()
+    await expect(page.getByRole('heading', { name: /delete "automation owner"/i })).not.toBeVisible()
+    await expect(page.getByText('No custom fields yet.')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/library`)
+    await page.getByText('Login works').click()
+    await expect(page.getByTestId('case-sidebar').getByText('ana')).not.toBeVisible()
+  })
+})

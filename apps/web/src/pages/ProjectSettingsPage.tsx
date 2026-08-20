@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { CustomFieldsCard } from '@/components/CustomFieldsCard'
 
 // Project-level settings (enable-public-project-access) — currently just
 // the "Public access" toggle. Gated on manageProject (broader than
@@ -112,6 +113,8 @@ export default function ProjectSettingsPage() {
   return (
     <div className="space-y-6">
       <Breadcrumbs segments={[{ label: 'Settings' }]} />
+
+      {projectKey && <CustomFieldsCard projectKey={projectKey} />}
 
       <Card>
         <CardHeader>

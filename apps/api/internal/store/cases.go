@@ -63,6 +63,10 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 	if err != nil {
 		return domain.TestCase{}, err
 	}
+	customFields, err := marshalCustomFields(content.CustomFields)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -96,12 +100,12 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 		return domain.TestCase{}, err
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated, actor_kind, actor_ref_id)
-		 VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields, actor_kind, actor_ref_id)
+		 VALUES ($1, 1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 		 RETURNING created_at`,
 		c.ID, content.Title, content.Description, steps, content.ExpectedResult,
 		defaultPriority(content.Priority), tagsOrEmpty(content.Tags),
-		content.Platform, content.TestType, content.Automated, actorKind, refID,
+		content.Platform, content.TestType, content.Automated, customFields, actorKind, refID,
 	).Scan(&c.UpdatedAt)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -116,6 +120,10 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 // NewVersion appends an immutable version and bumps current_version.
 func (r *CaseRepo) NewVersion(ctx context.Context, caseID string, content domain.CaseContent, actorKind domain.ResultActorKind, actorRefID string) (domain.TestCase, error) {
 	steps, err := marshalSteps(content.Steps)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	customFields, err := marshalCustomFields(content.CustomFields)
 	if err != nil {
 		return domain.TestCase{}, err
 	}
@@ -143,12 +151,12 @@ func (r *CaseRepo) NewVersion(ctx context.Context, caseID string, content domain
 		return domain.TestCase{}, err
 	}
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated, actor_kind, actor_ref_id)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+		`INSERT INTO test_case_versions (case_id, version, title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields, actor_kind, actor_ref_id)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
 		 RETURNING created_at`,
 		c.ID, c.CurrentVersion, content.Title, content.Description, steps,
 		content.ExpectedResult, defaultPriority(content.Priority), tagsOrEmpty(content.Tags),
-		content.Platform, content.TestType, content.Automated, actorKind, refID,
+		content.Platform, content.TestType, content.Automated, customFields, actorKind, refID,
 	).Scan(&c.UpdatedAt)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -169,22 +177,23 @@ func (r *CaseRepo) Get(ctx context.Context, caseID string) (domain.TestCase, err
 		tags                         []string
 		platform, testType           string
 		automated                    bool
+		customFieldsJSON             []byte
 	)
 	err := r.pool.QueryRow(ctx,
 		`SELECT c.id, c.key, c.project_id, c.folder_id, c.current_version, c.created_at, v.created_at,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields
 		 FROM test_cases c
 		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = c.current_version
 		 WHERE c.id = $1 AND NOT c.deleted`, caseID,
 	).Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt, &c.UpdatedAt,
-		&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)
+		&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.TestCase{}, ErrNotFound
 	}
 	if err != nil {
 		return domain.TestCase{}, err
 	}
-	content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
+	content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)()
 	if err != nil {
 		return domain.TestCase{}, err
 	}
@@ -195,7 +204,7 @@ func (r *CaseRepo) Get(ctx context.Context, caseID string) (domain.TestCase, err
 func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCase, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT c.id, c.key, c.project_id, c.folder_id, c.current_version, c.created_at, v.created_at,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields
 		 FROM test_cases c
 		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = c.current_version
 		 WHERE c.project_id = $1 AND NOT c.deleted
@@ -215,12 +224,13 @@ func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCas
 			tags                         []string
 			platform, testType           string
 			automated                    bool
+			customFieldsJSON             []byte
 		)
 		if err := rows.Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt, &c.UpdatedAt,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON); err != nil {
 			return nil, err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)()
 		if err != nil {
 			return nil, err
 		}
@@ -250,15 +260,16 @@ func (r *CaseRepo) Versions(ctx context.Context, caseID string) ([]domain.CaseVe
 			tags                         []string
 			platform, testType           string
 			automated                    bool
+			customFieldsJSON             []byte
 		)
 		if err := rows.Scan(&v.CaseID, &v.Version, &v.CreatedAt, &v.ActorKind, &refID,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON); err != nil {
 			return nil, err
 		}
 		if refID != nil {
 			v.ActorRefID = *refID
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)()
 		if err != nil {
 			return nil, err
 		}

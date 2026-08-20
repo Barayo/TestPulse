@@ -27,6 +27,33 @@ describe('diffContent', () => {
   })
 })
 
+describe('diffContent custom fields', () => {
+  const customFieldDefs = [{ id: 'f1', name: 'Automation Owner' }]
+
+  it('detects a changed custom field value, labeled by its current name', () => {
+    const diff = diffContent(
+      { ...base, customFields: { f1: 'ana' } },
+      { ...base, customFields: { f1: 'beto' } },
+      customFieldDefs,
+    )
+    expect(diff.fields).toEqual([{ label: 'Automation Owner', before: 'ana', after: 'beto' }])
+  })
+
+  it('treats an absent value as empty, not a diff against undefined', () => {
+    const diff = diffContent({ ...base, customFields: {} }, { ...base, customFields: {} }, customFieldDefs)
+    expect(diff.fields).toEqual([])
+  })
+
+  it('ignores a custom field value on a version that referenced a since-deleted field', () => {
+    const diff = diffContent(
+      { ...base, customFields: { 'deleted-field-id': 'x' } },
+      { ...base, customFields: { 'deleted-field-id': 'y' } },
+      customFieldDefs, // 'deleted-field-id' is not among the live definitions
+    )
+    expect(diff.fields).toEqual([])
+  })
+})
+
 describe('diffSignal', () => {
   it('names up to 2 changed fields', () => {
     expect(diffSignal({ fields: [{ label: 'Priority', before: 'low', after: 'high' }], steps: [] })).toBe(

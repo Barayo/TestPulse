@@ -77,6 +77,20 @@ internal `id` in paths — they aren't in scope for this scheme.
 | POST | `/api/v1/cases/{caseKey}/versions/{version}/restore` | Restore an old version's content as a **new** current version — never rewinds `currentVersion` in place |
 | GET | `/api/v1/cases/{caseKey}/executions` | Every execution that has pinned this case, across all runs. Default: grouped by pinned version, then time. `?order=recent&limit=N` (N ≤ 50): the N most recent executions strictly by recency, bounded server-side. `limit` without `order=recent`, or `limit` above 50, is rejected with 400. |
 
+**Custom fields** (`add-case-custom-fields`) — project-scoped case classification fields, either `text` or `select` (a closed, admin-defined option list); a field's `fieldType` is fixed at creation. Case content's `customFields` is a `{fieldId: value}` map (a select field's value is one of its option ids).
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/projects/{projectKey}/custom-fields` | List a project's custom field definitions, ordered by their admin-set position, each with its options if `select` |
+| POST | `/api/v1/projects/{projectKey}/custom-fields` | Define a field (`name`, `fieldType`) — requires `manageProject` |
+| PUT | `/api/v1/projects/{projectKey}/custom-fields/order` | Set the display order of a project's fields (`fieldIds`, the full new order) — requires `manageProject` |
+| PATCH | `/api/v1/custom-fields/{fieldId}` | Rename a field (`name`) — `fieldType` is immutable, requires `manageProject` |
+| DELETE | `/api/v1/custom-fields/{fieldId}` | Delete a field — does not rewrite any case version's recorded content, requires `manageProject` |
+| GET | `/api/v1/custom-fields/{fieldId}/deletion-preview` | How many of the project's current cases have a value set for this field, requires `manageProject` |
+| POST | `/api/v1/custom-fields/{fieldId}/options` | Add an option to a `select` field (`value`), requires `manageProject` |
+| DELETE | `/api/v1/custom-fields/{fieldId}/options/{optionId}` | Remove an option from a `select` field, requires `manageProject` |
+| PUT | `/api/v1/custom-fields/{fieldId}/options/order` | Set the display order of a `select` field's options (`optionIds`), requires `manageProject` |
+
 **Folders** — project-level, orthogonal to suites; every case belongs to
 exactly one folder, defaulting to the project's root; see
 [Database](database.md) for the tree model.
@@ -127,7 +141,7 @@ public, doesn't exist, or the switch is off (see
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/public/projects/{projectKey}` | Get a public project |
-| GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` \| `/runs/status-summary` | List, same shapes as the authenticated equivalents |
+| GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` \| `/runs/status-summary` \| `/custom-fields` | List, same shapes as the authenticated equivalents |
 | GET | `/api/v1/public/cases/{caseKey}` \| `/versions` \| `/executions` | A case, its version history, its execution history — `/executions` supports the same `order=recent&limit=N` params as the authenticated route |
 | GET | `/api/v1/public/suites/{suiteKey}` \| `/trend` | A suite, its pass-rate trend |
 | GET | `/api/v1/public/runs/{runKey}` \| `/items` \| `/summary` | A run, its items, its status counts |

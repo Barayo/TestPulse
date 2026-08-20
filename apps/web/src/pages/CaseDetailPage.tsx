@@ -14,7 +14,7 @@ import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel, type CaseResultsData } from '@/components/CaseResultsPanel'
 import { toResultsData, RECENT_EXECUTIONS_LIMIT } from '@/lib/caseResultsData'
 import { CaseStepsList } from '@/components/CaseStepsList'
-import { ClassificationEditor, type Priority } from '@/components/ClassificationEditor'
+import { ClassificationEditor, type Priority, type CustomField } from '@/components/ClassificationEditor'
 import { ClassificationPills, AutomationPill } from '@/components/Pills'
 import { FolderPicker } from '@/components/FolderPicker'
 import { RowActionMenu, type RowActionMenuItem } from '@/components/RowActionMenu'
@@ -78,6 +78,9 @@ export default function CaseDetailPage() {
   const [platform, setPlatform] = useState('')
   const [testType, setTestType] = useState('')
   const [automated, setAutomated] = useState(false)
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomField[]>([])
+  const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({})
+  const [showAllCustomFields, setShowAllCustomFields] = useState(false)
   const [moving, setMoving] = useState(false)
   const [moveQuery, setMoveQuery] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
@@ -91,7 +94,7 @@ export default function CaseDetailPage() {
     if (!projectKey || !caseKey || access === 'loading') return
     setNotFound(false)
     if (access === 'member') {
-      const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }, { data: execs }] = await Promise.all([
+      const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }, { data: execs }, { data: fields }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
         api.GET('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } }),
@@ -101,6 +104,7 @@ export default function CaseDetailPage() {
         api.GET('/api/v1/cases/{caseKey}/executions', {
           params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
         }),
+        api.GET('/api/v1/projects/{projectKey}/custom-fields', { params: { path: { projectKey } } }),
       ])
       if (!p || !c) {
         setNotFound(true)
@@ -112,6 +116,7 @@ export default function CaseDetailPage() {
       setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
       setSuites(s ?? [])
       setResultsData(toResultsData(execs ?? []))
+      setCustomFieldDefs(fields ?? [])
       setUserIdentities(
         Object.fromEntries(
           (users ?? []).map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
@@ -122,7 +127,7 @@ export default function CaseDetailPage() {
     // Anonymous: GET /api/v1/users has no public equivalent and never
     // gets one (design.md D1/D10) — version-history rows simply show no
     // author name, since userIdentities stays empty here.
-    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: execs }] = await Promise.all([
+    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: execs }, { data: fields }] = await Promise.all([
       api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
       api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
       api.GET('/api/v1/public/cases/{caseKey}', { params: { path: { caseKey } } }),
@@ -131,6 +136,7 @@ export default function CaseDetailPage() {
       api.GET('/api/v1/public/cases/{caseKey}/executions', {
         params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
       }),
+      api.GET('/api/v1/public/projects/{projectKey}/custom-fields', { params: { path: { projectKey } } }),
     ])
     if (!p || !c) {
       setNotFound(true)
@@ -142,6 +148,7 @@ export default function CaseDetailPage() {
     setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
     setSuites(s ?? [])
     setResultsData(toResultsData(execs ?? []))
+    setCustomFieldDefs(fields ?? [])
     setUserIdentities({})
   }, [projectKey, caseKey, access])
 
@@ -158,6 +165,7 @@ export default function CaseDetailPage() {
     setPlatform(testCase.content.platform ?? '')
     setTestType(testCase.content.testType ?? '')
     setAutomated(testCase.content.automated ?? false)
+    setCustomFieldValues(testCase.content.customFields ?? {})
     setIsEditing(false)
   }, [testCase])
 
@@ -199,6 +207,7 @@ export default function CaseDetailPage() {
         platform: platform.trim(),
         testType: testType.trim(),
         automated,
+        customFields: customFieldValues,
       },
     })
     await load()
@@ -353,6 +362,11 @@ export default function CaseDetailPage() {
                 onPlatformChange={setPlatform}
                 onTestTypeChange={setTestType}
                 onAutomatedChange={setAutomated}
+                customFieldDefs={customFieldDefs}
+                customFieldValues={customFieldValues}
+                onCustomFieldValueChange={(fieldId, value) =>
+                  setCustomFieldValues((prev) => ({ ...prev, [fieldId]: value }))
+                }
               />
             ) : (
               <>
@@ -401,6 +415,50 @@ export default function CaseDetailPage() {
                   }
                   wrap
                 />
+                {customFieldDefs.length > 0 &&
+                  (() => {
+                    const values = testCase.content.customFields ?? {}
+                    const visible = customFieldDefs.slice(0, 3)
+                    const hidden = customFieldDefs.slice(3)
+                    const renderField = (field: CustomField) => {
+                      const raw = values[field.id]
+                      const display =
+                        field.fieldType === 'select'
+                          ? (field.options ?? []).find((o) => o.id === raw)?.value
+                          : raw
+                      return (
+                        <PropertyRow
+                          key={field.id}
+                          label={field.name}
+                          value={
+                            field.fieldType === 'select' && display ? (
+                              <span className="rounded-full bg-muted px-2 py-0.5">{display}</span>
+                            ) : (
+                              display
+                            )
+                          }
+                          wrap
+                        />
+                      )
+                    }
+                    return (
+                      <>
+                        {visible.map(renderField)}
+                        {hidden.length > 0 &&
+                          (showAllCustomFields ? (
+                            hidden.map(renderField)
+                          ) : (
+                            <button
+                              type="button"
+                              className="text-xs text-primary hover:underline"
+                              onClick={() => setShowAllCustomFields(true)}
+                            >
+                              Show {hidden.length} more
+                            </button>
+                          ))}
+                      </>
+                    )
+                  })()}
               </>
             )}
           </CaseSidebarSection>
@@ -413,7 +471,7 @@ export default function CaseDetailPage() {
               <ul aria-label="Version history" className="divide-y rounded-md border text-sm">
                 {versions.map((v) => {
                   const previous = versions.find((x) => x.version === v.version - 1)
-                  const signal = previous ? diffSignal(diffContent(previous.content, v.content)) : 'Initial version'
+                  const signal = previous ? diffSignal(diffContent(previous.content, v.content, customFieldDefs)) : 'Initial version'
                   const expanded = expandedVersion === v.version
                   const author = v.actorKind === 'user' && v.actorRefId ? userIdentities[v.actorRefId] : undefined
                   return (
@@ -451,7 +509,7 @@ export default function CaseDetailPage() {
                       {expanded && (
                         <div className="space-y-2 border-t bg-muted/30 px-3 py-2">
                           {previous ? (
-                            <ContentDiffView diff={diffContent(previous.content, v.content)} />
+                            <ContentDiffView diff={diffContent(previous.content, v.content, customFieldDefs)} />
                           ) : (
                             <p className="text-sm text-muted-foreground">
                               This is the first version — there is no previous version to compare against.
@@ -490,6 +548,7 @@ export default function CaseDetailPage() {
           version={viewingVersion}
           versions={versions}
           access={access}
+          customFieldDefs={customFieldDefs}
         />
       )}
 

@@ -441,6 +441,142 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/custom-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a project's custom field definitions, ordered by their admin-set position */
+        get: operations["listCustomFields"];
+        put?: never;
+        /** Define a new custom field */
+        post: operations["createCustomField"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/custom-fields/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the display order of a project's custom fields */
+        put: operations["reorderCustomFields"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-fields/{fieldId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a custom field — does not rewrite any case version's recorded history */
+        delete: operations["deleteCustomField"];
+        options?: never;
+        head?: never;
+        /** Rename a custom field (its type cannot change after creation) */
+        patch: operations["renameCustomField"];
+        trace?: never;
+    };
+    "/api/v1/custom-fields/{fieldId}/deletion-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        /** How many of the project's current cases have a value set for this field */
+        get: operations["customFieldDeletionPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-fields/{fieldId}/options": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add an option to a select-type custom field */
+        post: operations["addCustomFieldOption"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-fields/{fieldId}/options/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set the display order of a select field's options */
+        put: operations["reorderCustomFieldOptions"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/custom-fields/{fieldId}/options/{optionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+                optionId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an option from a select-type custom field */
+        delete: operations["removeCustomFieldOption"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/imports": {
         parameters: {
             query?: never;
@@ -860,6 +996,25 @@ export interface paths {
         };
         /** Project-wide run item status breakdown, for a public project */
         get: operations["getPublicProjectStatusSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/custom-fields": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a public project's custom field definitions */
+        get: operations["listPublicCustomFields"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1671,6 +1826,10 @@ export interface components {
             testType?: string;
             /** @description Defaults to false — every case is manual until marked otherwise. */
             automated?: boolean;
+            /** @description The project's custom field values, keyed by field id (a select field's value is one of its option ids). Sparse — a field with no recorded value is simply absent, not a default (add-case-custom-fields). */
+            customFields?: {
+                [key: string]: string;
+            };
         };
         CaseCreateInput: components["schemas"]["CaseContent"] & {
             /** @description Defaults to the project's root folder when omitted. */
@@ -1971,6 +2130,43 @@ export interface components {
             currentVersion: number;
             /** @description 0-100 percentage: min(pass, failedOrBlocked) / (pass + failedOrBlocked) */
             rate: number;
+        };
+        /** @enum {string} */
+        CustomFieldType: "text" | "select";
+        CustomFieldOption: {
+            id: string;
+            value: string;
+        };
+        /** @description A project-scoped custom field definition (add-case-custom-fields). fieldType is fixed at creation and never changes. */
+        CustomField: {
+            id: string;
+            name: string;
+            fieldType: components["schemas"]["CustomFieldType"];
+            /** @description Populated only for a `select` field, ordered by its admin-set position. */
+            options?: components["schemas"]["CustomFieldOption"][];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CustomFieldInput: {
+            name: string;
+            fieldType: components["schemas"]["CustomFieldType"];
+        };
+        CustomFieldRenameInput: {
+            name: string;
+        };
+        CustomFieldOptionInput: {
+            value: string;
+        };
+        CustomFieldOrderInput: {
+            fieldIds: string[];
+        };
+        CustomFieldOptionOrderInput: {
+            optionIds: string[];
+        };
+        /** @description Real count of what deleting a custom field would affect, mirroring RoleDeletionPreview's counts-only pattern. */
+        CustomFieldDeletionPreview: {
+            /** @description The project's current cases with a value set for this field. */
+            caseCount: number;
         };
         ProjectSummary: {
             projectId: string;
@@ -3137,6 +3333,218 @@ export interface operations {
             };
         };
     };
+    listCustomFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Custom fields */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"][];
+                };
+            };
+        };
+    };
+    createCustomField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomFieldInput"];
+            };
+        };
+        responses: {
+            /** @description Created field */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    reorderCustomFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomFieldOrderInput"];
+            };
+        };
+        responses: {
+            /** @description Reordered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    deleteCustomField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    renameCustomField: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomFieldRenameInput"];
+            };
+        };
+        responses: {
+            /** @description Renamed field */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"];
+                };
+            };
+        };
+    };
+    customFieldDeletionPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deletion preview */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomFieldDeletionPreview"];
+                };
+            };
+        };
+    };
+    addCustomFieldOption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomFieldOptionInput"];
+            };
+        };
+        responses: {
+            /** @description Created option */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomFieldOption"];
+                };
+            };
+        };
+    };
+    reorderCustomFieldOptions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CustomFieldOptionOrderInput"];
+            };
+        };
+        responses: {
+            /** @description Reordered */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    removeCustomFieldOption: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                fieldId: string;
+                optionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     importResults: {
         parameters: {
             query?: never;
@@ -3878,6 +4286,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ProjectStatusSummary"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicCustomFields: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Custom fields */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CustomField"][];
                 };
             };
             404: components["responses"]["NotFound"];

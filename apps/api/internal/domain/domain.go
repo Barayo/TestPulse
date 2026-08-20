@@ -91,6 +91,13 @@ type CaseContent struct {
 	Platform  string `json:"platform"`
 	TestType  string `json:"testType"`
 	Automated bool   `json:"automated"`
+	// CustomFields holds the project's custom field values for this
+	// version, keyed by field id (not name — a later rename must not
+	// orphan existing values), select-field values holding the chosen
+	// option's id (add-case-custom-fields). Sparse: a field added after
+	// this version was created, or never given a value, is simply absent
+	// — never a zero-value entry.
+	CustomFields map[string]string `json:"customFields,omitempty"`
 }
 
 // Step is a single test case step.
@@ -588,6 +595,45 @@ type FlakyCase struct {
 	CaseTitle      string `json:"caseTitle"`
 	CurrentVersion int    `json:"currentVersion"`
 	Rate           int    `json:"rate"`
+}
+
+// CustomFieldType is the fixed set of custom field types
+// (add-case-custom-fields) — chosen at creation, never changed afterward.
+type CustomFieldType string
+
+const (
+	CustomFieldTypeText   CustomFieldType = "text"
+	CustomFieldTypeSelect CustomFieldType = "select"
+)
+
+// CustomField is a project-scoped custom field definition on test cases
+// (add-case-custom-fields). Options is only populated for a `select`
+// field, ordered by Position.
+type CustomField struct {
+	ID        string              `json:"id"`
+	ProjectID string              `json:"-"`
+	Name      string              `json:"name"`
+	FieldType CustomFieldType     `json:"fieldType"`
+	Position  int                 `json:"-"`
+	Options   []CustomFieldOption `json:"options,omitempty"`
+	CreatedAt time.Time           `json:"createdAt"`
+}
+
+// CustomFieldOption is one option of a `select` custom field
+// (add-case-custom-fields).
+type CustomFieldOption struct {
+	ID       string `json:"id"`
+	FieldID  string `json:"-"`
+	Value    string `json:"value"`
+	Position int    `json:"-"`
+}
+
+// CustomFieldDeletionPreview reports how many of a project's current
+// cases have a value set for a field about to be deleted
+// (add-case-custom-fields), matching RoleDeletionPreview's counts-only
+// convention.
+type CustomFieldDeletionPreview struct {
+	CaseCount int `json:"caseCount"`
 }
 
 // ProjectSummary is the per-project aggregate used by the project list and

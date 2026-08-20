@@ -425,6 +425,74 @@ func TestCaseClassificationFieldsRoundTripOnCreateAndUpdate(t *testing.T) {
 	}
 }
 
+func TestCaseCustomFieldValuesRoundTripOnCreateGetListAndVersions(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	f, err := s.CustomFields.Create(ctx, p.ID, "Automation Owner", domain.CustomFieldTypeText)
+	if err != nil {
+		t.Fatalf("create custom field: %v", err)
+	}
+
+	content := defaultContent("Login works")
+	content.CustomFields = map[string]string{f.ID: "ana"}
+	c, err := s.Cases.Create(ctx, p.ID, "", content, domain.ResultActorUnknown, "")
+	if err != nil {
+		t.Fatalf("create case: %v", err)
+	}
+	if c.Content.CustomFields[f.ID] != "ana" {
+		t.Fatalf("Content after create = %+v, want %s=ana", c.Content.CustomFields, f.ID)
+	}
+
+	got, err := s.Cases.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("get case: %v", err)
+	}
+	if got.Content.CustomFields[f.ID] != "ana" {
+		t.Fatalf("Content after Get = %+v, want %s=ana", got.Content.CustomFields, f.ID)
+	}
+
+	list, err := s.Cases.List(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("list cases: %v", err)
+	}
+	if len(list) != 1 || list[0].Content.CustomFields[f.ID] != "ana" {
+		t.Fatalf("List = %+v, want one case with %s=ana", list, f.ID)
+	}
+
+	edited := got.Content
+	edited.CustomFields = map[string]string{f.ID: "beto"}
+	c2, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, "")
+	if err != nil {
+		t.Fatalf("new version: %v", err)
+	}
+	if c2.Content.CustomFields[f.ID] != "beto" {
+		t.Fatalf("Content after NewVersion = %+v, want %s=beto", c2.Content.CustomFields, f.ID)
+	}
+
+	versions, err := s.Cases.Versions(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("versions: %v", err)
+	}
+	if len(versions) != 2 || versions[0].Content.CustomFields[f.ID] != "ana" || versions[1].Content.CustomFields[f.ID] != "beto" {
+		t.Fatalf("Versions = %+v, want v1=ana v2=beto", versions)
+	}
+}
+
+func TestCaseCustomFieldsAbsentWhenNeverSet(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	c, err := s.Cases.Create(ctx, p.ID, "", defaultContent("Login works"), domain.ResultActorUnknown, "")
+	if err != nil {
+		t.Fatalf("create case: %v", err)
+	}
+	if len(c.Content.CustomFields) != 0 {
+		t.Errorf("CustomFields = %+v, want empty when never set", c.Content.CustomFields)
+	}
+}
+
 func TestSoftDeleteHidesFromListKeepsVersions(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

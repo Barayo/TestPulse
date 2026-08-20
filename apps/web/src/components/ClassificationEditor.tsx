@@ -2,6 +2,7 @@ import { Input } from '@/components/ui/input'
 import type { components } from '@testpulse/shared/api'
 
 export type Priority = components['schemas']['Priority']
+export type CustomField = components['schemas']['CustomField']
 
 export const PRIORITIES: Priority[] = ['low', 'medium', 'high', 'critical']
 
@@ -16,6 +17,9 @@ export function ClassificationEditor({
   onPlatformChange,
   onTestTypeChange,
   onAutomatedChange,
+  customFieldDefs = [],
+  customFieldValues = {},
+  onCustomFieldValueChange,
 }: {
   priority: Priority
   tagsText: string
@@ -27,6 +31,11 @@ export function ClassificationEditor({
   onPlatformChange: (v: string) => void
   onTestTypeChange: (v: string) => void
   onAutomatedChange: (v: boolean) => void
+  // A project with no defined fields never renders this block at all — the
+  // form looks exactly as it does today (add-case-custom-fields).
+  customFieldDefs?: CustomField[]
+  customFieldValues?: Record<string, string>
+  onCustomFieldValueChange?: (fieldId: string, value: string) => void
 }) {
   return (
     <div className="space-y-3">
@@ -96,6 +105,41 @@ export function ClassificationEditor({
           placeholder="e.g. smoke, regression"
         />
       </div>
+
+      {customFieldDefs.length > 0 && (
+        <div className="space-y-3 border-t pt-3">
+          <div className="grid grid-cols-2 gap-3">
+            {customFieldDefs.map((field) => (
+              <div key={field.id} className="space-y-1">
+                <label htmlFor={`custom-field-${field.id}`} className="text-sm font-medium">
+                  {field.name}
+                </label>
+                {field.fieldType === 'select' ? (
+                  <select
+                    id={`custom-field-${field.id}`}
+                    value={customFieldValues[field.id] ?? ''}
+                    onChange={(e) => onCustomFieldValueChange?.(field.id, e.target.value)}
+                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  >
+                    <option value="">—</option>
+                    {(field.options ?? []).map((opt) => (
+                      <option key={opt.id} value={opt.id}>
+                        {opt.value}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <Input
+                    id={`custom-field-${field.id}`}
+                    value={customFieldValues[field.id] ?? ''}
+                    onChange={(e) => onCustomFieldValueChange?.(field.id, e.target.value)}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

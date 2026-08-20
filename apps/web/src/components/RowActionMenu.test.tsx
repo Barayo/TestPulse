@@ -131,6 +131,21 @@ describe('RowActionMenu', () => {
     expect(menu).toHaveStyle({ right: '760px' })
   })
 
+  it('renders a disabled item that does not fire onSelect when clicked', async () => {
+    const onSelect = vi.fn()
+    render(
+      <RowActionMenu
+        label="Actions for Two-Factor"
+        items={[{ label: 'Move up', onSelect, disabled: true }]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Two-Factor' }))
+    const item = screen.getByRole('menuitem', { name: 'Move up' })
+    expect(item).toBeDisabled()
+    await userEvent.click(item)
+    expect(onSelect).not.toHaveBeenCalled()
+  })
+
   it('renders a custom trigger instead of the default overflow icon when one is given', async () => {
     render(
       <RowActionMenu

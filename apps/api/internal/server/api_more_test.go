@@ -171,6 +171,82 @@ func TestScenario_CaseRecentExecutionsOverHTTP(t *testing.T) {
 	}
 }
 
+func TestScenario_CustomFieldsOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+
+	var textField struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		FieldType string `json:"fieldType"`
+	}
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/custom-fields", p.Key),
+		jmap{"name": "Automation Owner", "fieldType": "text"}, 201, &textField)
+	if textField.Name != "Automation Owner" || textField.FieldType != "text" {
+		t.Fatalf("textField = %+v", textField)
+	}
+
+	var selectField struct {
+		ID string `json:"id"`
+	}
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/custom-fields", p.Key),
+		jmap{"name": "Component", "fieldType": "select"}, 201, &selectField)
+
+	var option struct{ ID string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/custom-fields/%s/options", selectField.ID),
+		jmap{"value": "API"}, 201, &option)
+	var option2 struct{ ID string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/custom-fields/%s/options", selectField.ID),
+		jmap{"value": "Web"}, 201, &option2)
+
+	call(t, h, "PUT", fmt.Sprintf("/api/v1/custom-fields/%s/options/order", selectField.ID),
+		jmap{"optionIds": []string{option2.ID, option.ID}}, 204, nil)
+
+	var fields []struct {
+		ID      string `json:"id"`
+		Name    string `json:"name"`
+		Options []struct {
+			ID    string `json:"id"`
+			Value string `json:"value"`
+		} `json:"options"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/custom-fields", p.Key), nil, 200, &fields)
+	if len(fields) != 2 || fields[0].ID != textField.ID || fields[1].ID != selectField.ID {
+		t.Fatalf("fields = %+v", fields)
+	}
+	if len(fields[1].Options) != 2 || fields[1].Options[0].Value != "Web" || fields[1].Options[1].Value != "API" {
+		t.Fatalf("fields[1].Options = %+v, want [Web, API] (reordered)", fields[1].Options)
+	}
+
+	call(t, h, "PUT", fmt.Sprintf("/api/v1/projects/%s/custom-fields/order", p.Key),
+		jmap{"fieldIds": []string{selectField.ID, textField.ID}}, 204, nil)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/custom-fields", p.Key), nil, 200, &fields)
+	if fields[0].ID != selectField.ID || fields[1].ID != textField.ID {
+		t.Fatalf("reordered fields = %+v", fields)
+	}
+
+	var renamed struct{ Name string }
+	call(t, h, "PATCH", "/api/v1/custom-fields/"+textField.ID, jmap{"name": "Owner"}, 200, &renamed)
+	if renamed.Name != "Owner" {
+		t.Fatalf("renamed = %+v", renamed)
+	}
+
+	var preview struct{ CaseCount int }
+	call(t, h, "GET", "/api/v1/custom-fields/"+textField.ID+"/deletion-preview", nil, 200, &preview)
+	if preview.CaseCount != 0 {
+		t.Fatalf("preview = %+v, want 0", preview)
+	}
+
+	call(t, h, "DELETE", fmt.Sprintf("/api/v1/custom-fields/%s/options/%s", selectField.ID, option.ID), nil, 204, nil)
+	call(t, h, "DELETE", "/api/v1/custom-fields/"+textField.ID, nil, 204, nil)
+
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/custom-fields", p.Key), nil, 200, &fields)
+	if len(fields) != 1 || fields[0].ID != selectField.ID {
+		t.Fatalf("fields after delete = %+v", fields)
+	}
+}
+
 func TestScenario_ProjectStatusSummaryOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p, c struct{ Key string }

@@ -63,6 +63,10 @@ function mockDetailAPI(options?: {
   versions?: unknown[]
   users?: unknown[]
   executions?: unknown[]
+  customFields?: unknown[]
+  // Patches the *current* case's own content.customFields — separate from
+  // v1Content/versions, which only affect the version-history list.
+  currentCustomFieldValues?: Record<string, string>
   // pass `null` (not `undefined` — a default parameter would silently
   // override it) to simulate no permissions data at all.
   permissions?: unknown
@@ -86,12 +90,20 @@ function mockDetailAPI(options?: {
     const versionsPath = anon ? '/api/v1/public/cases/{caseKey}/versions' : '/api/v1/cases/{caseKey}/versions'
     const suitesPath = anon ? '/api/v1/public/projects/{projectKey}/suites' : '/api/v1/projects/{projectKey}/suites'
     const executionsPath = anon ? '/api/v1/public/cases/{caseKey}/executions' : '/api/v1/cases/{caseKey}/executions'
+    const customFieldsPath = anon
+      ? '/api/v1/public/projects/{projectKey}/custom-fields'
+      : '/api/v1/projects/{projectKey}/custom-fields'
     if (path === projectPath)
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
     if (path === foldersPath)
       return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
     if (path === casePath && opts?.params?.path?.caseKey === 'c1')
-      return Promise.resolve({ data: limitCase, response: { ok: true } })
+      return Promise.resolve({
+        data: options?.currentCustomFieldValues
+          ? { ...limitCase, content: { ...limitCase.content, customFields: options.currentCustomFieldValues } }
+          : limitCase,
+        response: { ok: true },
+      })
     if (path === versionsPath && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: options?.versions ?? [
@@ -106,6 +118,7 @@ function mockDetailAPI(options?: {
         response: { ok: true },
       })
     if (path === executionsPath) return Promise.resolve({ data: options?.executions ?? [], response: { ok: true } })
+    if (path === customFieldsPath) return Promise.resolve({ data: options?.customFields ?? [], response: { ok: true } })
     if (path === '/api/v1/users' && !anon) return Promise.resolve({ data: options?.users ?? [], response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anon) {
       const permissions = options && 'permissions' in options ? options.permissions : fullPermissions
@@ -583,6 +596,72 @@ describe('CaseDetailPage', () => {
         }),
       )
     })
+  })
+
+  it('editing a custom field value and saving includes it in the request', async () => {
+    mockDetailAPI({
+      customFields: [{ id: 'f1', name: 'Automation Owner', fieldType: 'text', createdAt: '' }],
+    })
+    mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+    await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+    await userEvent.type(screen.getByLabelText('Automation Owner'), 'ana')
+    await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/cases/{caseKey}',
+        expect.objectContaining({
+          params: { path: { caseKey: 'c1' } },
+          body: expect.objectContaining({ customFields: { f1: 'ana' } }),
+        }),
+      )
+    })
+  })
+
+  it('shows custom field values in the read-only Properties sidebar, select as a pill and text as plain text', async () => {
+    mockDetailAPI({
+      customFields: [
+        { id: 'f1', name: 'Automation Owner', fieldType: 'text', createdAt: '' },
+        { id: 'f2', name: 'Component', fieldType: 'select', options: [{ id: 'o1', value: 'API' }], createdAt: '' },
+      ],
+      currentCustomFieldValues: { f1: 'ana', f2: 'o1' },
+    })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+    const sidebar = screen.getByTestId('case-sidebar')
+    expect(within(sidebar).getByText('ana')).toBeInTheDocument()
+    expect(within(sidebar).getByText('API')).toHaveClass('rounded-full')
+  })
+
+  it('caps custom fields at 3 in the sidebar, collapsing the rest behind "Show N more"', async () => {
+    const defs = ['A', 'B', 'C', 'D', 'E'].map((name, i) => ({ id: `f${i}`, name, fieldType: 'text' as const, createdAt: '' }))
+    const values = Object.fromEntries(defs.map((d) => [d.id, `val-${d.name}`]))
+    mockDetailAPI({ customFields: defs, currentCustomFieldValues: values })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+    const sidebar = screen.getByTestId('case-sidebar')
+    expect(within(sidebar).getByText('val-A')).toBeInTheDocument()
+    expect(within(sidebar).getByText('val-B')).toBeInTheDocument()
+    expect(within(sidebar).getByText('val-C')).toBeInTheDocument()
+    expect(within(sidebar).queryByText('val-D')).not.toBeInTheDocument()
+    const disclosure = within(sidebar).getByText(/show 2 more/i)
+    expect(disclosure).toBeInTheDocument()
+
+    await userEvent.click(disclosure)
+    expect(within(sidebar).getByText('val-D')).toBeInTheDocument()
+    expect(within(sidebar).getByText('val-E')).toBeInTheDocument()
+  })
+
+  it('a project with no custom fields shows the sidebar unchanged', async () => {
+    mockDetailAPI({ customFields: [] })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.queryByText(/show \d+ more/i)).not.toBeInTheDocument()
   })
 
   it('entering edit mode keeps Results and Version History visible, and turns Properties into an inline form', async () => {

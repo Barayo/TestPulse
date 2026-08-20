@@ -28,6 +28,9 @@ func TestPublicProject_UnauthenticatedReadsSucceedWhenPublic(t *testing.T) {
 
 	var sum jmap
 	callAs(t, handler, "", "GET", "/api/v1/public/projects/"+projectKey+"/runs/status-summary", nil, 200, &sum)
+
+	var fields []jmap
+	callAs(t, handler, "", "GET", "/api/v1/public/projects/"+projectKey+"/custom-fields", nil, 200, &fields)
 }
 
 func TestPublicProject_UnauthenticatedReadsRejectedWhenNotPublic(t *testing.T) {

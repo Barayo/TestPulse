@@ -418,6 +418,65 @@ func TestSeedContentShowcasesProjectWideStatusSummary(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesCustomFields covers add-case-custom-fields'
+// showroom: the Sample Project defines both a text and a select custom
+// field, with values on real cases, so the Settings page's field list,
+// the case editor's Custom fields block, and the case sidebar's pill/text
+// rendering are all demonstrably non-empty.
+func TestSeedContentShowcasesCustomFields(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	fields, err := svc.ListCustomFields(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCustomFields: %v", err)
+	}
+	var textField, selectField *domain.CustomField
+	for i := range fields {
+		switch fields[i].FieldType {
+		case domain.CustomFieldTypeText:
+			textField = &fields[i]
+		case domain.CustomFieldTypeSelect:
+			selectField = &fields[i]
+		}
+	}
+	if textField == nil {
+		t.Fatal("no text custom field seeded")
+	}
+	if selectField == nil {
+		t.Fatal("no select custom field seeded")
+	}
+	if len(selectField.Options) < 2 {
+		t.Errorf("select field options = %+v, want at least 2", selectField.Options)
+	}
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var sawTextValue, sawSelectValue bool
+	for _, c := range cases {
+		if c.Content.CustomFields[textField.ID] != "" {
+			sawTextValue = true
+		}
+		if c.Content.CustomFields[selectField.ID] != "" {
+			sawSelectValue = true
+		}
+	}
+	if !sawTextValue {
+		t.Error("no case has a value for the seeded text field")
+	}
+	if !sawSelectValue {
+		t.Error("no case has a value for the seeded select field")
+	}
+}
+
 // TestSeedContentEndsOnAHealthyRun covers the project health-badge
 // showcase: the chronologically LAST-created run is the one that
 // determines the project's shown pass rate.

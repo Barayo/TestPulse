@@ -421,7 +421,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
 		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields
 		 FROM test_run_items i
 		 JOIN test_cases c ON c.id = i.case_id
 		 JOIN test_case_versions v ON v.case_id = i.case_id AND v.version = i.case_version
@@ -446,14 +446,15 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 			tags                                                                                []string
 			platform, testType                                                                  string
 			automated                                                                           bool
+			customFieldsJSON                                                                    []byte
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
 			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,
 			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON); err != nil {
 			return nil, err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)()
 		if err != nil {
 			return nil, err
 		}
