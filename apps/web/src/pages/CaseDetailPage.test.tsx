@@ -532,6 +532,15 @@ describe('CaseDetailPage', () => {
     expect(screen.getByText(new RegExp(`Last run.*${lastRun.replace(/\//g, '\\/')}`))).toBeInTheDocument()
   })
 
+  it('orders sidebar sections Properties → Results → Version history', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    const sidebar = screen.getByTestId('case-sidebar')
+    const sectionTitles = Array.from(sidebar.querySelectorAll('summary')).map((el) => el.textContent)
+    expect(sectionTitles).toEqual(['Properties', 'Results', 'Version history'])
+  })
+
   it('shows the sidebar sections as expandable, closed groups below 768px', async () => {
     vi.spyOn(window, 'matchMedia').mockReturnValue({
       matches: false,

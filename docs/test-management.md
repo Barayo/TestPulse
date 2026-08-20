@@ -285,7 +285,7 @@ Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for 
 - Single-select **status filter chips** (one per status present, with counts, plus an **All**) narrow the item list to one status at a time for triage; a "Showing N of M items" line reflects the active filter.
 - An optional **Group by status** toggle reorders the (possibly filtered) list into status-labeled sections in the same pass/failed/blocked/skipped/retest/pending order as the breakdown above, without hiding anything the filter hasn't already excluded.
 - The item list: each row shows a status chip, the test name/platform/tags captured from JUnit imports when present, and a "(newer version available)" hint when applicable.
-- Selecting an item navigates to its own page (`/runs/{runKey}/items/{caseKey}`) — the same single-window, content+sidebar pattern as a case's own detail page, not an inline panel — showing the pinned case's steps and expected result, a **Your name** / **Comment** form, verdict buttons (**Pass**, **Failed**, **Blocked**, **Skipped**), item properties (including **Assignee**, with its own **Assign to…** control), and result **History** in the sidebar.
+- Selecting an item navigates to its own page (`/runs/{runKey}/items/{caseKey}`) — the same single-window, content+sidebar pattern as a case's own detail page, not an inline panel — showing the pinned case's steps and expected result, a **Your name** / **Comment** form, verdict buttons (**Pass**, **Failed**, **Blocked**, **Skipped**), and a sidebar shaped to match the case's own detail page: **Properties** (including a **Test case** link back to the case's own page, the same priority/test type/automation pills and tag chips shown there, and **Assignee** with its own **Assign to…** control), a **Results** section showing the case's cross-run pass-rate and recent-execution bars (the same panel the case detail page shows, since it's the same underlying data), and **This run** — the verdicts recorded on this specific item only.
 - Recording a verdict updates the item's status immediately, without leaving the item's page.
 - A **Retest** button appears on failed items; marking retest sets the item back to an executable state (`retest` status) without erasing the prior failure from history.
 - Right-clicking an item row opens a shortcut menu: open its execution page (same as clicking the row), **Assign to…**, or jump straight to the case's own page in the Library without visiting the execution page first. If that row is part of an active multi-item selection (see **Assigning items**, below), the menu switches to the same bulk actions available in the bulk action bar instead — right-clicking a row outside the current selection always shows the ordinary single-item menu, and opening either menu never changes which items are selected.
@@ -306,7 +306,7 @@ is resolved live — it always reflects whatever the assigned person currently
 has set on their own profile, not a value captured at assignment time; a team
 assignee keeps its existing generated-color square chip, since teams have no
 avatar of their own. The same live-resolved avatar appears next to a
-user-attributed entry in an item's result **History** — an entry recorded by
+user-attributed entry in an item's **This run** section — an entry recorded by
 an agent, or with an unknown actor, or where "record on behalf of" was used,
 shows no avatar, since there's no real user identity to key one off. An **assignee filter** row, alongside the
 status filter, offers one chip per distinct assignee present plus an
@@ -320,8 +320,8 @@ assigns them all in one dialog. On an open run, the same bar also offers a
 **Mark as** dropdown listing all four verdicts (Pass, Failed, Blocked,
 Skipped, each labeled with the same status-color dot used everywhere else
 on the board), recording the chosen verdict against every selected item at
-once; each still writes its own independent entry to that item's result
-history, exactly as if recorded one at a time, so the audit trail never
+once; each still writes its own independent entry to that item's This run
+section, exactly as if recorded one at a time, so the audit trail never
 collapses a bulk action into a single combined record. This control isn't
 offered on a closed run, the same restriction individual verdict recording
 already has.
@@ -354,7 +354,7 @@ standalone "save comment" action independent of a result row. The
 **Comment** field reflects this directly: once the item has at least one
 prior verdict, a **Save comment** button appears beneath the field
 (disabled until you type something) that re-submits that same verdict
-with the new comment attached, appending a fresh entry to History without
+with the new comment attached, appending a fresh entry to This run without
 changing the item's current status — the way to leave a follow-up note
 ("still failing after retry") without pretending to re-record a fresh
 result. Before any verdict has ever been recorded, no button is shown; a
@@ -381,7 +381,7 @@ this ("...screenshots paste here too") only while the field is empty.
 Either way, a screenshot isn't linked to anything until a verdict is
 actually recorded (there's no result yet to attach it to) — recording one
 links every staged thumbnail to that result in the same action. An
-already-recorded result in **History** carries its own persistently-visible
+already-recorded result in **This run** carries its own persistently-visible
 paperclip icon for attaching evidence after the fact, without recording a
 new verdict.
 

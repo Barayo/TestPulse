@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { PaperclipIcon, UserPlusIcon } from 'lucide-react'
+import { ExternalLinkIcon, PaperclipIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
@@ -23,7 +23,10 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { PropertyRow } from '@/components/PropertyRow'
+import { ClassificationPills, AutomationPill } from '@/components/Pills'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
+import { CaseResultsPanel, type CaseResultsData } from '@/components/CaseResultsPanel'
+import { toResultsData, RECENT_EXECUTIONS_LIMIT } from '@/lib/caseResultsData'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
@@ -63,6 +66,7 @@ export default function RunItemDetailPage() {
   const [item, setItem] = useState<RunItem>()
   const [items, setItems] = useState<RunItem[]>([])
   const [results, setResults] = useState<Result[]>([])
+  const [resultsData, setResultsData] = useState<CaseResultsData>()
   const [notFound, setNotFound] = useState(false)
   // Resolved by load()'s own run fetch (design.md D11) — a signed-in
   // non-member ends up 'public' here, same as an anonymous visitor,
@@ -139,20 +143,30 @@ export default function RunItemDetailPage() {
     setItem(match)
     setItems(runItems ?? [])
     if (resolvedAccess === 'member') {
-      const { data: res } = await api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: match.id } } })
+      const [{ data: res }, { data: allUsers }, { data: execs }] = await Promise.all([
+        api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: match.id } } }),
+        api.GET('/api/v1/users'),
+        api.GET('/api/v1/cases/{caseKey}/executions', {
+          params: { path: { caseKey: match.caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
+        }),
+      ])
       setResults(res ?? [])
-      const { data: allUsers } = await api.GET('/api/v1/users')
       setUserAvatars(Object.fromEntries((allUsers ?? []).map((u) => [u.id, u.avatarKey])))
+      setResultsData(toResultsData(execs ?? []))
     } else {
       // Anonymous, or a signed-in non-member (D11): GET /api/v1/users has
       // no public equivalent and never gets one (design.md D1/D10) —
       // result-history rows simply show no author avatar, since
       // userAvatars stays empty here.
-      const { data: res } = await api.GET('/api/v1/public/items/{itemId}/results', {
-        params: { path: { itemId: match.id } },
-      })
+      const [{ data: res }, { data: execs }] = await Promise.all([
+        api.GET('/api/v1/public/items/{itemId}/results', { params: { path: { itemId: match.id } } }),
+        api.GET('/api/v1/public/cases/{caseKey}/executions', {
+          params: { path: { caseKey: match.caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
+        }),
+      ])
       setResults(res ?? [])
       setUserAvatars({})
+      setResultsData(toResultsData(execs ?? []))
     }
   }, [runKey, caseKey, user, authLoading])
 
@@ -554,10 +568,49 @@ export default function RunItemDetailPage() {
           data-testid="run-item-sidebar"
         >
           <CaseSidebarSection title="Properties">
-            <PropertyRow label="Status" value={<StatusBadge status={item.currentStatus} />} />
+            <PropertyRow
+              label="Test case"
+              value={
+                project && (
+                  <Link
+                    to={`/projects/${project.key}/cases/${item.caseKey}`}
+                    className="inline-flex items-center gap-1 text-primary hover:text-primary/70"
+                  >
+                    {item.caseKey}
+                    <ExternalLinkIcon className="size-3.5" aria-hidden="true" />
+                  </Link>
+                )
+              }
+            />
             {item.testName && <PropertyRow label="Test name" value={item.testName} />}
+            <PropertyRow
+              label="Priority"
+              value={<ClassificationPills priority={item.content.priority ?? 'medium'} />}
+              wrap
+            />
+            <PropertyRow
+              label="Test type"
+              value={item.content.testType && <ClassificationPills testType={item.content.testType} />}
+              wrap
+            />
+            <PropertyRow
+              label="Automation"
+              value={<AutomationPill automated={Boolean(item.content.automated)} />}
+              wrap
+            />
             <PropertyRow label="Platform" value={item.content.platform} />
-            <PropertyRow label="Tags" value={(item.content.tags ?? []).join(', ')} />
+            <PropertyRow
+              label="Tags"
+              value={
+                (item.content.tags ?? []).length > 0 &&
+                (item.content.tags ?? []).map((tag) => (
+                  <span key={tag} className="rounded-full bg-muted px-2 py-0.5">
+                    {tag}
+                  </span>
+                ))
+              }
+              wrap
+            />
             <PropertyRow label="Pinned version" value={`v${item.caseVersion}`} />
             <PropertyRow
               label="Assignee"
@@ -609,7 +662,11 @@ export default function RunItemDetailPage() {
             )}
           </CaseSidebarSection>
 
-          <CaseSidebarSection title="History">
+          <CaseSidebarSection title="Results">
+            <CaseResultsPanel data={resultsData} />
+          </CaseSidebarSection>
+
+          <CaseSidebarSection title="This run">
             {results.length > 0 ? (
               <ul className="space-y-2 text-sm" aria-label="Result history">
                 {results.map((r) => (

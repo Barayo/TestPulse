@@ -205,6 +205,46 @@ test.describe('Requirement: Run item detail page', () => {
 
     await expect(page.getByRole('heading', { name: 'Second case' })).toBeVisible()
   })
+
+  // unify-case-result-sidebar
+  test('Scenario: Item page links to its test case', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Case Link Project')
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works'])
+
+    await page.getByText('Login works').first().click()
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
+
+    const sidebar = page.getByTestId('run-item-sidebar')
+    const testCaseRow = sidebar.getByText('Test case', { exact: true }).locator('..')
+    await testCaseRow.getByRole('link').click()
+
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/cases/`))
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
+  })
+
+  // unify-case-result-sidebar
+  test('Scenario: Item page shows the case\'s cross-run Results', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Cross Run Results Project')
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works'])
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /^pass$/i }).click()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('pass')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 2', ['Login works'])
+    await page.getByText('Login works').first().click()
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
+
+    const sidebar = page.getByTestId('run-item-sidebar')
+    await expect(sidebar.getByText('Results', { exact: true })).toBeVisible()
+    // Run 1's recorded pass plus Run 2's own (still-pending) item — the
+    // cross-run panel includes every run item for the case, not only
+    // executed ones, matching CaseDetailPage's own Results section.
+    await expect(sidebar.getByTestId('case-result-bar')).toHaveCount(2)
+  })
 })
 
 test.describe('Requirement: Run item status lifecycle', () => {

@@ -75,6 +75,7 @@ function mockItemAPI(
   itemsOverride?: unknown[],
   permissions: unknown = fullPermissions,
   anonymous = false,
+  executions: unknown[] = [],
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me')
@@ -85,9 +86,11 @@ function mockItemAPI(
     const itemsPath = anonymous ? '/api/v1/public/runs/{runKey}/items' : '/api/v1/runs/{runKey}/items'
     const resultsPath = anonymous ? '/api/v1/public/items/{itemId}/results' : '/api/v1/items/{itemId}/results'
     const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
+    const executionsPath = anonymous ? '/api/v1/public/cases/{caseKey}/executions' : '/api/v1/cases/{caseKey}/executions'
     if (path === runPath) return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
     if (path === itemsPath) return Promise.resolve({ data: itemsOverride ?? [itemOverride ?? item], response: { ok: true } })
     if (path === resultsPath) return Promise.resolve({ data: results, response: { ok: true } })
+    if (path === executionsPath) return Promise.resolve({ data: executions, response: { ok: true } })
     if (path === projectPath)
       return Promise.resolve({
         data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
@@ -135,24 +138,76 @@ describe('RunItemDetailPage', () => {
     expect(within(nav).getByText('Sprint 1')).toBeInTheDocument()
   })
 
-  it('shows sidebar properties: status, test name, platform, tags, pinned version', async () => {
+  it('shows sidebar properties: test name, platform, tags, pinned version', async () => {
     mockItemAPI()
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
     const sidebar = screen.getByTestId('run-item-sidebar')
-    expect(within(sidebar).getByText('pending')).toBeInTheDocument()
     expect(within(sidebar).getByText('login_spec.ts::works')).toBeInTheDocument()
     expect(within(sidebar).getByText('web')).toBeInTheDocument()
     expect(within(sidebar).getByText('smoke')).toBeInTheDocument()
     expect(within(sidebar).getByText('v1')).toBeInTheDocument()
   })
 
-  it('shows the status property with a colored dot, not raw text alone', async () => {
+  it('links to the item\'s test case from the Properties panel', async () => {
     mockItemAPI()
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
     const sidebar = screen.getByTestId('run-item-sidebar')
-    expect(sidebar.querySelector('[data-dot]')).not.toBeNull()
+    const link = within(sidebar).getByRole('link', { name: /c1/i })
+    expect(link).toHaveAttribute('href', '/projects/p1/cases/c1')
+  })
+
+  it('shows a Results section with the case\'s cross-run execution history', async () => {
+    mockItemAPI(undefined, undefined, [], undefined, fullPermissions, false, [
+      { runItemId: 'i3', runId: 'r3', runKey: 'R-3', runName: 'run 3', caseVersion: 2, status: 'pass', createdAt: '2026-07-20T10:00:00Z' },
+      { runItemId: 'i2', runId: 'r2', runKey: 'R-2', runName: 'run 2', caseVersion: 2, status: 'failed', createdAt: '2026-07-19T10:00:00Z' },
+    ])
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('Results')).toBeInTheDocument()
+    expect(within(sidebar).getByText('50%')).toBeInTheDocument()
+    expect(within(sidebar).getAllByTestId('case-result-bar')).toHaveLength(2)
+  })
+
+  it('shows the Results section for an anonymous visitor to a public project', async () => {
+    mockItemAPI(undefined, undefined, [], undefined, fullPermissions, true, [
+      { runItemId: 'i1', runId: 'r1', runKey: 'R-1', runName: 'run 1', caseVersion: 1, status: 'pass', createdAt: '2026-07-18T10:00:00Z' },
+    ])
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('100%')).toBeInTheDocument()
+  })
+
+  it('titles the per-item verdict log "This run", not "History", and orders sections Properties → Results → This run', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).queryByText('History')).not.toBeInTheDocument()
+    const sectionTitles = Array.from(sidebar.querySelectorAll('summary')).map((el) => el.textContent)
+    expect(sectionTitles).toEqual(['Properties', 'Results', 'This run'])
+  })
+
+  it('has no separate Status property row — the header StatusBadge already shows it', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).queryByText('Status')).not.toBeInTheDocument()
+  })
+
+  it('promotes the case classification (priority, test type, automation, tags) into pills, matching CaseDetailPage', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('medium')).toHaveClass('rounded-full')
+    expect(within(sidebar).getByText('e2e')).toHaveClass('rounded-full')
+    expect(within(sidebar).getByText('Manual')).toHaveClass('rounded-full')
+    expect(within(sidebar).getByText('smoke')).toHaveClass('rounded-full')
   })
 
   it('shows a newer-version hint when the case has moved on', async () => {
