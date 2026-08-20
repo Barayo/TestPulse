@@ -422,6 +422,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/runs/status-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** Project-wide run item status breakdown, across every run */
+        get: operations["getProjectStatusSummary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/imports": {
         parameters: {
             query?: never;
@@ -822,6 +841,25 @@ export interface paths {
         };
         /** List runs in a public project */
         get: operations["listPublicRuns"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/runs/status-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** Project-wide run item status breakdown, for a public project */
+        get: operations["getPublicProjectStatusSummary"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1884,6 +1922,12 @@ export interface components {
         };
         RunSummary: {
             runId: string;
+            total: number;
+            counts: {
+                [key: string]: number;
+            };
+        };
+        ProjectStatusSummary: {
             total: number;
             counts: {
                 [key: string]: number;
@@ -3071,6 +3115,28 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getProjectStatusSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectStatusSummary"];
+                };
+            };
+        };
+    };
     importResults: {
         parameters: {
             query?: never;
@@ -3789,6 +3855,29 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicProjectStatusSummary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Status summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectStatusSummary"];
                 };
             };
             404: components["responses"]["NotFound"];

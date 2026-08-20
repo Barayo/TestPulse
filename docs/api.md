@@ -110,6 +110,8 @@ exactly one folder, defaulting to the project's root; see
 | GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`verdict`, `comment`, optional `actor` override — see below) |
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or assign to a real project member: `assigneeUserId` or `assigneeTeamId` (mutually exclusive; the id must belong to the project's membership) |
 | GET | `/api/v1/runs/{runKey}/summary` | Item counts by current status |
+| GET | `/api/v1/projects/{projectKey}/runs/status-summary` | Item counts by current status, aggregated across every run in the project (open and closed) — the project-wide equivalent of a single run's own `/summary`, backing the Reports page |
+| GET | `/api/v1/projects/{projectKey}/flaky-cases` | Every case whose current version is currently flaky (both a pass and a failed/blocked result), with its computed `rate` |
 | POST | `/api/v1/projects/{projectKey}/imports` | Bulk-import a JUnit XML report: matches each `<testcase>` to an existing case by its `key`, creates one run — created `closed`, not `open` — with items/results for every match. `201` if every test matched; `207` if some/all didn't (see [Importing results](importing-results.md)) |
 | GET / POST | `/api/v1/items/{itemId}/attachments` | List / stage a screenshot attachment (`multipart/form-data`, field `file`; PNG/JPEG/WebP, max 5MB) against an item before a verdict exists — `result_id` unset until linked via `recordResult`'s `attachmentIds` |
 | GET / POST | `/api/v1/results/{resultId}/attachments` | List a result's attachments / attach a screenshot directly to an already-recorded result (after-the-fact attach from History) |
@@ -125,7 +127,7 @@ public, doesn't exist, or the switch is off (see
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/public/projects/{projectKey}` | Get a public project |
-| GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` | List, same shapes as the authenticated equivalents |
+| GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` \| `/runs/status-summary` | List, same shapes as the authenticated equivalents |
 | GET | `/api/v1/public/cases/{caseKey}` \| `/versions` \| `/executions` | A case, its version history, its execution history — `/executions` supports the same `order=recent&limit=N` params as the authenticated route |
 | GET | `/api/v1/public/suites/{suiteKey}` \| `/trend` | A suite, its pass-rate trend |
 | GET | `/api/v1/public/runs/{runKey}` \| `/items` \| `/summary` | A run, its items, its status counts |

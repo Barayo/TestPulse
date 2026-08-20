@@ -511,6 +511,19 @@ paths:
               schema: { $ref: "#/components/schemas/Run" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/runs/status-summary:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getProjectStatusSummary
+      summary: Project-wide run item status breakdown, across every run
+      tags: [runs]
+      responses:
+        "200":
+          description: Status summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectStatusSummary" }
   /api/v1/projects/{projectKey}/imports:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -972,6 +985,20 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/runs/status-summary:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicProjectStatusSummary
+      summary: Project-wide run item status breakdown, for a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Status summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectStatusSummary" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/cases/{caseKey}:
     parameters:
@@ -2272,6 +2299,14 @@ components:
       required: [runId, total, counts]
       properties:
         runId: { type: string }
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+    ProjectStatusSummary:
+      type: object
+      required: [total, counts]
+      properties:
         total: { type: integer }
         counts:
           type: object

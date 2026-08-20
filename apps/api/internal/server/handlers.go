@@ -44,6 +44,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermSuiteCreate, projectIDParam)).Post("/suites", h.createSuite)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs", h.listRuns)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/runs", h.createRun)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs/status-summary", h.projectStatusSummary)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/imports", h.importResults)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/members", h.getProjectMembership)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/permissions", h.myPermissions)
@@ -597,6 +598,11 @@ func (h *api) suiteTrend(w http.ResponseWriter, r *http.Request) {
 func (h *api) flakyCases(w http.ResponseWriter, r *http.Request) {
 	flaky, err := h.svc.FlakyCases(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, flaky, err)
+}
+
+func (h *api) projectStatusSummary(w http.ResponseWriter, r *http.Request) {
+	sum, err := h.svc.ProjectStatusSummary(r.Context(), resolvedID(r, "projectKey"))
+	h.respond(w, http.StatusOK, sum, err)
 }
 
 // --- Items ---

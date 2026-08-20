@@ -1409,6 +1409,58 @@ func TestRunSummaryCounts(t *testing.T) {
 	}
 }
 
+// TestProjectStatusSummaryAggregatesAcrossOpenAndClosedRuns covers
+// add-project-reports-page's "Aggregate spans every run regardless of
+// open/closed status" scenario.
+func TestProjectStatusSummaryAggregatesAcrossOpenAndClosedRuns(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	var caseIDs []string
+	for _, title := range []string{"a", "b", "c", "d"} {
+		caseIDs = append(caseIDs, mustCase(t, s, p.ID, title).ID)
+	}
+
+	runOpen, _ := s.Runs.Create(ctx, p.ID, "open run", caseIDs[:2])
+	itemsOpen, _ := s.Runs.Items(ctx, runOpen.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, itemsOpen[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+
+	runClosed, _ := s.Runs.Create(ctx, p.ID, "closed run", caseIDs[2:])
+	itemsClosed, _ := s.Runs.Items(ctx, runClosed.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, itemsClosed[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Runs.Close(ctx, runClosed.ID); err != nil {
+		t.Fatal(err)
+	}
+
+	sum, err := s.Runs.ProjectStatusSummary(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ProjectStatusSummary: %v", err)
+	}
+	// open run: 1 pass, 1 pending. closed run: 1 failed, 1 pending.
+	if sum.Total != 4 || sum.Counts[domain.StatusPass] != 1 ||
+		sum.Counts[domain.StatusFailed] != 1 || sum.Counts[domain.StatusPending] != 2 {
+		t.Errorf("summary = %+v", sum)
+	}
+}
+
+func TestProjectStatusSummaryEmptyProjectIsZeroed(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	sum, err := s.Runs.ProjectStatusSummary(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ProjectStatusSummary: %v", err)
+	}
+	if sum.Total != 0 || len(sum.Counts) != 0 {
+		t.Errorf("expected zeroed summary, got %+v", sum)
+	}
+}
+
 // TestSuiteTrendListsClosedRunsOldestFirst covers add-suite-pass-rate-trend's
 // "A suite's closed runs appear in the trend, oldest first" scenario.
 func TestSuiteTrendListsClosedRunsOldestFirst(t *testing.T) {

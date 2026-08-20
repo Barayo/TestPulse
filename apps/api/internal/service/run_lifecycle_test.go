@@ -383,6 +383,37 @@ func TestFlakyCasesResolvesFromProjectID(t *testing.T) {
 	}
 }
 
+// TestProjectStatusSummaryIsAThinPassthrough covers
+// add-project-reports-page's service-layer resolution: Service.
+// ProjectStatusSummary is a thin passthrough to the store's aggregation
+// query, mirroring Service.FlakyCases.
+func TestProjectStatusSummaryIsAThinPassthrough(t *testing.T) {
+	s := lifecycleTestService(t)
+	ctx := context.Background()
+	p := mustLifecycleProject(t, s)
+	c := mustLifecycleCase(t, s, p.ID)
+
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "run 1", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	items, err := s.RunItems(ctx, run.ID, "")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("RunItems: %d, %v", len(items), err)
+	}
+	if _, err := s.RecordResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}); err != nil {
+		t.Fatalf("RecordResult: %v", err)
+	}
+
+	sum, err := s.ProjectStatusSummary(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ProjectStatusSummary: %v", err)
+	}
+	if sum.Total != 1 || sum.Counts[domain.StatusPass] != 1 {
+		t.Errorf("ProjectStatusSummary = %+v, want total 1, pass 1", sum)
+	}
+}
+
 // TestRecentCaseExecutionsIsAThinPassthrough covers add-case-result-history's
 // bounded recency query at the service layer: a thin wrapper over the store
 // call, no aggregation logic here.

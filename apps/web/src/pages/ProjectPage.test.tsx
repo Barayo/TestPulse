@@ -62,6 +62,10 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
   const suitesPath = anonymous ? '/api/v1/public/projects/{projectKey}/suites' : '/api/v1/projects/{projectKey}/suites'
   const runsPath = anonymous ? '/api/v1/public/projects/{projectKey}/runs' : '/api/v1/projects/{projectKey}/runs'
   const runSummaryPath = anonymous ? '/api/v1/public/runs/{runKey}/summary' : '/api/v1/runs/{runKey}/summary'
+  const statusSummaryPath = anonymous
+    ? '/api/v1/public/projects/{projectKey}/runs/status-summary'
+    : '/api/v1/projects/{projectKey}/runs/status-summary'
+  const flakyCasesPath = anonymous ? '/api/v1/public/projects/{projectKey}/flaky-cases' : '/api/v1/projects/{projectKey}/flaky-cases'
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me')
       return anonymous
@@ -104,6 +108,13 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
         data: overrides.runSummary ?? { runId: 'r1', total: 2, counts: { pass: 2 } },
         response: { ok: true },
       })
+    if (path === statusSummaryPath)
+      return Promise.resolve({
+        data: overrides.statusSummary ?? { total: 8, counts: { pass: 6, failed: 2 } },
+        response: { ok: true },
+      })
+    if (path === flakyCasesPath)
+      return Promise.resolve({ data: overrides.flakyCases ?? [], response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
       return Promise.resolve({ data: overrides.permissions ?? fullPermissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
@@ -419,6 +430,28 @@ describe('ProjectPage landing', () => {
     renderWithRoutes(<Route path="/projects/:projectKey/suites" element={<div>suites page stub</div>} />)
     await userEvent.click(await screen.findByRole('button', { name: 'Go to Suites' }))
     expect(await screen.findByText('suites page stub')).toBeInTheDocument()
+  })
+
+  it('shows a Reports panel below the other three, summarizing project-wide pass rate and flaky-case count', async () => {
+    mockProjectAPI({
+      statusSummary: { total: 8, counts: { pass: 6, failed: 2 } },
+      flakyCases: [
+        { caseKey: 'p1-1', caseTitle: 'Flaky one', currentVersion: 1, rate: 30 },
+        { caseKey: 'p1-2', caseTitle: 'Flaky two', currentVersion: 1, rate: 40 },
+      ],
+    })
+    renderProject()
+    await screen.findByText('Reports')
+    expect(await screen.findByText('75%')).toBeInTheDocument()
+    expect(screen.getByText(/2 flaky/i)).toBeInTheDocument()
+  })
+
+  it('the Reports panel links to the full Reports page, not "see all N"', async () => {
+    mockProjectAPI()
+    renderWithRoutes(<Route path="/projects/:projectKey/reports" element={<div>reports page stub</div>} />)
+    expect(await screen.findByRole('button', { name: 'Open Reports' })).toHaveTextContent(/open reports/i)
+    await userEvent.click(screen.getByRole('button', { name: 'Open Reports' }))
+    expect(await screen.findByText('reports page stub')).toBeInTheDocument()
   })
 
   it('navigates to the runs page via its "see all" link', async () => {

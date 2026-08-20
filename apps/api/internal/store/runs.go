@@ -711,3 +711,32 @@ func (r *RunRepo) Summary(ctx context.Context, runID string) (domain.RunSummary,
 	}
 	return sum, rows.Err()
 }
+
+// ProjectStatusSummary aggregates current_status counts across every run
+// item in a project, across every run regardless of open/closed status —
+// the same GROUP BY shape as Summary, scoped up from run_id to project_id
+// (add-project-reports-page).
+func (r *RunRepo) ProjectStatusSummary(ctx context.Context, projectID string) (domain.ProjectStatusSummary, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT i.current_status, count(*)
+		 FROM test_run_items i
+		 JOIN test_runs r ON r.id = i.run_id
+		 WHERE r.project_id = $1
+		 GROUP BY i.current_status`, projectID)
+	if err != nil {
+		return domain.ProjectStatusSummary{}, err
+	}
+	defer rows.Close()
+
+	sum := domain.ProjectStatusSummary{Counts: map[domain.Status]int{}}
+	for rows.Next() {
+		var status domain.Status
+		var count int
+		if err := rows.Scan(&status, &count); err != nil {
+			return domain.ProjectStatusSummary{}, err
+		}
+		sum.Counts[status] = count
+		sum.Total += count
+	}
+	return sum, rows.Err()
+}

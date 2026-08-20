@@ -54,4 +54,10 @@ describe('RunStatusBreakdown', () => {
     render(<RunStatusBreakdown total={0} counts={{}} />)
     expect(screen.getByText(/no items yet/i)).toBeInTheDocument()
   })
+
+  it('shows a caller-supplied emptyMessage instead of the default run-scoped copy', () => {
+    render(<RunStatusBreakdown total={0} counts={{}} emptyMessage="No runs yet in this project." />)
+    expect(screen.getByText('No runs yet in this project.')).toBeInTheDocument()
+    expect(screen.queryByText(/add cases to this run/i)).not.toBeInTheDocument()
+  })
 })

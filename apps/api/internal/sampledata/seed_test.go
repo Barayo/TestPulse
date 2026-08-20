@@ -382,6 +382,42 @@ func TestSeedContentSurfacesAFlakyCase(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesProjectWideStatusSummary covers
+// add-project-reports-page's showcase: the Sample Project's many seeded
+// runs (closed, open, imported) must aggregate into a real multi-status
+// breakdown, not a degenerate single-status one, so the Reports page's
+// status chart is a real showcase and not an empty/near-empty strip.
+func TestSeedContentShowcasesProjectWideStatusSummary(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	sum, err := svc.ProjectStatusSummary(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ProjectStatusSummary: %v", err)
+	}
+	if sum.Total < 20 {
+		t.Errorf("total = %d, want a substantial project-wide item count", sum.Total)
+	}
+	distinctStatuses := 0
+	for _, c := range sum.Counts {
+		if c > 0 {
+			distinctStatuses++
+		}
+	}
+	if distinctStatuses < 3 {
+		t.Errorf("counts = %+v, want at least 3 distinct statuses represented for a real status breakdown", sum.Counts)
+	}
+	if sum.Counts[domain.StatusPending] == 0 {
+		t.Error("no pending items in the project-wide summary — the open run's pending items should still count")
+	}
+}
+
 // TestSeedContentEndsOnAHealthyRun covers the project health-badge
 // showcase: the chronologically LAST-created run is the one that
 // determines the project's shown pass rate.

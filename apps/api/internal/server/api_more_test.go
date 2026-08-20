@@ -170,3 +170,28 @@ func TestScenario_CaseRecentExecutionsOverHTTP(t *testing.T) {
 		t.Errorf("default-order executions = %+v, want 3 items still grouped by version starting at v1", defaultOrder)
 	}
 }
+
+func TestScenario_ProjectStatusSummaryOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "Login works"}, 201, &c)
+
+	var run1, run2 struct{ Key string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 1", "caseKeys": []string{c.Key}}, 201, &run1)
+	var items1 []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run1.Key), nil, 200, &items1)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 2", "caseKeys": []string{c.Key}}, 201, &run2)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run2.Key), nil, 204, nil)
+
+	var sum struct {
+		Total  int            `json:"total"`
+		Counts map[string]int `json:"counts"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/runs/status-summary", p.Key), nil, 200, &sum)
+	if sum.Total != 2 || sum.Counts["pass"] != 1 || sum.Counts["pending"] != 1 {
+		t.Errorf("status summary = %+v, want total 2, pass 1, pending 1 (spans open+closed runs)", sum)
+	}
+}

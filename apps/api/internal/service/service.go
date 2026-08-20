@@ -523,6 +523,12 @@ func (s *Service) FlakyCases(ctx context.Context, projectID string) ([]domain.Fl
 	return s.store.Cases.FlakyCases(ctx, projectID)
 }
 
+// ProjectStatusSummary returns the project-wide run item status breakdown
+// across every run, open and closed (add-project-reports-page).
+func (s *Service) ProjectStatusSummary(ctx context.Context, projectID string) (domain.ProjectStatusSummary, error) {
+	return s.store.Runs.ProjectStatusSummary(ctx, projectID)
+}
+
 func (s *Service) AddCaseToSuite(ctx context.Context, suiteID, caseID string) error {
 	if err := s.store.Suites.AddCase(ctx, suiteID, caseID); err != nil {
 		return err

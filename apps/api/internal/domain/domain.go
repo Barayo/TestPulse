@@ -527,6 +527,13 @@ type RunSummary struct {
 	Counts map[Status]int `json:"counts"`
 }
 
+// ProjectStatusSummary is the project-wide status breakdown across every
+// run (open and closed), add-project-reports-page.
+type ProjectStatusSummary struct {
+	Total  int            `json:"total"`
+	Counts map[Status]int `json:"counts"`
+}
+
 // SuiteTrendPoint is one closed run's status breakdown within a suite's
 // pass-rate trend (add-suite-pass-rate-trend).
 type SuiteTrendPoint struct {

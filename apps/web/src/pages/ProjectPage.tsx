@@ -3,9 +3,10 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import { FoldersPanel, SuitesPanel, RunsPanel } from '@/components/ProjectLandingPanels'
+import { FoldersPanel, SuitesPanel, RunsPanel, ReportsPanel } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
+import { useProjectReportsTeaser } from '@/lib/useProjectReportsTeaser'
 import { useProjectSummaries, type ProjectSummary } from '@/lib/useProjectSummaries'
 import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
 import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
@@ -56,6 +57,7 @@ export default function ProjectPage() {
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const landing = useProjectLanding(projectKey, access === 'member', access === 'loading')
+  const reportsTeaser = useProjectReportsTeaser(projectKey, access === 'member', access === 'loading')
   const summaries = useProjectSummaries()
   // No public equivalent exists for the batched /api/v1/projects/summaries
   // aggregate (unify-authenticated-and-public-views design.md D2), so a
@@ -263,24 +265,32 @@ export default function ProjectPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[1fr_1fr_1.28fr]">
-          <FoldersPanel
-            folders={landing.folders}
-            totalCount={landing.totalFolders}
-            onSeeAll={() => navigate(`/projects/${projectKey}/library`)}
-            onSelectFolder={(folderId) => navigate(`/projects/${projectKey}/library/${folderId}`)}
-          />
-          <SuitesPanel
-            suites={landing.suites}
-            totalCount={landing.totalSuites}
-            onSeeAll={() => navigate(`/projects/${projectKey}/suites`)}
-            onSelectSuite={(suiteId) => navigate(`/projects/${projectKey}/suites/${suiteId}`)}
-          />
-          <RunsPanel
-            runs={landing.runs}
-            totalCount={landing.totalRuns}
-            onSeeAll={() => navigate(`/projects/${projectKey}/runs`)}
-            onSelectRun={(runId) => navigate(`/runs/${runId}`)}
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[1fr_1fr_1.28fr]">
+            <FoldersPanel
+              folders={landing.folders}
+              totalCount={landing.totalFolders}
+              onSeeAll={() => navigate(`/projects/${projectKey}/library`)}
+              onSelectFolder={(folderId) => navigate(`/projects/${projectKey}/library/${folderId}`)}
+            />
+            <SuitesPanel
+              suites={landing.suites}
+              totalCount={landing.totalSuites}
+              onSeeAll={() => navigate(`/projects/${projectKey}/suites`)}
+              onSelectSuite={(suiteId) => navigate(`/projects/${projectKey}/suites/${suiteId}`)}
+            />
+            <RunsPanel
+              runs={landing.runs}
+              totalCount={landing.totalRuns}
+              onSeeAll={() => navigate(`/projects/${projectKey}/runs`)}
+              onSelectRun={(runId) => navigate(`/runs/${runId}`)}
+            />
+          </div>
+          <ReportsPanel
+            total={reportsTeaser.total}
+            counts={reportsTeaser.counts}
+            flakyCount={reportsTeaser.flakyCount}
+            onOpenReports={() => navigate(`/projects/${projectKey}/reports`)}
           />
         </div>
       )}

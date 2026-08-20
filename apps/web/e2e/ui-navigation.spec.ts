@@ -239,6 +239,29 @@ test.describe('Requirement: Project landing shows top-level structure only', () 
     await page.goBack()
     await expect(page.getByRole('button', { name: 'Go to Library' })).toHaveText(/see all 5/)
   })
+
+  // add-project-reports-page
+  test('Scenario: Reports panel is a fourth, full-width row below the other three', async ({ page }) => {
+    await createProject(page, 'Reports Panel Project')
+    await openFolderExplorer(page)
+    await createCase(page, 'Placeholder case')
+    await page.goBack()
+
+    const foldersPanel = page.getByText('Library', { exact: true })
+    const reportsPanel = page.getByText('Reports', { exact: true })
+    await expect(reportsPanel).toBeVisible()
+
+    const foldersBox = await foldersPanel.boundingBox()
+    const reportsBox = await reportsPanel.boundingBox()
+    expect(foldersBox).not.toBeNull()
+    expect(reportsBox).not.toBeNull()
+    // Reports sits in its own row below the three-panel grid, not
+    // alongside them as a fourth same-height column.
+    expect(reportsBox!.y).toBeGreaterThan(foldersBox!.y)
+
+    await page.getByRole('button', { name: 'Open Reports' }).click()
+    await expect(page).toHaveURL(/\/reports$/)
+  })
 })
 
 test.describe('Requirement: Library with two-pane navigation', () => {

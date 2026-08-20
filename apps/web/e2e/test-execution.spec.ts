@@ -547,3 +547,43 @@ test.describe('Requirement: Run item assignment', () => {
     await expect(page.getByRole('button', { name: outsiderEmail })).not.toBeVisible()
   })
 })
+
+test.describe('Requirement: Project Reports page', () => {
+  // add-project-reports-page
+  test('Scenario: Reports page assembles all three sections', async ({ page }) => {
+    const projectId = await createProjectWithCase(page, 'Reports Page Project')
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 1', ['Login works'])
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /^pass$/i }).click()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('pass')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/runs/new`)
+    await createRun(page, 'Run 2', ['Login works'])
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /^failed$/i }).click()
+    await expect(page.getByRole('list', { name: /result history/i }).getByText('failed')).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/reports`)
+
+    // Status breakdown: 1 pass, 1 failed across the project's two runs.
+    // (Status breakdown's Card precedes Flaky cases' in DOM order, and the
+    // flaky rate happens to also be 50% here — .first() disambiguates.)
+    await expect(page.getByText('50%').first()).toBeVisible()
+
+    // Flaky cases: the alternating pass/fail on the same case makes it
+    // flaky (add-flaky-test-detection), linking through to its own page.
+    const flakyList = page.getByRole('list', { name: /flaky cases/i })
+    const flakyRow = flakyList.getByRole('link', { name: /login works/i })
+    await expect(flakyRow).toBeVisible()
+    await flakyRow.click()
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/cases/`))
+    await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
+
+    // Compare runs entry point.
+    await page.goto(`/projects/${projectId}/reports`)
+    await page.getByRole('button', { name: /compare runs/i }).click()
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/runs/compare`))
+  })
+})

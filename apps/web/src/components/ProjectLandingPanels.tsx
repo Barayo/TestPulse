@@ -1,8 +1,12 @@
 import { useState } from 'react'
-import { FolderIcon, LayersIcon, CirclePlayIcon, ChevronRightIcon } from 'lucide-react'
+import { FolderIcon, LayersIcon, CirclePlayIcon, ChevronRightIcon, BarChartIcon } from 'lucide-react'
 import type { LandingFolder, LandingSuite, LandingRun } from '@/lib/useProjectLanding'
 import { HealthBar, healthColorVar, statusBorderClass } from '@/components/HealthBar'
+import { STATUS_COLOR, STATUS_ORDER } from '@/components/RunStatusBreakdown'
 import { timeAgo } from '@/lib/timeAgo'
+import type { components } from '@testpulse/shared/api'
+
+type Status = components['schemas']['Status']
 
 function PanelShell({
   icon,
@@ -294,5 +298,75 @@ export function RunsPanel({
         </li>
       ))}
     </PanelShell>
+  )
+}
+
+// A summary *across* the other three panels, not a fourth peer list — gets
+// its own full-width row below them (ProjectPage.tsx) rather than squeezing
+// into the shared grid, and reuses PanelShell's header chrome directly but
+// not its isEmpty/children list body, which assumes <li> rows (add-project-
+// reports-page design.md D7). The action link always reads "Open Reports",
+// never "see all N ›" — this panel summarizes, it doesn't list.
+export function ReportsPanel({
+  total,
+  counts,
+  flakyCount,
+  onOpenReports,
+}: {
+  total: number
+  counts: Partial<Record<Status, number>>
+  flakyCount: number
+  onOpenReports: () => void
+}) {
+  const passRate = total > 0 ? Math.round(((counts.pass ?? 0) / total) * 100) : null
+
+  return (
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+        <span className="flex items-center gap-2 text-sm font-bold text-foreground">
+          <span className="text-primary">
+            <BarChartIcon className="size-4" aria-hidden="true" />
+          </span>
+          Reports
+        </span>
+        <button
+          type="button"
+          aria-label="Open Reports"
+          onClick={onOpenReports}
+          className="shrink-0 text-xs font-semibold text-primary hover:underline"
+        >
+          Open Reports ›
+        </button>
+      </div>
+      <div className="flex flex-wrap items-center gap-6 p-4">
+        {passRate === null ? (
+          <p className="text-sm text-muted-foreground">No runs yet — its status breakdown will appear here once one exists.</p>
+        ) : (
+          <div className="flex min-w-40 flex-1 items-center gap-3">
+            <span className="text-xl font-black tracking-tight">{passRate}%</span>
+            <div className="flex flex-1 flex-col gap-1">
+              <span className="flex h-1.5 w-full overflow-hidden rounded-full bg-border">
+                {STATUS_ORDER.filter((status) => (counts[status] ?? 0) > 0).map((status) => (
+                  <span
+                    key={status}
+                    className="h-full"
+                    style={{ width: `${((counts[status] ?? 0) / total) * 100}%`, background: STATUS_COLOR[status] }}
+                  />
+                ))}
+              </span>
+              <span className="text-xs text-muted-foreground">pass · {total} items</span>
+            </div>
+          </div>
+        )}
+        {flakyCount > 0 && (
+          <span className="flex items-center gap-1.5 text-xs">
+            <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-semibold text-destructive">
+              {flakyCount} flaky
+            </span>
+            <span className="text-muted-foreground">case{flakyCount === 1 ? '' : 's'} to watch</span>
+          </span>
+        )}
+      </div>
+    </div>
   )
 }

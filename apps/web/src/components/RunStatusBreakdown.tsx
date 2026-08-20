@@ -35,9 +35,11 @@ export const STATUS_ORDER: Status[] = ['pass', 'failed', 'blocked', 'skipped', '
 export function RunStatusBreakdown({
   total,
   counts,
+  emptyMessage = 'No items yet — add cases to this run to see its status breakdown here.',
 }: {
   total: number
   counts: Partial<Record<Status, number>>
+  emptyMessage?: string
 }) {
   if (total === 0) {
     return (
@@ -47,7 +49,7 @@ export function RunStatusBreakdown({
           aria-hidden="true"
           className="block h-2.5 w-full rounded-full border-[1.5px] border-dashed border-muted-foreground/30"
         />
-        <p className="text-sm text-muted-foreground">No items yet — add cases to this run to see its status breakdown here.</p>
+        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
       </div>
     )
   }
