@@ -28,16 +28,19 @@ export const RowActionMenu = forwardRef<
 >(function RowActionMenu({ label, items, trigger }, ref) {
     const [open, setOpen] = useState(false)
     const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
+    const [anchorPos, setAnchorPos] = useState<{ top: number; right: number } | null>(null)
     const wrapRef = useRef<HTMLDivElement>(null)
     const menuRef = useRef<HTMLDivElement>(null)
 
     function close() {
       setOpen(false)
       setCursorPos(null)
+      setAnchorPos(null)
     }
 
     useImperativeHandle(ref, () => ({
       openAt: (x, y) => {
+        setAnchorPos(null)
         setCursorPos({ x, y })
         setOpen(true)
       },
@@ -62,17 +65,19 @@ export const RowActionMenu = forwardRef<
       }
     }, [open])
 
+    const menuStyle = cursorPos
+      ? { left: cursorPos.x, top: cursorPos.y }
+      : anchorPos
+        ? { top: anchorPos.top, right: anchorPos.right }
+        : undefined
+
     const menu = (
       <div
         ref={menuRef}
         role="menu"
         aria-label={label}
-        className={
-          cursorPos
-            ? 'fixed z-50 w-40 rounded-md border bg-card py-1 text-sm shadow-lg'
-            : 'absolute right-0 z-50 mt-1 w-40 rounded-md border bg-card py-1 text-sm shadow-lg'
-        }
-        style={cursorPos ? { left: cursorPos.x, top: cursorPos.y } : undefined}
+        className="fixed z-50 w-40 rounded-md border bg-card py-1 text-sm shadow-lg"
+        style={menuStyle}
       >
         {items.map((item) => (
           <Fragment key={item.label}>
@@ -110,19 +115,23 @@ export const RowActionMenu = forwardRef<
           }
           onClick={() => {
             setCursorPos(null)
+            const rect = wrapRef.current?.getBoundingClientRect()
+            setAnchorPos(rect ? { top: rect.bottom + 4, right: window.innerWidth - rect.right } : null)
             setOpen((o) => !o)
           }}
         >
           {trigger ?? <MoreHorizontalIcon className="size-4" aria-hidden="true" />}
         </button>
 
-        {/* A cursor-positioned (right-click) menu is portaled to <body> —
-            nested deep inside the Library's layout, a plain `fixed` div can
-            end up visually covered by unrelated ancestors despite z-50
-            (found via a real-browser click-interception failure that jsdom
-            couldn't catch). The button-anchored case is unaffected: it's
-            already proven correct in production and stays un-portaled. */}
-        {open && (cursorPos ? createPortal(menu, document.body) : menu)}
+        {/* Always portaled to <body> and `fixed`-positioned from the
+            trigger's own bounding rect, computed at open time — a plain
+            `absolute` menu nested inside a row gets clipped the instant that
+            row sits near the bottom of an `overflow-hidden` ancestor (every
+            `Card`, see ui/card.tsx), which is routine for a short list like
+            a suite's "Run history". Found live: "Compare…" on a lone run row
+            rendered as an empty, unclickable box. Matches the reasoning
+            already applied to the cursor-positioned (right-click) case. */}
+        {open && createPortal(menu, document.body)}
       </div>
     )
   },

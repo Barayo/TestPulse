@@ -253,8 +253,8 @@ describe('Run execution board', () => {
     const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
     await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
 
-    expect(within(row).getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
-    expect(within(row).getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
   })
 
   it('"Go to case in Library" navigates straight to the case, without visiting the item page', async () => {
@@ -262,7 +262,7 @@ describe('Run execution board', () => {
     renderRun()
     const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
     await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
-    await userEvent.click(within(row).getByRole('menuitem', { name: /go to case in library/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /go to case in library/i }))
 
     expect(await screen.findByTestId('case-library-probe')).toHaveTextContent('case p1 c1')
     expect(screen.queryByTestId('item-page-probe')).not.toBeInTheDocument()
@@ -273,7 +273,7 @@ describe('Run execution board', () => {
     renderRun()
     const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
     await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
-    await userEvent.click(within(row).getByRole('menuitem', { name: /open execution/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /open execution/i }))
 
     expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c1')
   })
@@ -810,7 +810,7 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
 
     const row = screen.getByText('Checkout works').closest('li') as HTMLElement
     await userEvent.click(await within(row).findByRole('button', { name: /actions for checkout works/i }))
-    await userEvent.click(within(row).getByRole('menuitem', { name: /assign to/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /assign to/i }))
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'ana@example.com' })).toBeInTheDocument()
@@ -825,7 +825,7 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
 
     const row = screen.getByText('Login works').closest('li') as HTMLElement
     await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
-    await userEvent.click(within(row).getByRole('menuitem', { name: /assign to/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /assign to/i }))
     await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
 
     await waitFor(() => {
@@ -1002,13 +1002,13 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     const row = screen.getByText('Login works').closest('li') as HTMLElement
     await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
 
-    expect(within(row).getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
-    expect(within(row).getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
-    expect(within(row).getByRole('menuitem', { name: 'Failed' })).toBeInTheDocument()
-    expect(within(row).getByRole('menuitem', { name: 'Blocked' })).toBeInTheDocument()
-    expect(within(row).getByRole('menuitem', { name: 'Skipped' })).toBeInTheDocument()
-    expect(within(row).queryByRole('menuitem', { name: /open execution/i })).not.toBeInTheDocument()
-    expect(within(row).queryByRole('menuitem', { name: /go to case in library/i })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Failed' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Blocked' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Skipped' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /open execution/i })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /go to case in library/i })).not.toBeInTheDocument()
   })
 
   it('opening the row menu on an unchecked row, while others are selected, still shows single-item actions and leaves the selection alone', async () => {
@@ -1021,9 +1021,9 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     const row = screen.getByText('Password reset works').closest('li') as HTMLElement
     await userEvent.click(within(row).getByRole('button', { name: /actions for password reset works/i }))
 
-    expect(within(row).getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
-    expect(within(row).getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
-    expect(within(row).getByRole('menuitem', { name: /^assign to…$/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^assign to…$/i })).toBeInTheDocument()
     expect(screen.getByText('2 selected')).toBeInTheDocument()
     expect(screen.getByRole('checkbox', { name: /select password reset works/i })).not.toBeChecked()
   })
@@ -1038,7 +1038,7 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     const row = screen.getByText('Login works').closest('li') as HTMLElement
     await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
-    await userEvent.click(within(row).getByRole('menuitem', { name: 'Failed' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Failed' }))
 
     await waitFor(() => {
       expect(mockPOST).toHaveBeenCalledWith(
@@ -1061,7 +1061,7 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     const row = screen.getByText('Login works').closest('li') as HTMLElement
     await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
-    await userEvent.click(within(row).getByRole('menuitem', { name: 'Assign 2 selected…' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Assign 2 selected…' }))
 
     expect(await screen.findByText('Assign 2 items to…')).toBeInTheDocument()
   })
@@ -1076,8 +1076,8 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     const row = screen.getByText('Login works').closest('li') as HTMLElement
     await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
 
-    expect(within(row).getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
-    expect(within(row).queryByRole('menuitem', { name: 'Pass' })).not.toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'Pass' })).not.toBeInTheDocument()
   })
 })
 

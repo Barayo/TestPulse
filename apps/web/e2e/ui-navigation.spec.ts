@@ -1232,6 +1232,58 @@ test.describe('Requirement: Run comparison', () => {
     await page.waitForURL(/\/runs\/compare\//)
   })
 
+  test('Scenario: A run row menu inside a short Run history card is not clipped by the card, and Compare… is reachable', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-101' })
+    // A regression test for a real bug: RowActionMenu's button-anchored
+    // dropdown used to render un-portaled inside the row, so when the
+    // triggering row sat near the bottom of a Card (routine for a suite
+    // with just one run — Card has overflow-hidden), the whole menu was
+    // visually clipped and unclickable. Deliberately a single run so the
+    // "Run history" card is as short as possible, reproducing the clipping
+    // rather than relying on incidental extra padding from more rows.
+    const projectId = await createSuiteWithOneCase(page, 'Row Menu Clipping Project', 'Regression', 'Login works')
+    const suiteKey = new URL(page.url()).pathname.split('/').pop()!
+
+    await page.getByRole('button', { name: /^run suite$/i }).click()
+    await page.getByRole('button', { name: /^create run$/i }).click()
+    await page.getByRole('link', { name: /view it/i }).click()
+    await page.waitForURL(/\/runs\/(?!new$)[^/]+$/)
+    await page.getByText('Login works').first().click()
+    await page.getByRole('button', { name: /record on behalf of someone else/i }).click()
+    await page.getByLabel(/record on behalf of/i).fill('ana')
+    await page.getByRole('button', { name: /^pass$/i }).click()
+    await expect(page.getByRole('button', { name: /^pass$/i })).toBeEnabled()
+    await page.getByRole('link', { name: /^back to /i }).click()
+    await page.getByRole('button', { name: /^close run$/i }).click()
+    await expect(page.getByRole('button', { name: /^reopen$/i })).toBeVisible()
+
+    await page.goto(`/projects/${projectId}/suites/${suiteKey}`)
+    const runHistory = page.locator('[data-slot="card"]', { has: page.getByText('Run history') })
+    await runHistory.getByRole('button', { name: /^actions for /i }).click()
+    const compareItem = page.getByRole('menuitem', { name: /^compare…$/i })
+    await expect(compareItem).toBeVisible()
+    // The regression this guards against: a card's `overflow-hidden`
+    // visually clips the dropdown without removing it from the DOM or from
+    // Playwright's default actionability checks, so `.toBeVisible()` and a
+    // plain `.click()` can both pass even while a real click at that point
+    // would land on whatever's actually painted underneath. Explicitly
+    // hit-testing the item's own center via `elementFromPoint` is what
+    // exposed the bug live in a real browser, and is the only check that
+    // reliably tells clipped-but-present apart from truly clickable.
+    const hit = await compareItem.evaluate((el) => {
+      const r = el.getBoundingClientRect()
+      const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)
+      // top must be the item itself or a descendant (e.g. an inner icon span)
+      // — NOT merely an ancestor, which every element on the page trivially
+      // satisfies regardless of visual clipping via Node.contains().
+      return top === el || (top !== null && el.contains(top))
+    })
+    expect(hit).toBe(true)
+
+    await compareItem.click()
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/runs/compare$`))
+  })
+
   test('Scenario: "Compare…" from a run row\'s context menu pre-selects that run in the picker', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-96' })
     const { projectId } = await createTwoClosedRunsWithRegression(page, 'Run Compare Row Menu Project', 'Regression', 'Login works')

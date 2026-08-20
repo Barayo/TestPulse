@@ -393,7 +393,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /move to/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText('Nacionales')).toBeInTheDocument()
@@ -415,7 +415,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /move to/i }))
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText('Library')).toBeInTheDocument()
       expect(within(dialog).getByText('Nacionales')).toBeInTheDocument()
@@ -431,7 +431,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /move to/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /move to/i }))
       const dialog = await screen.findByRole('dialog')
 
       await userEvent.click(within(dialog).getByText('Transferencias'))
@@ -561,18 +561,18 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      expect(within(caseRow).getByRole('menuitem', { name: /move to/i })).toBeInTheDocument()
-      expect(within(caseRow).queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: /move to/i })).toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument()
     })
 
     it("a folder row's menu is closed by default and lists Delete once opened, with permission", async () => {
       mockExplorerAPI()
       renderExplorer()
       const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
-      expect(within(folderRow).queryByRole('menuitem')).not.toBeInTheDocument()
+      expect(screen.queryByRole('menuitem')).not.toBeInTheDocument()
 
       await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
-      expect(within(folderRow).getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
     })
 
     // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views
@@ -597,7 +597,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      expect(within(caseRow).queryByRole('menuitem', { name: /move to/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: /move to/i })).not.toBeInTheDocument()
     })
 
     it('hides the tree row\'s "New section in…" trigger without sectionCreate', async () => {
@@ -612,7 +612,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /^delete$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText(/daily transfer limit/i)).toBeInTheDocument()
@@ -628,7 +628,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /^delete$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
       const dialog = await screen.findByRole('dialog')
       await userEvent.click(within(dialog).getByRole('button', { name: /^delete case$/i }))
 
@@ -646,7 +646,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
       await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
-      await userEvent.click(within(folderRow).getByRole('menuitem', { name: /^delete$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText(/nacionales/i)).toBeInTheDocument()
@@ -667,7 +667,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
       await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
-      await userEvent.click(within(folderRow).getByRole('menuitem', { name: /^delete$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
       const dialog = await screen.findByRole('dialog')
       await userEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
 
@@ -681,7 +681,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
       await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
-      await userEvent.click(within(folderRow).getByRole('menuitem', { name: /^delete$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
 
       const dialog = await screen.findByRole('dialog')
       expect(within(dialog).getByText(/1 case and 1 subsection\./i)).toBeInTheDocument()
@@ -692,7 +692,7 @@ describe('FolderExplorerPage', () => {
       renderExplorer()
       const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
-      await userEvent.click(within(caseRow).getByRole('menuitem', { name: /^delete$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
       await screen.findByRole('dialog')
 
       await userEvent.keyboard('{Escape}')

@@ -102,6 +102,35 @@ describe('RowActionMenu', () => {
     expect(screen.queryByRole('menu')).not.toBeInTheDocument()
   })
 
+  it('portals the button-opened menu to <body>, positioned fixed under the trigger, so an overflow-hidden ancestor (e.g. Card) can never clip it', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 100,
+      bottom: 120,
+      left: 200,
+      right: 240,
+      width: 40,
+      height: 20,
+      x: 200,
+      y: 100,
+      toJSON: () => ({}),
+    })
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1000)
+
+    const { container } = render(
+      <div style={{ overflow: 'hidden' }} data-testid="clipping-ancestor">
+        <RowActionMenu label="Actions for Two-Factor" items={[{ label: 'Move to…', onSelect: vi.fn() }]} />
+      </div>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Two-Factor' }))
+
+    const menu = screen.getByRole('menu')
+    expect(container.contains(menu)).toBe(false)
+    expect(document.body.contains(menu)).toBe(true)
+    expect(menu.className).toContain('fixed')
+    expect(menu).toHaveStyle({ top: '124px' })
+    expect(menu).toHaveStyle({ right: '760px' })
+  })
+
   it('renders a custom trigger instead of the default overflow icon when one is given', async () => {
     render(
       <RowActionMenu
