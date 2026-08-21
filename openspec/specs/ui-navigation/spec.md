@@ -87,7 +87,11 @@ and a two-tone wordmark — matching the committed brand assets
 A project's landing page SHALL show three independent panels — Library, Suites, and Recent
 runs — each limited to its top items with a "see all" control linking to the full view,
 rather than the project's entire content at once, and every item row shown SHALL itself
-link directly to that item, not just to the panel's own full-list view. The Library panel
+link directly to that item, not just to the panel's own full-list view. Below those three,
+a fourth, full-width Reports panel SHALL summarize the project's overall status (a status
+breakdown bar and pass rate, plus a flaky-case count) without requiring navigation away
+from the landing page, linking to the full Reports page via a single "Open Reports" action
+rather than a "see all N" control, since it summarizes rather than lists. The Library panel
 SHALL include a visible entry for test cases that live directly in the project's root
 section, not only for named subsections, so a case created before any subsection existed
 is never invisible there. Above the panels, the landing SHALL show a summary of the
@@ -149,6 +153,10 @@ bar) reflecting that it is the highest-frequency scan on this page.
 #### Scenario: A never-run suite shows a distinct state on the landing
 - **WHEN** a suite shown on the landing has never had a run created from it
 - **THEN** its row shows "Never run" rather than a 0% pass rate
+
+#### Scenario: Reports panel is a fourth, full-width row below the other three
+- **WHEN** a user opens a project's landing page
+- **THEN** the Reports panel spans the full width below Folders, Suites, and Recent runs, rather than sitting alongside them as a fourth same-height column
 
 ### Requirement: Library with two-pane navigation
 The web UI SHALL provide a library browsing view — labeled "Library" for the project's
@@ -323,8 +331,9 @@ severity, the same as everywhere else it renders. The page header SHALL provide 
 actions menu offering "Move to…" and "Delete," using the same underlying actions already
 available from the Library's row-level menu. Each version-history row SHALL show a terse
 signal of what changed relative to the previous version (or that it is the initial
-version), computed from already-loaded version content; selecting a row SHALL expand an
-inline field-level diff without leaving the page. On viewports narrower than 768px, the
+version), computed from already-loaded version content, including any custom field value
+changes; selecting a row SHALL expand an inline field-level diff without leaving the page.
+On viewports narrower than 768px, the
 sidebar's sections SHALL collapse into stacked, independently-expandable sections in the
 same order as the desktop sidebar, with no content omitted. Entering edit mode SHALL keep
 the sidebar shell visible, with the Properties section becoming an inline edit form while
@@ -337,7 +346,14 @@ page. Each entry in the version history SHALL offer a restore action, gated behi
 confirmation explaining that restoring creates a new current version rather than altering
 history. When the case has recorded execution history, the Results section SHALL show its
 windowed success rate, a bar per recent execution colored by verdict, and the date of its
-most recent execution — not just the empty-state placeholder.
+most recent execution — not just the empty-state placeholder. When the project has custom
+fields defined, the Properties section SHALL render the case's values for them after the
+fixed fields, each per the field's own type: a `select` field's value as a flat pill
+matching the platform/test-type pill treatment, a `text` field's value as plain text —
+never both rendered the same way. Only the first three custom fields, by the project's
+admin-set field order, SHALL render directly; any remaining fields SHALL sit behind a
+"Show N more" disclosure that expands inline within the sidebar rather than navigating
+away or opening a popup.
 
 #### Scenario: Opening a case navigates to its own route
 - **WHEN** a user selects a test case from the library content list
@@ -442,6 +458,24 @@ most recent execution — not just the empty-state placeholder.
 #### Scenario: The Properties sidebar's priority pill is colored by severity
 - **WHEN** a user views a case's Properties sidebar
 - **THEN** the priority pill is tinted by its severity band, the same as the Library row's priority badge
+
+#### Scenario: Custom fields render after the fixed properties, capped at three
+- **WHEN** a case's project has five custom fields defined and the case
+  has values for all five
+- **THEN** the first three (by the project's admin-set order) render
+  directly in Properties, and the remaining two sit behind a "Show 2
+  more" disclosure
+
+#### Scenario: A select custom field renders as a pill, a text one does not
+- **WHEN** a case has a value set for a `select` custom field and a
+  `text` custom field
+- **THEN** the select field's value renders as a flat pill and the text
+  field's value renders as plain text within its own `PropertyRow`
+
+#### Scenario: A project with no custom fields shows the sidebar unchanged
+- **WHEN** a case's project has no custom fields defined
+- **THEN** the Properties sidebar renders exactly as it does today, with
+  no empty "Custom fields" affordance
 
 ### Requirement: Editing a test case creates a new version
 A user SHALL be able to edit an existing case's title and steps from

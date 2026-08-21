@@ -148,7 +148,10 @@ resolved from the authenticated caller — mirroring how a recorded
 result already tracks its actor. A user with `caseEdit` permission
 SHALL be able to restore an old version's content, which SHALL create
 a new version rather than modifying or reusing the target version's
-own version number.
+own version number. A version's content MAY include values for the
+project's custom fields (see `case-custom-fields`); those values are
+versioned exactly like every other field — immutable once recorded,
+never rewritten by a later field/option rename or deletion.
 
 #### Scenario: Editing creates a new version
 - **WHEN** a user with `caseEdit` permission edits the steps of a case at version 1
@@ -177,6 +180,12 @@ own version number.
 #### Scenario: Versions predating this capability show no actor
 - **WHEN** a version was created before actor tracking existed
 - **THEN** it reads back with `actorKind: "unknown"` rather than a fabricated identity
+
+#### Scenario: A custom field value change creates a new version like any other edit
+- **WHEN** a user with `caseEdit` permission changes only a custom field's
+  value, no other content
+- **THEN** a new version is created, and the previous version's recorded
+  value for that field is unchanged and still retrievable
 
 ### Requirement: Test suite grouping
 The system SHALL let a user with `suiteCreate` permission create suites within a project, and a user with `suiteEditMembership` permission manage an n:m membership between suites and test cases. Every suite SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. The web UI SHALL present suite creation and suite membership editing through the same checkbox-grid selection component: a filterable, checkbox-per-case list with a persistent selection count, rather than separate one-case-at-a-time flows. Toggling a case's checkbox SHALL update the selection regardless of which filter is currently applied, and changing a filter SHALL NOT alter which cases are selected. Suite creation SHALL let a user select cases in the same screen as naming the suite, rather than requiring the suite to be created empty first. Editing an existing suite's membership SHALL present the same grid pre-checked with its current members, committing only the net difference (added and removed cases) when saved.
