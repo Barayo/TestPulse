@@ -13,9 +13,10 @@ Admin's involvement — available only when the instance has outbound email
 The system SHALL let a user with a real, active account request a password
 reset email, and set a new password via a single-use, time-limited link,
 entirely without administrator involvement. This capability SHALL be
-available only when the instance has outbound email configured; when it is
-not configured, the system SHALL behave exactly as if no user had ever
-requested a reset — no partial/broken flow.
+available only when the instance has outbound email configured and
+SSO-only mode (see `sso-oidc`) is not enabled; when either condition is not
+met, the system SHALL behave exactly as if no user had ever requested a
+reset — no partial/broken flow.
 
 #### Scenario: Requesting a reset for a real, active account
 - **WHEN** a user submits their email to the forgot-password endpoint, and
@@ -56,9 +57,17 @@ requested a reset — no partial/broken flow.
 #### Scenario: The login page only offers recovery when it would actually work
 - **WHEN** a user visits the login page
 - **THEN** a "Forgot password?" link is shown only if the instance has SMTP
-  configured; otherwise no such link is shown
+  configured and SSO-only mode is not enabled; otherwise no such link is
+  shown
 
 #### Scenario: Instance metadata reports whether recovery is available
 - **WHEN** any caller, authenticated or not, requests instance metadata
 - **THEN** the response includes `passwordResetEnabled`, `true` only when
-  every required SMTP and public-URL environment variable is set
+  every required SMTP and public-URL environment variable is set and
+  SSO-only mode is not enabled
+
+#### Scenario: Recovery no-ops when SSO-only mode is enabled
+- **WHEN** SSO-only mode is enabled, regardless of SMTP configuration
+- **THEN** the forgot-password and reset-password endpoints behave exactly
+  as if SMTP were unconfigured — `200` with no email sent, and reset tokens
+  are never accepted

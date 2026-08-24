@@ -10,16 +10,18 @@ before any domain route runs.
 ### Requirement: Local user accounts
 The system SHALL support local user accounts identified by email, with a
 bcrypt-hashed password. There is no public self-registration — only a
-Tenant Admin (see `authorization`) can create a new account. A newly
-created account's `displayName` SHALL default to a name derived from
-the email's local-part (separators `.`/`_`/`-`/`+` become spaces, each
-resulting word title-cased) rather than staying unset. A Tenant Admin MAY
-change an existing account's email directly. A Tenant Admin SHALL NOT set
-an arbitrary password value for another account directly — password
-changes for another account happen only via an admin-triggered reset
-email, a required-change-at-next-login flag, or (only when the instance
-has no SMTP configured) a server-generated temporary password that
-forces the required-change flag in the same action.
+Tenant Admin (see `authorization`) can create a new account, with the sole
+exception of just-in-time provisioning on first OIDC login (see
+`sso-oidc`), which requires no password. A newly created account's
+`displayName` SHALL default to a name derived from the email's local-part
+(separators `.`/`_`/`-`/`+` become spaces, each resulting word title-cased)
+rather than staying unset. A Tenant Admin MAY change an existing account's
+email directly. A Tenant Admin SHALL NOT set an arbitrary password value
+for another account directly — password changes for another account happen
+only via an admin-triggered reset email, a required-change-at-next-login
+flag, or (only when the instance has no SMTP configured) a server-generated
+temporary password that forces the required-change flag in the same
+action.
 
 #### Scenario: Create a user
 - **WHEN** a Tenant Admin submits a new account with an email and password
@@ -57,6 +59,12 @@ forces the required-change flag in the same action.
 - **WHEN** a non-Tenant-Admin authenticated user attempts to change another
   account's email
 - **THEN** the request is rejected with `403`
+
+#### Scenario: JIT-provisioned account needs no password
+- **WHEN** a new account is created via first OIDC login rather than by a
+  Tenant Admin
+- **THEN** the account is created with no password hash, and this is not
+  treated as an error or an incomplete account
 
 ### Requirement: Self-service password change
 An authenticated user SHALL be able to change their own password by
@@ -169,7 +177,10 @@ The system SHALL authenticate a user's email and password against the
 stored bcrypt hash and, on success, create a server-side session and set an
 `HttpOnly`, `Secure`, `SameSite=Lax` cookie referencing it by opaque ID. The
 session expiry SHALL be 30 days from creation, extended (sliding) on each
-authenticated request that uses it.
+authenticated request that uses it. When SSO-only mode is enabled (see
+`sso-oidc`), password-based login SHALL be rejected regardless of
+credentials; a session created via OIDC login uses this same mechanism and
+expiry.
 
 #### Scenario: Successful login
 - **WHEN** a user submits their correct email and password to
@@ -194,6 +205,11 @@ authenticated request that uses it.
 #### Scenario: Expired session is rejected
 - **WHEN** a request presents a session cookie whose session has expired
 - **THEN** the request is rejected with `401` as if unauthenticated
+
+#### Scenario: SSO-only mode rejects password login even with correct credentials
+- **WHEN** SSO-only mode is enabled and a user submits their correct email
+  and password to `POST /api/v1/auth/login`
+- **THEN** the request is rejected with `401` and no session is created
 
 ### Requirement: Scoped API tokens for agents
 The system SHALL let any authenticated user create a named API token acting
