@@ -713,6 +713,31 @@ func (r *RunRepo) Summary(ctx context.Context, runID string) (domain.RunSummary,
 	return sum, rows.Err()
 }
 
+// TotalDuration sums, across a run's items, each item's LATEST result's
+// (end_time - start_time) — only for results carrying both timestamps
+// (add-run-comparison-timing design.md D2). "Latest per item" uses the same
+// DISTINCT ON idiom as SuiteRepo.latestRunStats. Returns nil when zero
+// results in the run qualify, never 0 — "no timing data" and "zero elapsed
+// time" must not be conflated.
+func (r *RunRepo) TotalDuration(ctx context.Context, runID string) (*int64, error) {
+	var ms *int64
+	err := r.pool.QueryRow(ctx,
+		`WITH latest AS (
+		   SELECT DISTINCT ON (run_item_id) start_time, end_time
+		   FROM test_run_results
+		   WHERE run_item_id IN (SELECT id FROM test_run_items WHERE run_id = $1)
+		   ORDER BY run_item_id, created_at DESC
+		 )
+		 SELECT (EXTRACT(EPOCH FROM SUM(end_time - start_time)) * 1000)::bigint
+		 FROM latest WHERE start_time IS NOT NULL AND end_time IS NOT NULL`,
+		runID,
+	).Scan(&ms)
+	if err != nil {
+		return nil, err
+	}
+	return ms, nil
+}
+
 // ProjectStatusSummary aggregates current_status counts across every run
 // item in a project, across every run regardless of open/closed status —
 // the same GROUP BY shape as Summary, scoped up from run_id to project_id

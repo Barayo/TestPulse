@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
@@ -188,5 +189,82 @@ func TestCompareRunsRejectsCrossProject(t *testing.T) {
 
 	if _, err := s.CompareRuns(context.Background(), run1.ID, run2.ID); err == nil {
 		t.Error("CompareRuns across projects: want error, got nil")
+	}
+}
+
+// TestCompareRunsIncludesTotalDurationWhenTimed covers
+// add-run-comparison-timing: a run with at least one fully-timed result
+// reports a non-nil TotalDurationMs on its comparison summary.
+func TestCompareRunsIncludesTotalDurationWhenTimed(t *testing.T) {
+	s := comparisonTestService(t)
+	ctx := context.Background()
+	p := mustComparisonProject(t, s)
+	c := mustComparisonCase(t, s, p.ID, "timed case")
+
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "timed run", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	items, err := s.RunItems(ctx, run.ID, "")
+	if err != nil || len(items) != 1 {
+		t.Fatalf("RunItems: %d, %v", len(items), err)
+	}
+	start := time.Date(2026, 8, 1, 9, 0, 0, 0, time.UTC)
+	end := start.Add(4 * time.Second)
+	if _, err := s.RecordResult(ctx, items[0].ID, domain.NewResult{
+		Actor: "ci", Verdict: domain.VerdictPass, StartTime: &start, EndTime: &end,
+	}); err != nil {
+		t.Fatalf("RecordResult: %v", err)
+	}
+	if err := s.CloseRun(ctx, run.ID); err != nil {
+		t.Fatalf("CloseRun: %v", err)
+	}
+	timed, err := s.GetRun(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("GetRun: %v", err)
+	}
+
+	other := closedRunWithVerdicts(t, s, p.ID, "other run", []string{c.ID}, []domain.Verdict{domain.VerdictPass})
+
+	cmp, err := s.CompareRuns(ctx, timed.ID, other.ID)
+	if err != nil {
+		t.Fatalf("CompareRuns: %v", err)
+	}
+	var summary domain.RunComparisonSummary
+	if cmp.OlderRun.RunKey == timed.Key {
+		summary = cmp.OlderRun
+	} else {
+		summary = cmp.NewerRun
+	}
+	if summary.TotalDurationMs == nil {
+		t.Fatal("TotalDurationMs = nil, want a value (run has a timed result)")
+	}
+	want := int64(4 * time.Second / time.Millisecond)
+	if *summary.TotalDurationMs != want {
+		t.Errorf("TotalDurationMs = %d, want %d", *summary.TotalDurationMs, want)
+	}
+}
+
+// TestCompareRunsTotalDurationNilWhenUntimed covers the "no timing data"
+// state: a run whose results carry no start/end time reports a nil
+// TotalDurationMs, not 0.
+func TestCompareRunsTotalDurationNilWhenUntimed(t *testing.T) {
+	s := comparisonTestService(t)
+	ctx := context.Background()
+	p := mustComparisonProject(t, s)
+	c := mustComparisonCase(t, s, p.ID, "untimed case")
+
+	older := closedRunWithVerdicts(t, s, p.ID, "older", []string{c.ID}, []domain.Verdict{domain.VerdictPass})
+	newer := closedRunWithVerdicts(t, s, p.ID, "newer", []string{c.ID}, []domain.Verdict{domain.VerdictPass})
+
+	cmp, err := s.CompareRuns(ctx, older.ID, newer.ID)
+	if err != nil {
+		t.Fatalf("CompareRuns: %v", err)
+	}
+	if cmp.OlderRun.TotalDurationMs != nil {
+		t.Errorf("OlderRun.TotalDurationMs = %v, want nil", *cmp.OlderRun.TotalDurationMs)
+	}
+	if cmp.NewerRun.TotalDurationMs != nil {
+		t.Errorf("NewerRun.TotalDurationMs = %v, want nil", *cmp.NewerRun.TotalDurationMs)
 	}
 }

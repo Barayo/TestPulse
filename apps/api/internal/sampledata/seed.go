@@ -3,6 +3,7 @@ package sampledata
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
@@ -575,6 +576,30 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	hotfixRun, err := runByName(ctx, svc, p.ID, hotfixRunName)
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
+	}
+	// Re-record the "Login with valid credentials" item's result (same
+	// verdict as above, VerdictFailed — the narrative is unaffected) with
+	// execution timing, so this run carries real duration data
+	// (add-run-comparison-timing) while "Release 1.1 regression" above
+	// carries none — the comparison showcase demonstrates both the real
+	// duration figure and the "No timing data" state side by side, rather
+	// than leaving the stat silently absent on both runs.
+	hotfixItems, err := svc.RunItems(ctx, hotfixRun.ID, "")
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	for _, item := range hotfixItems {
+		if item.CaseID != login.ID {
+			continue
+		}
+		start := hotfixRun.CreatedAt
+		end := start.Add(4200 * time.Millisecond)
+		if _, err := svc.RecordResult(ctx, item.ID, domain.NewResult{
+			Actor: Actors[0], Verdict: domain.VerdictFailed, StartTime: &start, EndTime: &end,
+		}); err != nil {
+			return fmt.Errorf("sampledata: recording timed result: %w", err)
+		}
+		break
 	}
 	if err := svc.CloseRun(ctx, hotfixRun.ID); err != nil {
 		return fmt.Errorf("sampledata: closing run: %w", err)

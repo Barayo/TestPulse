@@ -107,6 +107,54 @@ func TestScenario_CompareRunsEmptyCategoriesAreArraysNotNull(t *testing.T) {
 	}
 }
 
+// TestScenario_CompareRunsIncludesTotalDurationOverHTTP covers
+// add-run-comparison-timing: a run whose only result carries start/end
+// timestamps reports totalDurationMs on the comparison response; a run
+// with no timed results reports it absent (nil), not zero.
+func TestScenario_CompareRunsIncludesTotalDurationOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c, timedRun, untimedRun struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "timed", "caseKeys": []string{c.Key}}, 201, &timedRun)
+	var timedItems []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", timedRun.Key), nil, 200, &timedItems)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", timedItems[0].ID), jmap{
+		"actor": "ci", "verdict": "pass",
+		"startTime": "2026-08-01T09:00:00Z", "endTime": "2026-08-01T09:00:04Z",
+	}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", timedRun.Key), nil, 204, nil)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "untimed", "caseKeys": []string{c.Key}}, 201, &untimedRun)
+	var untimedItems []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", untimedRun.Key), nil, 200, &untimedItems)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", untimedItems[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", untimedRun.Key), nil, 204, nil)
+
+	var cmp struct {
+		OlderRun struct {
+			RunKey          string `json:"runKey"`
+			TotalDurationMs *int64 `json:"totalDurationMs"`
+		} `json:"olderRun"`
+		NewerRun struct {
+			RunKey          string `json:"runKey"`
+			TotalDurationMs *int64 `json:"totalDurationMs"`
+		} `json:"newerRun"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/compare/%s", timedRun.Key, untimedRun.Key), nil, 200, &cmp)
+
+	if cmp.OlderRun.RunKey != timedRun.Key {
+		t.Fatalf("OlderRun.RunKey = %q, want %q", cmp.OlderRun.RunKey, timedRun.Key)
+	}
+	if cmp.OlderRun.TotalDurationMs == nil || *cmp.OlderRun.TotalDurationMs != 4000 {
+		t.Errorf("OlderRun.TotalDurationMs = %v, want 4000", cmp.OlderRun.TotalDurationMs)
+	}
+	if cmp.NewerRun.TotalDurationMs != nil {
+		t.Errorf("NewerRun.TotalDurationMs = %v, want nil (no timed results)", *cmp.NewerRun.TotalDurationMs)
+	}
+}
+
 func TestScenario_CompareRunsRejectsOpenRunOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p, c, closedRun, openRun struct{ Key string }

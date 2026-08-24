@@ -1235,6 +1235,83 @@ func TestResultExecutionMetadataPersists(t *testing.T) {
 	}
 }
 
+// TestRunTotalDurationSumsLatestTimedResultsOnly covers
+// add-run-comparison-timing's duration aggregation: only each item's LATEST
+// result counts (an earlier, superseded timed result must not also be
+// summed), and an item whose latest result has no timing contributes
+// nothing rather than erroring or counting as zero duration.
+func TestRunTotalDurationSumsLatestTimedResultsOnly(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "timed")
+	c2 := mustCase(t, s, p.ID, "untimed")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c1.ID, c2.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+
+	start := time.Date(2026, 7, 22, 10, 0, 0, 0, time.UTC)
+
+	// item[0]'s first (superseded) result: 2s. Must NOT be included once a
+	// later result supersedes it.
+	supersededEnd := start.Add(2 * time.Second)
+	if _, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{
+		Actor: "ci", Verdict: domain.VerdictFailed, StartTime: &start, EndTime: &supersededEnd,
+	}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("AppendResult superseded: %v", err)
+	}
+	// item[0]'s latest result: 10s. This is the one that should count.
+	latestEnd := start.Add(10 * time.Second)
+	if _, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{
+		Actor: "ci", Verdict: domain.VerdictPass, StartTime: &start, EndTime: &latestEnd,
+	}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("AppendResult latest: %v", err)
+	}
+	// item[1]'s only result has no timing at all.
+	if _, err := s.Runs.AppendResult(ctx, items[1].ID, domain.NewResult{
+		Actor: "ci", Verdict: domain.VerdictPass,
+	}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("AppendResult untimed: %v", err)
+	}
+
+	got, err := s.Runs.TotalDuration(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("TotalDuration: %v", err)
+	}
+	if got == nil {
+		t.Fatal("TotalDuration = nil, want a value (one item has a timed latest result)")
+	}
+	want := int64(10 * time.Second / time.Millisecond)
+	if *got != want {
+		t.Errorf("TotalDuration = %d, want %d (only the latest, timed result)", *got, want)
+	}
+}
+
+// TestRunTotalDurationNilWhenNoTimedResults covers the "zero data" vs "zero
+// time" distinction (design.md D2): a run whose items have no fully-timed
+// result at all reports nil, not 0.
+func TestRunTotalDurationNilWhenNoTimedResults(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", []string{c.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+
+	if _, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{
+		Actor: "ana", Verdict: domain.VerdictPass,
+	}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("AppendResult: %v", err)
+	}
+
+	got, err := s.Runs.TotalDuration(ctx, run.ID)
+	if err != nil {
+		t.Fatalf("TotalDuration: %v", err)
+	}
+	if got != nil {
+		t.Errorf("TotalDuration = %v, want nil (no timed results)", *got)
+	}
+}
+
 // TestResultExecutionMetadataOptional covers the "omitted, not guessed" rule:
 // a result recorded without execution metadata leaves those fields absent.
 func TestResultExecutionMetadataOptional(t *testing.T) {

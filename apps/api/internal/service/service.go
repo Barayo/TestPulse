@@ -824,6 +824,22 @@ func summaryPoint(run domain.Run, items []domain.RunItem) domain.SuiteTrendPoint
 	return point
 }
 
+// comparisonSummary is summaryPoint plus a run's total duration
+// (add-run-comparison-timing design.md D1) — comparison-only, so it stays
+// separate from SuiteTrendPoint, which the unrelated Stability trend also
+// uses and has no need for a duration figure.
+func (s *Service) comparisonSummary(ctx context.Context, run domain.Run, items []domain.RunItem) (domain.RunComparisonSummary, error) {
+	point := summaryPoint(run, items)
+	durationMs, err := s.store.Runs.TotalDuration(ctx, run.ID)
+	if err != nil {
+		return domain.RunComparisonSummary{}, err
+	}
+	return domain.RunComparisonSummary{
+		RunKey: point.RunKey, RunName: point.RunName, CreatedAt: point.CreatedAt,
+		Total: point.Total, Counts: point.Counts, TotalDurationMs: durationMs,
+	}, nil
+}
+
 func isBadVerdictStatus(st domain.Status) bool {
 	return st == domain.StatusFailed || st == domain.StatusBlocked
 }
@@ -871,9 +887,18 @@ func (s *Service) CompareRuns(ctx context.Context, runID, otherRunID string) (do
 		newerByCase[it.CaseKey] = it
 	}
 
+	olderSummary, err := s.comparisonSummary(ctx, older, olderItems)
+	if err != nil {
+		return domain.RunComparison{}, err
+	}
+	newerSummary, err := s.comparisonSummary(ctx, newer, newerItems)
+	if err != nil {
+		return domain.RunComparison{}, err
+	}
+
 	cmp := domain.RunComparison{
-		OlderRun: summaryPoint(older, olderItems),
-		NewerRun: summaryPoint(newer, newerItems),
+		OlderRun: olderSummary,
+		NewerRun: newerSummary,
 		// Initialized non-nil so an empty category marshals as `[]`, matching
 		// the openapi schema's non-nullable array — a nil slice would
 		// otherwise encode as JSON `null` and break a client that assumes

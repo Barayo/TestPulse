@@ -59,6 +59,25 @@ describe('RunComparePage', () => {
     expect(headings.indexOf('Sprint 1')).toBeLessThan(headings.indexOf('Sprint 2'))
   })
 
+  it('shows a formatted duration when a run has timing data', async () => {
+    mockCompareAPI(comparison({ olderRun: { ...comparison().olderRun, totalDurationMs: 252_000 } }))
+    renderCompare()
+    expect(await screen.findByText('4m 12s')).toBeInTheDocument()
+  })
+
+  it('shows "No timing data" when a run has no timing data', async () => {
+    mockCompareAPI()
+    renderCompare()
+    expect(await screen.findAllByText('No timing data')).toHaveLength(2)
+  })
+
+  it('shows each run\'s own timing state independently in a mixed pair', async () => {
+    mockCompareAPI(comparison({ olderRun: { ...comparison().olderRun, totalDurationMs: 52_000 } }))
+    renderCompare()
+    expect(await screen.findByText('52s')).toBeInTheDocument()
+    expect(screen.getByText('No timing data')).toBeInTheDocument()
+  })
+
   it('shows the item diff categorized into five sections', async () => {
     mockCompareAPI(
       comparison({

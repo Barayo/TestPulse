@@ -3,6 +3,7 @@ import { useParams } from 'react-router'
 import { ChevronRightIcon, TrendingDownIcon, TrendingUpIcon, CheckCircle2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/useAuth'
+import { formatDuration } from '@/lib/formatDuration'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunStatusBreakdown } from '@/components/RunStatusBreakdown'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -10,15 +11,18 @@ import type { components } from '@testpulse/shared/api'
 
 type RunComparison = components['schemas']['RunComparison']
 type RunComparisonItem = components['schemas']['RunComparisonItem']
-type SuiteTrendPoint = components['schemas']['SuiteTrendPoint']
+type RunComparisonSummary = components['schemas']['RunComparisonSummary']
 
-function RunHeaderCard({ label, run }: { label: string; run: SuiteTrendPoint }) {
+function RunHeaderCard({ label, run }: { label: string; run: RunComparisonSummary }) {
   return (
     <Card className="flex-1">
       <CardHeader>
         <span className="tp-label text-muted-foreground">{label}</span>
         <CardTitle className="tp-heading">{run.runName}</CardTitle>
-        <p className="text-sm text-muted-foreground">Created {new Date(run.createdAt).toLocaleDateString()}</p>
+        <p className="text-sm text-muted-foreground">
+          Created {new Date(run.createdAt).toLocaleDateString()} ·{' '}
+          <span>{run.totalDurationMs != null ? formatDuration(run.totalDurationMs) : 'No timing data'}</span>
+        </p>
         <RunStatusBreakdown total={run.total} counts={run.counts} />
       </CardHeader>
     </Card>

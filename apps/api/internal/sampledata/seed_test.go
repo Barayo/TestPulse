@@ -569,6 +569,51 @@ func TestSeedContentHasARunComparisonShowcase(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesRunComparisonTiming covers add-run-comparison-timing:
+// the same regression/hotfix pair TestSeedContentHasARunComparisonShowcase
+// exercises should also demonstrate the new duration stat — one run with
+// real timing data, the other with none, so the comparison page's "No
+// timing data" state is showcased alongside a real duration, not left
+// silently absent on both sides.
+func TestSeedContentShowcasesRunComparisonTiming(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var older, newer *domain.Run
+	for i, r := range runs {
+		switch r.Name {
+		case "Release 1.1 regression":
+			older = &runs[i]
+		case "Release 1.1.1 hotfix verification":
+			newer = &runs[i]
+		}
+	}
+	if older == nil || newer == nil {
+		t.Fatal("missing one or both of the suite-linked regression/hotfix runs")
+	}
+
+	cmp, err := svc.CompareRuns(actorCtx, older.ID, newer.ID)
+	if err != nil {
+		t.Fatalf("CompareRuns: %v", err)
+	}
+	if cmp.OlderRun.TotalDurationMs != nil {
+		t.Errorf("OlderRun.TotalDurationMs = %v, want nil (showcasing the \"No timing data\" state)", *cmp.OlderRun.TotalDurationMs)
+	}
+	if cmp.NewerRun.TotalDurationMs == nil {
+		t.Error("NewerRun.TotalDurationMs = nil, want a real duration (showcasing the timed state)")
+	}
+}
+
 // TestSeedContentHasAnOpenRunAmongClosedSuiteHistory covers
 // rework-suite-run-flow D7: the Stability card's "Open + closed" view needs
 // a suite with a real mix of closed history AND a trailing open run to

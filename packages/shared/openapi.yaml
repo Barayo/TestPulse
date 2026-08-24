@@ -2574,12 +2574,28 @@ components:
           allOf: [{ $ref: "#/components/schemas/Status" }]
           nullable: true
           description: Absent for an item categorized as removed (it has no newer-run status).
+    RunComparisonSummary:
+      type: object
+      required: [runKey, runName, createdAt, total, counts]
+      properties:
+        runKey: { type: string }
+        runName: { type: string }
+        createdAt: { type: string, format: date-time }
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        totalDurationMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: "Total elapsed time summed across each item's latest fully-timed result, in milliseconds. Absent/null means no item in this run has a fully-timed result — never 0."
     RunComparison:
       type: object
       required: [olderRun, newerRun, regressed, improved, unchanged, added, removed]
       properties:
-        olderRun: { $ref: "#/components/schemas/SuiteTrendPoint" }
-        newerRun: { $ref: "#/components/schemas/SuiteTrendPoint" }
+        olderRun: { $ref: "#/components/schemas/RunComparisonSummary" }
+        newerRun: { $ref: "#/components/schemas/RunComparisonSummary" }
         regressed:
           type: array
           items: { $ref: "#/components/schemas/RunComparisonItem" }

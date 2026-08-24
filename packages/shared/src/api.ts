@@ -2195,9 +2195,24 @@ export interface components {
             /** @description Absent for an item categorized as removed (it has no newer-run status). */
             statusNewer?: components["schemas"]["Status"] | null;
         };
+        RunComparisonSummary: {
+            runKey: string;
+            runName: string;
+            /** Format: date-time */
+            createdAt: string;
+            total: number;
+            counts: {
+                [key: string]: number;
+            };
+            /**
+             * Format: int64
+             * @description Total elapsed time summed across each item's latest fully-timed result, in milliseconds. Absent/null means no item in this run has a fully-timed result — never 0.
+             */
+            totalDurationMs?: number | null;
+        };
         RunComparison: {
-            olderRun: components["schemas"]["SuiteTrendPoint"];
-            newerRun: components["schemas"]["SuiteTrendPoint"];
+            olderRun: components["schemas"]["RunComparisonSummary"];
+            newerRun: components["schemas"]["RunComparisonSummary"];
             regressed: components["schemas"]["RunComparisonItem"][];
             improved: components["schemas"]["RunComparisonItem"][];
             unchanged: components["schemas"]["RunComparisonItem"][];

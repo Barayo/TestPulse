@@ -603,18 +603,33 @@ type RunComparisonItem struct {
 	StatusNewer *Status `json:"statusNewer,omitempty"`
 }
 
+// RunComparisonSummary is a SuiteTrendPoint plus a comparison-only total
+// duration figure (add-run-comparison-timing design.md D1) — kept separate
+// from SuiteTrendPoint itself so this comparison-specific field never leaks
+// into the unrelated Stability trend that type also serves.
+// TotalDurationMs is nil when the run has no item with a fully-timed
+// result, never 0 — "no timing data" and "zero elapsed time" are distinct.
+type RunComparisonSummary struct {
+	RunKey          string         `json:"runKey"`
+	RunName         string         `json:"runName"`
+	CreatedAt       time.Time      `json:"createdAt"`
+	Total           int            `json:"total"`
+	Counts          map[Status]int `json:"counts"`
+	TotalDurationMs *int64         `json:"totalDurationMs,omitempty"`
+}
+
 // RunComparison is the categorized item-level diff between two closed runs
 // from the same project, joined by case key (add-run-comparison-view).
 // OlderRun/NewerRun are ordered by actual creation time, independent of
 // which run key was supplied first in the request.
 type RunComparison struct {
-	OlderRun  SuiteTrendPoint     `json:"olderRun"`
-	NewerRun  SuiteTrendPoint     `json:"newerRun"`
-	Regressed []RunComparisonItem `json:"regressed"`
-	Improved  []RunComparisonItem `json:"improved"`
-	Unchanged []RunComparisonItem `json:"unchanged"`
-	Added     []RunComparisonItem `json:"added"`
-	Removed   []RunComparisonItem `json:"removed"`
+	OlderRun  RunComparisonSummary `json:"olderRun"`
+	NewerRun  RunComparisonSummary `json:"newerRun"`
+	Regressed []RunComparisonItem  `json:"regressed"`
+	Improved  []RunComparisonItem  `json:"improved"`
+	Unchanged []RunComparisonItem  `json:"unchanged"`
+	Added     []RunComparisonItem  `json:"added"`
+	Removed   []RunComparisonItem  `json:"removed"`
 }
 
 // FlakyCase is a case whose current version's executions include both a

@@ -467,3 +467,5 @@ The comparison page itself lives at `/runs/compare/{olderRunKey}/{newerRunKey}` 
 - **Removed** — a case present only in the older run
 
 Two runs with little case overlap (below 20%) show a notice explaining the comparison is scoped to the cases both runs share, rather than presenting a confusing mostly-empty diff. Two runs with no regressions or improvements at all show a plain "nothing changed" state instead of an empty Regressed/Improved pair of sections.
+
+Each run's status card also shows a total-duration figure — the sum, across that run's items, of each item's *latest* result's execution time — whenever the data exists. Today that data comes exclusively from JUnit-XML-imported results; a run built entirely through the manual "Record Result" flow has none. A run with no timing data shows an explicit "No timing data" label in that stat's place instead of hiding the row, so a mixed pair (one CI-imported run, one manual) stays legible: one card reads a real duration, the other honestly reads "No timing data."
