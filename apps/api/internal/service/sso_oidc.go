@@ -93,24 +93,30 @@ func (s *Service) resolveOIDCUser(ctx context.Context, claims OIDCClaims) (domai
 		return user, nil
 	}
 
+	// An unverified email is rejected outright, whether or not it collides
+	// with an existing account. Trusting it for a brand-new account is just
+	// as risky as trusting it to link an existing one: any identity
+	// provider that lets a user self-assert an arbitrary, unverified email
+	// (open-registration/self-service IdPs commonly do) would otherwise let
+	// an attacker squat a colleague's real email — e.g. an admin's —
+	// before that colleague ever logs in via SSO themselves.
+	if !claims.EmailVerified {
+		return domain.User{}, unauthorized("identity provider did not verify this email address")
+	}
+
 	existing, _, err := s.store.Users.GetByEmailWithHash(ctx, claims.Email)
 	switch {
 	case err == nil:
-		// An account with this email already exists. Emails are unique
-		// (users.email), so there is no "distinct new account" to create
-		// here — an unverified claim is rejected outright rather than
-		// risking linking to (or erroring while trying to duplicate) an
-		// account this login may not actually own.
-		if !claims.EmailVerified {
-			return domain.User{}, unauthorized("identity provider did not verify this email address")
-		}
 		if err := s.store.Users.LinkOIDCSubject(ctx, existing.ID, claims.Subject); err != nil {
+			if errors.Is(err, store.ErrOIDCSubjectAlreadyLinked) {
+				return domain.User{}, unauthorized("account is already linked to a different oidc subject")
+			}
 			return domain.User{}, err
 		}
 		return existing, nil
 	case errors.Is(err, store.ErrNotFound):
-		// No existing account holds this email, verified or not — nothing
-		// to collide with, so it's safe to provision a new one.
+		// No existing account holds this (already verified) email — safe
+		// to provision a new one.
 	default:
 		return domain.User{}, err
 	}

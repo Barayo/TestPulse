@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/store"
@@ -78,6 +79,29 @@ func TestUserLinkOIDCSubjectBackfillsExistingAccount(t *testing.T) {
 	}
 	if !ok || got.ID != u.ID {
 		t.Errorf("got = %+v, ok = %v, want linked to %q", got, ok, u.ID)
+	}
+}
+
+func TestUserLinkOIDCSubjectRefusesToOverwriteExisting(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	u := mustUser(t, s, "already-linked@example.com", false)
+
+	if err := s.Users.LinkOIDCSubject(ctx, u.ID, "subject-first"); err != nil {
+		t.Fatalf("first LinkOIDCSubject: %v", err)
+	}
+
+	err := s.Users.LinkOIDCSubject(ctx, u.ID, "subject-second")
+	if !errors.Is(err, store.ErrOIDCSubjectAlreadyLinked) {
+		t.Errorf("err = %v, want ErrOIDCSubjectAlreadyLinked", err)
+	}
+
+	got, ok, err := s.Users.GetByOIDCSubject(ctx, "subject-first")
+	if err != nil {
+		t.Fatalf("GetByOIDCSubject: %v", err)
+	}
+	if !ok || got.ID != u.ID {
+		t.Errorf("account should still be linked to its original subject after a rejected rebind attempt")
 	}
 }
 

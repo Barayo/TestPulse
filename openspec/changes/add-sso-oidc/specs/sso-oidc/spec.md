@@ -102,21 +102,27 @@ create a session identical in shape to a password login's session.
 ### Requirement: Just-in-time user provisioning and account linking
 The system SHALL create a new user account automatically on a person's first
 successful OIDC login, without requiring a Tenant Admin to have created it
-first. Matching an OIDC login to a TestPulse account SHALL proceed in order: by a
-previously-linked `oidc_subject`; then by matching email against an
-existing account. Since email is unique per account, an email match to an
+first. Matching an OIDC login to a TestPulse account SHALL proceed in order:
+by a previously-linked `oidc_subject`; then, only when the ID token asserts
+`email_verified: true`, by matching email against an existing account. An
+ID token that does not assert `email_verified: true` SHALL be rejected
+outright — whether or not an existing account holds that email — since an
+identity provider that lets a user self-assert an arbitrary, unverified
+email would otherwise let an attacker provision an account under a
+colleague's real email address before that colleague ever uses SSO
+themselves. Since email is unique per account, a verified-email match to an
 existing account SHALL link that account (backfilling its `oidc_subject`)
-only when the ID token asserts `email_verified: true`; when the ID token
-does not assert this, the login SHALL be rejected rather than linked or
-duplicated. When no account holds that email at all, a new account SHALL
-be created with `oidc_subject` set and no password, regardless of the
-email-verified flag — there being no existing account to collide with. A
-JIT-provisioned account's `displayName` SHALL default the same way a
-Tenant-Admin-created account's does.
+only when that account has no `oidc_subject` already linked to a
+*different* subject; if it does, the login SHALL be rejected rather than
+silently rebinding the account to a new identity. When no account holds
+that (verified) email at all, a new account SHALL be created with
+`oidc_subject` set and no password. A JIT-provisioned account's
+`displayName` SHALL default the same way a Tenant-Admin-created account's
+does.
 
 #### Scenario: First login for a new email provisions an account
-- **WHEN** a person completes OIDC login with an email that has no existing
-  TestPulse account
+- **WHEN** a person completes OIDC login with a verified email that has no
+  existing TestPulse account
 - **THEN** a new account is created with that email, no password set, and
   `oidc_subject` recorded
 
@@ -138,12 +144,18 @@ Tenant-Admin-created account's does.
   (email is unique per account, so a "distinct" account with the same email
   is not possible)
 
-#### Scenario: An unverified email with no existing account is provisioned normally
+#### Scenario: An unverified email with no existing account is rejected too
 - **WHEN** an OIDC login's ID token has `email_verified: false` and no
   account holds that email yet
-- **THEN** a new account is provisioned as usual — verification only
-  matters when deciding whether to trust an existing account, not when
-  there is nothing to collide with
+- **THEN** the login is rejected and no account is created — an unverified
+  email is never trusted, whether or not it collides with an existing
+  account
+
+#### Scenario: Rebinding an already-linked account to a different subject is rejected
+- **WHEN** an OIDC login's verified email matches an existing account whose
+  `oidc_subject` is already linked to a *different* subject
+- **THEN** the login is rejected and the account's `oidc_subject` is left
+  unchanged — an account is only ever linked once
 
 ### Requirement: Claim-based Tenant Admin mapping
 The system SHALL grant `IsTenantAdmin` to a user, re-evaluated on every OIDC

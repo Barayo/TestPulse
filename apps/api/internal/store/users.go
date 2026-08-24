@@ -17,6 +17,16 @@ type UserRepo struct {
 // instance already has at least one user by the time its transaction ran.
 var ErrAlreadySetUp = errors.New("instance already has a user")
 
+// ErrOIDCSubjectAlreadyLinked marks a LinkOIDCSubject call against an
+// account that already has a *different* oidc_subject recorded
+// (add-sso-oidc) — linking only ever happens once, the first time a
+// pre-existing password account's verified email matches an OIDC login;
+// silently rebinding an already-linked account to a new subject would let
+// anyone who can obtain a verified-email assertion for that address (from
+// the one IdP the instance trusts) hijack it, regardless of who the
+// account was originally linked to.
+var ErrOIDCSubjectAlreadyLinked = errors.New("account already linked to a different oidc subject")
+
 // firstAdminSetupLockKey is an arbitrary, fixed Postgres advisory-lock key
 // (add-first-run-setup) — serializes concurrent CreateFirstAdmin calls
 // against each other for the lifetime of one transaction each, so "is the
@@ -105,16 +115,27 @@ func (r *UserRepo) GetByOIDCSubject(ctx context.Context, subject string) (domain
 // LinkOIDCSubject backfills oidc_subject onto an existing account
 // (add-sso-oidc) — used the first time a pre-existing, password-based
 // account's verified email matches an OIDC login, so subsequent logins
-// match by subject even if the email later changes at the IdP.
+// match by subject even if the email later changes at the IdP. Only
+// succeeds while oidc_subject is still unset: an account already linked to
+// a subject never gets silently rebound to a different one (see
+// ErrOIDCSubjectAlreadyLinked).
 func (r *UserRepo) LinkOIDCSubject(ctx context.Context, id, subject string) error {
-	tag, err := r.pool.Exec(ctx, `UPDATE users SET oidc_subject = $2 WHERE id = $1`, id, subject)
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE users SET oidc_subject = $2 WHERE id = $1 AND oidc_subject IS NULL`, id, subject)
 	if err != nil {
 		return err
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
+	if tag.RowsAffected() > 0 {
+		return nil
 	}
-	return nil
+	var exists bool
+	if err := r.pool.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, id).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		return ErrOIDCSubjectAlreadyLinked
+	}
+	return ErrNotFound
 }
 
 func (r *UserRepo) Get(ctx context.Context, id string) (domain.User, error) {

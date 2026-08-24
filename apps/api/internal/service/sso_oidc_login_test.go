@@ -94,18 +94,46 @@ func TestOIDCLoginRejectsUnverifiedEmailColludingWithExistingAccount(t *testing.
 	}
 }
 
-func TestOIDCLoginProvisionsNewAccountForUnverifiedEmailWithNoCollision(t *testing.T) {
+func TestOIDCLoginRejectsUnverifiedEmailWithNoCollision(t *testing.T) {
 	s := testServiceWithOIDC(t, nil)
 	ctx := context.Background()
 
-	_, user, err := s.OIDCLogin(ctx, service.OIDCClaims{
+	_, _, err := s.OIDCLogin(ctx, service.OIDCClaims{
 		Subject: "subject-4b", Email: "brand-new-unverified@example.com", EmailVerified: false,
 	})
-	if err != nil {
-		t.Fatalf("OIDCLogin: %v", err)
+	if err == nil {
+		t.Fatal("expected an error rejecting the login, got nil")
 	}
-	if user.Email != "brand-new-unverified@example.com" {
-		t.Errorf("Email = %q, want brand-new-unverified@example.com", user.Email)
+}
+
+func TestOIDCLoginRefusesToRebindAlreadyLinkedAccount(t *testing.T) {
+	s := testServiceWithOIDC(t, nil)
+	ctx := context.Background()
+	mustCreateUser(t, s, "rebind-target@example.com", "correcthorsebatterystaple1", false)
+
+	_, first, err := s.OIDCLogin(ctx, service.OIDCClaims{
+		Subject: "subject-legit", Email: "rebind-target@example.com", EmailVerified: true,
+	})
+	if err != nil {
+		t.Fatalf("first OIDCLogin: %v", err)
+	}
+
+	if _, _, err := s.OIDCLogin(ctx, service.OIDCClaims{
+		Subject: "subject-attacker", Email: "rebind-target@example.com", EmailVerified: true,
+	}); err == nil {
+		t.Fatal("expected an error rejecting the rebind attempt, got nil")
+	}
+
+	// The account must remain reachable via its original, legitimate
+	// subject — a rejected rebind attempt must not have disturbed it.
+	_, second, err := s.OIDCLogin(ctx, service.OIDCClaims{
+		Subject: "subject-legit", Email: "rebind-target@example.com", EmailVerified: true,
+	})
+	if err != nil {
+		t.Fatalf("OIDCLogin with original subject after rejected rebind: %v", err)
+	}
+	if second.ID != first.ID {
+		t.Errorf("second.ID = %q, want %q (original account unchanged)", second.ID, first.ID)
 	}
 }
 

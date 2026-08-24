@@ -186,21 +186,41 @@ set at `oidcLogin` to the same value as the `state` query param, checked
 callback to the browser that started it without needing server-side
 storage; this is additive to the signed payload, not a replacement for it.
 
-### D3: Account matching — `oidc_subject` first, then by email (verified only), then JIT-provision
+### D3: Account matching — `oidc_subject` first, then by verified email only, else reject
 `users` gains a nullable, unique `oidc_subject` column. On callback: look up
 by `oidc_subject` (stable across IdP-side email changes) first. If that
-misses, look up by the ID token's `email` claim:
+misses, an unverified email (`email_verified` not `true`) is rejected
+outright — whether or not an existing account holds that email. An earlier
+revision of this design JIT-provisioned a brand-new account regardless of
+the email-verified flag, reasoning "nothing to collide with, so it's safe."
+A security review after this shipped correctly identified that reasoning as
+wrong: any identity provider that lets a user self-assert an arbitrary,
+unverified email (open-registration/self-service IdPs commonly do, and the
+whole point of `email_verified` is to flag exactly this) would let an
+attacker squat a colleague's real email — an admin's, say — before that
+colleague ever logs in via SSO themselves, then inherit whatever access a
+Tenant Admin later grants that email address. Requiring verification up
+front closes that gap for both branches:
 - **An account with that email already exists.** `users.email` is unique,
   so there is no way to create a second, distinct account with the same
-  email — the only choices are link or reject. Link (backfilling
-  `oidc_subject`) only when the IdP asserts `email_verified: true`;
-  otherwise reject the login outright (discovered during implementation —
-  an early draft of this design tried to "create a distinct account
-  instead," which is impossible under the unique constraint and was caught
-  by the first test asserting it).
-- **No account holds that email yet.** Nothing to collide with, so
-  JIT-provision regardless of the email-verified flag — verification only
-  matters when it's being used to decide trust in an *existing* account.
+  email — the only choices are link or reject (discovered during
+  implementation — an early draft of this design tried to "create a
+  distinct account instead," which is impossible under the unique
+  constraint and was caught by the first test asserting it). Also refuse
+  to overwrite an account's `oidc_subject` if it's already linked to a
+  *different* subject — a second security-review finding: silently
+  rebinding on every verified-email match would let anyone who can obtain
+  a verified-email assertion for that address hijack an already-linked
+  account outright.
+- **No account holds that email yet.** JIT-provision — but only once the
+  email-verified check above has already passed.
+
+This does mean SSO login never works against an IdP that never asserts
+`email_verified` at all. In practice this is a narrow cost: Dex, Okta,
+Entra ID, and Google Workspace all default it to `true` for their
+directory-backed accounts (verified while implementing this fix, not
+assumed) — it only bites IdPs that deliberately leave identity
+unverified, which is exactly the case worth rejecting.
 
 A JIT-provisioned account's display name defaults the same way
 `Service.CreateUser`'s does (`domain.DefaultDisplayName`).
