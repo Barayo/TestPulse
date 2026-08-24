@@ -36,6 +36,11 @@ func mountAuth(r chi.Router, h *api, perMinute float64, burst int) {
 	forgotPasswordLimiter := newLoginRateLimiter(rate.Limit(perMinute/60), burst)
 	r.With(forgotPasswordLimiter.middleware).Post("/auth/forgot-password", h.forgotPassword)
 	r.Post("/auth/reset-password", h.resetPassword)
+
+	// OIDC/SSO (add-sso-oidc) — h.oidcAuth is nil whenever OIDC isn't
+	// configured, in which case both handlers 404.
+	r.Get("/auth/oidc/login", h.oidcLogin)
+	r.Get("/auth/oidc/callback", h.oidcCallback)
 }
 
 // mountIdentity registers the users/tokens/audit routes. The caller mounts

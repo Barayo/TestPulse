@@ -46,6 +46,13 @@ func hashToken(raw string) string {
 // (unknown email, wrong password, deactivated account) so a caller cannot
 // distinguish which is the case.
 func (s *Service) Login(ctx context.Context, email, password string) (domain.Session, domain.User, error) {
+	settings, err := s.store.InstanceSettings.Get(ctx)
+	if err != nil {
+		return domain.Session{}, domain.User{}, err
+	}
+	if settings.OIDCOnly {
+		return domain.Session{}, domain.User{}, unauthorized("password login is disabled; sign in with SSO")
+	}
 	if email == "" || password == "" {
 		return domain.Session{}, domain.User{}, unauthorized("invalid email or password")
 	}
@@ -281,6 +288,13 @@ func (s *Service) ForgotPassword(ctx context.Context, email string) error {
 	if !s.passwordResetEnabled {
 		return nil
 	}
+	settings, err := s.store.InstanceSettings.Get(ctx)
+	if err != nil {
+		return err
+	}
+	if settings.OIDCOnly {
+		return nil
+	}
 	user, _, err := s.store.Users.GetByEmailWithHash(ctx, email)
 	if errors.Is(err, store.ErrNotFound) {
 		return nil
@@ -415,6 +429,13 @@ func generateTemporaryPassword() (string, error) {
 // revokes every existing session for the account — a session's validity
 // is never re-derived from the password hash.
 func (s *Service) ResetPassword(ctx context.Context, token, newPassword string) error {
+	settings, err := s.store.InstanceSettings.Get(ctx)
+	if err != nil {
+		return err
+	}
+	if settings.OIDCOnly {
+		return invalid("invalid or expired reset link")
+	}
 	if err := domain.ValidatePassword(newPassword); err != nil {
 		return invalid("%s", err)
 	}

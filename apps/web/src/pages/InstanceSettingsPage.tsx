@@ -9,10 +9,12 @@ import { PaletteSwatch, PRESETS } from '@/components/PaletteSwatchSelector'
 import { CustomPaletteEditor } from '@/components/CustomPaletteEditor'
 import { PRESET_PALETTES } from '@/lib/presetPalettes'
 import { Switch } from '@/components/ui/switch'
+import { SSOSettingsCard } from '@/components/SSOSettingsCard'
 import type { CustomPalette } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
 
 type ColorTheme = components['schemas']['ColorTheme']
+type InstanceSettings = components['schemas']['InstanceSettings']
 
 // Tenant-Admin-only instance-wide settings (enable-public-project-access,
 // add-data-retention). Self-gates the same way RolesPage.tsx/PeoplePage.tsx
@@ -27,6 +29,7 @@ export default function InstanceSettingsPage() {
   const [customPalette, setCustomPalette] = useState<CustomPalette>()
   const [showCustomEditor, setShowCustomEditor] = useState(false)
   const [savingCustomPalette, setSavingCustomPalette] = useState(false)
+  const [ssoSettings, setSsoSettings] = useState<InstanceSettings>()
 
   useEffect(() => {
     if (!me?.isTenantAdmin) return
@@ -38,6 +41,7 @@ export default function InstanceSettingsPage() {
       setColorTheme(data.colorTheme)
       setCustomPalette(data.customPalette ?? undefined)
       if (data.colorTheme === 'custom') setShowCustomEditor(true)
+      setSsoSettings(data)
     })
   }, [me])
 
@@ -249,27 +253,7 @@ export default function InstanceSettingsPage() {
           <LockIcon className="size-3.5" aria-hidden="true" />
           Authentication
         </div>
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex items-center gap-3 opacity-60">
-              <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                <LockIcon className="size-4" aria-hidden="true" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-muted-foreground">Require SSO sign-in</span>
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
-                    Coming with SSO (v0.2)
-                  </span>
-                </div>
-                <span className="block text-xs text-muted-foreground">
-                  Block password login instance-wide once an identity provider is configured.
-                </span>
-              </div>
-              <Switch aria-label="Require SSO sign-in" checked={false} disabled />
-            </div>
-          </CardContent>
-        </Card>
+        {ssoSettings && <SSOSettingsCard settings={ssoSettings} onSettingsChange={setSsoSettings} />}
       </section>
     </AdminShell>
   )

@@ -155,6 +155,114 @@ func TestInstanceSettingsUpdateAppliesCustomPaletteAndRoundTripsAllFields(t *tes
 	}
 }
 
+func TestInstanceSettingsGetReturnsOIDCDefaults(t *testing.T) {
+	s := testStore(t)
+	got, err := s.InstanceSettings.Get(context.Background())
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.OIDCIssuer != "" || got.OIDCClientID != "" || got.OIDCClientSecretSet ||
+		got.OIDCGroupClaim != "" || len(got.OIDCAdminClaimValues) != 0 || got.OIDCOnly {
+		t.Errorf("got = %+v, want all OIDC fields unset/false", got)
+	}
+}
+
+func TestInstanceSettingsUpdateRoundTripsOIDCFields(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	issuer := "https://idp.example.com"
+	clientID := "testpulse"
+	secret := []byte("encrypted-bytes-not-real-crypto")
+	groupClaim := "groups"
+	adminValues := []string{"admins", "platform-team"}
+	oidcOnly := true
+
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{
+		OIDCIssuer: &issuer, OIDCClientID: &clientID,
+		OIDCGroupClaim: &groupClaim, OIDCAdminClaimValues: &adminValues,
+		OIDCOnly: &oidcOnly,
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if err := s.InstanceSettings.SetOIDCClientSecret(ctx, secret); err != nil {
+		t.Fatalf("SetOIDCClientSecret: %v", err)
+	}
+
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.OIDCIssuer != issuer || got.OIDCClientID != clientID || !got.OIDCClientSecretSet ||
+		got.OIDCGroupClaim != groupClaim || !got.OIDCOnly {
+		t.Errorf("got = %+v", got)
+	}
+	if len(got.OIDCAdminClaimValues) != 2 || got.OIDCAdminClaimValues[0] != "admins" || got.OIDCAdminClaimValues[1] != "platform-team" {
+		t.Errorf("OIDCAdminClaimValues = %v", got.OIDCAdminClaimValues)
+	}
+
+	gotSecret, err := s.InstanceSettings.GetOIDCClientSecret(ctx)
+	if err != nil {
+		t.Fatalf("GetOIDCClientSecret: %v", err)
+	}
+	if string(gotSecret) != string(secret) {
+		t.Errorf("GetOIDCClientSecret = %q, want %q", gotSecret, secret)
+	}
+}
+
+func TestInstanceSettingsUpdateOmittingOIDCClientSecretLeavesItUnchanged(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	secret := []byte("original-secret-bytes")
+	if err := s.InstanceSettings.SetOIDCClientSecret(ctx, secret); err != nil {
+		t.Fatalf("SetOIDCClientSecret: %v", err)
+	}
+
+	issuer := "https://idp.example.com"
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{OIDCIssuer: &issuer}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+
+	got, err := s.InstanceSettings.GetOIDCClientSecret(ctx)
+	if err != nil {
+		t.Fatalf("GetOIDCClientSecret: %v", err)
+	}
+	if string(got) != string(secret) {
+		t.Errorf("GetOIDCClientSecret = %q, want unchanged %q", got, secret)
+	}
+}
+
+func TestInstanceSettingsDisableOIDCClearsEveryField(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	issuer, clientID, groupClaim := "https://idp.example.com", "testpulse", "groups"
+	adminValues := []string{"admins"}
+	oidcOnly := true
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{
+		OIDCIssuer: &issuer, OIDCClientID: &clientID, OIDCGroupClaim: &groupClaim,
+		OIDCAdminClaimValues: &adminValues, OIDCOnly: &oidcOnly,
+	}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	if err := s.InstanceSettings.SetOIDCClientSecret(ctx, []byte("secret")); err != nil {
+		t.Fatalf("SetOIDCClientSecret: %v", err)
+	}
+
+	disable := true
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{DisableOIDC: &disable}); err != nil {
+		t.Fatalf("Update (disable): %v", err)
+	}
+
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.OIDCIssuer != "" || got.OIDCClientID != "" || got.OIDCClientSecretSet ||
+		got.OIDCGroupClaim != "" || len(got.OIDCAdminClaimValues) != 0 || got.OIDCOnly {
+		t.Errorf("got = %+v, want everything cleared after DisableOIDC", got)
+	}
+}
+
 func TestInstanceSettingsUpdateAppliesAutoArchiveInactiveDaysIndependently(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

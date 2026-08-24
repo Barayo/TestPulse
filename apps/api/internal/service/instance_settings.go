@@ -67,12 +67,73 @@ func (s *Service) UpdateInstanceSettings(ctx context.Context, upd domain.Instanc
 			return domain.InstanceSettings{}, err
 		}
 	}
+	// add-sso-oidc design.md D7: a client secret can only ever be stored
+	// encrypted — reject outright rather than silently store it in
+	// plaintext or silently drop it.
+	if upd.OIDCClientSecret != nil && s.encryptionKey == "" {
+		return domain.InstanceSettings{}, invalid("TESTPULSE_ENCRYPTION_KEY must be configured to store an OIDC client secret")
+	}
+	var current domain.InstanceSettings
+	if upd.DisableOIDC == nil && (upd.OIDCOnly != nil || upd.OIDCIssuer != nil || upd.OIDCClientID != nil || upd.OIDCClientSecret != nil) {
+		var err error
+		current, err = s.store.InstanceSettings.Get(ctx)
+		if err != nil {
+			return domain.InstanceSettings{}, err
+		}
+	}
+	if upd.OIDCOnly != nil && *upd.OIDCOnly {
+		// design.md D6: SSO-only has no break-glass, so it must never be
+		// enabled while SSO itself isn't fully configured — that would
+		// lock out every login with no way back in short of a direct DB
+		// edit.
+		issuer, clientID := current.OIDCIssuer, current.OIDCClientID
+		if upd.OIDCIssuer != nil {
+			issuer = *upd.OIDCIssuer
+		}
+		if upd.OIDCClientID != nil {
+			clientID = *upd.OIDCClientID
+		}
+		secretSet := current.OIDCClientSecretSet || upd.OIDCClientSecret != nil
+		if issuer == "" || clientID == "" || !secretSet {
+			return domain.InstanceSettings{}, invalid("cannot enable SSO-only until an issuer, client ID, and client secret are all configured")
+		}
+	}
+
 	settings, err := s.store.InstanceSettings.Update(ctx, upd)
 	if err != nil {
 		return domain.InstanceSettings{}, err
 	}
+	if upd.OIDCClientSecret != nil {
+		encrypted, err := encryptSecret(s.encryptionKey, *upd.OIDCClientSecret)
+		if err != nil {
+			return domain.InstanceSettings{}, err
+		}
+		if err := s.store.InstanceSettings.SetOIDCClientSecret(ctx, encrypted); err != nil {
+			return domain.InstanceSettings{}, err
+		}
+		settings.OIDCClientSecretSet = true
+	}
 	s.audit(ctx, "update", "instance_settings", "")
 	return settings, nil
+}
+
+// DecryptedOIDCClientSecret returns the plaintext OIDC client secret,
+// decrypted with the configured encryption key — used only by the server
+// layer to build an OIDCAuthenticator, never exposed via InstanceSettings.
+// ok is false when no secret has ever been stored.
+func (s *Service) DecryptedOIDCClientSecret(ctx context.Context) (secret string, ok bool, err error) {
+	encrypted, err := s.store.InstanceSettings.GetOIDCClientSecret(ctx)
+	if err != nil {
+		return "", false, err
+	}
+	if len(encrypted) == 0 {
+		return "", false, nil
+	}
+	plaintext, err := decryptSecret(s.encryptionKey, encrypted)
+	if err != nil {
+		return "", false, err
+	}
+	return plaintext, true, nil
 }
 
 // ListPublicProjects returns every project eligible for the anonymous

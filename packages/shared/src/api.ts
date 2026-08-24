@@ -1275,6 +1275,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/oidc/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start OIDC/SSO login (add-sso-oidc)
+         * @description Redirects to the configured identity provider's authorization endpoint (Authorization Code + PKCE), carrying a signed `state` that encodes the PKCE verifier and nonce rather than any server-side session — see design.md D2. 404s entirely when OIDC isn't configured.
+         */
+        get: operations["oidcLogin"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/oidc/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OIDC/SSO callback — completes login (add-sso-oidc)
+         * @description Exchanges the authorization code, verifies the ID token (signature, issuer, audience, nonce), resolves or JIT-provisions the account, applies claim-based Tenant Admin mapping, and starts a session exactly like a password login would. 404s entirely when OIDC isn't configured.
+         */
+        get: operations["oidcCallback"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/logout": {
         parameters: {
             query?: never;
@@ -1635,6 +1675,46 @@ export interface paths {
         post: operations["addTeamMember"];
         /** Remove a user from a team (Tenant Admin only) */
         delete: operations["removeTeamMember"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/team-mappings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List claim→Team mappings (Tenant Admin only, add-sso-oidc)
+         * @description Configured {claimValue, Team} pairs (design.md D10) — on every OIDC login, a user whose ID token's group claim includes claimValue is added to that Team if not already a member. Additive only: losing the claim value never removes membership.
+         */
+        get: operations["listOidcTeamMappings"];
+        put?: never;
+        /** Create a claim→Team mapping (Tenant Admin only, add-sso-oidc) */
+        post: operations["createOidcTeamMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sso/team-mappings/{mappingId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mappingId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete a claim→Team mapping (Tenant Admin only, add-sso-oidc) */
+        delete: operations["deleteOidcTeamMapping"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2204,6 +2284,10 @@ export interface components {
             colorTheme: components["schemas"]["ColorTheme"];
             /** @description Present only when colorTheme is "custom" — every visitor, including anonymous ones, needs the full palette to render it (add-color-theme-customization), the same reasoning that already put publicProjectsEnabled here for non-admin visibility. */
             customPalette?: components["schemas"]["CustomPalette"] | null;
+            /** @description OIDC/SSO login (add-sso-oidc) is configured (TESTPULSE_OIDC_ISSUER/_CLIENT_ID/_CLIENT_SECRET + TESTPULSE_PUBLIC_URL). The login page renders a "Sign in with SSO" action only when true. */
+            ssoEnabled: boolean;
+            /** @description Password-based login and password recovery are disabled instance-wide (TESTPULSE_OIDC_ONLY, only takes effect when ssoEnabled is also true). The login page renders only the SSO action when true, hiding the password form entirely. */
+            ssoOnly: boolean;
         };
         /**
          * @description The instance-wide color palette (add-color-theme-customization). "teal" is the unchanged default; indigo/ocean/forest are built-in presets; "custom" means the Tenant-Admin-authored CustomPalette is active.
@@ -2247,6 +2331,18 @@ export interface components {
             customPalette?: components["schemas"]["CustomPalette"] | null;
             /** Format: date-time */
             updatedAt: string;
+            /** @description OIDC/SSO issuer URL (add-sso-oidc), empty when not configured. */
+            oidcIssuer?: string;
+            /** @description OIDC/SSO client ID, empty when not configured. */
+            oidcClientId?: string;
+            /** @description Whether an OIDC client secret is currently stored — the secret itself is never returned by any read, only this flag. */
+            oidcClientSecretSet: boolean;
+            /** @description The ID-token claim name whose values feed both the Tenant Admin mapping and claim→Team mapping (add-sso-oidc). */
+            oidcGroupClaim?: string;
+            /** @description Claim values that grant Tenant Admin on every OIDC login. */
+            oidcAdminClaimValues?: string[];
+            /** @description Password-based login and password recovery are disabled instance-wide. Only takes effect while OIDC is configured. */
+            oidcOnly: boolean;
         };
         /** @description A partial update — every field is optional; omitted fields are left unchanged. */
         InstanceSettingsUpdate: {
@@ -2255,6 +2351,15 @@ export interface components {
             autoArchiveInactiveDays?: number;
             colorTheme?: components["schemas"]["ColorTheme"];
             customPalette?: components["schemas"]["CustomPalette"];
+            oidcIssuer?: string;
+            oidcClientId?: string;
+            /** @description Write-only (add-sso-oidc) — encrypted at rest before storage, never echoed back by any read. Omit to leave the currently stored secret unchanged. */
+            oidcClientSecret?: string;
+            oidcGroupClaim?: string;
+            oidcAdminClaimValues?: string[];
+            oidcOnly?: boolean;
+            /** @description Clears every OIDC/SSO field at once (add-sso-oidc) — a dedicated action rather than blanking oidcIssuer as a sentinel. */
+            disableSso?: boolean;
         };
         User: {
             id: string;
@@ -2391,6 +2496,15 @@ export interface components {
         };
         TeamInput: {
             name: string;
+        };
+        OIDCTeamMapping: {
+            id: string;
+            claimValue: string;
+            teamId: string;
+        };
+        OIDCTeamMappingInput: {
+            claimValue: string;
+            teamId: string;
         };
         TeamUpdate: {
             name: string;
@@ -4627,6 +4741,60 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    oidcLogin: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Redirect to the identity provider */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description OIDC is not configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    oidcCallback: {
+        parameters: {
+            query: {
+                code: string;
+                state: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authenticated; a session cookie is set */
+            302: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            /** @description OIDC is not configured */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     logout: {
         parameters: {
             query?: never;
@@ -5287,6 +5455,78 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Team"];
                 };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listOidcTeamMappings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All configured mappings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCTeamMapping"][];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    createOidcTeamMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OIDCTeamMappingInput"];
+            };
+        };
+        responses: {
+            /** @description Created mapping */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OIDCTeamMapping"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    deleteOidcTeamMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                mappingId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];

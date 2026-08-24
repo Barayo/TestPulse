@@ -19,7 +19,17 @@ type ReadinessChecker interface {
 	Ready(ctx context.Context) error
 }
 
-func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, loginRateLimitPerMinute float64, loginRateLimitBurst int) http.Handler {
+// SSOConfig bundles what the server layer needs to (re)build an
+// OIDCAuthenticator on demand (add-sso-oidc design.md D8) — a nil SSOConfig
+// (or a zero-value one) means SSO starts unconfigured, same as passing nil
+// for a manager alone used to mean.
+type SSOConfig struct {
+	Manager       *OIDCManager
+	PublicURL     string
+	EncryptionKey string
+}
+
+func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, loginRateLimitPerMinute float64, loginRateLimitBurst int, sso *SSOConfig) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
@@ -28,10 +38,16 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 	r.Get("/healthz", handleLiveness)
 	r.Get("/readyz", handleReadiness(logger, readiness))
 
-	h := &api{logger: logger, svc: svc}
+	if sso == nil {
+		sso = &SSOConfig{}
+	}
+	if sso.Manager == nil {
+		sso.Manager = NewOIDCManager()
+	}
+	h := &api{logger: logger, svc: svc, oidcManager: sso.Manager, publicURL: sso.PublicURL, encryptionKey: sso.EncryptionKey}
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Get("/meta", handleMeta(svc))
+		r.Get("/meta", handleMeta(svc, sso.Manager))
 		r.Post("/setup", h.setupFirstAdmin)
 		mountAuth(r, h, loginRateLimitPerMinute, loginRateLimitBurst)
 		mountPublicAPI(r, h)
@@ -44,6 +60,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 			mountTeams(r, h)
 			mountRoles(r, h)
 			mountCustomFields(r, h)
+			mountOIDCTeamMappings(r, h)
 			r.With(requireTenantAdmin).Get("/instance-settings", h.getInstanceSettings)
 			r.With(requireTenantAdmin).Patch("/instance-settings", h.updateInstanceSettings)
 		})
@@ -83,7 +100,7 @@ func handleReadiness(logger *slog.Logger, readiness ReadinessChecker) http.Handl
 // both the anonymous public frontend and the authenticated Project Settings
 // page (to decide whether to gray out its own "Public access" toggle).
 // Reveals nothing sensitive.
-func handleMeta(svc *service.Service) http.HandlerFunc {
+func handleMeta(svc *service.Service, oidcManager *OIDCManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		settings, err := svc.InstanceSettings(r.Context())
 		if err != nil {
@@ -95,13 +112,21 @@ func handleMeta(svc *service.Service) http.HandlerFunc {
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
 			return
 		}
+		passwordResetEnabled, err := svc.PasswordResetEnabled(r.Context())
+		if err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
+			return
+		}
+		ssoEnabled := oidcManager.Get() != nil
 		body := map[string]any{
 			"name":                  "TestPulse",
 			"version":               "0.0.1",
 			"publicProjectsEnabled": settings.PublicProjectsEnabled,
-			"passwordResetEnabled":  svc.PasswordResetEnabled(),
+			"passwordResetEnabled":  passwordResetEnabled,
 			"setupRequired":         !hasAnyUser,
 			"colorTheme":            settings.ColorTheme,
+			"ssoEnabled":            ssoEnabled,
+			"ssoOnly":               ssoEnabled && settings.OIDCOnly,
 		}
 		if settings.ColorTheme == "custom" && settings.CustomPalette != nil {
 			body["customPalette"] = settings.CustomPalette

@@ -168,6 +168,9 @@ export default function SetupPage() {
               {submitting ? 'Creating…' : 'Create admin account'}
             </Button>
             {error && <p className="text-sm text-destructive">{error}</p>}
+            <p className="text-center text-xs text-muted-foreground">
+              You can configure single sign-on later from Instance Settings.
+            </p>
           </form>
         </CardContent>
       </Card>

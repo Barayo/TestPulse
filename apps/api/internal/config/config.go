@@ -33,6 +33,13 @@
 //	                        migration-history gap; leave it off otherwise,
 //	                        since it's the check that catches that gap in
 //	                        the first place.
+//	TESTPULSE_ENCRYPTION_KEY
+//	                        (optional) symmetric key used to encrypt the
+//	                        OIDC client secret at rest (add-sso-oidc) —
+//	                        required only once a Tenant Admin actually saves
+//	                        one via the Instance Settings "Single sign-on"
+//	                        card; OIDC configuration itself is DB-backed
+//	                        (instance_settings), not an env var.
 package config
 
 import (
@@ -55,12 +62,16 @@ type Config struct {
 	LoginRateLimitPerMinute float64
 	LoginRateLimitBurst     int
 	AllowMissingMigrations  bool
+	EncryptionKey           string
 }
 
 // PasswordResetEnabled reports whether enough is configured to send a
 // password-reset email — host/port/from-address and PublicURL (needed to
 // build an absolute reset link) are required; username/password may stay
 // blank for an unauthenticated relay (e.g. Mailpit in the compose stack).
+// This only reflects SMTP configuration; SSO-only mode (a DB-backed,
+// runtime-editable setting — add-sso-oidc) is checked separately by
+// Service.PasswordResetEnabled, since it can change without a restart.
 func (c Config) PasswordResetEnabled() bool {
 	return c.SMTPHost != "" && c.SMTPPort != "" && c.SMTPFromAddress != "" && c.PublicURL != ""
 }
@@ -82,6 +93,7 @@ func Load(getenv func(string) string) (Config, error) {
 		SMTPFromAddress:        getenv("TESTPULSE_SMTP_FROM_ADDRESS"),
 		PublicURL:              getenv("TESTPULSE_PUBLIC_URL"),
 		AllowMissingMigrations: getenv("TESTPULSE_ALLOW_MISSING_MIGRATIONS") == "true",
+		EncryptionKey:          getenv("TESTPULSE_ENCRYPTION_KEY"),
 	}
 
 	if cfg.DatabaseURL == "" {

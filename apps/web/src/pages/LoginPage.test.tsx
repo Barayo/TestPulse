@@ -185,6 +185,47 @@ describe('LoginPage', () => {
     expect(banner).not.toBeInTheDocument()
   })
 
+  it('shows both the password form and a Sign in with SSO action when SSO is configured', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { publicProjectsEnabled: false, ssoEnabled: true, ssoOnly: false }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLogin()
+
+    expect(await screen.findByLabelText(/email/i)).toBeInTheDocument()
+    const ssoLink = await screen.findByRole('link', { name: /sign in with sso/i })
+    expect(ssoLink).toHaveAttribute('href', '/api/v1/auth/oidc/login')
+  })
+
+  it('hides the password form entirely when SSO-only is enabled', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { publicProjectsEnabled: false, ssoEnabled: true, ssoOnly: true }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLogin()
+
+    expect(await screen.findByRole('link', { name: /sign in with sso/i })).toBeInTheDocument()
+    expect(screen.queryByLabelText(/email/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/password/i)).not.toBeInTheDocument()
+  })
+
+  it('renders exactly as before when SSO is not configured', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { publicProjectsEnabled: false, ssoEnabled: false, ssoOnly: false }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLogin()
+
+    expect(await screen.findByLabelText(/email/i)).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /sign in with sso/i })).not.toBeInTheDocument()
+  })
+
   it('falls back to the projects root when there is no redirect-back location', async () => {
     mockPOST.mockResolvedValue({
       data: { id: 'u1', email: 'a@b.com', isTenantAdmin: false },

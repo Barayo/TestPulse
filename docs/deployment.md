@@ -14,6 +14,7 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`, `TESTPULSE_LOGIN_RATE_LIMIT_BURST` | no | `5`, `5` | Login attempts allowed per client IP (backlog #113) — sustained rate and burst size. The defaults are a real brute-force mitigation; raise them only for a same-process environment that legitimately logs in often in quick succession (e.g. an E2E suite), never to relax production |
 | `TESTPULSE_SMTP_HOST`, `TESTPULSE_SMTP_PORT`, `TESTPULSE_SMTP_FROM_ADDRESS`, `TESTPULSE_PUBLIC_URL` | no | — | Enable self-service password recovery (add-forgot-password) — all four required together, plus optionally `TESTPULSE_SMTP_USERNAME`/`_PASSWORD` (may be left blank for an unauthenticated relay, e.g. Mailpit). `TESTPULSE_PUBLIC_URL` builds the absolute link in the reset email (e.g. `https://testpulse.example.com`). Reported as `passwordResetEnabled` on `GET /api/v1/meta`; the login page's "Forgot password?" link only renders when true |
 | `TESTPULSE_ALLOW_MISSING_MIGRATIONS` | no | `false` | Recovery escape hatch for a migration-history gap — see [Database](database.md). Only set temporarily to unblock a startup after that specific failure; leave off otherwise |
+| `TESTPULSE_ENCRYPTION_KEY` | no | — | Encrypts the OIDC/SSO client secret at rest (add-sso-oidc) — required only once a Tenant Admin actually saves one via Instance Settings' "Single sign-on" card. Treat it like any other production secret: back it up, don't rotate casually. Losing or changing it means re-entering the client secret (issuer/client ID/claim mappings are unaffected) |
 
 The process exits immediately with an error naming the variable if a required
 value is missing. Pending migrations (`apps/api/internal/db/migrations/` —
@@ -31,6 +32,38 @@ necessarily its intended operator, claims the admin account. **For any
 instance reachable by untrusted parties before setup completes**, either
 configure both admin env vars before first boot, or keep network access
 restricted until setup is done.
+
+**Single sign-on** (`add-sso-oidc`): unlike every other feature on this
+page, OIDC/SSO is *not* configured via environment variables — a Tenant
+Admin configures it at runtime from Instance Settings' "Single sign-on"
+card (issuer URL, client ID, client secret, an optional group-claim name
+and Tenant-Admin-granting values, and an SSO-only toggle), the same way
+public project access, run retention, and the color theme already are.
+Saving validates the issuer via live OIDC discovery
+(`<issuer>/.well-known/openid-configuration`) before persisting anything,
+so a typo or unreachable IdP is rejected immediately rather than silently
+breaking login later. Any spec-compliant identity provider works (Okta,
+Entra ID, Google Workspace, Keycloak, and similar).
+
+The first successful login for a given email just-in-time provisions a
+TestPulse account — no Tenant Admin action needed first — and a later
+login with the same, IdP-verified email links to that same account rather
+than creating a second one. A configured group claim can also grant Tenant
+Admin (re-evaluated every login: losing the claim value demotes on the
+next login) and map claim values to `Team`s the Settings card lists
+underneath — matching an IdP group adds the user to that Team on login
+(additive only; it never removes a Team membership when a claim value is
+later lost). Beyond that, an SSO-provisioned user starts with the same,
+empty set of project memberships a Tenant-Admin-created account would,
+assigned the usual way (`add-project-rbac`). Agents are unaffected — they
+always authenticate via scoped API tokens, never SSO.
+
+Verify SSO login works end-to-end before enabling the SSO-only toggle:
+there is no break-glass once password login is disabled short of a direct
+database edit (`instance_settings.oidc_only = false`). A restart re-reads
+whatever's saved and re-discovers the provider; a since-broken IdP at boot
+logs a warning and starts with SSO disabled rather than failing the whole
+process — SSO is a runtime admin setting, not deploy-time infra.
 
 ## Health endpoints
 

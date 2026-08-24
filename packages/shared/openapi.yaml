@@ -1362,6 +1362,38 @@ paths:
               schema: { $ref: "#/components/schemas/User" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/auth/oidc/login:
+    get:
+      operationId: oidcLogin
+      summary: Start OIDC/SSO login (add-sso-oidc)
+      description: >
+        Redirects to the configured identity provider's authorization
+        endpoint (Authorization Code + PKCE), carrying a signed `state`
+        that encodes the PKCE verifier and nonce rather than any
+        server-side session — see design.md D2. 404s entirely when OIDC
+        isn't configured.
+      tags: [auth]
+      responses:
+        "302": { description: Redirect to the identity provider }
+        "404": { description: OIDC is not configured }
+  /api/v1/auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      summary: OIDC/SSO callback — completes login (add-sso-oidc)
+      description: >
+        Exchanges the authorization code, verifies the ID token
+        (signature, issuer, audience, nonce), resolves or JIT-provisions
+        the account, applies claim-based Tenant Admin mapping, and starts
+        a session exactly like a password login would. 404s entirely when
+        OIDC isn't configured.
+      tags: [auth]
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Authenticated; a session cookie is set, redirects to the app }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: OIDC is not configured }
   /api/v1/auth/logout:
     post:
       operationId: logout
@@ -1789,6 +1821,56 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/sso/team-mappings:
+    get:
+      operationId: listOidcTeamMappings
+      summary: List claim→Team mappings (Tenant Admin only, add-sso-oidc)
+      description: >
+        Configured {claimValue, Team} pairs (design.md D10) — on every
+        OIDC login, a user whose ID token's group claim includes
+        claimValue is added to that Team if not already a member.
+        Additive only: losing the claim value never removes membership.
+      tags: [sso]
+      responses:
+        "200":
+          description: All configured mappings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OIDCTeamMapping" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createOidcTeamMapping
+      summary: Create a claim→Team mapping (Tenant Admin only, add-sso-oidc)
+      tags: [sso]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OIDCTeamMappingInput" }
+      responses:
+        "201":
+          description: Created mapping
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OIDCTeamMapping" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/sso/team-mappings/{mappingId}:
+    parameters:
+      - { name: mappingId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteOidcTeamMapping
+      summary: Delete a claim→Team mapping (Tenant Admin only, add-sso-oidc)
+      tags: [sso]
+      responses:
+        "204": { description: Deleted }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
@@ -2623,7 +2705,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly]
       properties:
         name:
           type: string
@@ -2666,6 +2748,20 @@ components:
             including anonymous ones, needs the full palette to render it
             (add-color-theme-customization), the same reasoning that already
             put publicProjectsEnabled here for non-admin visibility.
+        ssoEnabled:
+          type: boolean
+          description: >
+            OIDC/SSO login (add-sso-oidc) is configured
+            (TESTPULSE_OIDC_ISSUER/_CLIENT_ID/_CLIENT_SECRET +
+            TESTPULSE_PUBLIC_URL). The login page renders a "Sign in with
+            SSO" action only when true.
+        ssoOnly:
+          type: boolean
+          description: >
+            Password-based login and password recovery are disabled
+            instance-wide (TESTPULSE_OIDC_ONLY, only takes effect when
+            ssoEnabled is also true). The login page renders only the SSO
+            action when true, hiding the password form entirely.
     ColorTheme:
       type: string
       enum: [teal, indigo, ocean, forest, custom]
@@ -2700,7 +2796,7 @@ components:
         dark: { $ref: '#/components/schemas/CustomPaletteMode' }
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly]
       properties:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays:
@@ -2724,6 +2820,31 @@ components:
           allOf: [{ $ref: '#/components/schemas/CustomPalette' }]
           nullable: true
         updatedAt: { type: string, format: date-time }
+        oidcIssuer:
+          type: string
+          description: OIDC/SSO issuer URL (add-sso-oidc), empty when not configured.
+        oidcClientId:
+          type: string
+          description: OIDC/SSO client ID, empty when not configured.
+        oidcClientSecretSet:
+          type: boolean
+          description: >
+            Whether an OIDC client secret is currently stored — the secret
+            itself is never returned by any read, only this flag.
+        oidcGroupClaim:
+          type: string
+          description: >
+            The ID-token claim name whose values feed both the Tenant Admin
+            mapping and claim→Team mapping (add-sso-oidc).
+        oidcAdminClaimValues:
+          type: array
+          items: { type: string }
+          description: Claim values that grant Tenant Admin on every OIDC login.
+        oidcOnly:
+          type: boolean
+          description: >
+            Password-based login and password recovery are disabled
+            instance-wide. Only takes effect while OIDC is configured.
     InstanceSettingsUpdate:
       type: object
       description: A partial update — every field is optional; omitted fields are left unchanged.
@@ -2735,6 +2856,24 @@ components:
           $ref: '#/components/schemas/ColorTheme'
         customPalette:
           $ref: '#/components/schemas/CustomPalette'
+        oidcIssuer: { type: string }
+        oidcClientId: { type: string }
+        oidcClientSecret:
+          type: string
+          description: >
+            Write-only (add-sso-oidc) — encrypted at rest before storage,
+            never echoed back by any read. Omit to leave the currently
+            stored secret unchanged.
+        oidcGroupClaim: { type: string }
+        oidcAdminClaimValues:
+          type: array
+          items: { type: string }
+        oidcOnly: { type: boolean }
+        disableSso:
+          type: boolean
+          description: >
+            Clears every OIDC/SSO field at once (add-sso-oidc) — a
+            dedicated action rather than blanking oidcIssuer as a sentinel.
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]
@@ -2957,6 +3096,19 @@ components:
       required: [name]
       properties:
         name: { type: string }
+    OIDCTeamMapping:
+      type: object
+      required: [id, claimValue, teamId]
+      properties:
+        id: { type: string }
+        claimValue: { type: string }
+        teamId: { type: string }
+    OIDCTeamMappingInput:
+      type: object
+      required: [claimValue, teamId]
+      properties:
+        claimValue: { type: string }
+        teamId: { type: string }
     TeamUpdate:
       type: object
       required: [name]

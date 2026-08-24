@@ -115,6 +115,15 @@ func mountAPI(r chi.Router, h *api) {
 type api struct {
 	logger *slog.Logger
 	svc    *service.Service
+	// oidcManager holds the current OIDC authenticator, nil whenever
+	// OIDC/SSO isn't configured (add-sso-oidc) — oidcLogin/oidcCallback
+	// 404 in that case. Swappable at runtime (design.md D8), never a fixed
+	// value set once at construction.
+	oidcManager *OIDCManager
+	// publicURL/encryptionKey are boot-time config (SSOConfig) needed to
+	// (re)build an OIDCAuthenticator when SSO settings are saved.
+	publicURL     string
+	encryptionKey string
 }
 
 // respond writes v as JSON, mapping domain errors to status codes.

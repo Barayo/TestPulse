@@ -304,7 +304,16 @@ type InstanceSettings struct {
 	// or "custom" (add-color-theme-customization design.md).
 	ColorTheme    string         `json:"colorTheme"`
 	CustomPalette *CustomPalette `json:"customPalette,omitempty"`
-	UpdatedAt     time.Time      `json:"updatedAt"`
+	// OIDC/SSO settings (add-sso-oidc) — Tenant-Admin-configurable, same
+	// row as every other instance-wide setting. OIDCClientSecretSet is
+	// computed (never the raw or encrypted secret itself).
+	OIDCIssuer           string    `json:"oidcIssuer"`
+	OIDCClientID         string    `json:"oidcClientId"`
+	OIDCClientSecretSet  bool      `json:"oidcClientSecretSet"`
+	OIDCGroupClaim       string    `json:"oidcGroupClaim"`
+	OIDCAdminClaimValues []string  `json:"oidcAdminClaimValues"`
+	OIDCOnly             bool      `json:"oidcOnly"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 // InstanceSettingsUpdate is a partial update to InstanceSettings — nil
@@ -316,6 +325,30 @@ type InstanceSettingsUpdate struct {
 	AutoArchiveInactiveDays *int
 	ColorTheme              *string
 	CustomPalette           *CustomPalette
+	// OIDC/SSO fields (add-sso-oidc). OIDCClientSecret is write-only and
+	// plaintext at this layer — the service layer encrypts it before it
+	// reaches the store; nil leaves the currently-stored secret untouched.
+	// DisableOIDC, when true, clears every oidc_* field/column at once —
+	// a dedicated action rather than an empty-string sentinel (the same
+	// trap ClearAvatarKey already exists to avoid).
+	OIDCIssuer           *string
+	OIDCClientID         *string
+	OIDCClientSecret     *string
+	OIDCGroupClaim       *string
+	OIDCAdminClaimValues *[]string
+	OIDCOnly             *bool
+	DisableOIDC          *bool
+}
+
+// OIDCTeamMapping maps a single OIDC group-claim value to a Team
+// (add-sso-oidc design.md D10) — on every OIDC login, a user whose ID
+// token's group claim includes ClaimValue is added to TeamID if not
+// already a member. Additive only: losing the claim value does not
+// remove the membership.
+type OIDCTeamMapping struct {
+	ID         string `json:"id"`
+	ClaimValue string `json:"claimValue"`
+	TeamID     string `json:"teamId"`
 }
 
 // CustomPaletteMode is the 10 admin-editable tokens for one light/dark
@@ -874,6 +907,9 @@ type User struct {
 	DeactivatedAt      *time.Time `json:"deactivatedAt"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	MustChangePassword bool       `json:"mustChangePassword"`
+	// OIDCSubject links this account to an external OIDC identity
+	// (add-sso-oidc); internal linkage detail, never serialized to clients.
+	OIDCSubject *string `json:"-"`
 }
 
 // UserDeletionPreview is the "what does deleting this account remove"

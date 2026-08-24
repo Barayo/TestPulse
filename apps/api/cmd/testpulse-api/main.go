@@ -63,7 +63,10 @@ func run() error {
 			From: cfg.SMTPFromAddress,
 		},
 		cfg.PublicURL, cfg.PasswordResetEnabled(),
-	)
+	).WithEncryptionKey(cfg.EncryptionKey)
+
+	oidcManager := buildOIDCManager(ctx, logger, svc, cfg.PublicURL, cfg.EncryptionKey)
+	sso := &server.SSOConfig{Manager: oidcManager, PublicURL: cfg.PublicURL, EncryptionKey: cfg.EncryptionKey}
 
 	if err := svc.BootstrapAdmin(ctx, cfg.AdminEmail, cfg.AdminPassword); err != nil {
 		return fmt.Errorf("bootstrapping admin: %w", err)
@@ -93,7 +96,7 @@ func run() error {
 
 	srv := &http.Server{
 		Addr:              cfg.Addr,
-		Handler:           server.New(logger, db.NewHealth(pool), svc, cfg.LoginRateLimitPerMinute, cfg.LoginRateLimitBurst),
+		Handler:           server.New(logger, db.NewHealth(pool), svc, cfg.LoginRateLimitPerMinute, cfg.LoginRateLimitBurst, sso),
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
@@ -115,6 +118,40 @@ func run() error {
 		}
 		return err
 	}
+}
+
+// buildOIDCManager reads whatever SSO settings a Tenant Admin has already
+// saved and attempts discovery for them at boot, so a restart doesn't leave
+// SSO silently disabled. Unlike a bad database connection, a bad IdP is not
+// a fatal startup error (add-sso-oidc design.md D8) — SSO is a runtime
+// admin setting, not deploy-time infra config, so this logs a warning and
+// starts with SSO disabled instead of crash-looping the whole app over a
+// third-party dependency someone else configured.
+func buildOIDCManager(ctx context.Context, logger *slog.Logger, svc *service.Service, publicURL, encryptionKey string) *server.OIDCManager {
+	manager := server.NewOIDCManager()
+	settings, err := svc.InstanceSettings(ctx)
+	if err != nil {
+		logger.Warn("reading instance settings for SSO at startup", "error", err)
+		return manager
+	}
+	if settings.OIDCIssuer == "" || settings.OIDCClientID == "" || !settings.OIDCClientSecretSet {
+		return manager
+	}
+	secret, ok, err := svc.DecryptedOIDCClientSecret(ctx)
+	if err != nil || !ok {
+		logger.Warn("decrypting stored OIDC client secret at startup", "error", err)
+		return manager
+	}
+	auth, err := server.NewOIDCAuthenticator(ctx, server.OIDCAuthenticatorConfig{
+		Issuer: settings.OIDCIssuer, ClientID: settings.OIDCClientID, ClientSecret: secret,
+		PublicURL: publicURL, GroupClaim: settings.OIDCGroupClaim, StateSigningKey: encryptionKey,
+	})
+	if err != nil {
+		logger.Warn("discovering configured OIDC provider at startup; starting with SSO disabled", "error", err)
+		return manager
+	}
+	manager.Set(auth)
+	return manager
 }
 
 // seedSampleProjectIfEmpty seeds the always-on Sample Project once, on an

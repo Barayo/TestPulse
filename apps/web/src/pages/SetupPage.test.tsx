@@ -56,6 +56,12 @@ describe('SetupPage', () => {
     expect(screen.getByRole('button', { name: /create admin account/i })).toBeInTheDocument()
   })
 
+  it('mentions single sign-on can be configured later', async () => {
+    renderPage()
+    await screen.findByLabelText(/^email$/i)
+    expect(screen.getByText(/configure single sign-on later/i)).toBeInTheDocument()
+  })
+
   it('has no "back to log in" link — there is nowhere to go back to on first run', async () => {
     renderPage()
     await screen.findByLabelText(/^email$/i)

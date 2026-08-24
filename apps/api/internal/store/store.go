@@ -31,6 +31,7 @@ type Store struct {
 	InstanceSettings    *InstanceSettingsRepo
 	PasswordResetTokens *PasswordResetTokenRepo
 	CustomFields        *CustomFieldRepo
+	OIDCTeamMappings    *OIDCTeamMappingRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -52,6 +53,7 @@ func New(pool *pgxpool.Pool) *Store {
 		InstanceSettings:    &InstanceSettingsRepo{pool: pool},
 		PasswordResetTokens: &PasswordResetTokenRepo{pool: pool},
 		CustomFields:        &CustomFieldRepo{pool: pool},
+		OIDCTeamMappings:    &OIDCTeamMappingRepo{pool: pool},
 	}
 }
 

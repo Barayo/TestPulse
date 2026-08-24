@@ -57,6 +57,16 @@ type Service struct {
 	mailer               mailer.Sender
 	publicURL            string
 	passwordResetEnabled bool
+
+	// encryptionKey (TESTPULSE_ENCRYPTION_KEY) encrypts the OIDC client
+	// secret at rest (add-sso-oidc design.md D7) — wired via
+	// WithEncryptionKey. Empty means unset; saving a client secret without
+	// it configured is rejected (see UpdateInstanceSettings). Unlike
+	// oidc_only/the admin-claim mapping (both DB-backed and read live, since
+	// a Tenant Admin can change them without a restart), this genuinely is
+	// deploy-time config — rotating it would orphan any already-encrypted
+	// secret, so it's resolved once at construction like PublicURL.
+	encryptionKey string
 }
 
 func New(s *store.Store) *Service { return &Service{store: s} }
@@ -71,11 +81,28 @@ func (s *Service) WithMailer(sender mailer.Sender, publicURL string, enabled boo
 	return s
 }
 
+// WithEncryptionKey configures the key used to encrypt the OIDC client
+// secret at rest (add-sso-oidc design.md D7).
+func (s *Service) WithEncryptionKey(key string) *Service {
+	s.encryptionKey = key
+	return s
+}
+
 // PasswordResetEnabled reports whether this Service can send password-reset
 // email — surfaced on GET /api/v1/meta so the login page knows whether to
-// render the "Forgot password?" link (design.md).
-func (s *Service) PasswordResetEnabled() bool {
-	return s.passwordResetEnabled
+// render the "Forgot password?" link (design.md). SMTP configuration is a
+// boot-time snapshot (s.passwordResetEnabled); SSO-only (add-sso-oidc) is
+// DB-backed and read live, since a Tenant Admin can change it without a
+// restart — either one being true disables self-service recovery.
+func (s *Service) PasswordResetEnabled(ctx context.Context) (bool, error) {
+	if !s.passwordResetEnabled {
+		return false, nil
+	}
+	settings, err := s.store.InstanceSettings.Get(ctx)
+	if err != nil {
+		return false, err
+	}
+	return !settings.OIDCOnly, nil
 }
 
 // --- Projects ---

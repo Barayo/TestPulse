@@ -17,7 +17,7 @@ func bareAPIServer(t *testing.T) (http.Handler, *service.Service) {
 	t.Helper()
 	pool := testutil.Pool(t, "server")
 	svc := service.New(store.New(pool))
-	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5), svc
+	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, nil), svc
 }
 
 func TestScenario_SetupCreatesAdminAndLogsIn(t *testing.T) {

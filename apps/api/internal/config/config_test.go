@@ -240,3 +240,28 @@ func TestLoadAllowMissingMigrationsTrue(t *testing.T) {
 		t.Error("AllowMissingMigrations = false with TESTPULSE_ALLOW_MISSING_MIGRATIONS=true, want true")
 	}
 }
+
+func TestLoadEncryptionKeyOptional(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EncryptionKey != "" {
+		t.Errorf("EncryptionKey = %q, want empty by default", cfg.EncryptionKey)
+	}
+}
+
+func TestLoadEncryptionKeySet(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":   "postgres://localhost/testpulse",
+		"TESTPULSE_ENCRYPTION_KEY": "a-very-secret-passphrase",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.EncryptionKey != "a-very-secret-passphrase" {
+		t.Errorf("EncryptionKey = %q", cfg.EncryptionKey)
+	}
+}

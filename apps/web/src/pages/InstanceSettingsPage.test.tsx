@@ -75,13 +75,13 @@ describe('InstanceSettingsPage', () => {
     expect(screen.getByText('Access')).toBeInTheDocument()
   })
 
-  it('shows an "Authentication" section with a disabled, coming-soon SSO row', async () => {
+  it('shows an "Authentication" section with the Single sign-on card', async () => {
     mockAsTenantAdmin(true, true)
     renderPage()
     await screen.findByRole('switch', { name: /public project access/i })
     expect(screen.getByText('Authentication')).toBeInTheDocument()
-    expect(screen.getByText(/require sso sign-in/i)).toBeInTheDocument()
-    expect(screen.getByText(/coming with sso/i)).toBeInTheDocument()
+    expect(await screen.findByText('Single sign-on')).toBeInTheDocument()
+    expect(screen.getByRole('switch', { name: /sso-only/i })).toBeDisabled()
   })
 
   it('toggling it off calls PATCH /instance-settings and reflects the new state', async () => {
@@ -157,7 +157,7 @@ describe('InstanceSettingsPage', () => {
           body: { runRetentionDays: 90 },
         }),
       )
-      expect(screen.queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument()
+      expect(runRetentionGroup().queryByRole('button', { name: /^save$/i })).not.toBeInTheDocument()
     })
 
     it('entering and committing a custom value saves it without touching publicProjectsEnabled', async () => {

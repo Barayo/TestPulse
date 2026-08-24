@@ -1,0 +1,37 @@
+# Throwaway Dex config for manually testing add-sso-oidc against a real
+# OIDC provider. Not part of the shipped evaluation stack — see
+# docker-compose.dex.yml and its own comment for how this fits together.
+issuer: http://dex.localtest.me:5556/dex
+
+storage:
+  type: memory
+
+web:
+  http: 0.0.0.0:5556
+
+oauth2:
+  skipApprovalScreen: true
+
+staticClients:
+  - id: testpulse
+    secret: testpulse-dex-secret
+    name: TestPulse
+    redirectURIs:
+      - http://localhost:8080/api/v1/auth/oidc/callback
+
+# Two test accounts, both password "password" (bcrypt hash below). Set
+# TESTPULSE_OIDC_ADMIN_CLAIM=email and
+# TESTPULSE_OIDC_ADMIN_CLAIM_VALUES=sso-admin@example.com to demonstrate
+# claim-based admin mapping using the one claim Dex's static-password
+# connector always emits reliably — no groups/LDAP connector needed for a
+# one-off smoke test of an already-unit-tested code path.
+enablePasswordDB: true
+staticPasswords:
+  - email: "sso-user@example.com"
+    hash: "$2a$10$aZMiMIASA31QM0zdq/uFIOT0Q2nQfS7yna0hXWy8q1Woq0UprYH5q"
+    username: "sso-user"
+    userID: "08a8684b-db88-4b73-90a9-3cd1661f5466"
+  - email: "sso-admin@example.com"
+    hash: "$2a$10$aZMiMIASA31QM0zdq/uFIOT0Q2nQfS7yna0hXWy8q1Woq0UprYH5q"
+    username: "sso-admin"
+    userID: "18a8684b-db88-4b73-90a9-3cd1661f5467"

@@ -35,7 +35,7 @@ func apiServer(t *testing.T) http.Handler {
 	pool := testutil.Pool(t, "server")
 	svc := service.New(store.New(pool))
 	cookie := testutil.AuthCookie(t, svc)
-	return authInjectingHandler{inner: server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5), cookie: cookie}
+	return authInjectingHandler{inner: server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, nil), cookie: cookie}
 }
 
 // authInjectingHandler attaches a fixed Cookie header to any request that

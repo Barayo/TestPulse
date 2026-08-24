@@ -71,6 +71,52 @@ func (r *UserRepo) Create(ctx context.Context, email, passwordHash string, isTen
 	return u, err
 }
 
+// CreateSSO JIT-provisions a user with no password, linked to an external
+// OIDC identity by subject (add-sso-oidc) — the account can only ever be
+// authenticated via OIDC login unless a Tenant Admin later sets a password.
+func (r *UserRepo) CreateSSO(ctx context.Context, email, oidcSubject string) (domain.User, error) {
+	var u domain.User
+	err := r.pool.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, oidc_subject) VALUES ($1, NULL, $2)
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
+		email, oidcSubject,
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	return u, err
+}
+
+// GetByOIDCSubject looks up a user previously linked to an external OIDC
+// identity (add-sso-oidc) — this is the first, most stable match a login
+// attempt tries, ahead of matching by email.
+func (r *UserRepo) GetByOIDCSubject(ctx context.Context, subject string) (domain.User, bool, error) {
+	var u domain.User
+	err := r.pool.QueryRow(ctx,
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password
+		 FROM users WHERE oidc_subject = $1`, subject,
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.User{}, false, nil
+	}
+	if err != nil {
+		return domain.User{}, false, err
+	}
+	return u, true, nil
+}
+
+// LinkOIDCSubject backfills oidc_subject onto an existing account
+// (add-sso-oidc) — used the first time a pre-existing, password-based
+// account's verified email matches an OIDC login, so subsequent logins
+// match by subject even if the email later changes at the IdP.
+func (r *UserRepo) LinkOIDCSubject(ctx context.Context, id, subject string) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE users SET oidc_subject = $2 WHERE id = $1`, id, subject)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
 func (r *UserRepo) Get(ctx context.Context, id string) (domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
@@ -88,10 +134,12 @@ func (r *UserRepo) Get(ctx context.Context, id string) (domain.User, error) {
 
 // GetByEmailWithHash returns the user plus their bcrypt hash — the hash
 // never leaves the store/service layer, it exists only to be compared by
-// AuthService.Login.
+// AuthService.Login. An SSO-only account (add-sso-oidc) has no password
+// hash; this returns "" for it rather than erroring, since
+// bcrypt.CompareHashAndPassword already fails closed against an empty hash.
 func (r *UserRepo) GetByEmailWithHash(ctx context.Context, email string) (domain.User, string, error) {
 	var u domain.User
-	var hash string
+	var hash *string
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password, password_hash
 		 FROM users WHERE email = $1`, email,
@@ -102,7 +150,10 @@ func (r *UserRepo) GetByEmailWithHash(ctx context.Context, email string) (domain
 	if err != nil {
 		return domain.User{}, "", err
 	}
-	return u, hash, nil
+	if hash == nil {
+		return u, "", nil
+	}
+	return u, *hash, nil
 }
 
 // GetByIDWithHash is GetByEmailWithHash keyed by id — used by
@@ -112,7 +163,7 @@ func (r *UserRepo) GetByEmailWithHash(ctx context.Context, email string) (domain
 // user actor, not for an agent/token actor).
 func (r *UserRepo) GetByIDWithHash(ctx context.Context, id string) (domain.User, string, error) {
 	var u domain.User
-	var hash string
+	var hash *string
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password, password_hash
 		 FROM users WHERE id = $1`, id,
@@ -123,7 +174,10 @@ func (r *UserRepo) GetByIDWithHash(ctx context.Context, id string) (domain.User,
 	if err != nil {
 		return domain.User{}, "", err
 	}
-	return u, hash, nil
+	if hash == nil {
+		return u, "", nil
+	}
+	return u, *hash, nil
 }
 
 func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {

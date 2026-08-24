@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router'
 import { LoginForm } from '@/components/LoginForm'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { HealthBadge } from '@/components/HealthBadge'
 import { api } from '@/lib/api'
 
@@ -11,6 +12,8 @@ export default function LoginPage() {
   const location = useLocation()
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState(false)
   const [passwordResetEnabled, setPasswordResetEnabled] = useState(false)
+  const [ssoEnabled, setSsoEnabled] = useState(false)
+  const [ssoOnly, setSsoOnly] = useState(false)
 
   useEffect(() => {
     void api
@@ -19,6 +22,8 @@ export default function LoginPage() {
         if (data) {
           setPublicProjectsEnabled(data.publicProjectsEnabled)
           setPasswordResetEnabled(data.passwordResetEnabled)
+          setSsoEnabled(data.ssoEnabled)
+          setSsoOnly(data.ssoOnly)
         }
       })
       .catch(() => {})
@@ -56,20 +61,27 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="tp-heading">Log in to TestPulse</CardTitle>
         </CardHeader>
-        <CardContent>
-          <LoginForm
-            showForgotPassword={passwordResetEnabled}
-            onSuccess={() => {
-              // Returns to wherever RequireAuth bounced the user from (e.g. a session
-              // timeout mid-task) rather than always the projects root — if that page
-              // turns out to be inaccessible to whoever just logged in, its own
-              // "not found" handling (add-project-rbac) covers that gracefully now,
-              // so there's no need to sacrifice the common case (same user, expired
-              // session) to guard against the rarer one (a different user).
-              const from = (location.state as { from?: string } | null)?.from ?? '/'
-              navigate(from, { replace: true })
-            }}
-          />
+        <CardContent className="space-y-4">
+          {!ssoOnly && (
+            <LoginForm
+              showForgotPassword={passwordResetEnabled}
+              onSuccess={() => {
+                // Returns to wherever RequireAuth bounced the user from (e.g. a session
+                // timeout mid-task) rather than always the projects root — if that page
+                // turns out to be inaccessible to whoever just logged in, its own
+                // "not found" handling (add-project-rbac) covers that gracefully now,
+                // so there's no need to sacrifice the common case (same user, expired
+                // session) to guard against the rarer one (a different user).
+                const from = (location.state as { from?: string } | null)?.from ?? '/'
+                navigate(from, { replace: true })
+              }}
+            />
+          )}
+          {ssoEnabled && (
+            <Button asChild variant={ssoOnly ? 'default' : 'outline'} className="w-full">
+              <a href="/api/v1/auth/oidc/login">Sign in with SSO</a>
+            </Button>
+          )}
         </CardContent>
       </Card>
       {publicProjectsEnabled && (

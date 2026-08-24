@@ -1,0 +1,55 @@
+# Throwaway overlay for manually testing add-sso-oidc against a real OIDC
+# provider (Dex — https://dexidp.io) — NOT part of the shipped evaluation
+# stack. Usage, from the repository root:
+#
+#   docker compose -f deploy/compose/docker-compose.yml \
+#     -f deploy/compose/docker-compose.dex.yml up --build -d --wait
+#
+# SSO is Tenant-Admin-configured at runtime, not via env vars (design.md
+# D1) — after the stack is up, log in as the seeded admin
+# (admin@example.com / correcthorsebatterystaple), open Instance Settings'
+# "Single sign-on" card, and save:
+#   Issuer:        http://dex.localtest.me:5556/dex
+#   Client ID:     testpulse
+#   Client secret: testpulse-dex-secret
+#   Group claim:   email   (Dex's static-password connector has no groups
+#                  claim, so "email" doubles as the group claim for this
+#                  manual test — set Tenant Admin claim values to
+#                  sso-admin@example.com to test that mapping)
+# Then log out and visit http://localhost:8080/login → "Sign in with SSO".
+# Test accounts (password "password" for both):
+#   sso-user@example.com   — plain JIT-provisioned account
+#   sso-admin@example.com  — granted Tenant Admin once the claim above is set
+#
+# dex.localtest.me is a public DNS wildcard that always resolves to
+# 127.0.0.1 — used (instead of "localhost") so the *same* hostname resolves
+# correctly both from your browser (via real DNS, to 127.0.0.1, hitting
+# Dex's published port) and from the `app` container (via Docker's network
+# alias below, to the `dex` container directly) — the two audiences an
+# OIDC issuer URL needs to be reachable from at once.
+#
+# Tear down: docker compose -f deploy/compose/docker-compose.yml \
+#   -f deploy/compose/docker-compose.dex.yml down
+name: testpulse
+
+services:
+  dex:
+    image: dexidp/dex:v2.41.1
+    ports:
+      - "5556:5556"
+    volumes:
+      - ./dex-testing/dex-config.yaml:/etc/dex/config.yaml:ro
+    command: ["dex", "serve", "/etc/dex/config.yaml"]
+    networks:
+      default:
+        aliases:
+          - dex.localtest.me
+
+  app:
+    environment:
+      # Only needed to encrypt the client secret you'll enter through the
+      # Settings UI — see the comment above for the actual SSO values.
+      TESTPULSE_ENCRYPTION_KEY: dev-only-encryption-key-not-for-production
+    depends_on:
+      dex:
+        condition: service_started

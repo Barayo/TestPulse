@@ -22,7 +22,7 @@ func (s stubReadiness) Ready(context.Context) error { return s.err }
 
 func newTestServer(readyErr error) http.Handler {
 	logger := slog.New(slog.DiscardHandler)
-	return New(logger, stubReadiness{err: readyErr}, nil, 5, 5)
+	return New(logger, stubReadiness{err: readyErr}, nil, 5, 5, nil)
 }
 
 func TestLivenessAlwaysOK(t *testing.T) {
@@ -115,7 +115,7 @@ func TestMetaEndpoint(t *testing.T) {
 	// so this needs a real service backed by the test database, unlike the
 	// liveness/readiness tests above.
 	svc := service.New(store.New(testutil.Pool(t, "server_meta")))
-	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5)
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
 	if rec.Code != http.StatusOK {
@@ -129,7 +129,7 @@ func TestMetaEndpoint(t *testing.T) {
 func TestMetaSetupRequiredReflectsInstanceState(t *testing.T) {
 	pool := testutil.Pool(t, "server_meta")
 	svc := service.New(store.New(pool))
-	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5)
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
@@ -163,7 +163,7 @@ func TestMetaSetupRequiredReflectsInstanceState(t *testing.T) {
 func TestMetaColorThemeDefaultsToTealAndCarriesCustomPaletteWhenActive(t *testing.T) {
 	pool := testutil.Pool(t, "server_meta")
 	svc := service.New(store.New(pool))
-	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5)
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
