@@ -25,6 +25,7 @@ export default function ProjectSettingsPage() {
   const [projectName, setProjectName] = useState('')
   const [publicAccess, setPublicAccess] = useState<boolean>()
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState<boolean>()
+  const [assigneeRestrictedRecording, setAssigneeRestrictedRecording] = useState<boolean>()
   const [archived, setArchived] = useState<boolean>()
   const [autoArchiveExempt, setAutoArchiveExempt] = useState<boolean>()
   // Only a Tenant Admin can read the instance-wide threshold
@@ -45,6 +46,7 @@ export default function ProjectSettingsPage() {
         setPublicAccess(data.publicAccess)
         setArchived(data.archived)
         setAutoArchiveExempt(data.autoArchiveExempt)
+        setAssigneeRestrictedRecording(data.assigneeRestrictedRecording)
       }
     })
     void api.GET('/api/v1/meta').then(({ data }) => {
@@ -89,6 +91,16 @@ export default function ProjectSettingsPage() {
       body: { autoArchiveExempt: next },
     })
     if (data) setAutoArchiveExempt(data.autoArchiveExempt)
+  }
+
+  async function toggleAssigneeRestrictedRecording() {
+    if (!projectKey || assigneeRestrictedRecording === undefined) return
+    const next = !assigneeRestrictedRecording
+    const { data } = await api.PATCH('/api/v1/projects/{projectKey}', {
+      params: { path: { projectKey } },
+      body: { assigneeRestrictedRecording: next },
+    })
+    if (data) setAssigneeRestrictedRecording(data.assigneeRestrictedRecording)
   }
 
   async function openDeleteDialog() {
@@ -160,6 +172,30 @@ export default function ProjectSettingsPage() {
               </Button>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Restrict recording to assignee</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            When on, only a run item&apos;s assignee (or a project admin) can record a result or change its status.
+            Unassigned items are unaffected.
+          </p>
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-sm font-medium">Restrict recording to assignee</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-muted-foreground">{assigneeRestrictedRecording ? 'On' : 'Off'}</span>
+              <Switch
+                aria-label="Restrict recording to assignee"
+                checked={assigneeRestrictedRecording ?? false}
+                disabled={assigneeRestrictedRecording === undefined}
+                onCheckedChange={() => void toggleAssigneeRestrictedRecording()}
+              />
+            </div>
+          </div>
         </CardContent>
       </Card>
 

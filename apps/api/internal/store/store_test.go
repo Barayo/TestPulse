@@ -1524,6 +1524,44 @@ func TestDeletingAssignedTeamRevertsItemToUnassigned(t *testing.T) {
 	}
 }
 
+func TestItemAssigneeReturnsUserAssignee(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "one")
+	run, _ := s.Runs.Create(ctx, p.ID, "r", []string{c1.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	ana := mustUser(t, s, "ana3@example.com", false)
+	if err := s.Runs.AssignItemToUser(ctx, items[0].ID, ana.ID); err != nil {
+		t.Fatalf("assign: %v", err)
+	}
+
+	got, err := s.Runs.ItemAssignee(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("ItemAssignee: %v", err)
+	}
+	if got == nil || got.Kind != domain.AssigneeKindUser || got.ID != ana.ID {
+		t.Errorf("ItemAssignee = %+v, want user %s", got, ana.ID)
+	}
+}
+
+func TestItemAssigneeReturnsNilWhenUnassigned(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c1 := mustCase(t, s, p.ID, "one")
+	run, _ := s.Runs.Create(ctx, p.ID, "r", []string{c1.ID})
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+
+	got, err := s.Runs.ItemAssignee(ctx, items[0].ID)
+	if err != nil {
+		t.Fatalf("ItemAssignee: %v", err)
+	}
+	if got != nil {
+		t.Errorf("ItemAssignee = %+v, want nil for unassigned item", got)
+	}
+}
+
 func TestRunSummaryCounts(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

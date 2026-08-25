@@ -253,6 +253,7 @@ export default function RunPage() {
   const [showCreatedBanner, setShowCreatedBanner] = useState(
     Boolean((location.state as { justCreated?: boolean } | null)?.justCreated),
   )
+  const [recordFailureWarning, setRecordFailureWarning] = useState<string>()
   useEffect(() => {
     if (!showCreatedBanner) return
     navigate(location.pathname, { replace: true, state: null })
@@ -448,8 +449,9 @@ export default function RunPage() {
   }
 
   async function handleBulkVerdict(verdict: Verdict) {
-    await recordBulkVerdict(Array.from(selectedIds), verdict)
+    const { failedCount } = await recordBulkVerdict(Array.from(selectedIds), verdict)
     setSelectedIds(new Set())
+    if (failedCount > 0) showRecordFailureWarning(failedCount)
     await load()
   }
 
@@ -457,8 +459,16 @@ export default function RunPage() {
   // separate result-recording code path needed (add-run-row-status-actions
   // design.md D1).
   async function handleItemVerdict(itemId: string, verdict: Verdict) {
-    await recordBulkVerdict([itemId], verdict)
+    const { failedCount } = await recordBulkVerdict([itemId], verdict)
+    if (failedCount > 0) showRecordFailureWarning(failedCount)
     await load()
+  }
+
+  // openapi-fetch resolves rather than throws on a rejected item (e.g.
+  // restrict-run-item-status-to-assignee's 403), so recordBulkVerdict would
+  // otherwise silently no-op on it with no indication anything failed.
+  function showRecordFailureWarning(failedCount: number) {
+    setRecordFailureWarning(`${failedCount} item${failedCount === 1 ? '' : 's'} not updated — not assigned to you.`)
   }
 
   // Mirrors RunItemDetailPage.tsx's markRetest — sets status directly
@@ -581,6 +591,9 @@ export default function RunPage() {
       />
       {showCreatedBanner && run && (
         <ConfirmBanner message={`Run "${run.name}" created.`} onDismiss={() => setShowCreatedBanner(false)} />
+      )}
+      {recordFailureWarning && (
+        <ConfirmBanner message={recordFailureWarning} onDismiss={() => setRecordFailureWarning(undefined)} />
       )}
       <Card>
         <CardHeader>

@@ -13,7 +13,7 @@ const mockDELETE = vi.mocked(api.DELETE)
 
 const project = {
   id: 'p1', key: 'QA', name: 'QA Platform', archived: false, description: '', isSample: false,
-  publicAccess: false, autoArchiveExempt: false, createdAt: '',
+  publicAccess: false, autoArchiveExempt: false, assigneeRestrictedRecording: false, createdAt: '',
 }
 
 function mockAPI({
@@ -24,6 +24,7 @@ function mockAPI({
   isTenantAdmin = false,
   autoArchiveExempt = false,
   autoArchiveInactiveDays = 0,
+  assigneeRestrictedRecording = false,
   summaries,
 }: {
   manageProject?: boolean
@@ -33,6 +34,7 @@ function mockAPI({
   isTenantAdmin?: boolean
   autoArchiveExempt?: boolean
   autoArchiveInactiveDays?: number
+  assigneeRestrictedRecording?: boolean
   summaries?: { projectId: string; suiteCount: number; caseCount: number; passRate: number | null; isFavorite: boolean; archived: boolean }[]
 } = {}) {
   const resolvedSummaries = summaries ?? [{ projectId: 'p1', suiteCount: 3, caseCount: 12, passRate: null, isFavorite: false, archived }]
@@ -41,7 +43,7 @@ function mockAPI({
       return Promise.resolve({ data: { id: 'u1', email: 'admin@example.com', isTenantAdmin }, response: { ok: true } })
     }
     if (path === '/api/v1/projects/{projectKey}') {
-      return Promise.resolve({ data: { ...project, archived, autoArchiveExempt }, response: { ok: true } })
+      return Promise.resolve({ data: { ...project, archived, autoArchiveExempt, assigneeRestrictedRecording }, response: { ok: true } })
     }
     if (path === '/api/v1/projects/{projectKey}/permissions') {
       return Promise.resolve({
@@ -135,6 +137,33 @@ describe('ProjectSettingsPage', () => {
     await screen.findByRole('switch', { name: /public access/i })
     expect(await screen.findByText(/turned off for this instance/i)).toBeInTheDocument()
     expect(screen.getByRole('switch', { name: /public access/i })).toBeDisabled()
+  })
+
+  describe('Assignee-restricted recording (restrict-run-item-status-to-assignee)', () => {
+    it('renders the toggle off by default and PATCHes assigneeRestrictedRecording: true on toggle', async () => {
+      mockAPI({ manageProject: true })
+      mockPATCH.mockResolvedValue({ data: { ...project, assigneeRestrictedRecording: true }, response: { ok: true } })
+      renderPage()
+
+      const toggle = await screen.findByRole('switch', { name: /restrict.*assignee/i })
+      expect(toggle).not.toBeChecked()
+
+      await userEvent.click(toggle)
+
+      await waitFor(() =>
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/projects/{projectKey}', {
+          params: { path: { projectKey: 'QA' } },
+          body: { assigneeRestrictedRecording: true },
+        }),
+      )
+    })
+
+    it('renders the toggle checked when already enabled', async () => {
+      mockAPI({ manageProject: true, assigneeRestrictedRecording: true })
+      renderPage()
+
+      expect(await screen.findByRole('switch', { name: /restrict.*assignee/i, checked: true })).toBeInTheDocument()
+    })
   })
 
   describe('Archive / Delete project (add-data-retention)', () => {

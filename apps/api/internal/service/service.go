@@ -209,11 +209,15 @@ type ProjectUpdate struct {
 	// UpdateProject itself, since this field needs a stricter gate than
 	// the route's own manageProject permission floor.
 	AutoArchiveExempt *bool
+	// AssigneeRestrictedRecording (restrict-run-item-status-to-assignee)
+	// gates recording results/status changes to an item's assignee. Same
+	// manageProject floor as PublicAccess — no stricter gate needed.
+	AssigneeRestrictedRecording *bool
 }
 
 func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdate) (domain.Project, error) {
-	if upd.Name == nil && upd.Description == nil && upd.Archived == nil && upd.PublicAccess == nil && upd.AutoArchiveExempt == nil {
-		return domain.Project{}, invalid("nothing to update: provide name, description, archived, publicAccess, and/or autoArchiveExempt")
+	if upd.Name == nil && upd.Description == nil && upd.Archived == nil && upd.PublicAccess == nil && upd.AutoArchiveExempt == nil && upd.AssigneeRestrictedRecording == nil {
+		return domain.Project{}, invalid("nothing to update: provide name, description, archived, publicAccess, autoArchiveExempt, and/or assigneeRestrictedRecording")
 	}
 	if upd.AutoArchiveExempt != nil {
 		actor, ok := domain.ActorFromContext(ctx)
@@ -268,6 +272,12 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 		} else {
 			s.audit(ctx, "unexempt_from_auto_archive", "project", id)
 		}
+	}
+	if upd.AssigneeRestrictedRecording != nil {
+		if err := s.store.Projects.SetAssigneeRestrictedRecording(ctx, id, *upd.AssigneeRestrictedRecording); err != nil {
+			return domain.Project{}, err
+		}
+		s.audit(ctx, "update_assignee_restricted_recording", "project", id)
 	}
 	return s.store.Projects.Get(ctx, id)
 }
@@ -707,6 +717,9 @@ func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.Ne
 	if err := res.Validate(); err != nil {
 		return domain.Result{}, invalid("%s", err)
 	}
+	if err := s.checkAssigneeRestriction(ctx, itemID); err != nil {
+		return domain.Result{}, err
+	}
 	for i, a := range res.Attachments {
 		contentType, err := attachmentimage.ValidateUpload(a.Data)
 		if err != nil {
@@ -757,6 +770,9 @@ func (s *Service) UpdateItem(ctx context.Context, itemID string, upd ItemUpdate)
 		status, err := domain.ParseStatus(*upd.Status)
 		if err != nil {
 			return invalid("%s", err)
+		}
+		if err := s.checkAssigneeRestriction(ctx, itemID); err != nil {
+			return err
 		}
 		if err := s.store.Runs.SetItemStatus(ctx, itemID, status); err != nil {
 			return runClosedAsConflict(err)

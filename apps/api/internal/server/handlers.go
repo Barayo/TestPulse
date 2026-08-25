@@ -205,11 +205,12 @@ func (h *api) getProject(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name              *string `json:"name"`
-		Description       *string `json:"description"`
-		Archived          *bool   `json:"archived"`
-		PublicAccess      *bool   `json:"publicAccess"`
-		AutoArchiveExempt *bool   `json:"autoArchiveExempt"`
+		Name                        *string `json:"name"`
+		Description                 *string `json:"description"`
+		Archived                    *bool   `json:"archived"`
+		PublicAccess                *bool   `json:"publicAccess"`
+		AutoArchiveExempt           *bool   `json:"autoArchiveExempt"`
+		AssigneeRestrictedRecording *bool   `json:"assigneeRestrictedRecording"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
@@ -219,6 +220,7 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 		service.ProjectUpdate{
 			Name: body.Name, Description: body.Description, Archived: body.Archived,
 			PublicAccess: body.PublicAccess, AutoArchiveExempt: body.AutoArchiveExempt,
+			AssigneeRestrictedRecording: body.AssigneeRestrictedRecording,
 		})
 	h.respond(w, http.StatusOK, p, err)
 }

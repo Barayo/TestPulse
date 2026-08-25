@@ -281,8 +281,15 @@ type Project struct {
 	// auto-archive-inactive-projects policy (design.md D9 of
 	// add-data-retention) — settable only by a Tenant Admin, never a
 	// Project Admin, even one with manageProject.
-	AutoArchiveExempt bool      `json:"autoArchiveExempt"`
-	CreatedAt         time.Time `json:"createdAt"`
+	AutoArchiveExempt bool `json:"autoArchiveExempt"`
+	// AssigneeRestrictedRecording, when true, requires the authenticated
+	// actor to match a run item's assignee (or hold ManageProject) before
+	// recording a result or changing its status
+	// (restrict-run-item-status-to-assignee). Default false preserves
+	// today's behavior where any runRecordResult holder may act on any
+	// item. An unassigned item is unaffected regardless of this setting.
+	AssigneeRestrictedRecording bool      `json:"assigneeRestrictedRecording"`
+	CreatedAt                   time.Time `json:"createdAt"`
 }
 
 // InstanceSettings is the single, instance-wide configuration row

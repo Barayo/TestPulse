@@ -32,4 +32,20 @@ describe('recordBulkVerdict', () => {
       )
     }
   })
+
+  it('reports zero failures when every item succeeds', async () => {
+    const result = await recordBulkVerdict(['i1', 'i2'], 'pass')
+    expect(result.failedCount).toBe(0)
+  })
+
+  it('counts items rejected by the API (e.g. assignee-restricted-recording 403s) without throwing', async () => {
+    mockPOST
+      .mockResolvedValueOnce({ response: { ok: true } })
+      .mockResolvedValueOnce({ error: { message: 'forbidden' }, response: { ok: false, status: 403 } })
+      .mockResolvedValueOnce({ error: { message: 'forbidden' }, response: { ok: false, status: 403 } })
+
+    const result = await recordBulkVerdict(['i1', 'i2', 'i3'], 'pass')
+
+    expect(result.failedCount).toBe(2)
+  })
 })

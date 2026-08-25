@@ -2,6 +2,7 @@ package sampledata_test
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -1364,5 +1365,92 @@ func TestSeedContentShowcasesRetestOnOpenRun(t *testing.T) {
 	}
 	if !sawFailed {
 		t.Error("no failed item on the open Nightly run — Retest has nothing real to showcase")
+	}
+}
+
+func TestSeedContentShowcasesAssigneeRestrictedRecording(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	// ListProjects doesn't project assigneeRestrictedRecording (same scope
+	// as autoArchiveExempt — a settings-page-only field, not needed in list
+	// views); GetProject is the accurate single-project read.
+	p, err := svc.GetProject(actorCtx, projects[0].ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if !p.AssigneeRestrictedRecording {
+		t.Fatal("Sample Project AssigneeRestrictedRecording = false, want true")
+	}
+
+	users, err := svc.ListUsers(context.Background())
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	var julia, sam domain.User
+	for _, u := range users {
+		switch u.Email {
+		case "julia@example.com":
+			julia = u
+		case "sam@example.com":
+			sam = u
+		}
+	}
+	if julia.ID == "" || sam.ID == "" {
+		t.Fatal("missing seeded demo users julia/sam")
+	}
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var sprintRun *domain.Run
+	for i, r := range runs {
+		if r.Name == "Sprint 12 execution" {
+			sprintRun = &runs[i]
+		}
+	}
+	if sprintRun == nil {
+		t.Fatal("missing the \"Sprint 12 execution\" run")
+	}
+
+	items, err := svc.RunItems(actorCtx, sprintRun.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	var juliaItem, unassignedItem *domain.RunItem
+	for i, it := range items {
+		if it.Assignee != nil && it.Assignee.ID == julia.ID {
+			juliaItem = &items[i]
+		}
+		if it.Assignee == nil {
+			unassignedItem = &items[i]
+		}
+	}
+	if juliaItem == nil || unassignedItem == nil {
+		t.Fatal("\"Sprint 12 execution\" must have both a julia-assigned item and an unassigned item to showcase both branches")
+	}
+
+	juliaCtx := domain.WithActor(context.Background(), domain.Actor{
+		ID: julia.ID, Kind: domain.ActorKindUser, DisplayName: julia.Email, EffectiveUserID: julia.ID,
+	})
+	samCtx := domain.WithActor(context.Background(), domain.Actor{
+		ID: sam.ID, Kind: domain.ActorKindUser, DisplayName: sam.Email, EffectiveUserID: sam.ID,
+	})
+
+	if _, err := svc.RecordResult(juliaCtx, juliaItem.ID, domain.NewResult{Verdict: domain.VerdictPass}); err != nil {
+		t.Errorf("julia recording against her own assigned item = %v, want success", err)
+	}
+	_, err = svc.RecordResult(samCtx, juliaItem.ID, domain.NewResult{Verdict: domain.VerdictPass})
+	var ferr *service.ForbiddenError
+	if err == nil || !errors.As(err, &ferr) {
+		t.Errorf("sam recording against julia's assigned item = %v, want ForbiddenError", err)
+	}
+	if _, err := svc.RecordResult(samCtx, unassignedItem.ID, domain.NewResult{Verdict: domain.VerdictPass}); err != nil {
+		t.Errorf("sam recording against the still-unassigned item = %v, want success", err)
 	}
 }

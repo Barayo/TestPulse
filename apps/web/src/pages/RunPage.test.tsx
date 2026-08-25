@@ -986,6 +986,22 @@ describe('Bulk verdict actions (add-bulk-status-verdicts)', () => {
     expect(screen.getByRole('button', { name: /assign selected/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Mark as' })).not.toBeInTheDocument()
   })
+
+  it('warns when some items are rejected by the server (e.g. assignee-restricted-recording)', async () => {
+    mockRunAPI([pendingItem, secondItem])
+    mockPOST
+      .mockResolvedValueOnce({ response: { ok: true } })
+      .mockResolvedValueOnce({ error: { error: 'forbidden' }, response: { ok: false, status: 403 } })
+    renderRun()
+    await screen.findByText('Login works')
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
+    await userEvent.click(screen.getByRole('button', { name: 'Mark as' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Pass' }))
+
+    expect(await screen.findByText(/1 item.*not updated/i)).toBeInTheDocument()
+  })
 })
 
 describe('Right-click a row while a multi-selection is active (add-bulk-status-verdicts)', () => {
@@ -1119,6 +1135,17 @@ describe('Single-row status actions (add-run-row-status-actions)', () => {
       '/api/v1/items/{itemId}/results',
       expect.objectContaining({ params: { path: { itemId: 'i2' } } }),
     )
+  })
+
+  it('warns when a single row\'s verdict is rejected by the server (e.g. assignee-restricted-recording)', async () => {
+    mockRunAPI([pendingItem])
+    mockPOST.mockResolvedValue({ error: { error: 'forbidden' }, response: { ok: false, status: 403 } })
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Pass' }))
+
+    expect(await screen.findByText(/1 item.*not updated/i)).toBeInTheDocument()
   })
 
   it('a single row\'s menu offers no verdict actions on a closed run', async () => {

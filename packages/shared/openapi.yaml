@@ -2193,7 +2193,7 @@ components:
           description: Required — only the root folder (auto-created with the project) may have no parent.
     Project:
       type: object
-      required: [id, key, name, archived, description, isSample, publicAccess, autoArchiveExempt, createdAt]
+      required: [id, key, name, archived, description, isSample, publicAccess, autoArchiveExempt, assigneeRestrictedRecording, createdAt]
       properties:
         id: { type: string }
         key:
@@ -2221,6 +2221,13 @@ components:
             only by a Tenant Admin, via PATCH — a request setting this
             field from anyone else is rejected (403), even a Project Admin
             who otherwise has manageProject on this project.
+        assigneeRestrictedRecording:
+          type: boolean
+          description: >
+            When true, recording a result or changing a run item's status
+            requires the authenticated actor to match the item's assignee
+            (or hold manageProject), unless the item is unassigned
+            (restrict-run-item-status-to-assignee). False by default.
         createdAt: { type: string, format: date-time }
     ProjectInput:
       type: object
@@ -2236,6 +2243,7 @@ components:
         archived: { type: boolean }
         publicAccess: { type: boolean }
         autoArchiveExempt: { type: boolean }
+        assigneeRestrictedRecording: { type: boolean }
     TestCase:
       type: object
       required: [id, key, projectId, folderId, currentVersion, content, createdAt, updatedAt]

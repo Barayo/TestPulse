@@ -503,6 +503,16 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		}
 	}
 
+	// Turning this on (restrict-run-item-status-to-assignee) demonstrates
+	// both branches on the very same run: julia/sam can still record
+	// against their own assigned item, a different signed-in member gets a
+	// 403 on either of those two, and the two still-unassigned items above
+	// stay open to anyone with runRecordResult regardless of the setting.
+	assigneeRestrictedRecording := true
+	if _, err := svc.UpdateProject(ctx, p.ID, service.ProjectUpdate{AssigneeRestrictedRecording: &assigneeRestrictedRecording}); err != nil {
+		return fmt.Errorf("sampledata: enabling assignee-restricted recording: %w", err)
+	}
+
 	// The failed "Login with bad password" result gets a screenshot —
 	// showcases the attachment thumbnail strip/lightbox on real seeded
 	// content (add-run-item-screenshot-attachments), a small bundled

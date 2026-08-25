@@ -49,8 +49,8 @@ func (r *ProjectRepo) Create(ctx context.Context, name, description string) (dom
 func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, key, name, archived, description, is_sample, public_access, auto_archive_exempt, created_at FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.AutoArchiveExempt, &p.CreatedAt)
+		`SELECT id, key, name, archived, description, is_sample, public_access, auto_archive_exempt, assignee_restricted_recording, created_at FROM projects WHERE id = $1`, id,
+	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.AutoArchiveExempt, &p.AssigneeRestrictedRecording, &p.CreatedAt)
 	if err != nil {
 		return domain.Project{}, ErrNotFound
 	}
@@ -233,6 +233,21 @@ func (r *ProjectRepo) SetDescription(ctx context.Context, id, description string
 // instance-wide InstanceSettings.PublicProjectsEnabled kill switch.
 func (r *ProjectRepo) SetPublicAccess(ctx context.Context, id string, public bool) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE projects SET public_access = $2 WHERE id = $1`, id, public)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// SetAssigneeRestrictedRecording toggles whether recording a result or
+// changing a run item's status on this project requires the actor to match
+// the item's assignee (restrict-run-item-status-to-assignee). Permission
+// enforcement (manageProject) lives in the service layer, not here.
+func (r *ProjectRepo) SetAssigneeRestrictedRecording(ctx context.Context, id string, restricted bool) error {
+	tag, err := r.pool.Exec(ctx, `UPDATE projects SET assignee_restricted_recording = $2 WHERE id = $1`, id, restricted)
 	if err != nil {
 		return err
 	}

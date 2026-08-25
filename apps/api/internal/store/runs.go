@@ -470,6 +470,28 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 	return items, rows.Err()
 }
 
+// ItemAssignee returns itemID's current assignee, or nil if unassigned.
+// A narrow single-row lookup (restrict-run-item-status-to-assignee design.md
+// D2) — unlike Items, it's used purely for the assignee-match permission
+// check, so it skips the name/avatar joins that display needs.
+func (r *RunRepo) ItemAssignee(ctx context.Context, itemID string) (*domain.Assignee, error) {
+	var userID, teamID *string
+	err := r.pool.QueryRow(ctx,
+		`SELECT assignee_user_id, assignee_team_id FROM test_run_items WHERE id = $1`, itemID,
+	).Scan(&userID, &teamID)
+	if err != nil {
+		return nil, err
+	}
+	switch {
+	case userID != nil:
+		return &domain.Assignee{Kind: domain.AssigneeKindUser, ID: *userID}, nil
+	case teamID != nil:
+		return &domain.Assignee{Kind: domain.AssigneeKindTeam, ID: *teamID}, nil
+	default:
+		return nil, nil
+	}
+}
+
 // ExecutionsByCase lists every run item that has ever pinned the given case,
 // across every run — unlike Items, which is scoped to one run_id
 // (extend-case-version-history: "did a specific edit introduce flakiness"

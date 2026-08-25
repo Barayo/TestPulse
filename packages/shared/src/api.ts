@@ -1954,6 +1954,8 @@ export interface components {
             publicAccess: boolean;
             /** @description Exempts this project from the instance-wide autoArchiveInactiveDays policy (add-data-retention). Settable only by a Tenant Admin, via PATCH — a request setting this field from anyone else is rejected (403), even a Project Admin who otherwise has manageProject on this project. */
             autoArchiveExempt: boolean;
+            /** @description When true, recording a result or changing a run item's status requires the authenticated actor to match the item's assignee (or hold manageProject), unless the item is unassigned (restrict-run-item-status-to-assignee). False by default. */
+            assigneeRestrictedRecording: boolean;
             /** Format: date-time */
             createdAt: string;
         };
@@ -1967,6 +1969,7 @@ export interface components {
             archived?: boolean;
             publicAccess?: boolean;
             autoArchiveExempt?: boolean;
+            assigneeRestrictedRecording?: boolean;
         };
         TestCase: {
             id: string;

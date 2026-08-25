@@ -351,6 +351,23 @@ every item in the new run is assigned to that person or team immediately
 after creation, the same as using **Assign to…** afterward, just without the
 extra clicks.
 
+### Restricting recording to the assignee
+
+A Project Admin can turn on **Restrict recording to assignee** at
+`/projects/{key}/settings`, alongside **Public access**. Off by default,
+matching today's behavior where anyone holding **Record Result** can act on
+any item regardless of who it's assigned to. Once on, recording a result or
+changing an item's status (including marking retest) is rejected unless the
+authenticated caller is the item's assignee — a matching user, or any member
+of the assigned team — or holds **Manage Project** on that project. A
+Tenant Admin can always act, the same override every other project-level
+policy in TestPulse gives them. An **unassigned** item is unaffected either
+way: the setting only ever narrows access to items that already have an
+owner, it never blocks recording on one that doesn't. The check looks at
+who's actually authenticated, never the free-text "record on behalf of"
+name — typing someone else's name into that field doesn't let you act on
+their behalf here.
+
 ### Comments
 
 A comment is always recorded together with a verdict — there's no
