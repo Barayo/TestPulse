@@ -719,7 +719,12 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
 
-    await userEvent.click(screen.getByRole('button', { name: /assign to/i }))
+    // "Assign to…" is gated on a separate, later-resolving permissions
+    // fetch than the one that populates the heading above — findByRole
+    // (not getByRole) waits for that race to settle instead of assuming
+    // it's already won (a real race, just usually too fast to observe
+    // outside a resource-constrained CI-equivalent environment like `act`).
+    await userEvent.click(await screen.findByRole('button', { name: /assign to/i }))
     await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
 
     await waitFor(() => {

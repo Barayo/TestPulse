@@ -129,7 +129,7 @@ func (r *CustomFieldRepo) Reorder(ctx context.Context, projectID string, fieldID
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	for i, id := range fieldIDs {
 		if _, err := tx.Exec(ctx,
 			`UPDATE case_custom_fields SET position = $2 WHERE id = $1 AND project_id = $3`, id, i, projectID,
@@ -171,7 +171,7 @@ func (r *CustomFieldRepo) ReorderOptions(ctx context.Context, fieldID string, op
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
+	defer func() { _ = tx.Rollback(ctx) }()
 	for i, id := range optionIDs {
 		if _, err := tx.Exec(ctx,
 			`UPDATE case_custom_field_options SET position = $2 WHERE id = $1 AND field_id = $3`, id, i, fieldID,

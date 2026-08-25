@@ -64,7 +64,12 @@ describe('InstanceSettingsPage', () => {
   it('renders the toggle in its current state for a Tenant Admin', async () => {
     mockAsTenantAdmin(true, true)
     renderPage()
-    const toggle = await screen.findByRole('switch', { name: /public project access/i })
+    // The switch renders once, disabled and unchecked, before the settings
+    // fetch resolves — matching on `checked: true` makes the query itself
+    // wait for that settled render instead of the transient loading one
+    // (a real race, just usually too fast to observe outside a
+    // resource-constrained CI-equivalent environment like `act`).
+    const toggle = await screen.findByRole('switch', { name: /public project access/i, checked: true })
     expect(toggle).toBeChecked()
   })
 
@@ -91,7 +96,10 @@ describe('InstanceSettingsPage', () => {
       response: { ok: true },
     })
     renderPage()
-    const toggle = await screen.findByRole('switch', { name: /public project access/i })
+    // Same race as above — wait for the loaded (enabled) state before
+    // clicking, or a slow environment can click the still-disabled switch
+    // and silently no-op.
+    const toggle = await screen.findByRole('switch', { name: /public project access/i, checked: true })
 
     await userEvent.click(toggle)
 
