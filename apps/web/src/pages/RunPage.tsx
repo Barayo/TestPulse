@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
-import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, UserPlusIcon } from 'lucide-react'
+import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, RotateCcwIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
@@ -38,6 +38,17 @@ type Suite = components['schemas']['Suite']
 type Status = components['schemas']['Status']
 type Verdict = components['schemas']['Verdict']
 
+// Shared by the bulk "Mark as" menu and a single row's own context menu
+// (add-run-row-status-actions) — same labels/dot icons either way, only
+// the onSelect callback (and what it's bound to) differs.
+function buildVerdictMenuItems(onVerdict: (verdict: Verdict) => void): RowActionMenuItem[] {
+  return (['pass', 'failed', 'blocked', 'skipped'] as const).map((verdict) => ({
+    label: STATUS_LABEL[verdict],
+    icon: <span className={`size-2 rounded-full ${dotClass[verdict]}`} aria-hidden="true" />,
+    onSelect: () => onVerdict(verdict),
+  }))
+}
+
 function RunItemRow({
   item,
   projectKey,
@@ -49,6 +60,8 @@ function RunItemRow({
   onGoToCase,
   onAssign,
   onAssignSelected,
+  onItemVerdict,
+  onRetest,
   bulkVerdictItems,
   canRecord,
 }: {
@@ -62,6 +75,8 @@ function RunItemRow({
   onGoToCase: () => void
   onAssign: () => void
   onAssignSelected: () => void
+  onItemVerdict: (verdict: Verdict) => void
+  onRetest: () => void
   bulkVerdictItems: RowActionMenuItem[]
   // Assign-to and bulk-verdict actions require runRecordResult; "Open
   // execution"/"Go to case" are pure navigation, never gated
@@ -99,6 +114,28 @@ function RunItemRow({
                 label: 'Assign to…',
                 icon: <UserPlusIcon className="size-4" aria-hidden="true" />,
                 onSelect: onAssign,
+              } satisfies RowActionMenuItem,
+            ]
+          : []),
+        // Same items a multi-selection's bulk menu already offers (same
+        // gating: bulkVerdictItems is only non-empty when the run is open
+        // and the caller can record results), just bound to this one row
+        // instead of the whole selection (add-run-row-status-actions
+        // design.md D1/D3).
+        ...(bulkVerdictItems.length > 0
+          ? buildVerdictMenuItems(onItemVerdict).map((verdictItem, index) => (index === 0 ? { ...verdictItem, dividerBefore: true } : verdictItem))
+          : []),
+        // Retest changes status directly rather than recording a verdict,
+        // so it gets its own trailing divider and a distinct icon instead
+        // of a verdict dot (design.md D3) — only offered for a row that's
+        // actually failed, under the same run-open/permission gate.
+        ...(bulkVerdictItems.length > 0 && item.currentStatus === 'failed'
+          ? [
+              {
+                label: 'Retest',
+                icon: <RotateCcwIcon className="size-4" aria-hidden="true" />,
+                onSelect: onRetest,
+                dividerBefore: true,
               } satisfies RowActionMenuItem,
             ]
           : []),
@@ -416,6 +453,24 @@ export default function RunPage() {
     await load()
   }
 
+  // recordBulkVerdict already generalizes cleanly to a single item — no
+  // separate result-recording code path needed (add-run-row-status-actions
+  // design.md D1).
+  async function handleItemVerdict(itemId: string, verdict: Verdict) {
+    await recordBulkVerdict([itemId], verdict)
+    await load()
+  }
+
+  // Mirrors RunItemDetailPage.tsx's markRetest — sets status directly
+  // rather than recording a verdict (design.md D2).
+  async function handleRetest(itemId: string) {
+    await api.PUT('/api/v1/items/{itemId}/status', {
+      params: { path: { itemId } },
+      body: { status: 'retest' },
+    })
+    await load()
+  }
+
   function toggleSelect(itemId: string, shiftKey = false) {
     if (shiftKey && lastToggledId) {
       const ids = displayOrder.map((item) => item.id)
@@ -488,13 +543,7 @@ export default function RunPage() {
   }
 
   const verdictMenuItems: RowActionMenuItem[] =
-    run?.status === 'open' && canRecord
-      ? (['pass', 'failed', 'blocked', 'skipped'] as const).map((verdict) => ({
-          label: STATUS_LABEL[verdict],
-          icon: <span className={`size-2 rounded-full ${dotClass[verdict]}`} aria-hidden="true" />,
-          onSelect: () => void handleBulkVerdict(verdict),
-        }))
-      : []
+    run?.status === 'open' && canRecord ? buildVerdictMenuItems((verdict) => void handleBulkVerdict(verdict)) : []
 
   const bulkActions: BulkAction[] = [
     ...(canRecord ? ([{ kind: 'button', label: 'Assign selected…', onSelect: handleAssignSelected }] satisfies BulkAction[]) : []),
@@ -711,6 +760,8 @@ export default function RunPage() {
                           onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
                           onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                           onAssignSelected={handleAssignSelected}
+                          onItemVerdict={(verdict) => void handleItemVerdict(item.id, verdict)}
+                          onRetest={() => void handleRetest(item.id)}
                           bulkVerdictItems={verdictMenuItems}
                           canRecord={canRecord}
                         />
@@ -735,6 +786,8 @@ export default function RunPage() {
                   onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
                   onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                   onAssignSelected={handleAssignSelected}
+                  onItemVerdict={(verdict) => void handleItemVerdict(item.id, verdict)}
+                  onRetest={() => void handleRetest(item.id)}
                   bulkVerdictItems={verdictMenuItems}
                   canRecord={canRecord}
                 />

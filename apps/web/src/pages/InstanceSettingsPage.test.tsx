@@ -125,7 +125,10 @@ describe('InstanceSettingsPage', () => {
       renderPage()
       await screen.findByRole('group', { name: 'Run retention period' })
       const offPill = runRetentionGroup().getByRole('button', { name: 'Off' })
-      expect(offPill).toHaveAttribute('aria-pressed', 'true')
+      // Same settled-vs-loading race as the sibling "90d" test below —
+      // "Off" also happens to be the pill's default/loading-state label,
+      // so waitFor (not a synchronous assertion) is needed here too.
+      await waitFor(() => expect(offPill).toHaveAttribute('aria-pressed', 'true'))
       expect(screen.getByText(/off — runs are never automatically deleted/i)).toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })
@@ -203,7 +206,9 @@ describe('InstanceSettingsPage', () => {
       renderPage()
       await screen.findByRole('group', { name: 'Auto-archive inactivity period' })
       const offPill = autoArchiveGroup().getByRole('button', { name: 'Off' })
-      expect(offPill).toHaveAttribute('aria-pressed', 'true')
+      // Same settled-vs-loading race fixed above for Run retention's own
+      // "Off" pill.
+      await waitFor(() => expect(offPill).toHaveAttribute('aria-pressed', 'true'))
       expect(screen.getByText(/off — projects are never automatically archived/i)).toBeInTheDocument()
       expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     })

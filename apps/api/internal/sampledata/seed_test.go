@@ -1320,3 +1320,49 @@ func TestSeedContentShowcasesSuiteRunBreakdownTrend(t *testing.T) {
 		t.Error("the trailing point in the includeOpen trend is not marked IsOpen")
 	}
 }
+
+// TestSeedContentShowcasesRetestOnOpenRun covers add-run-row-status-actions:
+// the run board's new single-row "Retest" context-menu item only appears
+// for a failed item on an open run, so the Sample Project needs at least
+// one to actually demonstrate it — not just closed-run history.
+func TestSeedContentShowcasesRetestOnOpenRun(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var nightly *domain.Run
+	for i, r := range runs {
+		if r.Name == "Nightly — main" {
+			nightly = &runs[i]
+		}
+	}
+	if nightly == nil {
+		t.Fatal("missing the \"Nightly — main\" run")
+	}
+	if nightly.Status != domain.RunStatusOpen {
+		t.Fatalf("Nightly — main status = %q, want open", nightly.Status)
+	}
+
+	items, err := svc.RunItems(actorCtx, nightly.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	sawFailed := false
+	for _, it := range items {
+		if it.CurrentStatus == domain.StatusFailed {
+			sawFailed = true
+		}
+	}
+	if !sawFailed {
+		t.Error("no failed item on the open Nightly run — Retest has nothing real to showcase")
+	}
+}

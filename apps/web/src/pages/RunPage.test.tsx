@@ -1081,6 +1081,117 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
   })
 })
 
+describe('Single-row status actions (add-run-row-status-actions)', () => {
+  const failedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', currentStatus: 'failed', content: { ...pendingItem.content, title: 'Logout works' } }
+
+  it('a single row\'s context menu offers all four verdicts on an open run', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+
+    expect(screen.getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Failed' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Blocked' })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: 'Skipped' })).toBeInTheDocument()
+    // The existing single-item actions stay first, unchanged.
+    expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
+    expect(screen.getByRole('menuitem', { name: /^assign to…$/i })).toBeInTheDocument()
+  })
+
+  it('picking a verdict from a single row\'s menu records it for that item only', async () => {
+    const secondItem = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
+    mockRunAPI([pendingItem, secondItem])
+    mockPOST.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Pass' }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/results',
+        expect.objectContaining({ params: { path: { itemId: 'i1' } }, body: { verdict: 'pass' } }),
+      )
+    })
+    expect(mockPOST).not.toHaveBeenCalledWith(
+      '/api/v1/items/{itemId}/results',
+      expect.objectContaining({ params: { path: { itemId: 'i2' } } }),
+    )
+  })
+
+  it('a single row\'s menu offers no verdict actions on a closed run', async () => {
+    mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+
+    expect(screen.queryByRole('menuitem', { name: 'Pass' })).not.toBeInTheDocument()
+  })
+
+  it('a single row\'s menu offers no verdict actions without runRecordResult', async () => {
+    mockRunAPI([pendingItem], undefined, undefined, undefined, { ...fullPermissions, runRecordResult: false })
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+
+    expect(screen.queryByRole('menuitem', { name: 'Pass' })).not.toBeInTheDocument()
+  })
+
+  it('a failed row\'s context menu offers Retest', async () => {
+    mockRunAPI([failedItem])
+    renderRun()
+    const row = (await screen.findByText('Logout works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for logout works/i }))
+
+    expect(screen.getByRole('menuitem', { name: /retest/i })).toBeInTheDocument()
+  })
+
+  it('a non-failed row\'s context menu does not offer Retest', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    const row = (await screen.findByText('Login works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
+
+    expect(screen.queryByRole('menuitem', { name: /retest/i })).not.toBeInTheDocument()
+  })
+
+  it('picking Retest from a failed row\'s menu sets its status to retest', async () => {
+    mockRunAPI([failedItem])
+    mockPUT.mockResolvedValue({ response: { ok: true } })
+    renderRun()
+    const row = (await screen.findByText('Logout works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for logout works/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /retest/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/status',
+        expect.objectContaining({ params: { path: { itemId: 'i3' } }, body: { status: 'retest' } }),
+      )
+    })
+  })
+
+  it('Retest is not offered on a closed run even for a failed row', async () => {
+    mockRunAPI([failedItem], undefined, { ...run, status: 'closed' })
+    renderRun()
+    const row = (await screen.findByText('Logout works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for logout works/i }))
+
+    expect(screen.queryByRole('menuitem', { name: /retest/i })).not.toBeInTheDocument()
+  })
+
+  it('Retest is not offered without runRecordResult even for a failed row', async () => {
+    mockRunAPI([failedItem], undefined, undefined, undefined, { ...fullPermissions, runRecordResult: false })
+    renderRun()
+    const row = (await screen.findByText('Logout works')).closest('li') as HTMLElement
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for logout works/i }))
+
+    expect(screen.queryByRole('menuitem', { name: /retest/i })).not.toBeInTheDocument()
+  })
+})
+
 describe('Checkbox opacity (add-run-board-select-shortcuts)', () => {
   const secondItem = { ...pendingItem, id: 'i2', caseKey: 'c2', content: { ...pendingItem.content, title: 'Checkout works' } }
 
