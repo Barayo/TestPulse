@@ -305,7 +305,15 @@ available in the bulk action bar (assign the selection, mark it with a
 verdict); right-clicking a row that is not part of the current selection
 SHALL always show the single-item menu regardless of whether other rows
 are selected, and opening a context menu SHALL NOT itself change which
-items are selected. When the run was
+items are selected. On an open run, while the caller holds permission to
+record results, the single-item menu SHALL additionally offer the same
+four verdicts (Pass, Failed, Blocked, Skipped) the bulk menu offers,
+recording the chosen verdict against that row alone; when that row's
+current status is `failed`, the menu SHALL further offer a Retest action
+that sets the item's status to `retest` directly, the same action already
+available on the item's own detail page. Neither the verdict items nor
+Retest SHALL appear when the run is closed or the caller lacks that
+permission. When the run was
 created from a suite, the board SHALL show a link back to that suite; when
 it was not, the board SHALL show an explicit indication that it is an ad hoc
 run rather than showing nothing. The board SHALL provide a single-select
@@ -358,6 +366,35 @@ be offered when the run is closed.
 - **WHEN** a user right-clicks a run item row
 - **THEN** a context menu opens with an option to jump directly to that
   case's own page in the Library, without opening the execution page first
+
+#### Scenario: Right-clicking a single row offers verdict actions on an open run
+- **WHEN** a user right-clicks a row that is not part of a multi-selection,
+  on an open run, and holds permission to record results
+- **THEN** the context menu offers Pass, Failed, Blocked, and Skipped,
+  each recording that verdict against that row alone
+
+#### Scenario: Right-clicking a failed row also offers Retest
+- **WHEN** a user right-clicks a single row whose current status is
+  `failed`, on an open run, with permission to record results
+- **THEN** the context menu additionally offers Retest, which sets that
+  item's status to `retest`
+
+#### Scenario: Retest is not offered for a non-failed row
+- **WHEN** a user right-clicks a single row whose current status is not
+  `failed`
+- **THEN** the context menu does not offer Retest, regardless of
+  permission or run status
+
+#### Scenario: Verdict and Retest actions are absent on a closed run
+- **WHEN** a user right-clicks a single row on a closed run
+- **THEN** the context menu offers none of the verdict items or Retest,
+  regardless of the row's current status or the caller's permission
+
+#### Scenario: Verdict and Retest actions are absent without permission
+- **WHEN** a user right-clicks a single row and lacks permission to
+  record results
+- **THEN** the context menu offers none of the verdict items or Retest,
+  regardless of the run's status or the row's current status
 
 #### Scenario: A run created from a suite links back to it
 - **WHEN** a user opens a run whose `suiteKey` is set
@@ -418,23 +455,6 @@ be offered when the run is closed.
 #### Scenario: A row's checkbox is quiet at rest and returns to full opacity when relevant
 - **WHEN** no item on the board is selected and a row is neither hovered nor under the keyboard focus cursor
 - **THEN** that row's checkbox renders at reduced opacity, and it returns to full opacity as soon as the row is hovered, gains the keyboard focus cursor, or any item anywhere in the list becomes selected
-
-#### Scenario: The "select all" checkbox is always fully visible
-- **WHEN** the board is at rest with nothing selected
-- **THEN** the header "select all" checkbox renders at full opacity, unlike the per-row checkboxes
-
-#### Scenario: Space toggles the keyboard-focused item
-- **WHEN** a user has moved the focus cursor to an item with `j`/`k` and presses Space
-- **THEN** that item's selection state toggles, the same as clicking its checkbox, and the page does not scroll
-
-#### Scenario: Shift-click extends the selection as a range
-- **WHEN** a user has already selected one item and Shift-clicks a row further down the visible list
-- **THEN** every item between the two, inclusive, is added to the selection, and any items already selected remain selected
-
-#### Scenario: Shift-click with no prior selection selects just that row
-- **WHEN** a user Shift-clicks a row before toggling or selecting anything else on the board
-- **THEN** only that row becomes selected, and it becomes the anchor for the next Shift-click's range
-
 ### Requirement: Run item detail page
 The web UI SHALL provide a dedicated page per run item, reached from the
 run execution board, showing the pinned case version's steps and expected
