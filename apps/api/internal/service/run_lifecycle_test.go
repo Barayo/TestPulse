@@ -276,7 +276,7 @@ func TestSuiteTrendResolvesFromSuiteID(t *testing.T) {
 		t.Fatalf("CloseRun: %v", err)
 	}
 
-	trend, err := s.SuiteTrend(ctx, suite.ID)
+	trend, err := s.SuiteTrend(ctx, suite.ID, false)
 	if err != nil {
 		t.Fatalf("SuiteTrend: %v", err)
 	}

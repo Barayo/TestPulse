@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SuiteCaseGrid, type SuiteCaseGridCase } from '@/components/SuiteCaseGrid'
 import { SuiteActionsMenu } from '@/components/SuiteActionsMenu'
-import { SuitePassRateTrend, type TrendPoint } from '@/components/SuitePassRateTrend'
+import { SuiteRunBreakdownTrend } from '@/components/SuiteRunBreakdownTrend'
 import { RunRow } from '@/components/RunList'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { PropertyRow } from '@/components/PropertyRow'
@@ -39,36 +39,6 @@ function toGridCase(c: TestCase): SuiteCaseGridCase {
   }
 }
 
-// Maps each of the two independent data sources SuiteDetailPage already
-// fetches into one normalized shape — SuitePassRateTrend itself doesn't know
-// or care which one it's rendering (rework-suite-run-flow design.md D7).
-function closedPoint(p: SuiteTrendPoint): TrendPoint {
-  const rate = p.total === 0 ? 0 : Math.round(((p.counts.pass ?? 0) / p.total) * 100)
-  const date = new Date(p.createdAt).toLocaleDateString()
-  return {
-    runKey: p.runKey,
-    runName: p.runName,
-    createdAt: p.createdAt,
-    rate,
-    isOpen: false,
-    detail: `${p.runName} · ${date} · ${rate}% (${p.counts.pass ?? 0}/${p.total} pass)`,
-  }
-}
-
-function runPoint(r: Run): TrendPoint {
-  const rate = r.passRate ?? 0
-  const date = new Date(r.createdAt).toLocaleDateString()
-  const isOpen = r.status === 'open'
-  return {
-    runKey: r.key,
-    runName: r.name,
-    createdAt: r.createdAt,
-    rate,
-    isOpen,
-    detail: isOpen ? `${r.name} · ${date} · ${rate}% so far (in progress)` : `${r.name} · ${date} · ${rate}%`,
-  }
-}
-
 export default function SuiteDetailPage() {
   const { projectKey, suiteKey } = useParams<{ projectKey: string; suiteKey: string }>()
   const navigate = useNavigate()
@@ -87,6 +57,7 @@ export default function SuiteDetailPage() {
   const [createdRun, setCreatedRun] = useState<{ key: string; name: string }>()
   const [isEditing, setIsEditing] = useState(false)
   const [trendPoints, setTrendPoints] = useState<SuiteTrendPoint[]>([])
+  const [openTrendPoints, setOpenTrendPoints] = useState<SuiteTrendPoint[]>([])
   const [suiteRuns, setSuiteRuns] = useState<Run[]>([])
   const [stabilityView, setStabilityView] = useState<'closed' | 'all'>('closed')
 
@@ -101,13 +72,14 @@ export default function SuiteDetailPage() {
     // instead of hitting 403s.
     if (!projectKey || !suiteKey || access === 'loading') return
     setNotFound(false)
-    const [{ data: p }, { data: c }, { data: f }, { data: s }, { data: t }, { data: r }] = access === 'member'
+    const [{ data: p }, { data: c }, { data: f }, { data: s }, { data: t }, { data: to }, { data: r }] = access === 'member'
       ? await Promise.all([
           api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
           api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
           api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
           api.GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } }),
           api.GET('/api/v1/suites/{suiteKey}/trend', { params: { path: { suiteKey } } }),
+          api.GET('/api/v1/suites/{suiteKey}/trend', { params: { path: { suiteKey }, query: { includeOpen: true } } }),
           api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
         ])
       : await Promise.all([
@@ -116,6 +88,7 @@ export default function SuiteDetailPage() {
           api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
           api.GET('/api/v1/public/suites/{suiteKey}', { params: { path: { suiteKey } } }),
           api.GET('/api/v1/public/suites/{suiteKey}/trend', { params: { path: { suiteKey } } }),
+          api.GET('/api/v1/public/suites/{suiteKey}/trend', { params: { path: { suiteKey }, query: { includeOpen: true } } }),
           api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
         ])
     if (!p || !s) {
@@ -127,6 +100,7 @@ export default function SuiteDetailPage() {
     setFolders(f ?? [])
     setSuite(s)
     setTrendPoints(t?.points ?? [])
+    setOpenTrendPoints(to?.points ?? [])
     setSuiteRuns((r ?? []).filter((run) => run.suiteKey === s.key))
   }, [projectKey, suiteKey, access])
 
@@ -304,8 +278,8 @@ export default function SuiteDetailPage() {
                 </div>
                 {stabilityView === 'closed' ? (
                   <>
-                    <SuitePassRateTrend
-                      points={trendPoints.map(closedPoint)}
+                    <SuiteRunBreakdownTrend
+                      points={trendPoints}
                       emptyMessage="No closed runs yet — close a run created from this suite to see its trend here."
                     />
                     <p className="text-xs text-muted-foreground">
@@ -314,15 +288,13 @@ export default function SuiteDetailPage() {
                   </>
                 ) : (
                   <>
-                    <SuitePassRateTrend
-                      points={[...suiteRuns]
-                        .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
-                        .map(runPoint)}
+                    <SuiteRunBreakdownTrend
+                      points={openTrendPoints}
                       emptyMessage="No runs yet — run this suite to see its trend here."
                     />
                     <p className="text-xs text-muted-foreground">
-                      Every run, open or closed. The open run's rate counts only what's been
-                      recorded so far against its full case list — it will keep moving.
+                      Every run, open or closed. The open run's breakdown counts only what's
+                      been recorded so far against its full case list — it will keep moving.
                     </p>
                   </>
                 )}

@@ -385,6 +385,86 @@ func TestScenario_SuiteTrendOverHTTP(t *testing.T) {
 	call(t, h, "GET", "/api/v1/suites/NOPE/trend", nil, 404, nil)
 }
 
+// TestScenario_SuiteTrendIncludeOpenOverHTTP covers
+// add-suite-run-breakdown-trend: ?includeOpen=true adds the suite's current
+// open run as a trailing, IsOpen-marked point; omitting it (or the plain
+// endpoint) excludes the open run exactly as before.
+func TestScenario_SuiteTrendIncludeOpenOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p, c, suite, closedRun, openRun struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key), jmap{"name": "smoke"}, 201, &suite)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
+		jmap{"name": "closed", "suiteKey": suite.Key, "caseKeys": []string{c.Key}}, 201, &closedRun)
+	var closedItems []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", closedRun.Key), nil, 200, &closedItems)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", closedItems[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", closedRun.Key), nil, 204, nil)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
+		jmap{"name": "open", "suiteKey": suite.Key, "caseKeys": []string{c.Key}}, 201, &openRun)
+	var openItems []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", openRun.Key), nil, 200, &openItems)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", openItems[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
+
+	type point struct {
+		RunKey string         `json:"runKey"`
+		Counts map[string]int `json:"counts"`
+		IsOpen bool           `json:"isOpen"`
+	}
+	var withoutOpen struct {
+		Points []point `json:"points"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/suites/%s/trend", suite.Key), nil, 200, &withoutOpen)
+	if len(withoutOpen.Points) != 1 || withoutOpen.Points[0].RunKey != closedRun.Key {
+		t.Fatalf("default trend Points = %+v, want only the closed run", withoutOpen.Points)
+	}
+
+	var withOpen struct {
+		Points []point `json:"points"`
+	}
+	call(t, h, "GET", fmt.Sprintf("/api/v1/suites/%s/trend?includeOpen=true", suite.Key), nil, 200, &withOpen)
+	if len(withOpen.Points) != 2 {
+		t.Fatalf("includeOpen=true Points = %+v, want 2", withOpen.Points)
+	}
+	last := withOpen.Points[len(withOpen.Points)-1]
+	if last.RunKey != openRun.Key || !last.IsOpen || last.Counts["failed"] != 1 {
+		t.Errorf("trailing point = %+v, want the open run marked IsOpen with 1 failed", last)
+	}
+}
+
+// TestPublicProject_SuiteTrendIncludeOpenSucceedsWhenPublic confirms the
+// public route (mounted on the same handler) supports includeOpen too.
+func TestPublicProject_SuiteTrendIncludeOpenSucceedsWhenPublic(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "Open Book"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+	callAs(t, handler, admin, "PATCH", "/api/v1/projects/"+projectKey, jmap{"publicAccess": true}, 200, nil)
+
+	var c, suite jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/cases", jmap{"title": "one"}, 201, &c)
+	caseKey, _ := c["key"].(string)
+	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/suites", jmap{"name": "smoke"}, 201, &suite)
+	suiteKey, _ := suite["key"].(string)
+
+	var openRun jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/runs",
+		jmap{"name": "open", "suiteKey": suiteKey, "caseKeys": []string{caseKey}}, 201, &openRun)
+
+	var trend struct {
+		Points []struct{ IsOpen bool } `json:"points"`
+	}
+	callAs(t, handler, "", "GET", "/api/v1/public/suites/"+suiteKey+"/trend?includeOpen=true", nil, 200, &trend)
+	if len(trend.Points) != 1 || !trend.Points[0].IsOpen {
+		t.Errorf("public includeOpen trend Points = %+v, want one open point", trend.Points)
+	}
+}
+
 func TestScenario_FlakyCasesOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p, c struct{ Key string }

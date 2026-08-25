@@ -281,11 +281,21 @@ func (r *SuiteRepo) RemoveCase(ctx context.Context, suiteID, caseID string) erro
 	return err
 }
 
-// Trend returns a suite's pass-rate trend: its closed runs, oldest first,
-// each with its full status-count breakdown (add-suite-pass-rate-trend).
-// Open runs are excluded — their counts are still mid-flight, not a
-// completed outcome.
-func (r *SuiteRepo) Trend(ctx context.Context, suiteID string) (domain.SuiteTrend, error) {
+// suiteTrendRecentRunLimit caps Trend's window to the most recent N
+// closed runs (add-suite-run-breakdown-trend design.md D2) rather than
+// growing unbounded as a suite accumulates history — a stacked-bar-per-run
+// chart degrades to illegibly thin bars long before a single pass-rate
+// line would.
+const suiteTrendRecentRunLimit = 15
+
+// Trend returns a suite's pass-rate trend: its most recent closed runs
+// (capped at suiteTrendRecentRunLimit), oldest first within that window,
+// each with its full status-count breakdown (add-suite-pass-rate-trend,
+// add-suite-run-breakdown-trend). Open runs are excluded by default — their
+// counts are still mid-flight, not a completed outcome — unless includeOpen
+// requests the suite's current open run (its most recently created one, if
+// more than one exists) as an additional trailing point, marked IsOpen.
+func (r *SuiteRepo) Trend(ctx context.Context, suiteID string, includeOpen bool) (domain.SuiteTrend, error) {
 	var suiteKey string
 	if err := r.pool.QueryRow(ctx, `SELECT key FROM test_suites WHERE id = $1`, suiteID).Scan(&suiteKey); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -295,16 +305,20 @@ func (r *SuiteRepo) Trend(ctx context.Context, suiteID string) (domain.SuiteTren
 	}
 
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.name, tr.created_at, tri.current_status, count(*)
-		 FROM test_runs tr
-		 JOIN test_run_items tri ON tri.run_id = tr.id
-		 WHERE tr.suite_id = $1 AND tr.status = 'closed'
-		 GROUP BY tr.id, tr.key, tr.name, tr.created_at, tri.current_status
-		 ORDER BY tr.created_at ASC`, suiteID)
+		`WITH recent_closed AS (
+		   SELECT id, key, name, created_at FROM test_runs
+		   WHERE suite_id = $1 AND status = 'closed'
+		   ORDER BY created_at DESC
+		   LIMIT $2
+		 )
+		 SELECT rc.id, rc.key, rc.name, rc.created_at, tri.current_status, count(*)
+		 FROM recent_closed rc
+		 JOIN test_run_items tri ON tri.run_id = rc.id
+		 GROUP BY rc.id, rc.key, rc.name, rc.created_at, tri.current_status
+		 ORDER BY rc.created_at ASC`, suiteID, suiteTrendRecentRunLimit)
 	if err != nil {
 		return domain.SuiteTrend{}, err
 	}
-	defer rows.Close()
 
 	trend := domain.SuiteTrend{SuiteID: suiteID, SuiteKey: suiteKey, Points: []domain.SuiteTrendPoint{}}
 	index := map[string]int{}
@@ -314,6 +328,7 @@ func (r *SuiteRepo) Trend(ctx context.Context, suiteID string) (domain.SuiteTren
 		var status domain.Status
 		var count int
 		if err := rows.Scan(&runID, &runKey, &runName, &createdAt, &status, &count); err != nil {
+			rows.Close()
 			return domain.SuiteTrend{}, err
 		}
 		i, ok := index[runID]
@@ -327,5 +342,51 @@ func (r *SuiteRepo) Trend(ctx context.Context, suiteID string) (domain.SuiteTren
 		trend.Points[i].Counts[status] = count
 		trend.Points[i].Total += count
 	}
-	return trend, rows.Err()
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return domain.SuiteTrend{}, err
+	}
+
+	if !includeOpen {
+		return trend, nil
+	}
+
+	var openRunID, openRunKey, openRunName string
+	var openCreatedAt time.Time
+	err = r.pool.QueryRow(ctx,
+		`SELECT id, key, name, created_at FROM test_runs
+		 WHERE suite_id = $1 AND status = 'open'
+		 ORDER BY created_at DESC LIMIT 1`, suiteID,
+	).Scan(&openRunID, &openRunKey, &openRunName, &openCreatedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return trend, nil
+	}
+	if err != nil {
+		return domain.SuiteTrend{}, err
+	}
+
+	openPoint := domain.SuiteTrendPoint{
+		RunKey: openRunKey, RunName: openRunName, CreatedAt: openCreatedAt,
+		Counts: map[domain.Status]int{}, IsOpen: true,
+	}
+	statusRows, err := r.pool.Query(ctx,
+		`SELECT current_status, count(*) FROM test_run_items WHERE run_id = $1 GROUP BY current_status`, openRunID)
+	if err != nil {
+		return domain.SuiteTrend{}, err
+	}
+	defer statusRows.Close()
+	for statusRows.Next() {
+		var status domain.Status
+		var count int
+		if err := statusRows.Scan(&status, &count); err != nil {
+			return domain.SuiteTrend{}, err
+		}
+		openPoint.Counts[status] = count
+		openPoint.Total += count
+	}
+	if err := statusRows.Err(); err != nil {
+		return domain.SuiteTrend{}, err
+	}
+	trend.Points = append(trend.Points, openPoint)
+	return trend, nil
 }

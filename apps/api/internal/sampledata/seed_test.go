@@ -1258,3 +1258,65 @@ func TestSeedContentShowcasesScreenshotAttachment(t *testing.T) {
 		t.Error("no seeded run item result carries a screenshot attachment")
 	}
 }
+
+// TestSeedContentShowcasesSuiteRunBreakdownTrend covers
+// add-suite-run-breakdown-trend (GH #137): the Regression suite's closed
+// runs already carry real pass/failed variation (from the run-comparison
+// showcase above) and a trailing open run — enough to demonstrate the new
+// stacked-breakdown chart's both tabs, not just an all-pass or all-empty
+// trend.
+func TestSeedContentShowcasesSuiteRunBreakdownTrend(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	suites, err := svc.ListSuites(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListSuites: %v", err)
+	}
+	var regression *domain.Suite
+	for i, s := range suites {
+		if s.Name == "Regression" {
+			regression = &suites[i]
+		}
+	}
+	if regression == nil {
+		t.Fatal("missing the Regression suite")
+	}
+
+	closedTrend, err := svc.SuiteTrend(actorCtx, regression.ID, false)
+	if err != nil {
+		t.Fatalf("SuiteTrend(includeOpen=false): %v", err)
+	}
+	if len(closedTrend.Points) < 2 {
+		t.Fatalf("closed trend has %d points, want at least 2", len(closedTrend.Points))
+	}
+	sawNonPass := false
+	for _, pt := range closedTrend.Points {
+		for status, count := range pt.Counts {
+			if status != domain.StatusPass && count > 0 {
+				sawNonPass = true
+			}
+		}
+	}
+	if !sawNonPass {
+		t.Error("no closed-run point has a non-pass status — the chart would show only solid-pass bars")
+	}
+
+	openTrend, err := svc.SuiteTrend(actorCtx, regression.ID, true)
+	if err != nil {
+		t.Fatalf("SuiteTrend(includeOpen=true): %v", err)
+	}
+	if len(openTrend.Points) != len(closedTrend.Points)+1 {
+		t.Fatalf("includeOpen trend has %d points, want %d (closed + 1 trailing open)", len(openTrend.Points), len(closedTrend.Points)+1)
+	}
+	last := openTrend.Points[len(openTrend.Points)-1]
+	if !last.IsOpen {
+		t.Error("the trailing point in the includeOpen trend is not marked IsOpen")
+	}
+}

@@ -88,8 +88,9 @@ function mockDetailAPI(
   anonymous = false,
   trendPoints: unknown[] = [],
   runs: unknown[] = [],
+  openTrendPoints: unknown[] = trendPoints,
 ) {
-  mockGET.mockImplementation((path: string) => {
+  mockGET.mockImplementation((path: string, options?: { params?: { query?: { includeOpen?: boolean } } }) => {
     if (path === '/api/v1/users/me')
       return anonymous
         ? Promise.resolve({ data: undefined, response: { ok: false } })
@@ -104,8 +105,10 @@ function mockDetailAPI(
     if (path === casesPath) return Promise.resolve({ data: cases, response: { ok: true } })
     if (path === foldersPath) return Promise.resolve({ data: folders, response: { ok: true } })
     if (path === suitePath) return Promise.resolve({ data: suite, response: { ok: true } })
-    if (path === trendPath)
-      return Promise.resolve({ data: { suiteId: 's1', suiteKey: 'p1-S1', points: trendPoints }, response: { ok: true } })
+    if (path === trendPath) {
+      const points = options?.params?.query?.includeOpen ? openTrendPoints : trendPoints
+      return Promise.resolve({ data: { suiteId: 's1', suiteKey: 'p1-S1', points }, response: { ok: true } })
+    }
     if (path === runsPath) return Promise.resolve({ data: runs, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
@@ -295,55 +298,63 @@ describe('SuiteDetailPage', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
   })
 
-  it('renders the suite pass-rate trend in the Stability section', async () => {
+  it('renders the suite run-breakdown trend in the Stability section', async () => {
     const points = [
       { runKey: 'p1-R1', runName: 'Run 1', createdAt: '2026-01-01T00:00:00Z', total: 4, counts: { pass: 3, failed: 1 } },
     ]
     mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points)
     renderDetail()
     await screen.findByText('Stability')
-    // SuitePassRateTrend's own tests cover its rendering in detail; here we
-    // only need proof it's fed real data, not an always-empty placeholder.
-    expect(screen.queryByTestId('suite-trend-placeholder')).not.toBeInTheDocument()
+    // SuiteRunBreakdownTrend's own tests cover its rendering in detail; here
+    // we only need proof it's fed real data, not an always-empty placeholder.
+    expect(screen.queryByTestId('suite-breakdown-placeholder')).not.toBeInTheDocument()
   })
 
   it('shows the trend\'s own empty state in Stability when the suite has no closed runs', async () => {
     mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [])
     renderDetail()
     await screen.findByText('Stability')
-    expect(screen.getByTestId('suite-trend-placeholder')).toBeInTheDocument()
+    expect(screen.getByTestId('suite-breakdown-placeholder')).toBeInTheDocument()
   })
 
   it('defaults the Stability card to "Closed runs", showing only closed-run points', async () => {
     const points = [{ runKey: 'p1-R1', runName: 'Run 1', createdAt: '2026-01-01T00:00:00Z', total: 4, counts: { pass: 3, failed: 1 } }]
+    const openPoints = [
+      ...points,
+      { runKey: 'p1-R2', runName: 'Run 2 (open)', createdAt: '2026-01-02T00:00:00Z', total: 5, counts: { pass: 1 }, isOpen: true },
+    ]
     const runs = [
       { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', passRate: 75, createdAt: '2026-01-01T00:00:00Z' },
       { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2 (open)', status: 'open', suiteKey: 'p1-S1', passRate: 20, createdAt: '2026-01-02T00:00:00Z' },
     ]
-    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points, runs)
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points, runs, openPoints)
     renderDetail()
     await screen.findByText('Stability')
 
     expect(screen.getByRole('button', { name: /^closed runs$/i })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByRole('button', { name: /^open \+ closed$/i })).toHaveAttribute('aria-pressed', 'false')
-    expect(screen.getByTestId('suite-trend-point-p1-R1')).toBeInTheDocument()
-    expect(screen.queryByTestId('suite-trend-point-p1-R2')).not.toBeInTheDocument()
+    expect(screen.getByTestId('suite-breakdown-bar-p1-R1')).toBeInTheDocument()
+    expect(screen.queryByTestId('suite-breakdown-bar-p1-R2')).not.toBeInTheDocument()
   })
 
   it('switching to "Open + closed" shows every run, including still-open ones', async () => {
     const points = [{ runKey: 'p1-R1', runName: 'Run 1', createdAt: '2026-01-01T00:00:00Z', total: 4, counts: { pass: 3, failed: 1 } }]
+    const openPoints = [
+      ...points,
+      { runKey: 'p1-R2', runName: 'Run 2 (open)', createdAt: '2026-01-02T00:00:00Z', total: 5, counts: { pass: 1 }, isOpen: true },
+    ]
     const runs = [
       { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', status: 'closed', suiteKey: 'p1-S1', passRate: 75, createdAt: '2026-01-01T00:00:00Z' },
       { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2 (open)', status: 'open', suiteKey: 'p1-S1', passRate: 20, createdAt: '2026-01-02T00:00:00Z' },
     ]
-    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points, runs)
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, points, runs, openPoints)
     renderDetail()
     await screen.findByText('Stability')
 
     await userEvent.click(screen.getByRole('button', { name: /^open \+ closed$/i }))
-    expect(screen.getByTestId('suite-trend-point-p1-R1')).toBeInTheDocument()
-    expect(screen.getByTestId('suite-trend-point-p1-R2')).toBeInTheDocument()
-    expect(screen.getByTestId('suite-trend-point-p1-R2')).toHaveAttribute('data-open', 'true')
+    expect(screen.getByTestId('suite-breakdown-bar-p1-R1')).toBeInTheDocument()
+    expect(screen.getByTestId('suite-breakdown-bar-p1-R2')).toBeInTheDocument()
+    expect(screen.getByTestId('suite-breakdown-bar-p1-R2')).toHaveAttribute('data-open', 'true')
   })
 
   it('each Stability view states what it counts', async () => {

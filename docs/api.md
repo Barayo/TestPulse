@@ -112,7 +112,7 @@ exactly one folder, defaulting to the project's root; see
 | GET / POST | `/api/v1/projects/{projectKey}/suites` | List / create — list entries include a batched `passRate`/`lastRunAt` from each suite's most recently created run |
 | GET / PUT / DELETE | `/api/v1/suites/{suiteKey}` | Get / rename / delete a single suite |
 | PUT / DELETE | `/api/v1/suites/{suiteKey}/cases/{caseKey}` | Add / remove a case (n:m; removing does not delete the case) |
-| GET | `/api/v1/suites/{suiteKey}/trend` | Pass-rate trend across the suite's closed runs, oldest first |
+| GET | `/api/v1/suites/{suiteKey}/trend?includeOpen=` | Status-breakdown trend across the suite's most recent 15 closed runs, oldest first; `includeOpen=true` adds the current open run as a trailing, marked point |
 
 **Runs and execution**
 
@@ -146,7 +146,7 @@ public, doesn't exist, or the switch is off (see
 | GET | `/api/v1/public/projects/{projectKey}` | Get a public project |
 | GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` \| `/runs/status-summary` \| `/custom-fields` | List, same shapes as the authenticated equivalents |
 | GET | `/api/v1/public/cases/{caseKey}` \| `/versions` \| `/executions` | A case, its version history, its execution history — `/executions` supports the same `order=recent&limit=N` params as the authenticated route |
-| GET | `/api/v1/public/suites/{suiteKey}` \| `/trend` | A suite, its pass-rate trend |
+| GET | `/api/v1/public/suites/{suiteKey}` \| `/trend?includeOpen=` | A suite, its status-breakdown trend — same `includeOpen` support as the authenticated route |
 | GET | `/api/v1/public/runs/{runKey}` \| `/items` \| `/summary` | A run, its items, its status counts |
 | GET | `/api/v1/public/items/{itemId}/results` | A run item's result log |
 | GET | `/api/v1/public/attachments/{attachmentId}` | The raw image bytes for an attachment |

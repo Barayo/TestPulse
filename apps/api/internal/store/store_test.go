@@ -3,6 +3,7 @@ package store_test
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
@@ -1642,7 +1643,7 @@ func TestSuiteTrendListsClosedRunsOldestFirst(t *testing.T) {
 		t.Fatalf("close run2: %v", err)
 	}
 
-	trend, err := s.Suites.Trend(ctx, suite.ID)
+	trend, err := s.Suites.Trend(ctx, suite.ID, false)
 	if err != nil {
 		t.Fatalf("Trend: %v", err)
 	}
@@ -1683,7 +1684,7 @@ func TestSuiteTrendExcludesOpenRuns(t *testing.T) {
 		t.Fatalf("create open run: %v", err)
 	}
 
-	trend, err := s.Suites.Trend(ctx, suite.ID)
+	trend, err := s.Suites.Trend(ctx, suite.ID, false)
 	if err != nil {
 		t.Fatalf("Trend: %v", err)
 	}
@@ -1703,12 +1704,144 @@ func TestSuiteTrendEmptyForNoClosedRuns(t *testing.T) {
 		t.Fatalf("create suite: %v", err)
 	}
 
-	trend, err := s.Suites.Trend(ctx, suite.ID)
+	trend, err := s.Suites.Trend(ctx, suite.ID, false)
 	if err != nil {
 		t.Fatalf("Trend: %v", err)
 	}
 	if len(trend.Points) != 0 {
 		t.Errorf("Points = %+v, want empty", trend.Points)
+	}
+}
+
+// closedSuiteRun creates and closes a run against the given suite with a
+// single passing item, returning the closed run.
+func closedSuiteRun(t *testing.T, s *store.Store, projectID, suiteID, caseID, name string) domain.Run {
+	t.Helper()
+	ctx := context.Background()
+	run, err := s.Runs.CreateWithSuite(ctx, projectID, name, suiteID, []string{caseID})
+	if err != nil {
+		t.Fatalf("create run %q: %v", name, err)
+	}
+	items, _ := s.Runs.Items(ctx, run.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, items[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictPass}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("append result %q: %v", name, err)
+	}
+	if err := s.Runs.Close(ctx, run.ID); err != nil {
+		t.Fatalf("close %q: %v", name, err)
+	}
+	return run
+}
+
+// TestSuiteTrendCapsToMostRecent15 covers add-suite-run-breakdown-trend's
+// "The trend is capped to the most recent 15 runs" scenario: a suite with
+// more than 15 closed runs reports only the 15 most recent, still ordered
+// oldest to newest within that window.
+func TestSuiteTrendCapsToMostRecent15(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+
+	var runs []domain.Run
+	for i := 0; i < 16; i++ {
+		runs = append(runs, closedSuiteRun(t, s, p.ID, suite.ID, c.ID, fmt.Sprintf("run %d", i)))
+	}
+
+	trend, err := s.Suites.Trend(ctx, suite.ID, false)
+	if err != nil {
+		t.Fatalf("Trend: %v", err)
+	}
+	if len(trend.Points) != 15 {
+		t.Fatalf("Points = %d, want 15", len(trend.Points))
+	}
+	// The oldest run (index 0) must have been dropped; the window is
+	// runs[1..15], still oldest first.
+	if trend.Points[0].RunKey != runs[1].Key {
+		t.Errorf("Points[0].RunKey = %q, want %q (the oldest run should be dropped)", trend.Points[0].RunKey, runs[1].Key)
+	}
+	if trend.Points[len(trend.Points)-1].RunKey != runs[15].Key {
+		t.Errorf("Points[last].RunKey = %q, want %q (the most recent run)", trend.Points[len(trend.Points)-1].RunKey, runs[15].Key)
+	}
+}
+
+// TestSuiteTrendIncludeOpenAddsTrailingPoint covers "includeOpen adds the
+// current open run as a trailing point".
+func TestSuiteTrendIncludeOpenAddsTrailingPoint(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+	closed := closedSuiteRun(t, s, p.ID, suite.ID, c.ID, "closed run")
+	openRun, err := s.Runs.CreateWithSuite(ctx, p.ID, "open run", suite.ID, []string{c.ID})
+	if err != nil {
+		t.Fatalf("create open run: %v", err)
+	}
+	openItems, _ := s.Runs.Items(ctx, openRun.ID, "")
+	if _, err := s.Runs.AppendResult(ctx, openItems[0].ID, domain.NewResult{Actor: "ana", Verdict: domain.VerdictFailed}, domain.ResultActorUnknown, ""); err != nil {
+		t.Fatalf("append result to open run: %v", err)
+	}
+
+	without, err := s.Suites.Trend(ctx, suite.ID, false)
+	if err != nil {
+		t.Fatalf("Trend(includeOpen=false): %v", err)
+	}
+	if len(without.Points) != 1 || without.Points[0].RunKey != closed.Key {
+		t.Fatalf("Trend(includeOpen=false).Points = %+v, want only the closed run", without.Points)
+	}
+
+	with, err := s.Suites.Trend(ctx, suite.ID, true)
+	if err != nil {
+		t.Fatalf("Trend(includeOpen=true): %v", err)
+	}
+	if len(with.Points) != 2 {
+		t.Fatalf("Trend(includeOpen=true).Points = %d, want 2", len(with.Points))
+	}
+	if with.Points[0].RunKey != closed.Key || with.Points[0].IsOpen {
+		t.Errorf("Points[0] = %+v, want the closed run, not open", with.Points[0])
+	}
+	last := with.Points[len(with.Points)-1]
+	if last.RunKey != openRun.Key || !last.IsOpen {
+		t.Errorf("Points[last] = %+v, want the open run marked IsOpen", last)
+	}
+	if last.Counts[domain.StatusFailed] != 1 {
+		t.Errorf("open run Counts = %+v, want 1 failed", last.Counts)
+	}
+}
+
+// TestSuiteTrendIncludeOpenWithNoOpenRunIsUnaffected covers "includeOpen
+// with no current open run is unaffected".
+func TestSuiteTrendIncludeOpenWithNoOpenRunIsUnaffected(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+	suite, err := s.Suites.Create(ctx, p.ID, "smoke")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+	closedSuiteRun(t, s, p.ID, suite.ID, c.ID, "closed run")
+
+	without, err := s.Suites.Trend(ctx, suite.ID, false)
+	if err != nil {
+		t.Fatalf("Trend(includeOpen=false): %v", err)
+	}
+	with, err := s.Suites.Trend(ctx, suite.ID, true)
+	if err != nil {
+		t.Fatalf("Trend(includeOpen=true): %v", err)
+	}
+	if len(with.Points) != len(without.Points) {
+		t.Fatalf("Trend(includeOpen=true).Points = %d, want %d (same as without)", len(with.Points), len(without.Points))
+	}
+	if with.Points[0].RunKey != without.Points[0].RunKey || with.Points[0].IsOpen {
+		t.Errorf("Points[0] = %+v, want identical to the no-open-run default", with.Points[0])
 	}
 }
 

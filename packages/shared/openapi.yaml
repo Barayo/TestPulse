@@ -984,6 +984,7 @@ paths:
   /api/v1/suites/{suiteKey}/trend:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
+      - { name: includeOpen, in: query, required: false, schema: { type: boolean }, description: "When true, adds the suite's current open run as a trailing, isOpen-marked point." }
     get:
       operationId: getSuiteTrend
       summary: Pass-rate trend across a suite's closed runs
@@ -1217,6 +1218,7 @@ paths:
   /api/v1/public/suites/{suiteKey}/trend:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
+      - { name: includeOpen, in: query, required: false, schema: { type: boolean }, description: "When true, adds the suite's current open run as a trailing, isOpen-marked point." }
     get:
       operationId: getPublicSuiteTrend
       summary: Pass-rate trend across a suite's closed runs, from a public project
@@ -2551,6 +2553,9 @@ components:
         counts:
           type: object
           additionalProperties: { type: integer }
+        isOpen:
+          type: boolean
+          description: "True only for the trailing point added by includeOpen=true — the suite's current open run. Absent/false for every closed-run point."
     SuiteTrend:
       type: object
       required: [suiteId, suiteKey, points]

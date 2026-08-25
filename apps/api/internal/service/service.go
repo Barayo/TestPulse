@@ -551,9 +551,10 @@ func (s *Service) DeleteSuite(ctx context.Context, suiteID string) error {
 }
 
 // SuiteTrend returns a suite's pass-rate trend across its closed runs
-// (add-suite-pass-rate-trend).
-func (s *Service) SuiteTrend(ctx context.Context, suiteID string) (domain.SuiteTrend, error) {
-	return s.store.Suites.Trend(ctx, suiteID)
+// (add-suite-pass-rate-trend), optionally including its current open run
+// as a trailing point (add-suite-run-breakdown-trend).
+func (s *Service) SuiteTrend(ctx context.Context, suiteID string, includeOpen bool) (domain.SuiteTrend, error) {
+	return s.store.Suites.Trend(ctx, suiteID, includeOpen)
 }
 
 // FlakyCases returns every currently-flaky case in a project

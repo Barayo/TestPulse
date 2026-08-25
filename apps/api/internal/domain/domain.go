@@ -582,6 +582,9 @@ type SuiteTrendPoint struct {
 	CreatedAt time.Time      `json:"createdAt"`
 	Total     int            `json:"total"`
 	Counts    map[Status]int `json:"counts"`
+	// IsOpen marks the trailing point added by Trend's includeOpen mode
+	// (add-suite-run-breakdown-trend) — false for every closed-run point.
+	IsOpen bool `json:"isOpen,omitempty"`
 }
 
 // SuiteTrend is a suite's closed runs, oldest first, each as a

@@ -603,7 +603,8 @@ func (h *api) compareRuns(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *api) suiteTrend(w http.ResponseWriter, r *http.Request) {
-	trend, err := h.svc.SuiteTrend(r.Context(), resolvedID(r, "suiteKey"))
+	includeOpen := r.URL.Query().Get("includeOpen") == "true"
+	trend, err := h.svc.SuiteTrend(r.Context(), resolvedID(r, "suiteKey"), includeOpen)
 	h.respond(w, http.StatusOK, trend, err)
 }
 

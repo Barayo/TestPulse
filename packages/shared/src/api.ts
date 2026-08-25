@@ -837,7 +837,10 @@ export interface paths {
     };
     "/api/v1/suites/{suiteKey}/trend": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When true, adds the suite's current open run as a trailing, isOpen-marked point. */
+                includeOpen?: boolean;
+            };
             header?: never;
             path: {
                 suiteKey: string;
@@ -1106,7 +1109,10 @@ export interface paths {
     };
     "/api/v1/public/suites/{suiteKey}/trend": {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When true, adds the suite's current open run as a trailing, isOpen-marked point. */
+                includeOpen?: boolean;
+            };
             header?: never;
             path: {
                 suiteKey: string;
@@ -2181,6 +2187,8 @@ export interface components {
             counts: {
                 [key: string]: number;
             };
+            /** @description True only for the trailing point added by includeOpen=true — the suite's current open run. Absent/false for every closed-run point. */
+            isOpen?: boolean;
         };
         SuiteTrend: {
             suiteId: string;
@@ -4218,7 +4226,10 @@ export interface operations {
     };
     getSuiteTrend: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When true, adds the suite's current open run as a trailing, isOpen-marked point. */
+                includeOpen?: boolean;
+            };
             header?: never;
             path: {
                 suiteKey: string;
@@ -4543,7 +4554,10 @@ export interface operations {
     };
     getPublicSuiteTrend: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When true, adds the suite's current open run as a trailing, isOpen-marked point. */
+                includeOpen?: boolean;
+            };
             header?: never;
             path: {
                 suiteKey: string;
