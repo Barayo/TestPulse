@@ -546,10 +546,20 @@ export default function RunItemDetailPage() {
                   >
                     Failed
                   </Button>
-                  <Button size="sm" variant="outline" disabled={isRecording} onClick={() => void recordVerdict('blocked')}>
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    disabled={isRecording}
+                    onClick={() => void recordVerdict('blocked')}
+                  >
                     Blocked
                   </Button>
-                  <Button size="sm" variant="outline" disabled={isRecording} onClick={() => void recordVerdict('skipped')}>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    disabled={isRecording}
+                    onClick={() => void recordVerdict('skipped')}
+                  >
                     Skipped
                   </Button>
                   {item.currentStatus === 'failed' && (

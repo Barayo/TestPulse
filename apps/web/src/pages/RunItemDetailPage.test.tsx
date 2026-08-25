@@ -291,6 +291,20 @@ describe('RunItemDetailPage', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: /^pass$/i })).not.toBeDisabled())
   })
 
+  it('colors Blocked and Skipped to match their StatusBadge dot color (#49)', async () => {
+    mockItemAPI()
+    renderPage()
+
+    const blocked = await screen.findByRole('button', { name: /^blocked$/i })
+    const skipped = await screen.findByRole('button', { name: /^skipped$/i })
+    // StatusBadge's dotClass colors `blocked` identically to `failed`
+    // (bg-destructive) and gives `skipped` its own bg-secondary/70 tone —
+    // the buttons should carry the matching Button variant, not the
+    // neutral `outline` treatment.
+    expect(blocked.className).toContain('bg-destructive/10')
+    expect(skipped.className).toContain('bg-secondary')
+  })
+
   it('offers retest on a failed item', async () => {
     mockItemAPI({ ...item, currentStatus: 'failed' })
     mockPUT.mockResolvedValue({ response: { ok: true } })
