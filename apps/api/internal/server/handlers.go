@@ -67,6 +67,7 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/executions", h.listCaseExecutions)
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
 	})
+	r.With(h.requirePermission(domain.PermSectionEdit, projectIDFromFolder)).Put("/folders/{folderID}", h.moveFolder)
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Get("/folders/{folderID}/delete-preview", h.folderDeletePreview)
 	r.Route("/suites/{suiteKey}/cases/{caseKey}", func(r chi.Router) {
@@ -144,7 +145,7 @@ func (h *api) respond(w http.ResponseWriter, status int, v any, err error) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		case errors.Is(err, store.ErrNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-		case errors.Is(err, store.ErrRootFolder):
+		case errors.Is(err, store.ErrRootFolder), errors.Is(err, store.ErrFolderCycle):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		default:
 			h.logger.Error("request failed", "error", err)
@@ -401,6 +402,18 @@ func (h *api) moveCase(w http.ResponseWriter, r *http.Request) {
 	}
 	err = h.svc.MoveCase(r.Context(), resolvedID(r, "caseKey"), body.FolderID)
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) moveFolder(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		ParentFolderID string `json:"parentFolderId"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	f, err := h.svc.MoveFolder(r.Context(), chi.URLParam(r, "folderID"), body.ParentFolderID)
+	h.respond(w, http.StatusOK, f, err)
 }
 
 func (h *api) deleteFolder(w http.ResponseWriter, r *http.Request) {

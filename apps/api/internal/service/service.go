@@ -494,6 +494,27 @@ func (s *Service) ListFolders(ctx context.Context, projectID string) ([]domain.F
 	return s.store.Folders.List(ctx, projectID)
 }
 
+// MoveFolder reparents folderID under targetParentID (add-library-folder-
+// selection), auditing "move"/"folder" with {from, to} exactly like
+// MoveCase does. A cycle (targetParentID inside folderID's own subtree, or
+// folderID itself) or moving the root folder surfaces as a client error
+// (store.ErrFolderCycle/ErrRootFolder), not a 500.
+func (s *Service) MoveFolder(ctx context.Context, folderID, targetParentID string) (domain.Folder, error) {
+	if targetParentID == "" {
+		return domain.Folder{}, invalid("parentFolderId is required")
+	}
+	before, err := s.store.Folders.Get(ctx, folderID)
+	if err != nil {
+		return domain.Folder{}, err
+	}
+	f, err := s.store.Folders.Move(ctx, folderID, targetParentID)
+	if err != nil {
+		return domain.Folder{}, err
+	}
+	s.audit(ctx, "move", "folder", folderID, map[string]any{"from": before.ParentFolderID, "to": targetParentID})
+	return f, nil
+}
+
 func (s *Service) DeleteFolder(ctx context.Context, folderID string) error {
 	if err := s.store.Folders.Delete(ctx, folderID); err != nil {
 		return err

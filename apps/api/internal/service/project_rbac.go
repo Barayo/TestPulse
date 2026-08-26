@@ -27,8 +27,9 @@ func (s *Service) MyPermissions(ctx context.Context, actor domain.Actor, project
 	if actor.IsTenantAdmin {
 		return domain.Permissions{
 			Read: true, CaseCreate: true, CaseEdit: true, CaseDelete: true,
-			SectionCreate: true, SectionDelete: true, SuiteCreate: true, SuiteEditMembership: true,
+			SectionCreate: true, SectionEdit: true, SectionDelete: true, SuiteCreate: true, SuiteEditMembership: true,
 			RunCreate: true, RunRecordResult: true, ManageProject: true,
+			RunDelete: true, ProjectDelete: true,
 		}, nil
 	}
 	perms, err := s.EffectivePermissions(ctx, actor, projectID)
@@ -105,12 +106,12 @@ var defaultRoles = []domain.Role{
 	{Name: "Tester", Rank: 1, CanRead: true, CanRunCreate: true, CanRunRecordResult: true},
 	{
 		Name: "Contributor", Rank: 2, CanRead: true,
-		CanCaseCreate: true, CanCaseEdit: true, CanSectionCreate: true, CanSuiteCreate: true, CanSuiteEditMembership: true,
+		CanCaseCreate: true, CanCaseEdit: true, CanSectionCreate: true, CanSectionEdit: true, CanSuiteCreate: true, CanSuiteEditMembership: true,
 		CanRunCreate: true, CanRunRecordResult: true,
 	},
 	{
 		Name: "Project Admin", Rank: 3, CanRead: true,
-		CanCaseCreate: true, CanCaseEdit: true, CanCaseDelete: true, CanSectionCreate: true, CanSectionDelete: true,
+		CanCaseCreate: true, CanCaseEdit: true, CanCaseDelete: true, CanSectionCreate: true, CanSectionEdit: true, CanSectionDelete: true,
 		CanSuiteCreate: true, CanSuiteEditMembership: true, CanRunCreate: true, CanRunRecordResult: true, CanManageProject: true,
 		CanRunDelete: true, CanProjectDelete: true,
 	},

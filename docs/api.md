@@ -103,6 +103,7 @@ exactly one folder, defaulting to the project's root; see
 | GET / POST | `/api/v1/projects/{projectKey}/folders` | List all folders (flat) / create a subfolder (`name`, `parentFolderId` — always required) |
 | GET | `/api/v1/folders/{folderId}/delete-preview` | Preview a delete's blast radius: `caseCount`/`folderCount` in the subtree, for the confirmation dialog to show before the user confirms (`add-delete-mode`) |
 | DELETE | `/api/v1/folders/{folderId}` | Cascading soft delete: the folder and every folder/case in its subtree (`add-delete-mode`, replacing the old reparent behavior); the root folder cannot be deleted (`400`) |
+| PUT | `/api/v1/folders/{folderId}` | Move (reparent) a folder to a different parent (`parentFolderId`), requires `sectionEdit` (`add-library-folder-selection`). Rejects a target that is the folder itself or anywhere in its own subtree, and rejects moving the root folder — both `400`, never a `500` or a silent no-op |
 | PUT | `/api/v1/cases/{caseKey}/folder` | Move a case to a different folder (`folderId`) — suite membership is unaffected |
 
 **Suites**
@@ -235,10 +236,11 @@ field alongside the report text, not inside it.
 | GET | `/api/v1/roles/{roleId}/deletion-preview` | Real reference counts for the delete-role confirmation dialog — direct user assignments, team assignments, and distinct projects touched (`redesign-admin-shell`) |
 | POST | `/api/v1/roles/reset` | Restore Tester/Contributor/Project Admin to their factory permission flags, in place — an existing one of the three keeps its `id` (so assignments referencing it stay valid), a missing one is recreated. Every other role, and every assignment, is untouched — not a wipe (design.md D12) |
 
-Each role carries twelve independent boolean flags (design.md D11 —
+Each role carries thirteen independent boolean flags (design.md D11 —
 concrete, per-resource actions rather than a handful of broad ones):
 `canRead`, `canCaseCreate`, `canCaseEdit`, `canCaseDelete`,
-`canSectionCreate`, `canSectionDelete`, `canSuiteCreate`,
+`canSectionCreate`, `canSectionEdit` (`add-library-folder-selection` —
+moving/reparenting a section), `canSectionDelete`, `canSuiteCreate`,
 `canSuiteEditMembership`, `canRunCreate`, `canRunRecordResult`,
 `canManageProject`, plus `canRunDelete` and `canProjectDelete`
 (`add-data-retention` D3 — kept independent of `canRunCreate`/

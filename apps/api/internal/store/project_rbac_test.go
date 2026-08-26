@@ -140,18 +140,19 @@ func TestRoleCreateGetUpdateDelete(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 
-	role := mustRole(t, s, domain.Role{Name: "Reviewer", Rank: 5, CanRead: true, CanCaseCreate: true})
-	if role.Name != "Reviewer" || !role.CanRead || !role.CanCaseCreate || role.CanCaseDelete {
+	role := mustRole(t, s, domain.Role{Name: "Reviewer", Rank: 5, CanRead: true, CanCaseCreate: true, CanSectionEdit: true})
+	if role.Name != "Reviewer" || !role.CanRead || !role.CanCaseCreate || role.CanCaseDelete || !role.CanSectionEdit {
 		t.Errorf("role = %+v", role)
 	}
 
 	role.Name = "Senior Reviewer"
 	role.CanCaseDelete = true
+	role.CanSectionEdit = false
 	updated, err := s.Roles.Update(ctx, role)
 	if err != nil {
 		t.Fatalf("Update: %v", err)
 	}
-	if updated.Name != "Senior Reviewer" || !updated.CanCaseDelete {
+	if updated.Name != "Senior Reviewer" || !updated.CanCaseDelete || updated.CanSectionEdit {
 		t.Errorf("updated = %+v", updated)
 	}
 

@@ -16,7 +16,12 @@ type FolderRepo struct {
 
 // ErrRootFolder is returned when an operation that isn't allowed on a
 // project's root folder (e.g. deletion) is attempted.
-var ErrRootFolder = fmt.Errorf("root folder cannot be deleted")
+var ErrRootFolder = fmt.Errorf("root folder cannot be moved or deleted")
+
+// ErrFolderCycle is returned when a folder move's target is the folder
+// itself or a descendant of it — reparenting into either would disconnect
+// the folder from the tree or create an unreachable loop.
+var ErrFolderCycle = fmt.Errorf("a folder cannot be moved into itself or one of its own subfolders")
 
 func scanFolder(row pgx.Row) (domain.Folder, error) {
 	var f domain.Folder
@@ -148,6 +153,42 @@ func (r *FolderRepo) Delete(ctx context.Context, folderID string) error {
 		return err
 	}
 	return tx.Commit(ctx)
+}
+
+// Move reparents folderID under targetParentID. Rejects moving the root
+// folder (ErrRootFolder, it has no parent) and rejects a target that is
+// folderID itself or anywhere in its own subtree (ErrFolderCycle), reusing
+// subtreeCTE rather than walking the tree in Go.
+func (r *FolderRepo) Move(ctx context.Context, folderID, targetParentID string) (domain.Folder, error) {
+	var parentFolderID *string
+	err := r.pool.QueryRow(ctx,
+		`SELECT parent_folder_id FROM test_case_folders WHERE id = $1 AND NOT deleted`, folderID,
+	).Scan(&parentFolderID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.Folder{}, ErrNotFound
+	}
+	if err != nil {
+		return domain.Folder{}, err
+	}
+	if parentFolderID == nil {
+		return domain.Folder{}, ErrRootFolder
+	}
+
+	var inSubtree bool
+	if err := r.pool.QueryRow(ctx,
+		subtreeCTE+` SELECT EXISTS (SELECT 1 FROM subtree WHERE id = $2)`,
+		folderID, targetParentID,
+	).Scan(&inSubtree); err != nil {
+		return domain.Folder{}, err
+	}
+	if inSubtree {
+		return domain.Folder{}, ErrFolderCycle
+	}
+
+	row := r.pool.QueryRow(ctx,
+		`UPDATE test_case_folders SET parent_folder_id = $2 WHERE id = $1 RETURNING `+folderColumns,
+		folderID, targetParentID)
+	return scanFolder(row)
 }
 
 // SubtreeCounts previews how many cases and descendant folders (not

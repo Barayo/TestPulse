@@ -228,3 +228,64 @@ func TestRootFolderCannotBeDeleted(t *testing.T) {
 		t.Errorf("Delete(root) = %v, want ErrRootFolder", err)
 	}
 }
+
+// TestMoveFolderReparents covers add-library-folder-selection task 2.1: a
+// folder can be moved (reparented) to a different, unrelated folder.
+func TestMoveFolderReparents(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	root, _ := s.Folders.Root(ctx, p.ID)
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
+	settings, _ := s.Folders.Create(ctx, p.ID, root.ID, "Settings")
+
+	moved, err := s.Folders.Move(ctx, auth.ID, settings.ID)
+	if err != nil {
+		t.Fatalf("Move: %v", err)
+	}
+	if moved.ParentFolderID != settings.ID {
+		t.Errorf("ParentFolderID = %q, want %q", moved.ParentFolderID, settings.ID)
+	}
+
+	got, err := s.Folders.Get(ctx, auth.ID)
+	if err != nil || got.ParentFolderID != settings.ID {
+		t.Errorf("Get after move: %+v, %v", got, err)
+	}
+}
+
+// TestMoveFolderRejectsCycles covers task 2.4: moving into a descendant or
+// into itself must fail, not silently corrupt the tree.
+func TestMoveFolderRejectsCycles(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	root, _ := s.Folders.Root(ctx, p.ID)
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
+	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login")
+
+	if _, err := s.Folders.Move(ctx, auth.ID, login.ID); !errors.Is(err, store.ErrFolderCycle) {
+		t.Errorf("Move(auth, into descendant login) = %v, want ErrFolderCycle", err)
+	}
+	if _, err := s.Folders.Move(ctx, auth.ID, auth.ID); !errors.Is(err, store.ErrFolderCycle) {
+		t.Errorf("Move(auth, into itself) = %v, want ErrFolderCycle", err)
+	}
+
+	// Neither rejected attempt actually changed auth's parent.
+	got, err := s.Folders.Get(ctx, auth.ID)
+	if err != nil || got.ParentFolderID != root.ID {
+		t.Errorf("auth's parent changed after rejected moves: %+v, %v", got, err)
+	}
+}
+
+// TestRootFolderCannotBeMoved covers task 2.4's third rejection case.
+func TestRootFolderCannotBeMoved(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	root, _ := s.Folders.Root(ctx, p.ID)
+	other, _ := s.Folders.Create(ctx, p.ID, root.ID, "Other")
+
+	if _, err := s.Folders.Move(ctx, root.ID, other.ID); !errors.Is(err, store.ErrRootFolder) {
+		t.Errorf("Move(root) = %v, want ErrRootFolder", err)
+	}
+}

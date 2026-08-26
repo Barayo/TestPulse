@@ -262,6 +262,34 @@ paths:
   /api/v1/folders/{folderId}:
     parameters:
       - { name: folderId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: moveFolder
+      summary: >-
+        Move (reparent) a folder to a different parent folder
+        (add-library-folder-selection, sectionEdit permission). Rejects a
+        target that is the folder itself or anywhere in its own subtree, and
+        rejects moving the root folder — both as 400, not a 500 or a silent
+        no-op.
+      tags: [folders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parentFolderId]
+              properties:
+                parentFolderId: { type: string }
+      responses:
+        "200":
+          description: The moved folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Folder" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
     delete:
       operationId: deleteFolder
       summary: >-
@@ -3039,7 +3067,7 @@ components:
         effective permissions on one project (add-delete-mode), not a role
         definition.
       required:
-        [read, caseCreate, caseEdit, caseDelete, sectionCreate, sectionDelete,
+        [read, caseCreate, caseEdit, caseDelete, sectionCreate, sectionEdit, sectionDelete,
          suiteCreate, suiteEditMembership, runCreate, runRecordResult, manageProject,
          runDelete, projectDelete]
       properties:
@@ -3048,6 +3076,7 @@ components:
         caseEdit: { type: boolean }
         caseDelete: { type: boolean }
         sectionCreate: { type: boolean }
+        sectionEdit: { type: boolean }
         sectionDelete: { type: boolean }
         suiteCreate: { type: boolean }
         suiteEditMembership: { type: boolean }
@@ -3068,7 +3097,7 @@ components:
         of broad ones — e.g. caseCreate is independent of caseDelete.
       required:
         [id, name, rank, canRead, canCaseCreate, canCaseEdit, canCaseDelete,
-         canSectionCreate, canSectionDelete, canSuiteCreate, canSuiteEditMembership,
+         canSectionCreate, canSectionEdit, canSectionDelete, canSuiteCreate, canSuiteEditMembership,
          canRunCreate, canRunRecordResult, canManageProject, canRunDelete,
          canProjectDelete, createdAt]
       properties:
@@ -3082,6 +3111,7 @@ components:
         canCaseEdit: { type: boolean }
         canCaseDelete: { type: boolean }
         canSectionCreate: { type: boolean }
+        canSectionEdit: { type: boolean }
         canSectionDelete: { type: boolean }
         canSuiteCreate: { type: boolean }
         canSuiteEditMembership: { type: boolean }
@@ -3102,6 +3132,7 @@ components:
         canCaseEdit: { type: boolean }
         canCaseDelete: { type: boolean }
         canSectionCreate: { type: boolean }
+        canSectionEdit: { type: boolean }
         canSectionDelete: { type: boolean }
         canSuiteCreate: { type: boolean }
         canSuiteEditMembership: { type: boolean }

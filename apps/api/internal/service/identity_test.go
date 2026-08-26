@@ -42,6 +42,23 @@ func actorFor(u domain.User) domain.Actor {
 	return domain.Actor{ID: u.ID, Kind: domain.ActorKindUser, DisplayName: u.Email, EffectiveUserID: u.ID, IsTenantAdmin: u.IsTenantAdmin}
 }
 
+// rootFolder finds a project's automatically-created root folder via the
+// public ListFolders — this package's tests only have access to *service.Service
+// from outside (package service_test), never the unexported store field.
+func rootFolder(t *testing.T, s *service.Service, ctx context.Context, projectID string) (domain.Folder, error) {
+	t.Helper()
+	folders, err := s.ListFolders(ctx, projectID)
+	if err != nil {
+		return domain.Folder{}, err
+	}
+	for _, f := range folders {
+		if f.ParentFolderID == "" {
+			return f, nil
+		}
+	}
+	return domain.Folder{}, fmt.Errorf("no root folder found for project %s", projectID)
+}
+
 // --- Login / sessions (authentication spec scenarios) ---
 
 func TestLoginSuccessCreatesSession(t *testing.T) {
@@ -1410,6 +1427,84 @@ func TestMoveCaseAuditEntryRecordsFromAndTo(t *testing.T) {
 	want := map[string]any{"from": originalFolderID, "to": target.ID}
 	if !reflect.DeepEqual(moveEntry.Detail, want) {
 		t.Errorf("move detail = %+v, want %+v", moveEntry.Detail, want)
+	}
+}
+
+// TestMoveFolderAuditEntryRecordsFromAndTo covers add-library-folder-selection
+// task 2.2: reparenting a folder audits "move"/"folder" with {from, to}
+// exactly like MoveCase does.
+func TestMoveFolderAuditEntryRecordsFromAndTo(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "folder-mover@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Move Folder Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := rootFolder(t, s, ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := s.CreateFolder(ctx, project.ID, domain.NewFolder{Name: "Auth", ParentFolderID: root.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings, err := s.CreateFolder(ctx, project.ID, domain.NewFolder{Name: "Settings", ParentFolderID: root.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	moved, err := s.MoveFolder(ctx, auth.ID, settings.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if moved.ParentFolderID != settings.ID {
+		t.Errorf("ParentFolderID = %q, want %q", moved.ParentFolderID, settings.ID)
+	}
+
+	history, err := s.AuditHistory(context.Background(), "folder", auth.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var moveEntry *domain.AuditEntry
+	for i := range history {
+		if history[i].Action == "move" {
+			moveEntry = &history[i]
+		}
+	}
+	if moveEntry == nil {
+		t.Fatalf("no move audit entry found: %+v", history)
+	}
+	want := map[string]any{"from": root.ID, "to": settings.ID}
+	if !reflect.DeepEqual(moveEntry.Detail, want) {
+		t.Errorf("move detail = %+v, want %+v", moveEntry.Detail, want)
+	}
+}
+
+// TestMoveFolderRejectsEmptyTarget covers the "targetParentID is required"
+// validation the handler relies on to return 400, not a 500 from a bad SQL arg.
+func TestMoveFolderRejectsEmptyTarget(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "folder-mover2@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Move Folder Validation Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	root, err := rootFolder(t, s, ctx, project.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	auth, err := s.CreateFolder(ctx, project.ID, domain.NewFolder{Name: "Auth", ParentFolderID: root.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var verr *service.ValidationError
+	if _, err := s.MoveFolder(ctx, auth.ID, ""); !errors.As(err, &verr) {
+		t.Errorf("MoveFolder with empty target = %v, want ValidationError", err)
 	}
 }
 

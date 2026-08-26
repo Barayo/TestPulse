@@ -32,6 +32,7 @@ const allPermissions = {
   caseEdit: true,
   caseDelete: true,
   sectionCreate: true,
+  sectionEdit: true,
   sectionDelete: true,
   suiteCreate: true,
   suiteEditMembership: true,
@@ -554,11 +555,32 @@ describe('FolderExplorerPage', () => {
       expect(screen.queryByRole('button', { name: /delete mode/i })).not.toBeInTheDocument()
     })
 
-    it("hides a folder row's action menu entirely without sectionDelete permission", async () => {
+    // The trigger is additive (design.md D7): sectionDelete alone no longer
+    // hides the menu once sectionEdit's "Move to…" is also gated on it —
+    // only the absence of both permissions hides the trigger entirely.
+    it("still shows a folder row's action menu without sectionDelete, but without a Delete item", async () => {
       mockExplorerAPI({ permissions: { ...allPermissions, sectionDelete: false } })
+      renderExplorer()
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      expect(screen.getByRole('menuitem', { name: /move to/i })).toBeInTheDocument()
+      expect(screen.queryByRole('menuitem', { name: /^delete$/i })).not.toBeInTheDocument()
+    })
+
+    it("hides a folder row's action menu entirely without sectionEdit or sectionDelete permission", async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, sectionEdit: false, sectionDelete: false } })
       renderExplorer()
       await screen.findByRole('list', { name: 'Section contents' })
       expect(screen.queryByRole('button', { name: /actions for nacionales/i })).not.toBeInTheDocument()
+    })
+
+    it('omits "Move to…" from a folder row\'s menu without sectionEdit', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, sectionEdit: false } })
+      renderExplorer()
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      expect(screen.queryByRole('menuitem', { name: /move to/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
     })
 
     it("still shows a case row's action menu without caseDelete permission, but without a Delete item", async () => {
@@ -667,6 +689,46 @@ describe('FolderExplorerPage', () => {
       })
     })
 
+    // add-library-folder-selection task 3.3: single-folder "Move to…", the
+    // same FolderPicker the case-move dialog already uses.
+    it('moving a folder calls the move endpoint with the chosen parent and refreshes', async () => {
+      mockExplorerAPI()
+      mockPUT.mockResolvedValue({ data: { ...nacionales, parentFolderId: 'root' }, response: { ok: true } })
+      renderExplorer()
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /move to/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByText('Library'))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/folders/{folderId}',
+          expect.objectContaining({
+            params: { path: { folderId: 'nacionales' } },
+            body: { parentFolderId: 'root' },
+          }),
+        )
+      })
+    })
+
+    // task 3.1: the picker must exclude the folder's own subtree — moving a
+    // folder into one of its own descendants is nonsensical and the backend
+    // rejects it anyway (ErrFolderCycle), so it shouldn't even be offered.
+    it("the move-folder picker excludes the folder's own subtree", async () => {
+      mockExplorerAPI()
+      renderExplorer('/projects/p1/library/root')
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Transferencias')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for transferencias/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /move to/i }))
+
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).queryByText('Transferencias')).not.toBeInTheDocument()
+      expect(within(dialog).queryByText('Nacionales')).not.toBeInTheDocument()
+      expect(within(dialog).getByText('Library')).toBeInTheDocument()
+    })
+
     it('canceling a folder delete confirmation makes no request and leaves the folder in place', async () => {
       mockExplorerAPI({ deletePreview: { caseCount: 0, folderCount: 0 } })
       renderExplorer()
@@ -704,6 +766,68 @@ describe('FolderExplorerPage', () => {
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
       expect(mockDELETE).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('creating a section (inline input)', () => {
+    // The page also listens for keydown on `window` for J/K/Space/Enter
+    // shortcuts. Enter both creates the section (the input's own onKeyDown)
+    // and, if the same event reaches that global listener too, immediately
+    // navigates/opens whatever row happens to be focused — a real bug found
+    // by manual testing (add-library-folder-selection): the input's handler
+    // must stop the event from propagating there at all, not rely on
+    // `document.activeElement` timing once the input starts unmounting.
+    it('creating a section via the content-pane input does not leak Enter to global shortcuts', async () => {
+      mockExplorerAPI()
+      const globalKeydown = vi.fn()
+      window.addEventListener('keydown', globalKeydown)
+      mockPOST.mockResolvedValue({
+        data: { id: 'new-1', projectId: 'p1', parentFolderId: 'transferencias', name: 'jk test', createdAt: '' },
+        response: { ok: true },
+      })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      await userEvent.click(screen.getByRole('button', { name: /\+ new section/i }))
+      const input = screen.getByLabelText('New section name')
+      await userEvent.type(input, 'jk test')
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => {
+        expect(mockPOST).toHaveBeenCalledWith(
+          '/api/v1/projects/{projectKey}/folders',
+          expect.objectContaining({ body: { name: 'jk test', parentFolderId: 'transferencias' } }),
+        )
+      })
+      expect(globalKeydown).not.toHaveBeenCalled()
+      window.removeEventListener('keydown', globalKeydown)
+    })
+
+    it('creating a section via the sidebar tree input does not leak Enter to global shortcuts', async () => {
+      mockExplorerAPI()
+      const globalKeydown = vi.fn()
+      window.addEventListener('keydown', globalKeydown)
+      mockPOST.mockResolvedValue({
+        data: { id: 'new-1', projectId: 'p1', parentFolderId: 'nacionales', name: 'tree section', createdAt: '' },
+        response: { ok: true },
+      })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      await userEvent.click(screen.getByRole('button', { name: /new section in nacionales/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^new section$/i }))
+      const input = screen.getByLabelText('New section name')
+      await userEvent.type(input, 'tree section')
+      fireEvent.keyDown(input, { key: 'Enter' })
+
+      await waitFor(() => {
+        expect(mockPOST).toHaveBeenCalledWith(
+          '/api/v1/projects/{projectKey}/folders',
+          expect.objectContaining({ body: { name: 'tree section', parentFolderId: 'nacionales' } }),
+        )
+      })
+      expect(globalKeydown).not.toHaveBeenCalled()
+      window.removeEventListener('keydown', globalKeydown)
     })
   })
 
@@ -983,8 +1107,8 @@ describe('FolderExplorerPage', () => {
       expect(screen.getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
     })
 
-    it('right-clicking a folder row without sectionDelete permission does nothing', async () => {
-      mockExplorerAPI({ permissions: { ...allPermissions, sectionDelete: false } })
+    it('right-clicking a folder row without sectionEdit or sectionDelete permission does nothing', async () => {
+      mockExplorerAPI({ permissions: { ...allPermissions, sectionEdit: false, sectionDelete: false } })
       renderExplorer()
       const folderRow = (
         await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
@@ -1114,15 +1238,69 @@ describe('FolderExplorerPage', () => {
       }
     })
 
-    it('shift-clicking a folder row still navigates into it (regression guard)', async () => {
+    // A Shift+Click that toggles selection must not also trigger the
+    // browser's own native text-selection gesture — Shift+Click is the
+    // browser's standard "extend text selection to here" shortcut too, and
+    // by the time a `click` handler's preventDefault() runs, the browser has
+    // already finalized a native selection from mousedown/mouseup. The fix
+    // has to preventDefault on mousedown itself, before the browser acts.
+    it("a Shift+Click on a case row doesn't trigger native text selection", async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      const event = fireEvent.mouseDown(title, { shiftKey: true })
+      expect(event).toBe(false) // fireEvent returns false when preventDefault() was called
+    })
+
+    it("a Shift+Click on a folder row doesn't trigger native text selection", async () => {
       mockExplorerAPI()
       renderExplorer()
       const list = await screen.findByRole('list', { name: 'Section contents' })
-      await shiftClick(within(list).getByText('Nacionales'))
+      const folderTitle = within(list).getByText('Nacionales')
+      const event = fireEvent.mouseDown(folderTitle, { shiftKey: true })
+      expect(event).toBe(false)
+    })
+
+    // add-library-folder-selection supersedes the old "folders are exempt
+    // from Shift+Click" behavior: a folder row now selects like any other
+    // row, and a range can span both kinds (library-bulk-select spec.md).
+    it('shift-clicking a folder row selects it instead of navigating', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      const folderRow = within(list).getByText('Nacionales').closest('li') as HTMLElement
+      shiftClick(within(list).getByText('Nacionales'))
+
+      expect(folderRow).toHaveClass('bg-primary/10')
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+      expect(within(nav).queryByText('Nacionales')).not.toBeInTheDocument()
+    })
+
+    it('a plain click on a folder row still navigates into it and selects nothing', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      const folderRow = within(list).getByText('Nacionales').closest('li') as HTMLElement
+      await userEvent.click(within(list).getByText('Nacionales'))
+
       await waitFor(() => {
         const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
         expect(within(nav).getByText('Nacionales')).toBeInTheDocument()
       })
+      expect(folderRow).not.toHaveClass('bg-primary/10')
+    })
+
+    it('a range can span a folder row and a case row together', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      await within(list).findByText('Daily transfer limit')
+      shiftClick(within(list).getByText('Nacionales'))
+      shiftClick(within(list).getByText('Case Two'))
+
+      for (const title of ['Nacionales', 'Daily transfer limit', 'Case Two']) {
+        expect(within(list).getByText(title).closest('li')).toHaveClass('bg-primary/10')
+      }
     })
   })
 
@@ -1132,7 +1310,7 @@ describe('FolderExplorerPage', () => {
 
     it('arrow keys move focus through case rows, scrolling the focused row into view', async () => {
       const user = userEvent.setup()
-      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo, caseThree] })
       renderExplorer()
       await screen.findByText('Daily transfer limit')
 
@@ -1146,7 +1324,7 @@ describe('FolderExplorerPage', () => {
 
     it('j/k move focus the same as arrow keys', async () => {
       const user = userEvent.setup()
-      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo, caseThree] })
       renderExplorer()
       await screen.findByText('Daily transfer limit')
 
@@ -1159,7 +1337,7 @@ describe('FolderExplorerPage', () => {
 
     it('Space toggles the focused row', async () => {
       const user = userEvent.setup()
-      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo] })
       renderExplorer()
       await screen.findByText('Daily transfer limit')
 
@@ -1172,7 +1350,7 @@ describe('FolderExplorerPage', () => {
 
     it('Shift+Space extends the range from the anchor to the focused row', async () => {
       const user = userEvent.setup()
-      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo, caseThree] })
       renderExplorer()
       await screen.findByText('Daily transfer limit')
 
@@ -1187,7 +1365,7 @@ describe('FolderExplorerPage', () => {
 
     it('Enter opens the focused case', async () => {
       const user = userEvent.setup()
-      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo] })
       renderExplorer()
       await screen.findByText('Daily transfer limit')
 
@@ -1197,9 +1375,29 @@ describe('FolderExplorerPage', () => {
       expect(await screen.findByTestId('case-detail-probe')).toHaveTextContent('c2')
     })
 
-    it('keyboard shortcuts do nothing while an unrelated input has focus', async () => {
+    // add-library-folder-selection: folder rows join keyboard nav too — a
+    // section with subfolders puts them first (render order), and pressing
+    // Enter while one is focused navigates into it instead of opening a case.
+    it('folder rows come first in keyboard nav order, and Enter navigates into a focused folder', async () => {
       const user = userEvent.setup()
       mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      const focused = document.querySelector('[data-focused="true"]')
+      expect(within(focused as HTMLElement).getByText('Nacionales')).toBeInTheDocument()
+
+      await user.keyboard('{Enter}')
+
+      await waitFor(() => {
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+        expect(within(nav).getByText('Nacionales')).toBeInTheDocument()
+      })
+    })
+
+    it('keyboard shortcuts do nothing while an unrelated input has focus', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo] })
       renderExplorer()
       await screen.findByText('Daily transfer limit')
       const input = document.createElement('input')
@@ -1215,7 +1413,7 @@ describe('FolderExplorerPage', () => {
 
     it('resets keyboard focus to the first row when the visible case list changes', async () => {
       const user = userEvent.setup()
-      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo, caseThree] })
       renderExplorer()
       await screen.findByText('Daily transfer limit')
       await user.keyboard('jj')
@@ -1249,7 +1447,7 @@ describe('FolderExplorerPage', () => {
     }
 
     it('shows the footer bar once a case is selected, with a "Select all" link', async () => {
-      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo, caseThree] })
       renderExplorer()
       const title = await screen.findByText('Daily transfer limit')
       shiftClick(title)
@@ -1259,7 +1457,7 @@ describe('FolderExplorerPage', () => {
     })
 
     it('"Select all" selects every visible case and then hides itself', async () => {
-      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      mockExplorerAPI({ folders: [root, transferencias], cases: [limitCase, caseTwo, caseThree] })
       renderExplorer()
       const title = await screen.findByText('Daily transfer limit')
       shiftClick(title)
@@ -1270,6 +1468,24 @@ describe('FolderExplorerPage', () => {
       expect(screen.queryByRole('button', { name: /select all/i })).not.toBeInTheDocument()
       for (const t of ['Daily transfer limit', 'Case Two', 'Case Three']) {
         expect(screen.getByText(t).closest('li')).toHaveClass('bg-primary/10')
+      }
+    })
+
+    // add-library-folder-selection: "Select all" spans both kinds in one
+    // combined selection.
+    it('"Select all" spans folders and cases together', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      const title = await within(list).findByText('Daily transfer limit')
+      shiftClick(title)
+
+      expect(screen.getByRole('button', { name: /select all 3/i })).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: /select all 3/i }))
+
+      expect(screen.getByText('3 selected')).toBeInTheDocument()
+      for (const t of ['Nacionales', 'Daily transfer limit', 'Case Two']) {
+        expect(within(list).getByText(t).closest('li')).toHaveClass('bg-primary/10')
       }
     })
 
@@ -1307,6 +1523,67 @@ describe('FolderExplorerPage', () => {
         )
       })
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
+    })
+
+    // add-library-folder-selection: a mixed folder+case selection splits by
+    // kind internally — cases go through the case-move endpoint, the
+    // selected folder through the folder-move endpoint, against one target.
+    it('bulk "Move to…" moves both a selected folder and selected cases to the chosen target', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      mockPUT.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      await within(list).findByText('Daily transfer limit')
+      shiftClick(within(list).getByText('Nacionales'))
+      shiftClick(within(list).getByText('Case Two'))
+
+      await userEvent.click(screen.getByRole('button', { name: /^move to…$/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByText('Library'))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}/folder',
+          expect.objectContaining({ params: { path: { caseKey: 'c1' } }, body: { folderId: 'root' } }),
+        )
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}/folder',
+          expect.objectContaining({ params: { path: { caseKey: 'c2' } }, body: { folderId: 'root' } }),
+        )
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/folders/{folderId}',
+          expect.objectContaining({ params: { path: { folderId: 'nacionales' } }, body: { parentFolderId: 'root' } }),
+        )
+      })
+      expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
+    })
+
+    it('bulk "Delete" sums the selected folder\'s own preview into the confirmation total', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo], deletePreview: { caseCount: 5, folderCount: 2 } })
+      mockDELETE.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      await within(list).findByText('Daily transfer limit')
+      shiftClick(within(list).getByText('Nacionales'))
+      shiftClick(within(list).getByText('Case Two'))
+
+      await userEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+      expect(await screen.findByRole('heading', { name: /delete 7 cases and 2 subsections/i })).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+      await waitFor(() => {
+        for (const key of ['c1', 'c2']) {
+          expect(mockDELETE).toHaveBeenCalledWith(
+            '/api/v1/cases/{caseKey}',
+            expect.objectContaining({ params: { path: { caseKey: key } } }),
+          )
+        }
+        expect(mockDELETE).toHaveBeenCalledWith(
+          '/api/v1/folders/{folderId}',
+          expect.objectContaining({ params: { path: { folderId: 'nacionales' } } }),
+        )
+      })
       expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
     })
 

@@ -18,6 +18,7 @@ type Role = {
   canCaseEdit: boolean
   canCaseDelete: boolean
   canSectionCreate: boolean
+  canSectionEdit: boolean
   canSectionDelete: boolean
   canSuiteCreate: boolean
   canSuiteEditMembership: boolean
@@ -34,6 +35,7 @@ type PermissionKey =
   | 'canCaseEdit'
   | 'canCaseDelete'
   | 'canSectionCreate'
+  | 'canSectionEdit'
   | 'canSectionDelete'
   | 'canSuiteCreate'
   | 'canSuiteEditMembership'
@@ -84,6 +86,7 @@ const PERMISSION_SECTIONS: {
     icon: <FolderIcon className="size-4" aria-hidden="true" />,
     items: [
       { key: 'canSectionCreate', shortLabel: 'Create', fullLabel: 'Create Section' },
+      { key: 'canSectionEdit', shortLabel: 'Edit', fullLabel: 'Edit Section' },
       { key: 'canSectionDelete', shortLabel: 'Delete', fullLabel: 'Delete Section' },
     ],
   },
@@ -127,6 +130,7 @@ const emptyFlags: Record<PermissionKey, boolean> = {
   canCaseEdit: false,
   canCaseDelete: false,
   canSectionCreate: false,
+  canSectionEdit: false,
   canSectionDelete: false,
   canSuiteCreate: false,
   canSuiteEditMembership: false,
@@ -221,7 +225,7 @@ export default function RolesPage() {
 
   async function toggleFlag(role: Role, key: PermissionKey) {
     const {
-      canRead, canCaseCreate, canCaseEdit, canCaseDelete, canSectionCreate, canSectionDelete,
+      canRead, canCaseCreate, canCaseEdit, canCaseDelete, canSectionCreate, canSectionEdit, canSectionDelete,
       canSuiteCreate, canSuiteEditMembership, canRunCreate, canRunRecordResult, canManageProject,
       canRunDelete, canProjectDelete,
       name, rank,
@@ -229,7 +233,7 @@ export default function RolesPage() {
     await api.PATCH('/api/v1/roles/{roleId}', {
       params: { path: { roleId: role.id } },
       body: {
-        name, rank, canRead, canCaseCreate, canCaseEdit, canCaseDelete, canSectionCreate, canSectionDelete,
+        name, rank, canRead, canCaseCreate, canCaseEdit, canCaseDelete, canSectionCreate, canSectionEdit, canSectionDelete,
         canSuiteCreate, canSuiteEditMembership, canRunCreate, canRunRecordResult, canManageProject,
         canRunDelete, canProjectDelete,
         [key]: !role[key],

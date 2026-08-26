@@ -153,3 +153,80 @@ func TestScenario_RootFolderNotDeletableOverHTTP(t *testing.T) {
 
 	call(t, h, "DELETE", "/api/v1/folders/"+folders[0].ID, nil, 400, nil)
 }
+
+// TestScenario_MoveFolderOverHTTP covers add-library-folder-selection task
+// 2.3: PUT /api/v1/folders/{folderId} reparents a folder.
+func TestScenario_MoveFolderOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	var folders []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
+	root := folders[0].ID
+
+	var auth, settings struct{ ID string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
+		jmap{"name": "Auth", "parentFolderId": root}, 201, &auth)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
+		jmap{"name": "Settings", "parentFolderId": root}, 201, &settings)
+
+	var moved struct {
+		ParentFolderID string `json:"parentFolderId"`
+	}
+	call(t, h, "PUT", "/api/v1/folders/"+auth.ID, jmap{"parentFolderId": settings.ID}, 200, &moved)
+	if moved.ParentFolderID != settings.ID {
+		t.Errorf("parentFolderId after move = %q, want %q", moved.ParentFolderID, settings.ID)
+	}
+}
+
+// TestScenario_MoveFolderRejectsCyclesOverHTTP covers task 2.4: moving into
+// a descendant, into itself, or moving the root folder are all 400s, not a
+// 500 or a silent no-op.
+func TestScenario_MoveFolderRejectsCyclesOverHTTP(t *testing.T) {
+	h := apiServer(t)
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	var folders []struct{ ID string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
+	root := folders[0].ID
+
+	var auth, login struct{ ID string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
+		jmap{"name": "Auth", "parentFolderId": root}, 201, &auth)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
+		jmap{"name": "Login", "parentFolderId": auth.ID}, 201, &login)
+
+	call(t, h, "PUT", "/api/v1/folders/"+auth.ID, jmap{"parentFolderId": login.ID}, 400, nil)
+	call(t, h, "PUT", "/api/v1/folders/"+auth.ID, jmap{"parentFolderId": auth.ID}, 400, nil)
+	call(t, h, "PUT", "/api/v1/folders/"+root, jmap{"parentFolderId": auth.ID}, 400, nil)
+}
+
+// TestScenario_MoveFolderRequiresSectionEditOverHTTP covers task 2.5: a role
+// without sectionEdit (Tester, which grants neither sectionCreate nor
+// sectionDelete) gets 403, not a silent success.
+func TestScenario_MoveFolderRequiresSectionEditOverHTTP(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+	testerRoleID := roleIDByName(t, handler, admin, "Tester")
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+	var folders []jmap
+	callAs(t, handler, admin, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", projectKey), nil, 200, &folders)
+	root, _ := folders[0]["id"].(string)
+	var auth jmap
+	callAs(t, handler, admin, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", projectKey),
+		jmap{"name": "Auth", "parentFolderId": root}, 201, &auth)
+	authID, _ := auth["id"].(string)
+
+	var user jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "tester-mover@example.com", "password": "correcthorse"}, 201, &user)
+	userID, _ := user["id"].(string)
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
+		jmap{"roleId": testerRoleID}, 204, nil)
+	testerCookie := loginCookie(t, handler, "tester-mover@example.com", "correcthorse")
+
+	callAs(t, handler, testerCookie, "PUT", "/api/v1/folders/"+authID, jmap{"parentFolderId": root}, 403, nil)
+}

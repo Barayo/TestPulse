@@ -189,16 +189,19 @@ func TestScenario_TenantAdminManagesRolesOverHTTP(t *testing.T) {
 
 	var created jmap
 	callAs(t, handler, admin, "POST", "/api/v1/roles",
-		jmap{"name": "Reviewer (http-test)", "rank": 9, "canRead": true, "canCaseCreate": false}, 201, &created)
+		jmap{"name": "Reviewer (http-test)", "rank": 9, "canRead": true, "canCaseCreate": false, "canSectionEdit": true}, 201, &created)
 	roleID, _ := created["id"].(string)
 	if roleID == "" {
 		t.Fatalf("createRole response missing id: %+v", created)
 	}
+	if created["canSectionEdit"] != true {
+		t.Errorf("createRole response = %+v, want canSectionEdit: true", created)
+	}
 
 	var updated jmap
 	callAs(t, handler, admin, "PATCH", "/api/v1/roles/"+roleID,
-		jmap{"name": "Senior Reviewer (http-test)", "rank": 9, "canRead": true, "canCaseCreate": true}, 200, &updated)
-	if updated["name"] != "Senior Reviewer (http-test)" || updated["canCaseCreate"] != true {
+		jmap{"name": "Senior Reviewer (http-test)", "rank": 9, "canRead": true, "canCaseCreate": true, "canSectionEdit": false}, 200, &updated)
+	if updated["name"] != "Senior Reviewer (http-test)" || updated["canCaseCreate"] != true || updated["canSectionEdit"] != false {
 		t.Errorf("updateRole response = %+v", updated)
 	}
 

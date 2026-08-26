@@ -25,6 +25,9 @@ import { LibraryBulkActionBar } from '@/components/LibraryBulkActionBar'
 import type { BulkAction } from '@/components/RunBulkActionBar'
 import { bulkMoveCases } from '@/lib/bulkMoveCases'
 import { bulkDeleteCases } from '@/lib/bulkDeleteCases'
+import { bulkMoveFolders } from '@/lib/bulkMoveFolders'
+import { bulkDeleteFolders } from '@/lib/bulkDeleteFolders'
+import { folderDeletePreviewTotal } from '@/lib/folderDeletePreviewTotal'
 import type { components } from '@testpulse/shared/api'
 
 type Folder = components['schemas']['Folder']
@@ -35,9 +38,19 @@ type Project = components['schemas']['Project']
 type DeleteTarget =
   | { kind: 'case'; key: string; title: string }
   | { kind: 'folder'; id: string; name: string; caseCount: number; folderCount: number }
-  | { kind: 'bulk'; keys: string[] }
+  // add-library-folder-selection: `keys`/`folderIds` split by kind for the
+  // confirm step's two bulk-delete calls; `caseCount`/`folderCount` are the
+  // precomputed sum (directly selected cases + every selected folder's own
+  // subtree preview) shown by the confirmation dialog.
+  | { kind: 'bulk'; keys: string[]; folderIds: string[]; caseCount: number; folderCount: number }
 
 type DrawerState = { mode: 'create' }
+
+// add-library-folder-selection design.md D4: one combined, rendered-order
+// list of folder and case rows backs Shift+Click ranging and keyboard nav —
+// folder DB ids and case keys are confirmed disjoint namespaces, so a
+// single `id` field is safe to share one Set<string> selection across both.
+type Entry = { kind: 'folder'; id: string; folder: Folder } | { kind: 'case'; id: string; case: TestCase }
 
 function ancestorChain(folders: Folder[], folderId: string): Folder[] {
   const chain: Folder[] = []
@@ -53,6 +66,28 @@ function folderPathLabel(folders: Folder[], folderId: string): string {
   return ancestorChain(folders, folderId)
     .map((f) => f.name)
     .join(' / ')
+}
+
+// subtreeIds mirrors CasePicker's own buildFolderTree().subtreeIds pattern —
+// every id in folderId's subtree, including itself, used to filter a
+// folder-move target list (moving into your own subtree is a cycle the
+// backend rejects anyway, so it's never offered).
+function subtreeIds(folders: Folder[], folderId: string): Set<string> {
+  const childrenOf = new Map<string, string[]>()
+  for (const f of folders) {
+    if (!f.parentFolderId) continue
+    const list = childrenOf.get(f.parentFolderId) ?? []
+    list.push(f.id)
+    childrenOf.set(f.parentFolderId, list)
+  }
+  const out = new Set<string>([folderId])
+  const stack = [...(childrenOf.get(folderId) ?? [])]
+  while (stack.length > 0) {
+    const id = stack.pop() as string
+    out.add(id)
+    stack.push(...(childrenOf.get(id) ?? []))
+  }
+  return out
 }
 
 // The project's auto-created root folder is surfaced to users as "Library" —
@@ -83,8 +118,14 @@ function FolderRow({
   onDragLeave,
   onDrop,
   onNavigate,
+  canMove,
+  onMoveTo,
   canDelete,
   onRequestDelete,
+  selected,
+  onToggleSelect,
+  focused,
+  rowRef,
 }: {
   folder: Folder
   stats: { count: number; hasCritical: boolean; criticalCount: number; automatedCount: number }
@@ -93,17 +134,47 @@ function FolderRow({
   onDragLeave: () => void
   onDrop: (caseKey: string) => void
   onNavigate: () => void
+  canMove: boolean
+  onMoveTo: () => void
   canDelete: boolean
   onRequestDelete: () => void
+  // add-library-folder-selection: matches CaseRow's selection props exactly
+  // — Shift+Click only (no checkbox), independent keyboard focus ring.
+  selected: boolean
+  onToggleSelect: () => void
+  focused: boolean
+  rowRef: (el: HTMLLIElement | null) => void
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
   const items: RowActionMenuItem[] = [
-    { label: 'Delete', danger: true, icon: <Trash2Icon className="size-4" aria-hidden="true" />, onSelect: onRequestDelete },
+    ...(canMove
+      ? [
+          {
+            label: 'Move to…',
+            icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
+            onSelect: onMoveTo,
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
+    ...(canDelete
+      ? [
+          {
+            label: 'Delete',
+            danger: true,
+            dividerBefore: true,
+            icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+            onSelect: onRequestDelete,
+          } satisfies RowActionMenuItem,
+        ]
+      : []),
   ]
+  const canOpenMenu = canMove || canDelete
 
   return (
     <li
-      className={`group flex items-center gap-2 border-b px-3 py-2 text-sm transition-[transform,box-shadow] duration-150 last:border-b-0 hover:-translate-y-px hover:shadow-md ${isDragOver ? 'bg-primary/10' : ''}`}
+      ref={rowRef}
+      data-focused={focused ? 'true' : undefined}
+      className={`group flex items-center gap-2 border-b px-3 py-2 text-sm transition-[transform,box-shadow] duration-150 last:border-b-0 hover:-translate-y-px hover:shadow-md ${isDragOver ? 'bg-primary/10' : selected ? 'bg-primary/10' : ''} ${focused ? 'ring-2 ring-inset ring-primary/50' : ''}`}
       onDragOver={(e) => {
         e.preventDefault()
         onDragOver()
@@ -116,12 +187,30 @@ function FolderRow({
         if (caseKey) onDrop(caseKey)
       }}
       onContextMenu={(e) => {
-        if (!canDelete) return
+        if (!canOpenMenu) return
         e.preventDefault()
         menuRef.current?.openAt(e.clientX, e.clientY)
       }}
     >
-      <button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={onNavigate}>
+      <button
+        type="button"
+        className="flex flex-1 items-center gap-2 text-left"
+        // Shift+Click is also the browser's own "extend text selection"
+        // gesture — by the time a click handler's preventDefault() runs,
+        // native selection has already been finalized from mousedown, so
+        // it has to be suppressed here instead.
+        onMouseDown={(e) => {
+          if (e.shiftKey) e.preventDefault()
+        }}
+        onClick={(e) => {
+          if (e.shiftKey) {
+            e.preventDefault()
+            onToggleSelect()
+            return
+          }
+          onNavigate()
+        }}
+      >
         <FolderIcon className="size-4 text-primary" aria-hidden="true" />
         <span>{folder.name}</span>
       </button>
@@ -148,7 +237,7 @@ function FolderRow({
           {stats.count} {stats.count === 1 ? 'case' : 'cases'}
         </span>
       </div>
-      {canDelete && <RowActionMenu ref={menuRef} label={`Actions for ${folder.name}`} items={items} hoverReveal />}
+      {canOpenMenu && <RowActionMenu ref={menuRef} label={`Actions for ${folder.name}`} items={items} hoverReveal />}
     </li>
   )
 }
@@ -231,6 +320,11 @@ function CaseRow({
       <button
         type="button"
         className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        // See FolderRow's identical onMouseDown above — Shift+Click's native
+        // text-selection has to be suppressed before it happens, not after.
+        onMouseDown={(e) => {
+          if (e.shiftKey) e.preventDefault()
+        }}
         onClick={(e) => {
           if (e.shiftKey) {
             e.preventDefault()
@@ -281,6 +375,8 @@ export default function FolderExplorerPage() {
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [movingCaseKey, setMovingCaseKey] = useState<string | null>(null)
   const [moveQuery, setMoveQuery] = useState('')
+  const [movingFolderId, setMovingFolderId] = useState<string | null>(null)
+  const [moveFolderQuery, setMoveFolderQuery] = useState('')
   const [bulkMoveKeys, setBulkMoveKeys] = useState<string[] | null>(null)
   const [bulkMoveQuery, setBulkMoveQuery] = useState('')
   const [browsingSections, setBrowsingSections] = useState(false)
@@ -294,9 +390,9 @@ export default function FolderExplorerPage() {
   const [filters, setFilters] = useState({ tag: '', priority: '', platform: '', testType: '', automated: '', flaky: '' })
   const [searchEntireLibrary, setSearchEntireLibrary] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
-  const [lastToggledKey, setLastToggledKey] = useState<string | null>(null)
+  const [lastToggledId, setLastToggledId] = useState<string | null>(null)
   const [focusedIndex, setFocusedIndex] = useState(0)
-  const caseRowRefs = useRef<Map<string, HTMLLIElement>>(new Map())
+  const rowRefs = useRef<Map<string, HTMLLIElement>>(new Map())
 
   const treeWidth = useResizableWidth({ storageKey: 'testpulse.libraryTreeWidth', defaultWidth: 256, min: 200, max: 480 })
 
@@ -374,58 +470,69 @@ export default function FolderExplorerPage() {
 
   const visibleHere = casesHere.filter(caseMatches)
   const entireLibraryMatches = cases.filter(caseMatches)
-  const orderedVisibleCases = searchEntireLibrary ? entireLibraryMatches : visibleHere
+  // "Search entire Library" flattens to a cases-only list (no folder rows
+  // are ever shown there); browsing a single section shows its subfolders
+  // before its cases, matching the JSX render order below (design.md D4).
+  const subfoldersHere = folders.filter((f) => f.parentFolderId === selectedFolderId)
+  const orderedVisibleEntries: Entry[] = searchEntireLibrary
+    ? entireLibraryMatches.map((c) => ({ kind: 'case', id: c.key, case: c }) satisfies Entry)
+    : [
+        ...subfoldersHere.map((f) => ({ kind: 'folder', id: f.id, folder: f }) satisfies Entry),
+        ...visibleHere.map((c) => ({ kind: 'case', id: c.key, case: c }) satisfies Entry),
+      ]
 
   // Shift+Click-only range select (no checkboxes, add-library-bulk-select
   // design.md D1) — identical anchor/range semantics to RunPage.tsx's own
   // toggleSelect, applied here for the first time without an accompanying
   // checkbox: the first Shift+Click (no anchor yet) toggles just that row
   // and becomes the anchor; a later Shift+Click extends a contiguous range.
-  function toggleSelect(caseKey: string, shiftKey: boolean) {
-    if (shiftKey && lastToggledKey) {
-      const keys = orderedVisibleCases.map((c) => c.key)
-      const fromIndex = keys.indexOf(lastToggledKey)
-      const toIndex = keys.indexOf(caseKey)
+  // add-library-folder-selection extends this to folder rows too — a range
+  // can span both kinds, since both live in one ordered entry list.
+  function toggleSelect(id: string, shiftKey: boolean) {
+    if (shiftKey && lastToggledId) {
+      const ids = orderedVisibleEntries.map((e) => e.id)
+      const fromIndex = ids.indexOf(lastToggledId)
+      const toIndex = ids.indexOf(id)
       if (fromIndex !== -1 && toIndex !== -1) {
         const [start, end] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex]
-        const rangeKeys = keys.slice(start, end + 1)
-        setSelected((prev) => new Set([...prev, ...rangeKeys]))
-        setLastToggledKey(caseKey)
+        const rangeIds = ids.slice(start, end + 1)
+        setSelected((prev) => new Set([...prev, ...rangeIds]))
+        setLastToggledId(id)
         return
       }
     }
     setSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(caseKey)) next.delete(caseKey)
-      else next.add(caseKey)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
       return next
     })
-    setLastToggledKey(caseKey)
+    setLastToggledId(id)
   }
 
-  // A stable (string, value-compared) signal of which cases are visible and
-  // in what order — orderedVisibleCases itself is a fresh array every
+  // A stable (string, value-compared) signal of which entries are visible
+  // and in what order — orderedVisibleEntries itself is a fresh array every
   // render, so depending on it directly would fire these effects on every
   // render, not just when the actual visible set changes.
-  const orderedVisibleKeysSignal = orderedVisibleCases.map((c) => c.key).join(',')
+  const orderedVisibleEntriesSignal = orderedVisibleEntries.map((e) => e.id).join(',')
 
   useEffect(() => {
     setFocusedIndex(0)
-  }, [orderedVisibleKeysSignal])
+  }, [orderedVisibleEntriesSignal])
 
   useEffect(() => {
-    const target = orderedVisibleCases[focusedIndex]
+    const target = orderedVisibleEntries[focusedIndex]
     if (!target) return
-    caseRowRefs.current.get(target.key)?.scrollIntoView({ block: 'nearest' })
+    rowRefs.current.get(target.id)?.scrollIntoView({ block: 'nearest' })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [focusedIndex, orderedVisibleKeysSignal])
+  }, [focusedIndex, orderedVisibleEntriesSignal])
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (isEditableElementFocused()) return
       const key = e.key.toLowerCase()
       if (key === 'j' || key === 'arrowdown') {
-        setFocusedIndex((i) => Math.min(i + 1, orderedVisibleCases.length - 1))
+        setFocusedIndex((i) => Math.min(i + 1, orderedVisibleEntries.length - 1))
         return
       }
       if (key === 'k' || key === 'arrowup') {
@@ -434,25 +541,27 @@ export default function FolderExplorerPage() {
       }
       if (key === ' ') {
         e.preventDefault()
-        const target = orderedVisibleCases[focusedIndex]
-        if (target) toggleSelect(target.key, e.shiftKey)
+        const target = orderedVisibleEntries[focusedIndex]
+        if (target) toggleSelect(target.id, e.shiftKey)
         return
       }
       if (e.key === 'Enter') {
-        const target = orderedVisibleCases[focusedIndex]
-        if (target) openCase(target.key)
+        const target = orderedVisibleEntries[focusedIndex]
+        if (!target) return
+        if (target.kind === 'case') openCase(target.id)
+        else navigate(`/projects/${projectKey}/library/${target.id}`)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orderedVisibleKeysSignal, focusedIndex])
+  }, [orderedVisibleEntriesSignal, focusedIndex])
 
   const librarySelectionShortcuts: ShortcutEntry[] = [
     { keys: 'J/K · ↑/↓', label: 'Move focus' },
-    { keys: 'Space', label: 'Select focused case' },
+    { keys: 'Space', label: 'Select focused row' },
     { keys: 'Shift+Space', label: 'Extend selection' },
-    { keys: 'Enter', label: 'Open focused case' },
+    { keys: 'Enter', label: 'Open case / navigate into folder' },
   ]
 
   if (!projectKey) return null
@@ -473,8 +582,6 @@ export default function FolderExplorerPage() {
     )
   }
   if (!root || !selectedFolderId) return null
-
-  const subfolders = folders.filter((f) => f.parentFolderId === selectedFolderId)
 
   // Direct-children counts only, no recursive rollup (design.md) — computed
   // once from data already fetched, shared by the tree and content-pane rows.
@@ -503,7 +610,7 @@ export default function FolderExplorerPage() {
   const testTypeOptions = distinctValues(cases, (c) => c.content.testType ?? '')
 
   const bulkActions: BulkAction[] = [
-    ...(permissions?.caseEdit
+    ...(permissions?.caseEdit || permissions?.sectionEdit
       ? ([
           {
             kind: 'button',
@@ -515,8 +622,8 @@ export default function FolderExplorerPage() {
           },
         ] satisfies BulkAction[])
       : []),
-    ...(permissions?.caseDelete
-      ? ([{ kind: 'button', label: 'Delete', onSelect: () => setDeleteTarget({ kind: 'bulk', keys: Array.from(selected) }) }] satisfies BulkAction[])
+    ...(permissions?.caseDelete || permissions?.sectionDelete
+      ? ([{ kind: 'button', label: 'Delete', onSelect: () => void requestBulkDelete(Array.from(selected)) }] satisfies BulkAction[])
       : []),
   ]
 
@@ -552,6 +659,15 @@ export default function FolderExplorerPage() {
     bumpLanding()
   }
 
+  async function moveFolder(folderIdToMove: string, targetParentId: string) {
+    await api.PUT('/api/v1/folders/{folderId}', {
+      params: { path: { folderId: folderIdToMove } },
+      body: { parentFolderId: targetParentId },
+    })
+    await load()
+    bumpLanding()
+  }
+
   async function requestDeleteFolder(folder: Folder) {
     const { data: preview } = await api.GET('/api/v1/folders/{folderId}/delete-preview', {
       params: { path: { folderId: folder.id } },
@@ -565,14 +681,37 @@ export default function FolderExplorerPage() {
     })
   }
 
+  // A mixed selection's ids are either folder DB ids or case keys (confirmed
+  // disjoint namespaces, add-library-folder-selection design.md D4) — split
+  // by checking membership against the currently-loaded folders list.
+  function splitSelection(ids: string[]): { folderIds: string[]; caseKeys: string[] } {
+    const folderIdSet = new Set(folders.map((f) => f.id))
+    return {
+      folderIds: ids.filter((id) => folderIdSet.has(id)),
+      caseKeys: ids.filter((id) => !folderIdSet.has(id)),
+    }
+  }
+
+  async function requestBulkDelete(ids: string[]) {
+    const { folderIds, caseKeys } = splitSelection(ids)
+    const folderTotal = folderIds.length > 0 ? await folderDeletePreviewTotal(folderIds) : { caseCount: 0, folderCount: 0 }
+    setDeleteTarget({
+      kind: 'bulk',
+      keys: caseKeys,
+      folderIds,
+      caseCount: caseKeys.length + folderTotal.caseCount,
+      folderCount: folderTotal.folderCount,
+    })
+  }
+
   async function confirmDelete() {
     if (!deleteTarget) return
     if (deleteTarget.kind === 'case') {
       await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey: deleteTarget.key } } })
     } else if (deleteTarget.kind === 'bulk') {
-      await bulkDeleteCases(deleteTarget.keys)
+      await Promise.all([bulkDeleteCases(deleteTarget.keys), bulkDeleteFolders(deleteTarget.folderIds)])
       setSelected(new Set())
-      setLastToggledKey(null)
+      setLastToggledId(null)
     } else {
       await api.DELETE('/api/v1/folders/{folderId}', { params: { path: { folderId: deleteTarget.id } } })
     }
@@ -583,10 +722,11 @@ export default function FolderExplorerPage() {
 
   async function handleBulkMove(targetFolderId: string) {
     if (!bulkMoveKeys) return
-    await bulkMoveCases(bulkMoveKeys, targetFolderId)
+    const { folderIds, caseKeys } = splitSelection(bulkMoveKeys)
+    await Promise.all([bulkMoveCases(caseKeys, targetFolderId), bulkMoveFolders(folderIds, targetFolderId)])
     setBulkMoveKeys(null)
     setSelected(new Set())
-    setLastToggledKey(null)
+    setLastToggledId(null)
     await load()
     bumpLanding()
   }
@@ -823,6 +963,13 @@ export default function FolderExplorerPage() {
                     value={newFolderName}
                     onChange={(e) => setNewFolderName(e.target.value)}
                     onKeyDown={(e) => {
+                      // Stops this keydown from ever reaching the page's
+                      // global keyboard-shortcut listener on `window` — by
+                      // the time that listener would run, this input may
+                      // already be unmounting (Enter here also closes it),
+                      // so `document.activeElement` can no longer be relied
+                      // on to signal "an editable element handled this."
+                      e.stopPropagation()
                       if (e.key === 'Enter') {
                         void createFolder(selectedFolderId, newFolderName)
                         setContentCreatingFolder(false)
@@ -857,27 +1004,27 @@ export default function FolderExplorerPage() {
                         onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
                         selected={selected.has(c.key)}
                         onToggleSelect={() => toggleSelect(c.key, true)}
-                        focused={orderedVisibleCases[focusedIndex]?.key === c.key}
+                        focused={orderedVisibleEntries[focusedIndex]?.id === c.key}
                         rowRef={(el) => {
-                          if (el) caseRowRefs.current.set(c.key, el)
-                          else caseRowRefs.current.delete(c.key)
+                          if (el) rowRefs.current.set(c.key, el)
+                          else rowRefs.current.delete(c.key)
                         }}
                       />
                     ))}
                   </ul>
                 )
-              ) : subfolders.length === 0 && casesHere.length === 0 && !contentCreatingFolder ? (
+              ) : subfoldersHere.length === 0 && casesHere.length === 0 && !contentCreatingFolder ? (
                 <p className="p-4 text-center text-sm text-muted-foreground">
                   Nothing here yet in {displayFolderName(selectedFolder, root.id)}.
                 </p>
-              ) : subfolders.length === 0 && visibleHere.length === 0 && anyFilterActive ? (
+              ) : subfoldersHere.length === 0 && visibleHere.length === 0 && anyFilterActive ? (
                 <p className="p-4 text-center text-sm text-muted-foreground">
                   No cases match your filters. Try a different combination, or use "Clear filters" above to see all
                   cases in {displayFolderName(selectedFolder, root.id)}.
                 </p>
               ) : (
                 <ul aria-label="Section contents">
-                  {subfolders.map((f) => (
+                  {subfoldersHere.map((f) => (
                     <FolderRow
                       key={f.id}
                       folder={f}
@@ -887,8 +1034,20 @@ export default function FolderExplorerPage() {
                       onDragLeave={() => setDragOverFolderId(null)}
                       onDrop={(caseKey) => void moveCase(caseKey, f.id)}
                       onNavigate={() => navigate(`/projects/${projectKey}/library/${f.id}`)}
+                      canMove={Boolean(permissions?.sectionEdit)}
+                      onMoveTo={() => {
+                        setMoveFolderQuery('')
+                        setMovingFolderId(f.id)
+                      }}
                       canDelete={Boolean(permissions?.sectionDelete)}
                       onRequestDelete={() => void requestDeleteFolder(f)}
+                      selected={selected.has(f.id)}
+                      onToggleSelect={() => toggleSelect(f.id, true)}
+                      focused={orderedVisibleEntries[focusedIndex]?.id === f.id}
+                      rowRef={(el) => {
+                        if (el) rowRefs.current.set(f.id, el)
+                        else rowRefs.current.delete(f.id)
+                      }}
                     />
                   ))}
                   {visibleHere.map((c) => (
@@ -908,10 +1067,10 @@ export default function FolderExplorerPage() {
                       onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
                       selected={selected.has(c.key)}
                       onToggleSelect={() => toggleSelect(c.key, true)}
-                      focused={orderedVisibleCases[focusedIndex]?.key === c.key}
+                      focused={orderedVisibleEntries[focusedIndex]?.id === c.key}
                       rowRef={(el) => {
-                        if (el) caseRowRefs.current.set(c.key, el)
-                        else caseRowRefs.current.delete(c.key)
+                        if (el) rowRefs.current.set(c.key, el)
+                        else rowRefs.current.delete(c.key)
                       }}
                     />
                   ))}
@@ -927,12 +1086,12 @@ export default function FolderExplorerPage() {
 
       <LibraryBulkActionBar
         count={selected.size}
-        total={orderedVisibleCases.length}
-        onSelectAll={() => setSelected(new Set(orderedVisibleCases.map((c) => c.key)))}
+        total={orderedVisibleEntries.length}
+        onSelectAll={() => setSelected(new Set(orderedVisibleEntries.map((e) => e.id)))}
         actions={bulkActions}
         onClear={() => {
           setSelected(new Set())
-          setLastToggledKey(null)
+          setLastToggledId(null)
         }}
       />
 
@@ -953,11 +1112,35 @@ export default function FolderExplorerPage() {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={movingFolderId !== null} onOpenChange={(open) => !open && setMovingFolderId(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Move to…</DialogTitle>
+          <FolderPicker
+            folders={movingFolderId ? folders.filter((f) => !subtreeIds(folders, movingFolderId).has(f.id)) : folders}
+            rootId={root.id}
+            query={moveFolderQuery}
+            onQueryChange={setMoveFolderQuery}
+            folderStats={folderStats}
+            onSelect={(targetFolderId) => {
+              if (movingFolderId) void moveFolder(movingFolderId, targetFolderId)
+              setMovingFolderId(null)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={bulkMoveKeys !== null} onOpenChange={(open) => !open && setBulkMoveKeys(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Move {bulkMoveKeys?.length} cases to…</DialogTitle>
+          <DialogTitle>Move {bulkMoveKeys?.length} {bulkMoveKeys?.length === 1 ? 'item' : 'items'} to…</DialogTitle>
           <FolderPicker
-            folders={folders}
+            folders={
+              bulkMoveKeys
+                ? folders.filter((f) => {
+                    const excluded = splitSelection(bulkMoveKeys).folderIds.flatMap((id) => [...subtreeIds(folders, id)])
+                    return !excluded.includes(f.id)
+                  })
+                : folders
+            }
             rootId={root.id}
             query={bulkMoveQuery}
             onQueryChange={setBulkMoveQuery}
@@ -1014,10 +1197,19 @@ export default function FolderExplorerPage() {
           )}
           {deleteTarget?.kind === 'bulk' && (
             <>
-              <DialogTitle>Delete {deleteTarget.keys.length} cases?</DialogTitle>
+              <DialogTitle>
+                Delete {deleteTarget.caseCount} case{deleteTarget.caseCount === 1 ? '' : 's'}
+                {deleteTarget.folderCount > 0
+                  ? ` and ${deleteTarget.folderCount} subsection${deleteTarget.folderCount === 1 ? '' : 's'}`
+                  : ''}
+                ?
+              </DialogTitle>
               <DialogDescription>
-                Delete {deleteTarget.keys.length} case{deleteTarget.keys.length === 1 ? '' : 's'}? This cannot be
-                undone.
+                Delete {deleteTarget.caseCount} case{deleteTarget.caseCount === 1 ? '' : 's'}
+                {deleteTarget.folderCount > 0
+                  ? ` and ${deleteTarget.folderCount} subsection${deleteTarget.folderCount === 1 ? '' : 's'}`
+                  : ''}
+                ? This cannot be undone.
               </DialogDescription>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDeleteTarget(null)}>

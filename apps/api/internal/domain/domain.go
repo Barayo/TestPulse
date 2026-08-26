@@ -729,6 +729,7 @@ const (
 	PermCaseEdit            Permission = "caseEdit"
 	PermCaseDelete          Permission = "caseDelete"
 	PermSectionCreate       Permission = "sectionCreate"
+	PermSectionEdit         Permission = "sectionEdit"
 	PermSectionDelete       Permission = "sectionDelete"
 	PermSuiteCreate         Permission = "suiteCreate"
 	PermSuiteEditMembership Permission = "suiteEditMembership"
@@ -753,6 +754,7 @@ type Role struct {
 	CanCaseEdit            bool      `json:"canCaseEdit"`
 	CanCaseDelete          bool      `json:"canCaseDelete"`
 	CanSectionCreate       bool      `json:"canSectionCreate"`
+	CanSectionEdit         bool      `json:"canSectionEdit"`
 	CanSectionDelete       bool      `json:"canSectionDelete"`
 	CanSuiteCreate         bool      `json:"canSuiteCreate"`
 	CanSuiteEditMembership bool      `json:"canSuiteEditMembership"`
@@ -777,6 +779,8 @@ func (r Role) Has(perm Permission) bool {
 		return r.CanCaseDelete
 	case PermSectionCreate:
 		return r.CanSectionCreate
+	case PermSectionEdit:
+		return r.CanSectionEdit
 	case PermSectionDelete:
 		return r.CanSectionDelete
 	case PermSuiteCreate:
@@ -808,6 +812,7 @@ func (r Role) Permissions() Permissions {
 		CaseEdit:            r.CanCaseEdit,
 		CaseDelete:          r.CanCaseDelete,
 		SectionCreate:       r.CanSectionCreate,
+		SectionEdit:         r.CanSectionEdit,
 		SectionDelete:       r.CanSectionDelete,
 		SuiteCreate:         r.CanSuiteCreate,
 		SuiteEditMembership: r.CanSuiteEditMembership,
@@ -834,6 +839,7 @@ type Permissions struct {
 	CaseEdit            bool `json:"caseEdit"`
 	CaseDelete          bool `json:"caseDelete"`
 	SectionCreate       bool `json:"sectionCreate"`
+	SectionEdit         bool `json:"sectionEdit"`
 	SectionDelete       bool `json:"sectionDelete"`
 	SuiteCreate         bool `json:"suiteCreate"`
 	SuiteEditMembership bool `json:"suiteEditMembership"`
@@ -857,6 +863,8 @@ func (p Permissions) Has(perm Permission) bool {
 		return p.CaseDelete
 	case PermSectionCreate:
 		return p.SectionCreate
+	case PermSectionEdit:
+		return p.SectionEdit
 	case PermSectionDelete:
 		return p.SectionDelete
 	case PermSuiteCreate:
@@ -887,6 +895,7 @@ func (p Permissions) IsSubsetOf(other Permissions) bool {
 		(!p.CaseEdit || other.CaseEdit) &&
 		(!p.CaseDelete || other.CaseDelete) &&
 		(!p.SectionCreate || other.SectionCreate) &&
+		(!p.SectionEdit || other.SectionEdit) &&
 		(!p.SectionDelete || other.SectionDelete) &&
 		(!p.SuiteCreate || other.SuiteCreate) &&
 		(!p.SuiteEditMembership || other.SuiteEditMembership) &&
@@ -908,6 +917,7 @@ func (p Permissions) Intersect(other Permissions) Permissions {
 		CaseEdit:            p.CaseEdit && other.CaseEdit,
 		CaseDelete:          p.CaseDelete && other.CaseDelete,
 		SectionCreate:       p.SectionCreate && other.SectionCreate,
+		SectionEdit:         p.SectionEdit && other.SectionEdit,
 		SectionDelete:       p.SectionDelete && other.SectionDelete,
 		SuiteCreate:         p.SuiteCreate && other.SuiteCreate,
 		SuiteEditMembership: p.SuiteEditMembership && other.SuiteEditMembership,

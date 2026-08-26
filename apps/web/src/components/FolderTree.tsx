@@ -81,6 +81,10 @@ function InlineNewFolderRow({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={(e) => {
+          // See FolderExplorerPage.tsx's content-pane creator for why this
+          // must stop propagation rather than rely on focus state: Enter
+          // both confirms and unmounts this input in the same keydown.
+          e.stopPropagation()
           if (e.key === 'Enter') onConfirm()
           if (e.key === 'Escape') onCancel()
         }}

@@ -3,11 +3,28 @@ package service_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
 )
+
+// allTruePermissions builds a domain.Permissions with every flag true, via
+// reflection rather than a field-by-field literal — a literal is exactly
+// how MyPermissions' own Tenant Admin bypass silently missed sectionEdit
+// (and, pre-existing, runDelete/projectDelete) when those flags were added:
+// nothing forced every call site enumerating every field to be revisited.
+// This helper (and the assertion below) closes that hole for good: adding a
+// field to Permissions without updating the bypass now fails this test.
+func allTruePermissions() domain.Permissions {
+	var p domain.Permissions
+	v := reflect.ValueOf(&p).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		v.Field(i).SetBool(true)
+	}
+	return p
+}
 
 func TestNonTenantAdminCannotManageTeams(t *testing.T) {
 	s := testService(t)
@@ -376,6 +393,28 @@ func TestNonTenantAdminCannotResetRolesToDefaults(t *testing.T) {
 	}
 }
 
+// TestSeededRolesReportSectionEditPermission covers add-library-folder-selection
+// task 1.8: sectionEdit sits at the same rank threshold as sectionCreate
+// (Contributor and Project Admin), not the more restrictive sectionDelete tier.
+func TestSeededRolesReportSectionEditPermission(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+
+	roles, err := s.ListRoles(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{
+		"Viewer": false, "Tester": false,
+		"Contributor": true, "Project Admin": true,
+	}
+	for _, r := range roles {
+		if expected, ok := want[r.Name]; ok && r.CanSectionEdit != expected {
+			t.Errorf("%s.CanSectionEdit = %v, want %v", r.Name, r.CanSectionEdit, expected)
+		}
+	}
+}
+
 func TestSetProjectMemberValidatesRole(t *testing.T) {
 	s := testService(t)
 	admin := actorFor(mustCreateUser(t, s, "admin@example.com", "correcthorse", true))
@@ -405,7 +444,7 @@ func TestMyPermissionsExposesEffectivePermissionsForTheFrontend(t *testing.T) {
 
 	// A Tenant Admin has every flag, even with no explicit membership row.
 	perms, err := s.MyPermissions(ctx, admin, project.ID)
-	if err != nil || !perms.Has(domain.PermSectionDelete) || !perms.Has(domain.PermCaseDelete) {
+	if err != nil || perms != allTruePermissions() {
 		t.Fatalf("Tenant Admin MyPermissions = %+v, %v; want every flag true", perms, err)
 	}
 

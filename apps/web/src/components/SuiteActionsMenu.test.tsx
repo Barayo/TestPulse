@@ -35,6 +35,7 @@ const fullPermissions = {
   caseEdit: true,
   caseDelete: true,
   sectionCreate: true,
+  sectionEdit: true,
   sectionDelete: true,
   suiteCreate: true,
   suiteEditMembership: true,

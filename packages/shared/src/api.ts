@@ -211,7 +211,8 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        put?: never;
+        /** Move (reparent) a folder to a different parent folder (add-library-folder-selection, sectionEdit permission). Rejects a target that is the folder itself or anywhere in its own subtree, and rejects moving the root folder — both as 400, not a 500 or a silent no-op. */
+        put: operations["moveFolder"];
         post?: never;
         /** Delete a folder (Tenant Admin or sectionDelete permission). Cascading soft delete (add-delete-mode): the folder and every folder and case anywhere in its subtree are soft-deleted, not reparented. The root folder cannot be deleted. */
         delete: operations["deleteFolder"];
@@ -2465,6 +2466,7 @@ export interface components {
             caseEdit: boolean;
             caseDelete: boolean;
             sectionCreate: boolean;
+            sectionEdit: boolean;
             sectionDelete: boolean;
             suiteCreate: boolean;
             suiteEditMembership: boolean;
@@ -2485,6 +2487,7 @@ export interface components {
             canCaseEdit: boolean;
             canCaseDelete: boolean;
             canSectionCreate: boolean;
+            canSectionEdit: boolean;
             canSectionDelete: boolean;
             canSuiteCreate: boolean;
             canSuiteEditMembership: boolean;
@@ -2504,6 +2507,7 @@ export interface components {
             canCaseEdit?: boolean;
             canCaseDelete?: boolean;
             canSectionCreate?: boolean;
+            canSectionEdit?: boolean;
             canSectionDelete?: boolean;
             canSuiteCreate?: boolean;
             canSuiteEditMembership?: boolean;
@@ -3057,6 +3061,38 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+        };
+    };
+    moveFolder: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                folderId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    parentFolderId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The moved folder */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Folder"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     deleteFolder: {

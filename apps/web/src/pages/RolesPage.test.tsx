@@ -22,6 +22,7 @@ const roles = [
     canCaseEdit: false,
     canCaseDelete: false,
     canSectionCreate: false,
+    canSectionEdit: false,
     canSectionDelete: false,
     canSuiteCreate: false,
     canSuiteEditMembership: false,
@@ -41,6 +42,7 @@ const roles = [
     canCaseEdit: true,
     canCaseDelete: false,
     canSectionCreate: true,
+    canSectionEdit: true,
     canSectionDelete: false,
     canSuiteCreate: true,
     canSuiteEditMembership: true,
@@ -219,6 +221,26 @@ describe('RolesPage', () => {
         expect.objectContaining({
           params: { path: { roleId: 'r1' } },
           body: expect.objectContaining({ canCaseCreate: true }),
+        }),
+      ),
+    )
+  })
+
+  it('toggles the Edit Section permission on an existing role via PATCH', async () => {
+    mockAsTenantAdmin(true)
+    mockPATCH.mockResolvedValue({ data: roles[0], response: { ok: true } })
+    const user = userEvent.setup()
+    renderPage()
+
+    await waitForLoaded()
+    await user.click(screen.getByLabelText('Tester — Edit Section'))
+
+    await waitFor(() =>
+      expect(mockPATCH).toHaveBeenCalledWith(
+        '/api/v1/roles/{roleId}',
+        expect.objectContaining({
+          params: { path: { roleId: 'r1' } },
+          body: expect.objectContaining({ canSectionEdit: true }),
         }),
       ),
     )
