@@ -5,6 +5,7 @@ import {
   healthLabel,
   StatusPill,
   ProgressBar,
+  HealthRing,
   statusDotClass,
   statusBorderClass,
   statusTextClass,
@@ -114,6 +115,18 @@ describe('ProgressBar', () => {
     render(<ProgressBar rate={null} />)
     expect(document.querySelector('[data-fill]')).not.toBeInTheDocument()
     expect(document.querySelector('[data-track]')).toHaveClass('border-dashed')
+  })
+})
+
+describe('HealthRing', () => {
+  it('defaults to size-11 (44px) when size is omitted, matching ProjectPage\'s existing call site', () => {
+    render(<HealthRing rate={84} />)
+    expect(screen.getByTestId('health-ring')).toHaveClass('size-11')
+  })
+
+  it('renders at a custom pixel size when requested (redesign-runs-list-triage-view)', () => {
+    render(<HealthRing rate={25} size={128} />)
+    expect(screen.getByTestId('health-ring')).toHaveStyle({ width: '128px', height: '128px' })
   })
 })
 

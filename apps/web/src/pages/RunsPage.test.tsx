@@ -124,6 +124,13 @@ describe('RunsPage', () => {
     expect(runLink).toHaveAttribute('href', '/runs/p1-Sprint 1')
   })
 
+  it('fetches the project\'s suites alongside the project and runs, to resolve suite names for clustering', async () => {
+    mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })])
+    renderRuns()
+    await screen.findByRole('link', { name: /sprint 1/i })
+    expect(mockGET).toHaveBeenCalledWith('/api/v1/projects/{projectKey}/suites', expect.anything())
+  })
+
   it('offers a "+ New run" button linking to the dedicated creation route', async () => {
     mockRunsAPI([run({ name: 'Sprint 1', status: 'open' })])
     renderRuns()
@@ -159,7 +166,7 @@ describe('RunsPage', () => {
     expect(screen.getByText('2')).toBeInTheDocument()
   })
 
-  it('shows a pass-rate health bar and relative date per row', async () => {
+  it('shows a pass-rate health ring and relative date per row (redesign-runs-list-triage-view)', async () => {
     mockRunsAPI([
       run({ name: 'Nightly', status: 'open', passRate: 75, createdAt: new Date(Date.now() - 3600_000).toISOString() }),
       run({ name: 'Never run', status: 'open', passRate: null }),
@@ -168,7 +175,9 @@ describe('RunsPage', () => {
     await screen.findByRole('link', { name: /nightly/i })
     expect(screen.getByText('75%')).toBeInTheDocument()
     expect(screen.getByText(/1 hour ago/i)).toBeInTheDocument()
-    expect(screen.getByText(/not run yet/i)).toBeInTheDocument()
+    // A null pass rate sorts first (design.md D1) and reuses StatusPill's
+    // existing "No runs yet" label rather than inventing new copy.
+    expect(screen.getByText('No runs yet')).toBeInTheDocument()
   })
 
   it('caps the Closed section at 10 rows, with a control to reveal the rest', async () => {

@@ -140,20 +140,30 @@ export function ProgressBar({ rate }: { rate: number | null }) {
 // Donut ring for the project landing's summary strip (enrich-project-landing-panels)
 // — a conic-gradient needs a real color value, not a Tailwind class, so it's
 // the one health visualization that reaches for healthColorVar directly.
-export function HealthRing({ rate }: { rate: number | null }) {
+// size overrides the default 44px (size-11) for callers that need a larger
+// or smaller ring — the inner circle and label scale proportionally so a
+// custom size still reads as the same shape, not a thicker ring around a
+// tiny label (redesign-runs-list-triage-view).
+export function HealthRing({ rate, size }: { rate: number | null; size?: number }) {
   const pct = rate ?? 0
+  const innerSize = size !== undefined ? size * (34 / 44) : undefined
+  const fontSize = size !== undefined ? size * (11 / 44) : undefined
   return (
     <span
       data-testid="health-ring"
-      className="relative inline-flex size-11 shrink-0 items-center justify-center rounded-full"
+      className={`relative inline-flex shrink-0 items-center justify-center rounded-full ${size === undefined ? 'size-11' : ''}`}
       style={{
+        ...(size !== undefined ? { width: size, height: size } : {}),
         background:
           rate === null
             ? 'var(--muted)'
             : `conic-gradient(${healthColorVar(rate)} ${pct}%, var(--muted) 0)`,
       }}
     >
-      <span className="flex size-8.5 items-center justify-center rounded-full bg-card text-[11px] font-bold tabular-nums">
+      <span
+        className={`flex items-center justify-center rounded-full bg-card font-bold tabular-nums ${size === undefined ? 'size-8.5 text-[11px]' : ''}`}
+        style={size !== undefined ? { width: innerSize, height: innerSize, fontSize } : undefined}
+      >
         {rate === null ? '—' : `${rate}%`}
       </span>
     </span>

@@ -4,7 +4,8 @@ import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
-import { RunSection } from '@/components/RunList'
+import { OpenRunsTriage, ClosedRunsLedger } from '@/components/RunsListTriage'
+import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
 import { useAuth } from '@/lib/useAuth'
@@ -12,6 +13,7 @@ import type { components } from '@testpulse/shared/api'
 
 type Run = components['schemas']['Run']
 type Project = components['schemas']['Project']
+type Suite = components['schemas']['Suite']
 
 export default function RunsPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
@@ -22,6 +24,7 @@ export default function RunsPage() {
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const [runs, setRuns] = useState<Run[]>([])
+  const [suites, setSuites] = useState<Suite[]>([])
 
   const load = useCallback(async () => {
     // Waits for the session check and confirmed project read access before
@@ -31,14 +34,22 @@ export default function RunsPage() {
     if (!projectKey || access === 'loading') return
     setNotFound(false)
     try {
-      const [{ data: p }, { data: r }] = access === 'member'
+      // Suites are fetched alongside runs to resolve each closed run's
+      // suiteKey to a real name/link for clustering
+      // (redesign-runs-list-triage-view design.md D3) — a run's suiteKey
+      // survives its suite being deleted, so this list won't always cover
+      // every key seen on a run; that's an expected, handled case, not an
+      // error.
+      const [{ data: p }, { data: r }, { data: s }] = access === 'member'
         ? await Promise.all([
             api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
             api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
+            api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
           ])
         : await Promise.all([
             api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
             api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
+            api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
           ])
       if (!p) {
         setNotFound(true)
@@ -46,6 +57,7 @@ export default function RunsPage() {
       }
       setProject(p)
       setRuns(r ?? [])
+      setSuites(s ?? [])
     } catch {
       setRuns([])
     }
@@ -124,21 +136,37 @@ export default function RunsPage() {
             </div>
           ) : (
             <div className="space-y-5">
-              <RunSection
-                title="Open"
-                variant="secondary"
-                runs={open}
-                emptyMessage={`No open runs — everything's closed out. Start one with the "+ New run" button above.`}
-                projectKey={projectKey}
-              />
-              <RunSection
-                title="Closed"
-                variant="outline"
-                runs={closed}
-                emptyMessage="No closed runs yet — runs land here once they're closed."
-                recessed
-                projectKey={projectKey}
-              />
+              <div>
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <Badge variant="secondary">Open</Badge>
+                  <span className="text-xs text-muted-foreground">{open.length}</span>
+                </div>
+                {open.length === 0 ? (
+                  <p className="px-1 text-sm text-muted-foreground">
+                    No open runs — everything&apos;s closed out. Start one with the &quot;+ New run&quot; button above.
+                  </p>
+                ) : (
+                  <>
+                    <p className="mb-2 px-1 text-xs text-muted-foreground italic">
+                      Ordered by what needs attention first — lowest pass rate leads, not most recent.
+                    </p>
+                    <OpenRunsTriage runs={open} />
+                  </>
+                )}
+              </div>
+              <div>
+                <div className="mb-2 flex items-center gap-2 px-1">
+                  <Badge variant="outline">Closed</Badge>
+                  <span className="text-xs text-muted-foreground">{closed.length}</span>
+                </div>
+                {closed.length === 0 ? (
+                  <p className="px-1 text-sm text-muted-foreground">
+                    No closed runs yet — runs land here once they&apos;re closed.
+                  </p>
+                ) : (
+                  <ClosedRunsLedger runs={closed} suites={suites} projectKey={projectKey} />
+                )}
+              </div>
             </div>
           )}
         </CardContent>
