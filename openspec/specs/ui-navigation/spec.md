@@ -539,7 +539,7 @@ own width preference.
 
 #### Scenario: Suite detail page shows filterable case membership
 - **WHEN** a user opens a suite's detail page
-- **THEN** its member cases are shown in a checkbox list filterable by tag, priority, platform, and test type, with selection preserved across filter changes
+- **THEN** its member cases are shown in a list filterable by tag, priority, platform, and test type, each row showing its membership state via a circular checkmark indicator (not a checkbox), with selection preserved across filter changes
 
 #### Scenario: Creating a suite opens straight into its detail page
 - **WHEN** a user creates a new suite from the index
@@ -596,6 +596,75 @@ own width preference.
 #### Scenario: No resize handle while the section rail is collapsed
 - **WHEN** a user collapses the case picker's "Sections" rail via its "Hide" toggle
 - **THEN** no resize divider is shown, since there is nothing to resize while the rail itself isn't rendered
+
+### Requirement: Suite detail run history is capped
+
+The Suite Detail page's "Run history" list SHALL render with the same
+bounded-DOM-rows and "Show N more" expansion behavior as every other run
+list in the app (`RunSection`'s `SECTION_CAP` of 10), rather than rendering
+every run for the suite unconditionally. This closes a gap specific to this
+page's own list, which predates the capping behavior other run lists
+already have.
+
+#### Scenario: Run history caps at 10 with an expand control
+- **WHEN** a suite has more than 10 runs
+- **THEN** the Run history list shows only the 10 most recent and a "Show N more runs" control, matching the wording and behavior of the Runs page's own capped sections
+
+#### Scenario: Expanding reveals the rest
+- **WHEN** a user activates "Show N more runs" on the Suite Detail page
+- **THEN** the remaining runs render inline without navigating away from the page
+
+#### Scenario: A suite with 10 or fewer runs shows no expand control
+- **WHEN** a suite has 10 or fewer runs
+- **THEN** all of its runs render with no "Show more" control, since there is nothing left to reveal
+
+### Requirement: Case picker selection is checkbox-free with bidirectional range-toggle
+
+The case-selection picker (shared by suite membership editing and run creation)
+SHALL indicate each row's membership state with a circular checkmark indicator and a
+row tint rather than a native checkbox, while remaining keyboard-focusable and
+exposed to assistive technology as a checkbox (role, checked state, and accessible
+name unchanged). Shift+Click on a row SHALL apply that row's resulting checked state
+to every row between it and the last individually-toggled row — bidirectionally,
+unlike an additive-only range-select — since membership is a toggle, not a one-way
+gather-then-act list. The same range model SHALL be available from the keyboard: a
+focus indicator moves through the rows via arrow keys or j/k, scrolling the picker's
+virtualized viewport directly to keep the focused row visible; Space toggles the
+focused row and sets it as the range anchor; Shift+Space extends the bidirectional
+range to the focused row.
+
+#### Scenario: A row shows a circular checkmark, not a checkbox
+- **WHEN** a user views the case picker
+- **THEN** each row shows an empty circular outline when unselected, or a filled circle with a checkmark when selected, with no checkbox glyph
+
+#### Scenario: The picker stays accessible as a checkbox list
+- **WHEN** a screen reader or automated accessibility query inspects a picker row
+- **THEN** the row is exposed with role "checkbox", a checked state matching its selection, and an accessible name matching the case title
+
+#### Scenario: First Shift+Click on a range selects one row and sets the anchor
+- **WHEN** a user Shift+Clicks a row with no prior anchor
+- **THEN** only that row's checked state toggles, and it becomes the range anchor
+
+#### Scenario: A later Shift+Click applies the clicked row's resulting state to the whole range
+- **WHEN** a user Shift+Clicks a row after an anchor exists, and the clicked row was previously unchecked
+- **THEN** every row between the anchor and the clicked row becomes checked
+
+#### Scenario: A bidirectional range-toggle can also uncheck a range
+- **WHEN** a user Shift+Clicks a row after an anchor exists, and the clicked row was previously checked
+- **THEN** every row between the anchor and the clicked row becomes unchecked
+
+#### Scenario: Arrow keys move focus and scroll the virtualized viewport directly
+- **WHEN** a user presses an arrow key (or j/k) while the case picker has keyboard focus, and the target row is outside the currently rendered window
+- **THEN** the picker's viewport scrolls to bring the target row into its rendered window and visible area
+
+#### Scenario: Space toggles the focused row
+- **WHEN** a user presses Space with a row focused and no prior anchor
+- **THEN** that row's checked state toggles and it becomes the range anchor
+
+#### Scenario: Shift+Space extends the bidirectional range from the keyboard
+- **WHEN** a user presses Shift+Space with a row focused after an anchor exists
+- **THEN** every row between the anchor and the focused row takes on the focused row's resulting checked state
+
 ### Requirement: Run creation
 The Runs page SHALL show the project's runs as the primary content, grouped into two
 sections — Open, then Closed — each ordered newest-first, with a "+ New run" button
@@ -647,7 +716,7 @@ was created.
 
 #### Scenario: New run defaults to an empty, explicit selection
 - **WHEN** a user opens the "New run" form with no suite selected
-- **THEN** no cases are pre-selected and "Create run" is disabled until at least one case is checked
+- **THEN** no cases are pre-selected and "Create run" is disabled until at least one case is selected
 
 #### Scenario: Selecting a suite seeds the picker with its cases
 - **WHEN** a user selects a suite in the "New run" form's suite selector
