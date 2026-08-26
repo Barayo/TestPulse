@@ -149,6 +149,7 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
         <div className="flex flex-col gap-2">
           {canRun && (
             <Button type="button" onClick={openRunSuite}>
+              <PlayIcon className="size-4" aria-hidden="true" />
               Run suite
             </Button>
           )}
@@ -161,11 +162,13 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
                 setRenaming(true)
               }}
             >
+              <PencilIcon className="size-4" aria-hidden="true" />
               Rename
             </Button>
           )}
           {canDelete && (
             <Button type="button" variant="destructive" onClick={() => setDeleting(true)}>
+              <Trash2Icon className="size-4" aria-hidden="true" />
               Delete
             </Button>
           )}

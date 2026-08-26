@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { FolderPlusIcon } from 'lucide-react'
+import { ChevronRightIcon, FolderPlusIcon } from 'lucide-react'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from './RowActionMenu'
 
 export type TreeFolder = { id: string; name: string; parentFolderId?: string }
@@ -148,10 +148,13 @@ function TreeNode({
           <button
             type="button"
             aria-label={isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
-            className="w-3 shrink-0 text-xs text-muted-foreground"
+            className="w-3 shrink-0 text-muted-foreground"
             onClick={() => onToggle(folder.id)}
           >
-            {isExpanded ? '▾' : '▸'}
+            <ChevronRightIcon
+              className={`size-3 transition-transform ${isExpanded ? 'rotate-90' : ''}`}
+              aria-hidden="true"
+            />
           </button>
         ) : (
           <span className="w-3 shrink-0" />
@@ -229,7 +232,8 @@ export function FolderTree({
 }: Props) {
   const topLevel = folders.filter((f) => f.parentFolderId === rootId)
   return (
-    <nav aria-label="Section tree" className="relative shrink-0 border-r py-2" style={{ width }}>
+    <nav aria-label="Section tree" className="relative shrink-0 rounded-lg bg-muted/60 py-2" style={{ width }}>
+      <p className="tp-label px-3 pb-1.5 text-muted-foreground">Sections</p>
       {topLevel.map((folder) => (
         <TreeNode
           key={folder.id}

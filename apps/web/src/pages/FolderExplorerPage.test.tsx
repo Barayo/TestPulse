@@ -152,6 +152,11 @@ beforeEach(() => {
   // responsive behavior assume desktop, matching this page's pre-refactor
   // behavior; the "responsive layout" describe block overrides per test.
   mockViewport(true)
+  // jsdom has no scrollIntoView at all — the keyboard-nav effect
+  // (add-library-bulk-select) calls it unconditionally whenever a case row
+  // is focused, so every test needs the stub, not just the ones about
+  // keyboard navigation.
+  Element.prototype.scrollIntoView = vi.fn()
 })
 
 afterEach(() => {
@@ -741,13 +746,48 @@ describe('FolderExplorerPage', () => {
   })
 
   describe('case row richness (rework-library-ux)', () => {
-    it('shows priority, platform, and test type pills', async () => {
+    it('shows a priority pill, and platform/test type as plain text (polish-library-and-suites-pages)', async () => {
       mockExplorerAPI()
       renderExplorer()
       const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
       expect(within(row).getByText('high')).toBeInTheDocument()
-      expect(within(row).getByText('web')).toBeInTheDocument()
-      expect(within(row).getByText('e2e')).toBeInTheDocument()
+      expect(within(row).getByText('web · e2e')).toBeInTheDocument()
+    })
+
+    it('shows no version chip (polish-library-and-suites-pages)', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).queryByText(`v${limitCase.currentVersion}`)).not.toBeInTheDocument()
+    })
+
+    it('caps suite-name tags at 2 with a "+N" overflow indicator (polish-library-and-suites-pages)', async () => {
+      const suites = [
+        { id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' },
+        { id: 's2', projectId: 'p1', name: 'Regression', caseIds: ['c1'], createdAt: '' },
+        { id: 's3', projectId: 'p1', name: 'Nightly', caseIds: ['c1'], createdAt: '' },
+      ]
+      mockExplorerAPI({ suites })
+      renderExplorer()
+      const row = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      expect(within(row).getByText('Smoke')).toBeInTheDocument()
+      expect(within(row).getByText('Regression')).toBeInTheDocument()
+      expect(within(row).queryByText('Nightly')).not.toBeInTheDocument()
+      expect(within(row).getByText('+1')).toBeInTheDocument()
+    })
+
+    it('truncates a long case title instead of wrapping the row (polish-library-and-suites-pages)', async () => {
+      const longTitleCase = {
+        ...limitCase,
+        content: {
+          ...limitCase.content,
+          title: 'A daily transfer limit case with a title so long it would otherwise wrap the row',
+        },
+      }
+      mockExplorerAPI({ cases: [longTitleCase] })
+      renderExplorer()
+      const title = await screen.findByText(longTitleCase.content.title)
+      expect(title).toHaveClass('truncate')
     })
 
     it('shows an Auto pill for an automated case', async () => {
@@ -864,6 +904,15 @@ describe('FolderExplorerPage', () => {
       await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
       expect(screen.queryByText('Daily transfer limit')).not.toBeInTheDocument()
       expect(screen.getByText('Low prio flaky case')).toBeInTheDocument()
+    })
+
+    it('hides "Clear filters" until a filter is active (polish-library-and-suites-pages)', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument()
+      await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'low')
+      expect(screen.getByRole('button', { name: /clear filters/i })).toBeInTheDocument()
     })
 
     it('"Clear filters" resets search and every filter dropdown', async () => {
@@ -1020,6 +1069,268 @@ describe('FolderExplorerPage', () => {
       expect(await screen.findByText('Daily transfer limit')).toBeInTheDocument()
       expect(screen.queryByText(/project not found/i)).not.toBeInTheDocument()
       expect(mockGET).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}', expect.anything())
+    })
+  })
+
+  describe('bulk selection (add-library-bulk-select)', () => {
+    const caseTwo = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Case Two' } }
+    const caseThree = { ...limitCase, id: 'c3', key: 'c3', content: { ...limitCase.content, title: 'Case Three' } }
+
+    // user-event's click() takes no modifier options in this version —
+    // fireEvent sets the native event's shiftKey directly instead.
+    function shiftClick(el: HTMLElement) {
+      fireEvent.click(el, { shiftKey: true })
+    }
+
+    it('selects a case row on Shift+Click without navigating', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      const row = title.closest('li') as HTMLElement
+      await shiftClick(title)
+      expect(row).toHaveClass('bg-primary/10')
+      expect(screen.queryByTestId('case-detail-probe')).not.toBeInTheDocument()
+    })
+
+    it('a plain click still opens the case and selects nothing', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      const row = title.closest('li') as HTMLElement
+      await userEvent.click(title)
+      expect(await screen.findByTestId('case-detail-probe')).toBeInTheDocument()
+      expect(row).not.toHaveClass('bg-primary/10')
+    })
+
+    it('extends a range on a second Shift+Click', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await shiftClick(screen.getByText('Daily transfer limit'))
+      await shiftClick(screen.getByText('Case Three'))
+
+      for (const title of ['Daily transfer limit', 'Case Two', 'Case Three']) {
+        expect(screen.getByText(title).closest('li')).toHaveClass('bg-primary/10')
+      }
+    })
+
+    it('shift-clicking a folder row still navigates into it (regression guard)', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      await shiftClick(within(list).getByText('Nacionales'))
+      await waitFor(() => {
+        const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+        expect(within(nav).getByText('Nacionales')).toBeInTheDocument()
+      })
+    })
+  })
+
+  describe('keyboard navigation and selection (add-library-bulk-select)', () => {
+    const caseTwo = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Case Two', priority: 'medium' } }
+    const caseThree = { ...limitCase, id: 'c3', key: 'c3', content: { ...limitCase.content, title: 'Case Three', priority: 'low' } }
+
+    it('arrow keys move focus through case rows, scrolling the focused row into view', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      await user.keyboard('{ArrowDown}')
+
+      const focused = document.querySelector('[data-focused="true"]')
+      expect(focused).not.toBeNull()
+      expect(within(focused as HTMLElement).getByText('Case Two')).toBeInTheDocument()
+      expect(Element.prototype.scrollIntoView).toHaveBeenCalled()
+    })
+
+    it('j/k move focus the same as arrow keys', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      await user.keyboard('jj')
+      await user.keyboard('k')
+
+      const focused = document.querySelector('[data-focused="true"]')
+      expect(within(focused as HTMLElement).getByText('Case Two')).toBeInTheDocument()
+    })
+
+    it('Space toggles the focused row', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      await user.keyboard('j')
+      await user.keyboard(' ')
+
+      expect(screen.getByText('Case Two').closest('li')).toHaveClass('bg-primary/10')
+      expect(screen.getByText('Daily transfer limit').closest('li')).not.toHaveClass('bg-primary/10')
+    })
+
+    it('Shift+Space extends the range from the anchor to the focused row', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      await user.keyboard(' ')
+      await user.keyboard('jj')
+      await user.keyboard('{Shift>} {/Shift}')
+
+      for (const title of ['Daily transfer limit', 'Case Two', 'Case Three']) {
+        expect(screen.getByText(title).closest('li')).toHaveClass('bg-primary/10')
+      }
+    })
+
+    it('Enter opens the focused case', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      await user.keyboard('j')
+      await user.keyboard('{Enter}')
+
+      expect(await screen.findByTestId('case-detail-probe')).toHaveTextContent('c2')
+    })
+
+    it('keyboard shortcuts do nothing while an unrelated input has focus', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      const input = document.createElement('input')
+      document.body.appendChild(input)
+      input.focus()
+
+      await user.keyboard('j ')
+
+      expect(screen.queryByTestId('case-detail-probe')).not.toBeInTheDocument()
+      expect(screen.getByText('Daily transfer limit').closest('li')).not.toHaveClass('bg-primary/10')
+      input.remove()
+    })
+
+    it('resets keyboard focus to the first row when the visible case list changes', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await user.keyboard('jj')
+
+      await user.selectOptions(screen.getByLabelText(/^priority$/i), 'high')
+      await user.keyboard('{Enter}')
+
+      expect(await screen.findByTestId('case-detail-probe')).toHaveTextContent('c1')
+    })
+
+    it('shows a persistent shortcuts hint and opens an overlay with ?', async () => {
+      const user = userEvent.setup()
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+
+      expect(screen.getByLabelText('Keyboard shortcuts')).toBeInTheDocument()
+      expect(screen.getByText('Move focus')).toBeInTheDocument()
+
+      await user.keyboard('?')
+      expect(screen.getByRole('dialog', { name: /keyboard shortcuts/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('bulk action footer bar (add-library-bulk-select)', () => {
+    const caseTwo = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Case Two' } }
+    const caseThree = { ...limitCase, id: 'c3', key: 'c3', content: { ...limitCase.content, title: 'Case Three' } }
+
+    function shiftClick(el: HTMLElement) {
+      fireEvent.click(el, { shiftKey: true })
+    }
+
+    it('shows the footer bar once a case is selected, with a "Select all" link', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+
+      expect(screen.getByText('1 selected')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /select all 3/i })).toBeInTheDocument()
+    })
+
+    it('"Select all" selects every visible case and then hides itself', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+
+      await userEvent.click(screen.getByRole('button', { name: /select all 3/i }))
+
+      expect(screen.getByText('3 selected')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /select all/i })).not.toBeInTheDocument()
+      for (const t of ['Daily transfer limit', 'Case Two', 'Case Three']) {
+        expect(screen.getByText(t).closest('li')).toHaveClass('bg-primary/10')
+      }
+    })
+
+    it('"Clear" empties the selection and hides the footer bar', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+      await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+
+      expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
+      expect(screen.getByText('Daily transfer limit').closest('li')).not.toHaveClass('bg-primary/10')
+    })
+
+    it('bulk "Move to…" moves every selected case to the chosen folder', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      mockPUT.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+      shiftClick(screen.getByText('Case Two'))
+
+      await userEvent.click(screen.getByRole('button', { name: /^move to…$/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByText('Nacionales'))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}/folder',
+          expect.objectContaining({ params: { path: { caseKey: 'c1' } }, body: { folderId: 'nacionales' } }),
+        )
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}/folder',
+          expect.objectContaining({ params: { path: { caseKey: 'c2' } }, body: { folderId: 'nacionales' } }),
+        )
+      })
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
+    })
+
+    it('bulk "Delete" names the count and deletes every selected case on confirm', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo, caseThree] })
+      mockDELETE.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+      shiftClick(screen.getByText('Case Three'))
+
+      await userEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+      expect(await screen.findByRole('heading', { name: /delete 3 cases/i })).toBeInTheDocument()
+      await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+      await waitFor(() => {
+        for (const key of ['c1', 'c2', 'c3']) {
+          expect(mockDELETE).toHaveBeenCalledWith(
+            '/api/v1/cases/{caseKey}',
+            expect.objectContaining({ params: { path: { caseKey: key } } }),
+          )
+        }
+      })
+      expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
     })
   })
 })

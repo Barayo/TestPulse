@@ -146,6 +146,36 @@ describe('RowActionMenu', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it('is fully visible by default, with no hover/focus-reveal opacity classes (polish-library-and-suites-pages)', () => {
+    render(<RowActionMenu label="Actions for Two-Factor" items={[{ label: 'Move to…', onSelect: vi.fn() }]} />)
+    expect(screen.getByRole('button', { name: 'Actions for Two-Factor' })).not.toHaveClass('opacity-0')
+  })
+
+  it('is hidden until hover/focus when hoverReveal is set (polish-library-and-suites-pages)', () => {
+    render(
+      <RowActionMenu
+        label="Actions for Two-Factor"
+        items={[{ label: 'Move to…', onSelect: vi.fn() }]}
+        hoverReveal
+      />,
+    )
+    const trigger = screen.getByRole('button', { name: 'Actions for Two-Factor' })
+    expect(trigger).toHaveClass('opacity-0', 'group-hover:opacity-100', 'group-focus-within:opacity-100')
+  })
+
+  it('stays visible while open even with hoverReveal set, so the trigger does not vanish under an open menu (polish-library-and-suites-pages)', async () => {
+    render(
+      <RowActionMenu
+        label="Actions for Two-Factor"
+        items={[{ label: 'Move to…', onSelect: vi.fn() }]}
+        hoverReveal
+      />,
+    )
+    const trigger = screen.getByRole('button', { name: 'Actions for Two-Factor' })
+    await userEvent.click(trigger)
+    expect(trigger).toHaveClass('opacity-100')
+  })
+
   it('renders a custom trigger instead of the default overflow icon when one is given', async () => {
     render(
       <RowActionMenu

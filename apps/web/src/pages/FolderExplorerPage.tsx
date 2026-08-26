@@ -10,7 +10,7 @@ import { useResizableWidth } from '@/lib/useResizableWidth'
 import { FolderPicker } from '@/components/FolderPicker'
 import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
-import { AutomationPill, ClassificationPills, distinctValues, FlakyPill, StalePill } from '@/components/Pills'
+import { AutomationPill, ClassificationPills, distinctValues, FlakyPill, StalePill, tagPills } from '@/components/Pills'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
@@ -19,6 +19,12 @@ import { useBumpDataRevision } from '@/lib/DataRevision'
 import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
 import { useAuth } from '@/lib/useAuth'
 import { timeAgo } from '@/lib/timeAgo'
+import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
+import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
+import { LibraryBulkActionBar } from '@/components/LibraryBulkActionBar'
+import type { BulkAction } from '@/components/RunBulkActionBar'
+import { bulkMoveCases } from '@/lib/bulkMoveCases'
+import { bulkDeleteCases } from '@/lib/bulkDeleteCases'
 import type { components } from '@testpulse/shared/api'
 
 type Folder = components['schemas']['Folder']
@@ -29,6 +35,7 @@ type Project = components['schemas']['Project']
 type DeleteTarget =
   | { kind: 'case'; key: string; title: string }
   | { kind: 'folder'; id: string; name: string; caseCount: number; folderCount: number }
+  | { kind: 'bulk'; keys: string[] }
 
 type DrawerState = { mode: 'create' }
 
@@ -96,7 +103,7 @@ function FolderRow({
 
   return (
     <li
-      className={`flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0 ${isDragOver ? 'bg-primary/10' : ''}`}
+      className={`group flex items-center gap-2 border-b px-3 py-2 text-sm transition-[transform,box-shadow] duration-150 last:border-b-0 hover:-translate-y-px hover:shadow-md ${isDragOver ? 'bg-primary/10' : ''}`}
       onDragOver={(e) => {
         e.preventDefault()
         onDragOver()
@@ -115,7 +122,7 @@ function FolderRow({
       }}
     >
       <button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={onNavigate}>
-        <FolderIcon className="size-4 text-muted-foreground" aria-hidden="true" />
+        <FolderIcon className="size-4 text-primary" aria-hidden="true" />
         <span>{folder.name}</span>
       </button>
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
@@ -141,7 +148,7 @@ function FolderRow({
           {stats.count} {stats.count === 1 ? 'case' : 'cases'}
         </span>
       </div>
-      {canDelete && <RowActionMenu ref={menuRef} label={`Actions for ${folder.name}`} items={items} />}
+      {canDelete && <RowActionMenu ref={menuRef} label={`Actions for ${folder.name}`} items={items} hoverReveal />}
     </li>
   )
 }
@@ -157,6 +164,10 @@ function CaseRow({
   canMove,
   canDelete,
   onRequestDelete,
+  selected,
+  onToggleSelect,
+  focused,
+  rowRef,
 }: {
   testCase: TestCase
   suiteNames: string[]
@@ -172,6 +183,14 @@ function CaseRow({
   canMove: boolean
   canDelete: boolean
   onRequestDelete: () => void
+  // add-library-bulk-select: Shift+Click only (design.md D1) — a plain
+  // click always opens the case via onOpen above.
+  selected: boolean
+  onToggleSelect: () => void
+  // Keyboard focus (design.md D3/D4) — independent of selection, so the two
+  // stay visually distinguishable when they overlap.
+  focused: boolean
+  rowRef: (el: HTMLLIElement | null) => void
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
   const items: RowActionMenuItem[] = [
@@ -199,41 +218,48 @@ function CaseRow({
 
   return (
     <li
+      ref={rowRef}
       draggable
       onDragStart={onDragStart}
-      className="flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0"
+      data-focused={focused ? 'true' : undefined}
+      className={`group flex items-center gap-2 border-b px-3 py-2 text-sm last:border-b-0 hover:bg-accent ${selected ? 'bg-primary/10' : ''} ${focused ? 'ring-2 ring-inset ring-primary/50' : ''}`}
       onContextMenu={(e) => {
         e.preventDefault()
         menuRef.current?.openAt(e.clientX, e.clientY)
       }}
     >
-      <button type="button" className="flex flex-1 items-center gap-2 text-left" onClick={onOpen}>
-        <FileTextIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-        <span>{testCase.content.title}</span>
+      <button
+        type="button"
+        className="flex min-w-0 flex-1 items-center gap-2 text-left"
+        onClick={(e) => {
+          if (e.shiftKey) {
+            e.preventDefault()
+            onToggleSelect()
+            return
+          }
+          onOpen()
+        }}
+      >
+        <FileTextIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="min-w-0 flex-1 truncate">{testCase.content.title}</span>
       </button>
       {folderPath && <span className="shrink-0 text-xs text-muted-foreground">{folderPath}</span>}
-      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-        v{testCase.currentVersion}
-      </span>
+      {(testCase.content.platform || testCase.content.testType) && (
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {[testCase.content.platform, testCase.content.testType].filter(Boolean).join(' · ')}
+        </span>
+      )}
       <span className="flex flex-wrap items-center gap-1.5 text-xs">
-        <ClassificationPills
-          priority={testCase.content.priority}
-          platform={testCase.content.platform}
-          testType={testCase.content.testType}
-        />
+        <ClassificationPills priority={testCase.content.priority} />
         <AutomationPill automated={Boolean(testCase.content.automated)} />
         {isFlaky && <FlakyPill />}
-        {suiteNames.map((name) => (
-          <span key={name} className="rounded-full bg-accent px-2 py-0.5">
-            {name}
-          </span>
-        ))}
+        {tagPills(suiteNames)}
       </span>
       <span className="shrink-0 text-xs text-muted-foreground">
         {isStale(testCase.updatedAt) ? <StalePill /> : timeAgo(testCase.updatedAt)}
       </span>
       {items.length > 0 && (
-        <RowActionMenu ref={menuRef} label={`Actions for ${testCase.content.title}`} items={items} />
+        <RowActionMenu ref={menuRef} label={`Actions for ${testCase.content.title}`} items={items} hoverReveal />
       )}
     </li>
   )
@@ -255,6 +281,8 @@ export default function FolderExplorerPage() {
   const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null)
   const [movingCaseKey, setMovingCaseKey] = useState<string | null>(null)
   const [moveQuery, setMoveQuery] = useState('')
+  const [bulkMoveKeys, setBulkMoveKeys] = useState<string[] | null>(null)
+  const [bulkMoveQuery, setBulkMoveQuery] = useState('')
   const [browsingSections, setBrowsingSections] = useState(false)
   const [browseQuery, setBrowseQuery] = useState('')
   const [treeCreatingIn, setTreeCreatingIn] = useState<string | null>(null)
@@ -265,6 +293,10 @@ export default function FolderExplorerPage() {
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ tag: '', priority: '', platform: '', testType: '', automated: '', flaky: '' })
   const [searchEntireLibrary, setSearchEntireLibrary] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [lastToggledKey, setLastToggledKey] = useState<string | null>(null)
+  const [focusedIndex, setFocusedIndex] = useState(0)
+  const caseRowRefs = useRef<Map<string, HTMLLIElement>>(new Map())
 
   const treeWidth = useResizableWidth({ storageKey: 'testpulse.libraryTreeWidth', defaultWidth: 256, min: 200, max: 480 })
 
@@ -319,6 +351,110 @@ export default function FolderExplorerPage() {
     setExpanded((prev) => new Set([...prev, ...ancestors]))
   }, [selectedFolderId, folders])
 
+  // Everything below, through the keyboard-nav effects, is computed above
+  // the early-return guards (unlike most of this component's render-only
+  // derivations) — these effects must run on every render, early-returns or
+  // not, or the hook count changes between renders (a hooks-rule crash).
+  const casesHere = cases.filter((c) => c.folderId === selectedFolderId)
+
+  const normalizedSearch = search.trim().toLowerCase()
+
+  function caseMatches(c: TestCase): boolean {
+    if (normalizedSearch && !c.content.title.toLowerCase().includes(normalizedSearch)) return false
+    if (filters.tag && !c.content.tags?.includes(filters.tag)) return false
+    if (filters.priority && c.content.priority !== filters.priority) return false
+    if (filters.platform && c.content.platform !== filters.platform) return false
+    if (filters.testType && c.content.testType !== filters.testType) return false
+    if (filters.automated === 'yes' && !c.content.automated) return false
+    if (filters.automated === 'no' && c.content.automated) return false
+    if (filters.flaky === 'yes' && !flakyKeys.has(c.key)) return false
+    if (filters.flaky === 'no' && flakyKeys.has(c.key)) return false
+    return true
+  }
+
+  const visibleHere = casesHere.filter(caseMatches)
+  const entireLibraryMatches = cases.filter(caseMatches)
+  const orderedVisibleCases = searchEntireLibrary ? entireLibraryMatches : visibleHere
+
+  // Shift+Click-only range select (no checkboxes, add-library-bulk-select
+  // design.md D1) — identical anchor/range semantics to RunPage.tsx's own
+  // toggleSelect, applied here for the first time without an accompanying
+  // checkbox: the first Shift+Click (no anchor yet) toggles just that row
+  // and becomes the anchor; a later Shift+Click extends a contiguous range.
+  function toggleSelect(caseKey: string, shiftKey: boolean) {
+    if (shiftKey && lastToggledKey) {
+      const keys = orderedVisibleCases.map((c) => c.key)
+      const fromIndex = keys.indexOf(lastToggledKey)
+      const toIndex = keys.indexOf(caseKey)
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const [start, end] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex]
+        const rangeKeys = keys.slice(start, end + 1)
+        setSelected((prev) => new Set([...prev, ...rangeKeys]))
+        setLastToggledKey(caseKey)
+        return
+      }
+    }
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(caseKey)) next.delete(caseKey)
+      else next.add(caseKey)
+      return next
+    })
+    setLastToggledKey(caseKey)
+  }
+
+  // A stable (string, value-compared) signal of which cases are visible and
+  // in what order — orderedVisibleCases itself is a fresh array every
+  // render, so depending on it directly would fire these effects on every
+  // render, not just when the actual visible set changes.
+  const orderedVisibleKeysSignal = orderedVisibleCases.map((c) => c.key).join(',')
+
+  useEffect(() => {
+    setFocusedIndex(0)
+  }, [orderedVisibleKeysSignal])
+
+  useEffect(() => {
+    const target = orderedVisibleCases[focusedIndex]
+    if (!target) return
+    caseRowRefs.current.get(target.key)?.scrollIntoView({ block: 'nearest' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedIndex, orderedVisibleKeysSignal])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (isEditableElementFocused()) return
+      const key = e.key.toLowerCase()
+      if (key === 'j' || key === 'arrowdown') {
+        setFocusedIndex((i) => Math.min(i + 1, orderedVisibleCases.length - 1))
+        return
+      }
+      if (key === 'k' || key === 'arrowup') {
+        setFocusedIndex((i) => Math.max(i - 1, 0))
+        return
+      }
+      if (key === ' ') {
+        e.preventDefault()
+        const target = orderedVisibleCases[focusedIndex]
+        if (target) toggleSelect(target.key, e.shiftKey)
+        return
+      }
+      if (e.key === 'Enter') {
+        const target = orderedVisibleCases[focusedIndex]
+        if (target) openCase(target.key)
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderedVisibleKeysSignal, focusedIndex])
+
+  const librarySelectionShortcuts: ShortcutEntry[] = [
+    { keys: 'J/K · ↑/↓', label: 'Move focus' },
+    { keys: 'Space', label: 'Select focused case' },
+    { keys: 'Shift+Space', label: 'Extend selection' },
+    { keys: 'Enter', label: 'Open focused case' },
+  ]
+
   if (!projectKey) return null
   if (notFound) {
     return (
@@ -339,7 +475,6 @@ export default function FolderExplorerPage() {
   if (!root || !selectedFolderId) return null
 
   const subfolders = folders.filter((f) => f.parentFolderId === selectedFolderId)
-  const casesHere = cases.filter((c) => c.folderId === selectedFolderId)
 
   // Direct-children counts only, no recursive rollup (design.md) — computed
   // once from data already fetched, shared by the tree and content-pane rows.
@@ -355,30 +490,35 @@ export default function FolderExplorerPage() {
     }
   }
 
-  const normalizedSearch = search.trim().toLowerCase()
   const anyFilterActive = Boolean(
     normalizedSearch || filters.tag || filters.priority || filters.platform || filters.testType || filters.automated || filters.flaky,
   )
 
-  function caseMatches(c: TestCase): boolean {
-    if (normalizedSearch && !c.content.title.toLowerCase().includes(normalizedSearch)) return false
-    if (filters.tag && !c.content.tags?.includes(filters.tag)) return false
-    if (filters.priority && c.content.priority !== filters.priority) return false
-    if (filters.platform && c.content.platform !== filters.platform) return false
-    if (filters.testType && c.content.testType !== filters.testType) return false
-    if (filters.automated === 'yes' && !c.content.automated) return false
-    if (filters.automated === 'no' && c.content.automated) return false
-    if (filters.flaky === 'yes' && !flakyKeys.has(c.key)) return false
-    if (filters.flaky === 'no' && flakyKeys.has(c.key)) return false
-    return true
+  function filterSelectClass(active: boolean): string {
+    return `h-8 rounded-md border px-2 text-sm ${active ? 'border-primary/40 bg-primary/5' : 'border-input bg-background'}`
   }
 
   const tagOptions = distinctValues(cases.flatMap((c) => c.content.tags ?? []).map((t) => ({ t })), (x) => x.t)
   const platformOptions = distinctValues(cases, (c) => c.content.platform ?? '')
   const testTypeOptions = distinctValues(cases, (c) => c.content.testType ?? '')
 
-  const visibleHere = casesHere.filter(caseMatches)
-  const entireLibraryMatches = cases.filter(caseMatches)
+  const bulkActions: BulkAction[] = [
+    ...(permissions?.caseEdit
+      ? ([
+          {
+            kind: 'button',
+            label: 'Move to…',
+            onSelect: () => {
+              setBulkMoveQuery('')
+              setBulkMoveKeys(Array.from(selected))
+            },
+          },
+        ] satisfies BulkAction[])
+      : []),
+    ...(permissions?.caseDelete
+      ? ([{ kind: 'button', label: 'Delete', onSelect: () => setDeleteTarget({ kind: 'bulk', keys: Array.from(selected) }) }] satisfies BulkAction[])
+      : []),
+  ]
 
   function clearFilters() {
     setSearch('')
@@ -429,10 +569,24 @@ export default function FolderExplorerPage() {
     if (!deleteTarget) return
     if (deleteTarget.kind === 'case') {
       await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey: deleteTarget.key } } })
+    } else if (deleteTarget.kind === 'bulk') {
+      await bulkDeleteCases(deleteTarget.keys)
+      setSelected(new Set())
+      setLastToggledKey(null)
     } else {
       await api.DELETE('/api/v1/folders/{folderId}', { params: { path: { folderId: deleteTarget.id } } })
     }
     setDeleteTarget(null)
+    await load()
+    bumpLanding()
+  }
+
+  async function handleBulkMove(targetFolderId: string) {
+    if (!bulkMoveKeys) return
+    await bulkMoveCases(bulkMoveKeys, targetFolderId)
+    setBulkMoveKeys(null)
+    setSelected(new Set())
+    setLastToggledKey(null)
     await load()
     bumpLanding()
   }
@@ -559,7 +713,7 @@ export default function FolderExplorerPage() {
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
             <input
               type="text"
               aria-label="Search test cases"
@@ -570,7 +724,7 @@ export default function FolderExplorerPage() {
             />
             <select
               aria-label="Tag"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className={filterSelectClass(Boolean(filters.tag))}
               value={filters.tag}
               onChange={(e) => setFilters((f) => ({ ...f, tag: e.target.value }))}
             >
@@ -583,7 +737,7 @@ export default function FolderExplorerPage() {
             </select>
             <select
               aria-label="Priority"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className={filterSelectClass(Boolean(filters.priority))}
               value={filters.priority}
               onChange={(e) => setFilters((f) => ({ ...f, priority: e.target.value }))}
             >
@@ -595,7 +749,7 @@ export default function FolderExplorerPage() {
             </select>
             <select
               aria-label="Platform"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className={filterSelectClass(Boolean(filters.platform))}
               value={filters.platform}
               onChange={(e) => setFilters((f) => ({ ...f, platform: e.target.value }))}
             >
@@ -608,7 +762,7 @@ export default function FolderExplorerPage() {
             </select>
             <select
               aria-label="Test type"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className={filterSelectClass(Boolean(filters.testType))}
               value={filters.testType}
               onChange={(e) => setFilters((f) => ({ ...f, testType: e.target.value }))}
             >
@@ -621,7 +775,7 @@ export default function FolderExplorerPage() {
             </select>
             <select
               aria-label="Automated"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className={filterSelectClass(Boolean(filters.automated))}
               value={filters.automated}
               onChange={(e) => setFilters((f) => ({ ...f, automated: e.target.value }))}
             >
@@ -631,7 +785,7 @@ export default function FolderExplorerPage() {
             </select>
             <select
               aria-label="Flaky"
-              className="h-8 rounded-md border border-input bg-background px-2 text-sm"
+              className={filterSelectClass(Boolean(filters.flaky))}
               value={filters.flaky}
               onChange={(e) => setFilters((f) => ({ ...f, flaky: e.target.value }))}
             >
@@ -639,14 +793,15 @@ export default function FolderExplorerPage() {
               <option value="yes">Flaky</option>
               <option value="no">Not flaky</option>
             </select>
-            <button
-              type="button"
-              className="text-sm font-medium text-primary underline underline-offset-2 disabled:text-muted-foreground disabled:no-underline"
-              disabled={!anyFilterActive}
-              onClick={clearFilters}
-            >
-              Clear filters
-            </button>
+            {anyFilterActive && (
+              <button
+                type="button"
+                className="text-sm font-medium text-primary underline underline-offset-2"
+                onClick={clearFilters}
+              >
+                Clear filters
+              </button>
+            )}
             <label className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
               <input
                 type="checkbox"
@@ -700,6 +855,13 @@ export default function FolderExplorerPage() {
                         canMove={Boolean(permissions?.caseEdit)}
                         canDelete={Boolean(permissions?.caseDelete)}
                         onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
+                        selected={selected.has(c.key)}
+                        onToggleSelect={() => toggleSelect(c.key, true)}
+                        focused={orderedVisibleCases[focusedIndex]?.key === c.key}
+                        rowRef={(el) => {
+                          if (el) caseRowRefs.current.set(c.key, el)
+                          else caseRowRefs.current.delete(c.key)
+                        }}
                       />
                     ))}
                   </ul>
@@ -744,14 +906,35 @@ export default function FolderExplorerPage() {
                       canMove={Boolean(permissions?.caseEdit)}
                       canDelete={Boolean(permissions?.caseDelete)}
                       onRequestDelete={() => setDeleteTarget({ kind: 'case', key: c.key, title: c.content.title })}
+                      selected={selected.has(c.key)}
+                      onToggleSelect={() => toggleSelect(c.key, true)}
+                      focused={orderedVisibleCases[focusedIndex]?.key === c.key}
+                      rowRef={(el) => {
+                        if (el) caseRowRefs.current.set(c.key, el)
+                        else caseRowRefs.current.delete(c.key)
+                      }}
                     />
                   ))}
                 </ul>
               )}
             </CardContent>
           </Card>
+          <RunShortcutsHint shortcuts={librarySelectionShortcuts} />
         </div>
       </div>
+
+      <RunShortcutsOverlay shortcuts={librarySelectionShortcuts} />
+
+      <LibraryBulkActionBar
+        count={selected.size}
+        total={orderedVisibleCases.length}
+        onSelectAll={() => setSelected(new Set(orderedVisibleCases.map((c) => c.key)))}
+        actions={bulkActions}
+        onClear={() => {
+          setSelected(new Set())
+          setLastToggledKey(null)
+        }}
+      />
 
       <Dialog open={movingCaseKey !== null} onOpenChange={(open) => !open && setMovingCaseKey(null)}>
         <DialogContent className="sm:max-w-md">
@@ -766,6 +949,20 @@ export default function FolderExplorerPage() {
               if (movingCaseKey) void moveCase(movingCaseKey, targetFolderId)
               setMovingCaseKey(null)
             }}
+          />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkMoveKeys !== null} onOpenChange={(open) => !open && setBulkMoveKeys(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Move {bulkMoveKeys?.length} cases to…</DialogTitle>
+          <FolderPicker
+            folders={folders}
+            rootId={root.id}
+            query={bulkMoveQuery}
+            onQueryChange={setBulkMoveQuery}
+            folderStats={folderStats}
+            onSelect={(targetFolderId) => void handleBulkMove(targetFolderId)}
           />
         </DialogContent>
       </Dialog>
@@ -811,6 +1008,23 @@ export default function FolderExplorerPage() {
                 </Button>
                 <Button variant="destructive" onClick={() => void confirmDelete()}>
                   Delete case
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+          {deleteTarget?.kind === 'bulk' && (
+            <>
+              <DialogTitle>Delete {deleteTarget.keys.length} cases?</DialogTitle>
+              <DialogDescription>
+                Delete {deleteTarget.keys.length} case{deleteTarget.keys.length === 1 ? '' : 's'}? This cannot be
+                undone.
+              </DialogDescription>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDeleteTarget(null)}>
+                  Cancel
+                </Button>
+                <Button variant="destructive" onClick={() => void confirmDelete()}>
+                  Confirm delete
                 </Button>
               </DialogFooter>
             </>

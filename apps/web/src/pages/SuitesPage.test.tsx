@@ -88,11 +88,11 @@ describe('SuitesPage', () => {
   it('shows no breadcrumb — the header chip already covers the project, and the page heading already says "Suites"', async () => {
     mockSuitesAPI(projectQA)
     renderSuites()
-    await screen.findByText('Suites', { selector: '[data-slot="card-title"]' })
+    await screen.findByRole('heading', { name: 'Suites' })
     expect(screen.queryByRole('navigation', { name: 'Breadcrumb' })).not.toBeInTheDocument()
   })
 
-  it('shows each suite as a card with name, case count, and a pass-rate health bar', async () => {
+  it('shows each suite as a card with name, case count, and a status pill + progress bar (polish-library-and-suites-pages)', async () => {
     mockSuitesAPI(projectQA, [
       { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1', 'c2'], createdAt: '', passRate: 90, lastRunAt: '2026-07-25T10:00:00Z' },
     ])
@@ -100,7 +100,8 @@ describe('SuitesPage', () => {
     const list = await screen.findByRole('list', { name: 'Suites' })
     expect(within(list).getByText('Smoke')).toBeInTheDocument()
     expect(within(list).getByText(/2 cases/i)).toBeInTheDocument()
-    expect(within(list).getByText('90%')).toBeInTheDocument()
+    expect(within(list).getByText('Healthy')).toBeInTheDocument()
+    expect(list.querySelector('[data-track]')).toBeInTheDocument()
     // Suite's established icon, matching FolderExplorerPage's row-icon treatment —
     // fix-entity-icon-consistency.
     expect(list.querySelector('.lucide-layers')).toBeInTheDocument()
@@ -277,7 +278,7 @@ describe('SuitesPage', () => {
   it('hides "+ New suite" for a caller lacking suiteCreate', async () => {
     mockSuitesAPI(projectQA, [], { ...fullPermissions, suiteCreate: false })
     renderSuites()
-    await screen.findByText('Suites', { selector: '[data-slot="card-title"]' })
+    await screen.findByRole('heading', { name: 'Suites' })
     expect(screen.queryByRole('button', { name: /new suite/i })).not.toBeInTheDocument()
   })
 

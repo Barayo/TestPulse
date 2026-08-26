@@ -18,8 +18,18 @@ const cases: CasePickerCase[] = [
 
 function renderPicker(overrides: Partial<Parameters<typeof CasePicker>[0]> = {}) {
   const onToggle = vi.fn()
-  render(<CasePicker cases={cases} folders={folders} selected={new Set()} onToggle={onToggle} {...overrides} />)
-  return { onToggle }
+  const onToggleRange = vi.fn()
+  render(
+    <CasePicker
+      cases={cases}
+      folders={folders}
+      selected={new Set()}
+      onToggle={onToggle}
+      onToggleRange={onToggleRange}
+      {...overrides}
+    />,
+  )
+  return { onToggle, onToggleRange }
 }
 
 describe('CasePicker resizable Sections rail (add-resizable-library-tree)', () => {
@@ -235,6 +245,163 @@ describe('CasePicker', () => {
     // own, so the test supplies a realistic value rather than an impossible one.
     fireEvent.scroll(viewport, { target: { scrollTop: 11560 } })
     expect(screen.getByText('Bulk case 199')).toBeInTheDocument()
+  })
+
+  describe('circular checkmark indicator (redesign-case-picker-membership)', () => {
+    it('shows no native checkbox input — the row itself carries the checkbox role', () => {
+      renderPicker()
+      expect(document.querySelector('input[type="checkbox"]')).not.toBeInTheDocument()
+      expect(screen.getByRole('checkbox', { name: /login succeeds/i })).toBeInTheDocument()
+    })
+
+    it('shows a checkmark icon only when the row is checked', () => {
+      renderPicker({ selected: new Set(['c2']) })
+      const checkedRow = screen.getByRole('checkbox', { name: /login fails/i })
+      const uncheckedRow = screen.getByRole('checkbox', { name: /login succeeds/i })
+      expect(checkedRow.querySelector('.lucide-check')).toBeInTheDocument()
+      expect(uncheckedRow.querySelector('.lucide-check')).not.toBeInTheDocument()
+    })
+
+    it('tints the row background when checked, distinct from the unchecked state', () => {
+      renderPicker({ selected: new Set(['c2']) })
+      expect(screen.getByRole('checkbox', { name: /login fails/i })).toHaveClass('bg-primary/10')
+      expect(screen.getByRole('checkbox', { name: /login succeeds/i })).not.toHaveClass('bg-primary/10')
+    })
+
+    it('marks a disabled row via aria-disabled, so toBeDisabled() still passes without a native input', async () => {
+      const { onToggle } = renderPicker({ readOnly: true })
+      const row = screen.getByRole('checkbox', { name: /checkout completes/i })
+      expect(row).toBeDisabled()
+      await userEvent.click(row)
+      expect(onToggle).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('bidirectional Shift+Click range-toggle (redesign-case-picker-membership)', () => {
+    function shiftClick(el: HTMLElement) {
+      fireEvent.click(el, { shiftKey: true })
+    }
+
+    it('a first Shift+Click (no prior anchor) toggles just that row via onToggle, not onToggleRange', () => {
+      const { onToggle, onToggleRange } = renderPicker()
+      shiftClick(screen.getByRole('checkbox', { name: /login succeeds/i }))
+      expect(onToggle).toHaveBeenCalledWith('c1')
+      expect(onToggleRange).not.toHaveBeenCalled()
+    })
+
+    it('a later Shift+Click applies the clicked row\'s resulting (checked) state to the whole range', () => {
+      const { onToggleRange } = renderPicker({ selected: new Set() })
+      shiftClick(screen.getByRole('checkbox', { name: /login succeeds/i }))
+      shiftClick(screen.getByRole('checkbox', { name: /checkout completes/i }))
+      expect(onToggleRange).toHaveBeenCalledWith(['c1', 'c2', 'c3'], true)
+    })
+
+    it('a bidirectional range-toggle can also uncheck an already-checked range', () => {
+      const { onToggleRange } = renderPicker({ selected: new Set(['c1', 'c2', 'c3']) })
+      shiftClick(screen.getByRole('checkbox', { name: /login succeeds/i }))
+      shiftClick(screen.getByRole('checkbox', { name: /checkout completes/i }))
+      expect(onToggleRange).toHaveBeenCalledWith(['c1', 'c2', 'c3'], false)
+    })
+
+    it('a plain click (no shift) still calls only onToggle, even after an anchor exists', () => {
+      const { onToggle, onToggleRange } = renderPicker()
+      shiftClick(screen.getByRole('checkbox', { name: /login succeeds/i }))
+      onToggleRange.mockClear()
+      onToggle.mockClear()
+      fireEvent.click(screen.getByRole('checkbox', { name: /checkout completes/i }))
+      expect(onToggle).toHaveBeenCalledWith('c3')
+      expect(onToggleRange).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('keyboard navigation (redesign-case-picker-membership)', () => {
+    it('arrow keys move real keyboard focus through the rows', async () => {
+      renderPicker()
+      await userEvent.keyboard('{ArrowDown}')
+      expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: /login fails/i }))
+    })
+
+    it('j/k move focus the same as arrow keys', async () => {
+      renderPicker()
+      await userEvent.keyboard('jj')
+      await userEvent.keyboard('k')
+      expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: /login fails/i }))
+    })
+
+    it('clamps focus at the last row', async () => {
+      renderPicker()
+      await userEvent.keyboard('jjjj')
+      expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: /checkout completes/i }))
+    })
+
+    it('clamps focus at the first row', async () => {
+      renderPicker()
+      await userEvent.keyboard('kkkk')
+      expect(document.activeElement).toBe(screen.getByRole('checkbox', { name: /login succeeds/i }))
+    })
+
+    it('Space toggles the arrow-focused row', async () => {
+      const { onToggle } = renderPicker()
+      await userEvent.keyboard('j')
+      await userEvent.keyboard(' ')
+      expect(onToggle).toHaveBeenCalledWith('c2')
+    })
+
+    it('Shift+Space extends the bidirectional range from the anchor to the focused row', async () => {
+      const { onToggleRange } = renderPicker({ selected: new Set() })
+      // Establishes real focus on the first row, matching a realistic entry
+      // path (e.g. Tab into the picker) — Space alone with nothing focused
+      // anywhere on the page has no target, by design.
+      screen.getByRole('checkbox', { name: /login succeeds/i }).focus()
+      await userEvent.keyboard(' ')
+      await userEvent.keyboard('jj')
+      await userEvent.keyboard('{Shift>} {/Shift}')
+      expect(onToggleRange).toHaveBeenCalledWith(['c1', 'c2', 'c3'], true)
+    })
+
+    it('Enter does nothing — a picker row has no "open" destination', async () => {
+      const { onToggle, onToggleRange } = renderPicker()
+      await userEvent.keyboard('{Enter}')
+      expect(onToggle).not.toHaveBeenCalled()
+      expect(onToggleRange).not.toHaveBeenCalled()
+    })
+
+    it('arrow keys do nothing while the search box has focus', async () => {
+      renderPicker()
+      const search = screen.getByRole('textbox', { name: /search case titles/i })
+      search.focus()
+      await userEvent.keyboard('{ArrowDown}')
+      expect(document.activeElement).toBe(search)
+    })
+
+    it('scrolls the virtualized viewport directly (not scrollIntoView) to keep the focused row in the rendered window', async () => {
+      const many: CasePickerCase[] = Array.from({ length: 200 }, (_, i) => ({
+        id: `bulk-${i}`,
+        title: `Bulk case ${i}`,
+        tags: [],
+        priority: '',
+        platform: '',
+        testType: '',
+        folderId: 'auth',
+      }))
+      renderPicker({ cases: many, selected: new Set() })
+      const viewport = screen.getByTestId('case-picker-viewport')
+      for (let i = 0; i < 30; i++) {
+        // eslint-disable-next-line no-await-in-loop
+        await userEvent.keyboard('j')
+      }
+      expect(viewport.scrollTop).toBeGreaterThan(0)
+      expect(screen.getByRole('checkbox', { name: /bulk case 30/i })).toBeInTheDocument()
+    })
+  })
+
+  it('shows a persistent shortcuts hint and opens an overlay with ? (redesign-case-picker-membership)', async () => {
+    renderPicker()
+    expect(screen.getByLabelText('Keyboard shortcuts')).toBeInTheDocument()
+    expect(screen.getByText('Move focus')).toBeInTheDocument()
+
+    await userEvent.keyboard('?')
+    expect(screen.getByRole('dialog', { name: /keyboard shortcuts/i })).toBeInTheDocument()
   })
 
   it('caps tags at 2 with an overflow badge', () => {

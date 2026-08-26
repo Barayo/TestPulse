@@ -140,6 +140,18 @@ export default function NewRunPage() {
     })
   }
 
+  // Bidirectional Shift+Click/Shift+Space range-toggle (redesign-case-picker-membership).
+  function toggleCaseRange(caseKeys: string[], checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const key of caseKeys) {
+        if (checked) next.add(key)
+        else next.delete(key)
+      }
+      return next
+    })
+  }
+
   async function handleCreateRun(e: FormEvent) {
     e.preventDefault()
     if (!projectKey || !runName.trim() || !loaded || selected.size === 0) return
@@ -261,7 +273,13 @@ export default function NewRunPage() {
               </p>
             )}
 
-            <CasePicker cases={gridCases} folders={folders} selected={selected} onToggle={toggleCase} />
+            <CasePicker
+              cases={gridCases}
+              folders={folders}
+              selected={selected}
+              onToggle={toggleCase}
+              onToggleRange={toggleCaseRange}
+            />
 
             <div className="flex items-center justify-between rounded-md border bg-accent px-4 py-2.5">
               <span className="text-sm font-medium">

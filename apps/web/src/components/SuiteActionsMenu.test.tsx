@@ -76,6 +76,13 @@ describe('SuiteActionsMenu', () => {
       expect(screen.getByRole('button', { name: /^delete$/i })).toBeInTheDocument()
     })
 
+    it('shows an icon on each of the three full-width actions, matching the "menu" variant (polish-library-and-suites-pages)', () => {
+      renderMenu({ variant: 'buttons' })
+      expect(screen.getByRole('button', { name: /run suite/i }).querySelector('.lucide-play')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /rename/i }).querySelector('.lucide-pencil')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^delete$/i }).querySelector('.lucide-trash-2')).toBeInTheDocument()
+    })
+
     it('Run suite opens a confirm dialog showing the case count and an editable name', async () => {
       renderMenu({ variant: 'buttons' })
       await userEvent.click(screen.getByRole('button', { name: /run suite/i }))

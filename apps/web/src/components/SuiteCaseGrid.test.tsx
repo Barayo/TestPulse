@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { SuiteCaseGrid, type SuiteCaseGridCase, type SuiteCaseGridFolder } from './SuiteCaseGrid'
 
@@ -20,6 +20,7 @@ const cases: SuiteCaseGridCase[] = [
 
 function renderGrid(overrides: Partial<Parameters<typeof SuiteCaseGrid>[0]> = {}) {
   const onToggle = vi.fn()
+  const onToggleRange = vi.fn()
   const onCommit = vi.fn()
   const onExit = vi.fn()
   render(
@@ -28,6 +29,7 @@ function renderGrid(overrides: Partial<Parameters<typeof SuiteCaseGrid>[0]> = {}
       folders={folders}
       selected={new Set()}
       onToggle={onToggle}
+      onToggleRange={onToggleRange}
       commitLabel="Create suite (0)"
       commitDisabled
       onCommit={onCommit}
@@ -35,7 +37,7 @@ function renderGrid(overrides: Partial<Parameters<typeof SuiteCaseGrid>[0]> = {}
       {...overrides}
     />,
   )
-  return { onToggle, onCommit, onExit }
+  return { onToggle, onToggleRange, onCommit, onExit }
 }
 
 describe('SuiteCaseGrid', () => {
@@ -43,6 +45,15 @@ describe('SuiteCaseGrid', () => {
     renderGrid({ selected: new Set(['c2']) })
     expect(screen.getByRole('checkbox', { name: /login fails/i })).toBeChecked()
     expect(screen.getByRole('checkbox', { name: /login succeeds/i })).not.toBeChecked()
+  })
+
+  it('passes onToggleRange through to the picker unchanged (redesign-case-picker-membership)', () => {
+    const { onToggleRange } = renderGrid()
+    const first = screen.getByRole('checkbox', { name: /login succeeds/i })
+    const second = screen.getByRole('checkbox', { name: /login fails/i })
+    fireEvent.click(first, { shiftKey: true })
+    fireEvent.click(second, { shiftKey: true })
+    expect(onToggleRange).toHaveBeenCalledWith(['c1', 'c2'], true)
   })
 
   it('calls onToggle with the case id when its checkbox is clicked', async () => {

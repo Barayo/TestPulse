@@ -633,6 +633,36 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	// 3.7. Nine additional closed runs of the Regression suite, quick and
+	// undecorated (no comparison narrative — Release 1.1 regression/1.1.1
+	// hotfix/1.1.2 patch above already carry that) — solely so the Suite
+	// Detail page's "Run history" list demonstrates its SECTION_CAP (10) /
+	// "Show N more" behavior (polish-library-and-suites-pages) against a
+	// suite that realistically accumulates more runs than fit on one screen.
+	// login's own verdict cycles through pass/failed/skipped/blocked rather
+	// than pinning to one value across all nine — otherwise, being both the
+	// suite's first case and the most recently touched, it would crowd out
+	// the multi-color execution history TestSeedFlagshipCaseShowcasesMultipleVerdictColors
+	// (add-case-result-history) showcases on the Library's most-clicked case.
+	loginCheckpointVerdicts := []domain.Verdict{domain.VerdictPass, domain.VerdictFailed, domain.VerdictSkipped, domain.VerdictBlocked}
+	for i := 1; i <= 9; i++ {
+		checkpointName := fmt.Sprintf("Regression checkpoint %d", i)
+		if err := RunFromSuiteWithVerdicts(ctx, svc, p.ID, regressionSuite.ID, checkpointName, regressionCaseIDs,
+			[]domain.Verdict{
+				loginCheckpointVerdicts[i%len(loginCheckpointVerdicts)], domain.VerdictPass, domain.VerdictPass, domain.VerdictPass,
+				domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass,
+			}); err != nil {
+			return fmt.Errorf("sampledata: %w", err)
+		}
+		checkpointRun, err := runByName(ctx, svc, p.ID, checkpointName)
+		if err != nil {
+			return fmt.Errorf("sampledata: %w", err)
+		}
+		if err := svc.CloseRun(ctx, checkpointRun.ID); err != nil {
+			return fmt.Errorf("sampledata: closing run: %w", err)
+		}
+	}
+
 	// 4. Open nightly run — automated cases. checkoutValid fails here,
 	// deliberately, having passed in runs 1 and 2 above: same pinned
 	// version, mixed verdicts, no edit in between — a genuinely flaky case.

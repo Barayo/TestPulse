@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import SuiteDetailPage from './SuiteDetailPage'
@@ -176,6 +176,27 @@ describe('SuiteDetailPage', () => {
     mockDetailAPI({ ...smokeSuite, passRate: null, lastRunAt: null })
     renderDetail()
     expect(await screen.findAllByText(/never run/i)).not.toHaveLength(0)
+  })
+
+  it('Shift+Click range-toggles both grid cases at once (redesign-case-picker-membership)', async () => {
+    mockDetailAPI()
+    renderDetail()
+    await enterEdit()
+
+    const login = await screen.findByRole('checkbox', { name: /login works/i })
+    const checkout = screen.getByRole('checkbox', { name: /checkout works/i })
+    expect(login).toBeChecked()
+    expect(checkout).not.toBeChecked()
+
+    // First Shift+Click has no prior anchor, so it's a plain toggle: login
+    // flips off. Second Shift+Click has an anchor (login), so the range
+    // [login, checkout] takes on checkout's *resulting* state (checked).
+    fireEvent.click(login, { shiftKey: true })
+    expect(login).not.toBeChecked()
+    fireEvent.click(checkout, { shiftKey: true })
+
+    expect(login).toBeChecked()
+    expect(checkout).toBeChecked()
   })
 
   it('scopes the case grid to a section using the project\'s real folder hierarchy', async () => {
@@ -423,6 +444,47 @@ describe('SuiteDetailPage', () => {
     renderDetail()
     await screen.findByText('Run history')
     expect(screen.getByText(/no runs yet/i)).toBeInTheDocument()
+  })
+
+  it('caps Run history at 10 with a "Show N more" control, matching every other run list (polish-library-and-suites-pages)', async () => {
+    const runs = Array.from({ length: 12 }, (_, i) => ({
+      id: `r${i}`,
+      key: `p1-R${i}`,
+      projectId: 'p1',
+      name: `Run ${i}`,
+      status: 'closed',
+      suiteKey: 'p1-S1',
+      passRate: 80,
+      createdAt: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    }))
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    await screen.findByText('Run history')
+    const history = screen.getByTestId('suite-run-history')
+    expect(within(history).getAllByText(/^Run \d+$/)).toHaveLength(10)
+    const showMore = within(history).getByRole('button', { name: /show 2 more/i })
+
+    await userEvent.click(showMore)
+    expect(within(history).getAllByText(/^Run \d+$/)).toHaveLength(12)
+  })
+
+  it('shows no "Show more" control in Run history when there are 10 or fewer runs', async () => {
+    const runs = Array.from({ length: 10 }, (_, i) => ({
+      id: `r${i}`,
+      key: `p1-R${i}`,
+      projectId: 'p1',
+      name: `Run ${i}`,
+      status: 'closed',
+      suiteKey: 'p1-S1',
+      passRate: 80,
+      createdAt: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+    }))
+    mockDetailAPI(smokeSuite, [case1, case2], fullPermissions, false, [], runs)
+    renderDetail()
+    await screen.findByText('Run history')
+    const history = screen.getByTestId('suite-run-history')
+    expect(within(history).getAllByText(/^Run \d+$/)).toHaveLength(10)
+    expect(within(history).queryByRole('button', { name: /show.*more/i })).not.toBeInTheDocument()
   })
 
   it('offers an unseeded "Compare runs" link in Run history with at least two closed runs', async () => {

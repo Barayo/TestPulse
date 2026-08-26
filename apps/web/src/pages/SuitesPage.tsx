@@ -7,9 +7,8 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
-import { HealthBar } from '@/components/HealthBar'
+import { StatusPill, ProgressBar, healthColor } from '@/components/HealthBar'
 import { timeAgo } from '@/lib/timeAgo'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { SuiteActionsMenu, type SuiteActionsMenuHandle } from '@/components/SuiteActionsMenu'
@@ -25,6 +24,14 @@ type Permissions = components['schemas']['Permissions']
 // its own ref to the menu it opens on right-click — a ref can't live inside
 // a bare .map() callback (rules of hooks). Matches FolderRow/CaseRow/
 // RunItemRow's identical precedent (add-suite-index-context-menu).
+//
+// A background fill, not `statusBorderClass` (a `border-l-*` color class
+// with no accompanying border-width utility, so it paints nothing) — found
+// live while verifying this card locally.
+function accentSpineClass(rate: number | null): string {
+  return rate === null ? 'bg-border' : healthColor(rate)
+}
+
 function SuiteCard({
   suite,
   projectKey,
@@ -50,36 +57,44 @@ function SuiteCard({
         menuRef.current?.openAt(e.clientX, e.clientY)
       }}
     >
-      <button
-        type="button"
-        className="flex w-full flex-col gap-2 rounded-lg border p-4 pr-9 text-left hover:border-primary"
-        onClick={() => navigate(`/projects/${projectKey}/suites/${suite.key}`)}
-      >
-        <span className="flex items-center gap-1.5 truncate font-medium">
-          <LayersIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          {suite.name}
-        </span>
-        {suite.passRate === null ? (
-          <span className="text-xs text-muted-foreground">Never run</span>
-        ) : (
-          <HealthBar rate={suite.passRate} />
-        )}
-        <span className="text-xs text-muted-foreground">
-          {suite.caseIds.length} {suite.caseIds.length === 1 ? 'case' : 'cases'}
-          {suite.lastRunAt && ` · ${timeAgo(suite.lastRunAt)}`}
-        </span>
-      </button>
-      <div className="absolute top-3 right-2">
-        <SuiteActionsMenu
-          ref={menuRef}
-          suite={suite}
-          projectKey={projectKey}
-          variant="menu"
-          navigate={navigate}
-          onChanged={onChanged}
-          onRunCreated={onRunCreated}
-          permissions={permissions}
-        />
+      <div className="relative overflow-hidden rounded-xl border bg-card transition-[transform,box-shadow] duration-150 hover:-translate-y-px hover:shadow-md">
+        <span className={`absolute inset-y-0 left-0 w-1 ${accentSpineClass(suite.passRate)}`} aria-hidden="true" />
+        <button
+          type="button"
+          className="flex w-full flex-col gap-2.5 p-4 pl-5 pr-9 text-left"
+          onClick={() => navigate(`/projects/${projectKey}/suites/${suite.key}`)}
+        >
+          <span className="flex items-center gap-2">
+            <span className="flex size-7 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+              <LayersIcon className="size-4" aria-hidden="true" />
+            </span>
+            <span className="truncate font-medium">{suite.name}</span>
+          </span>
+          {suite.passRate === null ? (
+            <span className="text-xs text-muted-foreground">Never run</span>
+          ) : (
+            <>
+              <StatusPill rate={suite.passRate} />
+              <ProgressBar rate={suite.passRate} />
+            </>
+          )}
+          <span className="text-xs text-muted-foreground">
+            {suite.caseIds.length} {suite.caseIds.length === 1 ? 'case' : 'cases'}
+            {suite.lastRunAt && ` · ${timeAgo(suite.lastRunAt)}`}
+          </span>
+        </button>
+        <div className="absolute top-3 right-2">
+          <SuiteActionsMenu
+            ref={menuRef}
+            suite={suite}
+            projectKey={projectKey}
+            variant="menu"
+            navigate={navigate}
+            onChanged={onChanged}
+            onRunCreated={onRunCreated}
+            permissions={permissions}
+          />
+        </div>
       </div>
     </li>
   )
@@ -181,41 +196,42 @@ export default function SuitesPage() {
         />
       )}
 
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="tp-heading">Suites</CardTitle>
-          {permissions?.suiteCreate && (
-            <Button
-              type="button"
-              onClick={() => {
-                setSuiteName('')
-                setCreating(true)
-              }}
-            >
-              + New suite
-            </Button>
-          )}
-        </CardHeader>
-        <CardContent>
-          {suites.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No suites yet.</p>
-          ) : (
-            <ul aria-label="Suites" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {suites.map((s) => (
-                <SuiteCard
-                  key={s.id}
-                  suite={s}
-                  projectKey={projectKey}
-                  navigate={navigate}
-                  onChanged={load}
-                  onRunCreated={setCreatedRun}
-                  permissions={permissions}
-                />
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-between">
+        <h1 className="tp-heading text-2xl">Suites</h1>
+        {permissions?.suiteCreate && (
+          <Button
+            type="button"
+            onClick={() => {
+              setSuiteName('')
+              setCreating(true)
+            }}
+          >
+            + New suite
+          </Button>
+        )}
+      </div>
+
+      {suites.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No suites yet.</p>
+      ) : (
+        <ul
+          aria-label="Suites"
+          className="grid gap-4"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))' }}
+        >
+          {suites.map((s) => (
+            <SuiteCard
+              key={s.id}
+              suite={s}
+              projectKey={projectKey}
+              navigate={navigate}
+              onChanged={load}
+              onRunCreated={setCreatedRun}
+              permissions={permissions}
+            />
+          ))}
+        </ul>
+      )}
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-md">

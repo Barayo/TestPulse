@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router'
 import NewRunPage from './NewRunPage'
@@ -110,6 +110,19 @@ describe('NewRunPage', () => {
     await screen.findByRole('checkbox', { name: /login works/i })
     expect(screen.getByRole('checkbox', { name: /login works/i })).not.toBeChecked()
     expect(screen.getByRole('button', { name: /create run/i })).toBeDisabled()
+  })
+
+  it('Shift+Click range-toggles both cases at once (redesign-case-picker-membership)', async () => {
+    mockNewRunAPI([caseA, caseB])
+    renderNewRun()
+    const login = await screen.findByRole('checkbox', { name: /login works/i })
+    const checkout = screen.getByRole('checkbox', { name: /checkout works/i })
+
+    fireEvent.click(login, { shiftKey: true })
+    fireEvent.click(checkout, { shiftKey: true })
+
+    expect(login).toBeChecked()
+    expect(checkout).toBeChecked()
   })
 
   it('creates a run from a hand-picked case selection, not every project case', async () => {

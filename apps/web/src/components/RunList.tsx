@@ -12,7 +12,7 @@ type Run = components['schemas']['Run']
 // Closed can grow unbounded (CI dogfooding imports many automated runs on
 // every push) — one shared cap/expand, not Closed-specific, so Open would
 // be handled the same way if it ever ballooned too (group-runs-by-status).
-const SECTION_CAP = 10
+export const SECTION_CAP = 10
 
 // Shared between RunsPage.tsx (a project's full run list) and the suite
 // detail page's Run history card (rework-suite-run-flow design.md D3) — one

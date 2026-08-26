@@ -25,8 +25,12 @@ export type RowActionMenuHandle = {
 // one state machine and one set of items, two entry points.
 export const RowActionMenu = forwardRef<
   RowActionMenuHandle,
-  { label: string; items: RowActionMenuItem[]; trigger?: ReactNode }
->(function RowActionMenu({ label, items, trigger }, ref) {
+  // hoverReveal (polish-library-and-suites-pages): opt-in, so existing call
+  // sites (suite cards, run item rows) keep their always-visible trigger —
+  // only the Library's rows ask for the quieter hover/focus-reveal
+  // treatment. Requires a `group` class on an ancestor row.
+  { label: string; items: RowActionMenuItem[]; trigger?: ReactNode; hoverReveal?: boolean }
+>(function RowActionMenu({ label, items, trigger, hoverReveal }, ref) {
     const [open, setOpen] = useState(false)
     const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
     const [anchorPos, setAnchorPos] = useState<{ top: number; right: number } | null>(null)
@@ -110,11 +114,15 @@ export const RowActionMenu = forwardRef<
           aria-label={label}
           aria-haspopup="menu"
           aria-expanded={open}
-          className={
+          className={`${
             trigger
               ? 'flex items-center gap-1 rounded-md border border-input px-3 py-1.5 text-sm font-medium hover:bg-accent'
               : 'flex size-7 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground'
-          }
+          } ${
+            hoverReveal
+              ? `transition-opacity ${open ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100'}`
+              : ''
+          }`}
           onClick={() => {
             setCursorPos(null)
             const rect = wrapRef.current?.getBoundingClientRect()

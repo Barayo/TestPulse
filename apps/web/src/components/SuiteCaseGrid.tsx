@@ -21,6 +21,7 @@ export function SuiteCaseGrid({
   folders,
   selected,
   onToggle,
+  onToggleRange,
   commitLabel,
   commitDisabled,
   onCommit,
@@ -31,6 +32,9 @@ export function SuiteCaseGrid({
   folders: SuiteCaseGridFolder[]
   selected: Set<string>
   onToggle: (caseId: string) => void
+  // Passed straight through to CasePicker (redesign-case-picker-membership)
+  // — no logic of its own here, same as onToggle above.
+  onToggleRange: (caseIds: string[], checked: boolean) => void
   commitLabel: string
   commitDisabled: boolean
   onCommit: () => void
@@ -45,7 +49,14 @@ export function SuiteCaseGrid({
 }) {
   return (
     <div className="space-y-3">
-      <CasePicker cases={cases} folders={folders} selected={selected} onToggle={onToggle} readOnly={readOnly} />
+      <CasePicker
+        cases={cases}
+        folders={folders}
+        selected={selected}
+        onToggle={onToggle}
+        onToggleRange={onToggleRange}
+        readOnly={readOnly}
+      />
 
       {readOnly ? (
         <div className="flex justify-end rounded-md border bg-accent px-4 py-2.5">

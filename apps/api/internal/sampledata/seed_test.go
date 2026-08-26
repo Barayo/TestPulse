@@ -1322,6 +1322,50 @@ func TestSeedContentShowcasesSuiteRunBreakdownTrend(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesRunHistoryCap covers polish-library-and-suites-pages:
+// the Suite Detail page's "Run history" list gained a SECTION_CAP (10) /
+// "Show N more" cap that previously had no seed data to demonstrate it —
+// the Regression suite needs more than 10 runs so the showroom actually
+// exercises the cap and expand control, not just correct-but-unseen code.
+func TestSeedContentShowcasesRunHistoryCap(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	suites, err := svc.ListSuites(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListSuites: %v", err)
+	}
+	var regression *domain.Suite
+	for i, s := range suites {
+		if s.Name == "Regression" {
+			regression = &suites[i]
+		}
+	}
+	if regression == nil {
+		t.Fatal("missing the Regression suite")
+	}
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var regressionRunCount int
+	for _, r := range runs {
+		if r.SuiteKey != nil && *r.SuiteKey == regression.Key {
+			regressionRunCount++
+		}
+	}
+	if regressionRunCount <= 10 {
+		t.Errorf("Regression suite has %d runs, want more than 10 (SECTION_CAP) so its Run history cap is demonstrable", regressionRunCount)
+	}
+}
+
 // TestSeedContentShowcasesRetestOnOpenRun covers add-run-row-status-actions:
 // the run board's new single-row "Retest" context-menu item only appears
 // for a failed item on an open run, so the Sample Project needs at least

@@ -1,8 +1,17 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { CheckIcon } from 'lucide-react'
 import { PRIORITIES, type Priority } from '@/components/ClassificationEditor'
 import { ClassificationPills, distinctValues, tagPills } from '@/components/Pills'
 import { ResizeHandle } from '@/components/ResizeHandle'
 import { useResizableWidth } from '@/lib/useResizableWidth'
+import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
+import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
+
+const CASE_PICKER_SHORTCUTS: ShortcutEntry[] = [
+  { keys: 'J/K · ↑/↓', label: 'Move focus' },
+  { keys: 'Space', label: 'Select focused case' },
+  { keys: 'Shift+Space', label: 'Extend selection' },
+]
 
 export type CasePickerFolder = { id: string; name: string; parentFolderId?: string }
 
@@ -165,12 +174,19 @@ export function CasePicker({
   folders,
   selected,
   onToggle,
+  onToggleRange,
   readOnly = false,
 }: {
   cases: CasePickerCase[]
   folders: CasePickerFolder[]
   selected: Set<string>
   onToggle: (caseId: string) => void
+  // Bidirectional Shift+Click/Shift+Space range-toggle (design.md D3) — a
+  // later Shift+Click's *resulting* state (the opposite of its current
+  // selected.has(id)) is applied to every case between it and the anchor,
+  // so a range-select can check or uncheck equally, unlike the Library's
+  // additive-only bulk-select range.
+  onToggleRange: (caseIds: string[], checked: boolean) => void
   // Genuinely disables the checkboxes (not just a visual affordance) for a
   // caller who can't edit membership — e.g. an anonymous visitor on a
   // public project, or a member without suiteEditMembership
@@ -179,6 +195,18 @@ export function CasePicker({
 }) {
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [search, setSearch] = useState('')
+  const [lastToggledId, setLastToggledId] = useState<string | null>(null)
+  const [focusedIndex, setFocusedIndex] = useState(0)
+  const rowRefs = useRef<Map<string, HTMLButtonElement>>(new Map())
+  // Real focus is only transferred once the user actually drives keyboard
+  // navigation (arrow keys/j-k) — not on mount, and not merely because a
+  // filter/search change reset focusedIndex to 0, which would otherwise
+  // silently steal focus away from whatever the user is actively doing
+  // (e.g. mid-keystroke in the search box). State, not a ref: the very
+  // first arrow-key press must trigger the focus effect even when
+  // focusedIndex doesn't itself change (already at index 0 and pressing
+  // "up"), which a ref-only flag wouldn't cause a re-render for.
+  const [hasKeyboardNavigated, setHasKeyboardNavigated] = useState(false)
   const [scope, setScope] = useState<string | null>(null)
   const [selectedOnly, setSelectedOnly] = useState(false)
   const [railCollapsed, setRailCollapsed] = useState(false)
@@ -221,8 +249,86 @@ export function CasePicker({
     resetScroll()
   }
 
+  // Bidirectional range-toggle (design.md D3): a first Shift+Click (no
+  // anchor yet) is a plain single toggle via onToggle, same as no shift at
+  // all. A later Shift+Click applies the clicked row's *resulting* state
+  // (the opposite of its current selected.has) to the whole anchor..clicked
+  // range via onToggleRange — so a range-select can check or uncheck
+  // equally, unlike the Library's additive-only bulk-select range.
+  function handleRowClick(caseId: string, shiftKey: boolean) {
+    if (shiftKey && lastToggledId) {
+      const ids = visible.map((c) => c.id)
+      const fromIndex = ids.indexOf(lastToggledId)
+      const toIndex = ids.indexOf(caseId)
+      if (fromIndex !== -1 && toIndex !== -1) {
+        const [start, end] = fromIndex <= toIndex ? [fromIndex, toIndex] : [toIndex, fromIndex]
+        const rangeIds = ids.slice(start, end + 1)
+        const targetChecked = !selected.has(caseId)
+        onToggleRange(rangeIds, targetChecked)
+        setLastToggledId(caseId)
+        return
+      }
+    }
+    onToggle(caseId)
+    setLastToggledId(caseId)
+  }
+
   const { start, end } = computeVisibleRange(scrollTop, VIEWPORT_HEIGHT, ROW_HEIGHT, visible.length, OVERSCAN)
   const slice = visible.slice(start, end)
+
+  // A stable (string, value-compared) signal of which cases are visible and
+  // in what order — `visible` itself is a fresh array every render, so
+  // depending on it directly would fire these effects on every render, not
+  // just when the actual visible set changes (mirrors add-library-bulk-select's
+  // identical orderedVisibleKeysSignal pattern in FolderExplorerPage.tsx).
+  const visibleKeysSignal = visible.map((c) => c.id).join(',')
+
+  useEffect(() => {
+    setFocusedIndex(0)
+  }, [visibleKeysSignal])
+
+  // Real virtualized-scroll math (design.md D5), not scrollIntoView — only
+  // rows inside the current windowed slice are mounted at all, so a ref to
+  // an unmounted row is null. Clamps scrollTop just enough to bring the
+  // focused row into the rendered window, mirroring resetScroll()'s own
+  // direct-assignment idiom rather than a smooth/centering scroll.
+  useEffect(() => {
+    if (!viewportRef.current) return
+    const targetTop = focusedIndex * ROW_HEIGHT
+    const targetBottom = targetTop + ROW_HEIGHT
+    const currentScrollTop = viewportRef.current.scrollTop
+    let nextScrollTop = currentScrollTop
+    if (targetTop < currentScrollTop) nextScrollTop = targetTop
+    else if (targetBottom > currentScrollTop + VIEWPORT_HEIGHT) nextScrollTop = targetBottom - VIEWPORT_HEIGHT
+    if (nextScrollTop !== currentScrollTop) {
+      viewportRef.current.scrollTop = nextScrollTop
+      setScrollTop(nextScrollTop)
+    }
+    const target = visible[focusedIndex]
+    if (target && hasKeyboardNavigated && !isEditableElementFocused()) {
+      rowRefs.current.get(target.id)?.focus({ preventScroll: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusedIndex, visibleKeysSignal, hasKeyboardNavigated])
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (isEditableElementFocused()) return
+      const key = e.key.toLowerCase()
+      if (key === 'j' || key === 'arrowdown') {
+        e.preventDefault()
+        setHasKeyboardNavigated(true)
+        setFocusedIndex((i) => Math.min(i + 1, visible.length - 1))
+      } else if (key === 'k' || key === 'arrowup') {
+        e.preventDefault()
+        setHasKeyboardNavigated(true)
+        setFocusedIndex((i) => Math.max(i - 1, 0))
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleKeysSignal])
 
   return (
     <div className="space-y-3">
@@ -413,39 +519,77 @@ export function CasePicker({
               onScroll={(e) => setScrollTop(e.currentTarget.scrollTop)}
             >
               <div style={{ height: visible.length * ROW_HEIGHT, position: 'relative' }}>
-                {slice.map((c, i) => (
-                  <label
-                    key={c.id}
-                    className="absolute inset-x-0 flex cursor-pointer items-start gap-3 border-b px-3 py-2.5 hover:bg-accent"
-                    style={{ top: (start + i) * ROW_HEIGHT, height: ROW_HEIGHT }}
-                  >
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={selected.has(c.id)}
-                      onChange={() => onToggle(c.id)}
-                      disabled={readOnly}
+                {slice.map((c, i) => {
+                  const checked = selected.has(c.id)
+                  return (
+                    <button
+                      key={c.id}
+                      type="button"
+                      role="checkbox"
+                      aria-checked={checked}
                       aria-label={c.title}
-                    />
-                    <span className="min-w-0 space-y-1">
-                      <span className="block truncate text-sm font-medium">{c.title}</span>
-                      {scope === null && (
-                        <span className="block truncate text-xs text-muted-foreground">
-                          {tree.byId.get(c.folderId)?.name ?? ''}
-                        </span>
-                      )}
-                      <span className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
-                        <ClassificationPills priority={c.priority} platform={c.platform} testType={c.testType} />
-                        {tagPills(c.tags)}
+                      disabled={readOnly}
+                      className={`absolute inset-x-0 flex items-start gap-3 border-b px-3 py-2.5 text-left hover:bg-accent disabled:cursor-not-allowed ${checked ? 'bg-primary/10' : ''}`}
+                      style={{ top: (start + i) * ROW_HEIGHT, height: ROW_HEIGHT }}
+                      ref={(el) => {
+                        if (el) rowRefs.current.set(c.id, el)
+                        else rowRefs.current.delete(c.id)
+                      }}
+                      tabIndex={start + i === focusedIndex ? 0 : -1}
+                      onClick={(e) => {
+                        setFocusedIndex(start + i)
+                        handleRowClick(c.id, e.shiftKey)
+                      }}
+                      onKeyDown={(e) => {
+                        // Space only, matching a native checkbox's own keyboard
+                        // contract (design.md D6) — Enter has no "open"
+                        // destination here the way it does for the Library's
+                        // rows, so it's deliberately left unbound. Handles
+                        // Shift+Space too (via the same handleRowClick used by
+                        // click/shift-click) — roving tabindex means the row
+                        // with real focus always matches focusedIndex, so no
+                        // separate global Shift+Space handler is needed.
+                        if (e.key === ' ') {
+                          e.preventDefault()
+                          handleRowClick(c.id, e.shiftKey)
+                        } else if (e.key === 'Enter') {
+                          // A native <button> activates on Enter by default —
+                          // suppressed here since Enter is deliberately unbound.
+                          e.preventDefault()
+                        }
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={`mt-1 flex size-5 shrink-0 items-center justify-center rounded-full border-2 ${
+                          checked ? 'border-primary bg-primary text-primary-foreground' : 'border-input'
+                        }`}
+                      >
+                        {checked && <CheckIcon className="size-3" strokeWidth={3} />}
                       </span>
-                    </span>
-                  </label>
-                ))}
+                      <span className="min-w-0 space-y-1">
+                        <span className="block truncate text-sm font-medium">{c.title}</span>
+                        {scope === null && (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {tree.byId.get(c.folderId)?.name ?? ''}
+                          </span>
+                        )}
+                        <span className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">
+                          <ClassificationPills priority={c.priority} platform={c.platform} testType={c.testType} />
+                          {tagPills(c.tags)}
+                        </span>
+                      </span>
+                    </button>
+                  )
+                })}
               </div>
             </div>
           )}
         </div>
       </div>
+
+      <RunShortcutsHint shortcuts={CASE_PICKER_SHORTCUTS} />
+      <RunShortcutsOverlay shortcuts={CASE_PICKER_SHORTCUTS} />
     </div>
   )
 }

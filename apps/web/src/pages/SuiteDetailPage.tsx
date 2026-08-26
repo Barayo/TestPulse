@@ -8,10 +8,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SuiteCaseGrid, type SuiteCaseGridCase } from '@/components/SuiteCaseGrid'
 import { SuiteActionsMenu } from '@/components/SuiteActionsMenu'
 import { SuiteRunBreakdownTrend } from '@/components/SuiteRunBreakdownTrend'
-import { RunRow } from '@/components/RunList'
+import { RunRow, SECTION_CAP } from '@/components/RunList'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { PropertyRow } from '@/components/PropertyRow'
-import { HealthBar } from '@/components/HealthBar'
+import { HealthBar, HealthRing } from '@/components/HealthBar'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { useBumpDataRevision } from '@/lib/DataRevision'
@@ -60,6 +60,7 @@ export default function SuiteDetailPage() {
   const [openTrendPoints, setOpenTrendPoints] = useState<SuiteTrendPoint[]>([])
   const [suiteRuns, setSuiteRuns] = useState<Run[]>([])
   const [stabilityView, setStabilityView] = useState<'closed' | 'all'>('closed')
+  const [runHistoryExpanded, setRunHistoryExpanded] = useState(false)
 
   const load = useCallback(async () => {
     // Waits for the session check (and, per design.md D11, for confirmed
@@ -129,6 +130,19 @@ export default function SuiteDetailPage() {
       const next = new Set(prev)
       if (next.has(caseKey)) next.delete(caseKey)
       else next.add(caseKey)
+      return next
+    })
+  }
+
+  // Bidirectional Shift+Click/Shift+Space range-toggle (redesign-case-picker-membership) —
+  // CasePicker computes the range and the resulting checked state; this just applies it.
+  function toggleRange(caseKeys: string[], checked: boolean) {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      for (const key of caseKeys) {
+        if (checked) next.add(key)
+        else next.delete(key)
+      }
       return next
     })
   }
@@ -229,6 +243,7 @@ export default function SuiteDetailPage() {
             folders={folders}
             selected={selected}
             onToggle={toggle}
+            onToggleRange={toggleRange}
             commitLabel="Save changes"
             commitDisabled={!isDirty}
             onCommit={() => void handleSaveEdit()}
@@ -242,24 +257,20 @@ export default function SuiteDetailPage() {
                 <CardTitle className="tp-heading text-lg">Stability</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                <div className="space-y-0.5 border-b pb-3" data-testid="suite-latest-closed-run">
-                  <PropertyRow
-                    label="Latest closed run"
-                    value={
-                      latestClosedRun ? (
-                        <span className="flex items-center gap-2">
-                          <HealthBar rate={latestClosedRun.passRate ?? 0} />
-                          <span className="text-xs text-muted-foreground">{timeAgo(latestClosedRun.createdAt)}</span>
-                        </span>
-                      ) : undefined
-                    }
-                  />
-                  {trailingOpenCount > 0 && (
-                    <PropertyRow
-                      label="In progress"
-                      value={<Badge variant="secondary">{trailingOpenCount} run{trailingOpenCount === 1 ? '' : 's'}</Badge>}
-                    />
-                  )}
+                <div className="flex items-center gap-4 border-b pb-4" data-testid="suite-latest-closed-run">
+                  <HealthRing rate={latestClosedRun ? (latestClosedRun.passRate ?? 0) : null} size={72} />
+                  <div className="space-y-1">
+                    <p className="tp-label">Latest closed run</p>
+                    {latestClosedRun && (
+                      <p className="text-xs text-muted-foreground">{timeAgo(latestClosedRun.createdAt)}</p>
+                    )}
+                    {trailingOpenCount > 0 && (
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        In progress
+                        <Badge variant="secondary">{trailingOpenCount} run{trailingOpenCount === 1 ? '' : 's'}</Badge>
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <div role="group" aria-label="Stability view" className="flex w-fit gap-0.5 rounded-full bg-muted p-1">
                   {(['closed', 'all'] as const).map((view) => (
@@ -276,28 +287,30 @@ export default function SuiteDetailPage() {
                     </button>
                   ))}
                 </div>
-                {stabilityView === 'closed' ? (
-                  <>
-                    <SuiteRunBreakdownTrend
-                      points={trendPoints}
-                      emptyMessage="No closed runs yet — close a run created from this suite to see its trend here."
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Only closed runs — an in-progress run has no final verdict yet.
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <SuiteRunBreakdownTrend
-                      points={openTrendPoints}
-                      emptyMessage="No runs yet — run this suite to see its trend here."
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      Every run, open or closed. The open run's breakdown counts only what's
-                      been recorded so far against its full case list — it will keep moving.
-                    </p>
-                  </>
-                )}
+                <div className="space-y-2 rounded-xl bg-muted/40 p-3">
+                  {stabilityView === 'closed' ? (
+                    <>
+                      <SuiteRunBreakdownTrend
+                        points={trendPoints}
+                        emptyMessage="No closed runs yet — close a run created from this suite to see its trend here."
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Only closed runs — an in-progress run has no final verdict yet.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <SuiteRunBreakdownTrend
+                        points={openTrendPoints}
+                        emptyMessage="No runs yet — run this suite to see its trend here."
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Every run, open or closed. The open run's breakdown counts only what's
+                        been recorded so far against its full case list — it will keep moving.
+                      </p>
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -311,19 +324,31 @@ export default function SuiteDetailPage() {
                 )}
               </CardHeader>
               <CardContent>
-                {suiteRuns.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No runs yet — run this suite to see its history here.
-                  </p>
-                ) : (
-                  <ul className="space-y-0.5">
-                    {suiteRuns.map((r) => (
-                      <li key={r.id}>
-                        <RunRow run={r} projectKey={projectKey} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                <div className="rounded-xl bg-muted/40 p-3" data-testid="suite-run-history">
+                  {suiteRuns.length === 0 ? (
+                    <p className="px-1 text-sm text-muted-foreground">
+                      No runs yet — run this suite to see its history here.
+                    </p>
+                  ) : (
+                    <>
+                      <ul className="space-y-0.5">
+                        {(runHistoryExpanded ? suiteRuns : suiteRuns.slice(0, SECTION_CAP)).map((r) => (
+                          <li key={r.id}>
+                            <RunRow run={r} projectKey={projectKey} />
+                          </li>
+                        ))}
+                      </ul>
+                      {!runHistoryExpanded && suiteRuns.length > SECTION_CAP && (
+                        <div className="flex justify-center pt-2">
+                          <Button type="button" variant="outline" size="sm" onClick={() => setRunHistoryExpanded(true)}>
+                            Show {suiteRuns.length - SECTION_CAP} more run
+                            {suiteRuns.length - SECTION_CAP === 1 ? '' : 's'}
+                          </Button>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </div>
