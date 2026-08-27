@@ -4,15 +4,17 @@ import { defineConfig } from '@playwright/test'
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
-  // Uncapped local concurrency (defaults to CPU count) overwhelms the single
-  // compose-stack instance every test run shares — on an 11-core dev machine
+  // Uncapped concurrency (defaults to CPU count) overwhelms the single
+  // compose-stack instance every test run shares — on an 11-core machine
   // that's 11 concurrent browsers hammering one API/DB container, and
   // request latency under that contention trips fixed timeouts (waitForURL,
   // the default 5s expect timeout), not any bug in the tests themselves:
   // every test that failed under full parallelism passed reliably alone.
-  // 4 was verified stable across repeated full-suite runs; CI's runners
-  // have far fewer cores already, so its own default cap stays untouched.
-  workers: process.env.CI ? undefined : 4,
+  // 4 was verified stable across repeated full-suite runs. Applies to CI
+  // too now (self-host-ci-runner) — CI runs on this same dev machine, not
+  // a separate lower-core-count GitHub-hosted runner, so the two cases are
+  // no longer different.
+  workers: 4,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
   // In CI, 'junit' feeds docs/importing-results.md's importer — case keys
