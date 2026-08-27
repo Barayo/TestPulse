@@ -171,6 +171,13 @@ jobs:
             -H "Authorization: Bearer ${{ secrets.TESTPULSE_DOGFOOD_TOKEN }}" \
             -H 'Content-Type: application/json' \
             -d "$(jq -n --rawfile report apps/web/e2e-results.xml --arg name "$name" '{format: "junit-xml", report: $report, name: $name}')"
+      - name: Stop compose stack
+        # Hosted runners are ephemeral VMs that discard this on their own;
+        # this self-hosted runner persists between jobs (self-host-ci-runner),
+        # so a stack left running here keeps consuming CPU/RAM into whatever
+        # job the runner picks up next.
+        if: always()
+        run: docker compose -f deploy/compose/docker-compose.yml down -v
 
   helm:
     name: Helm chart
