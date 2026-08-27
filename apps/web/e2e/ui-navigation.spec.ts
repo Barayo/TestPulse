@@ -1108,7 +1108,7 @@ test.describe('Requirement: Suites index and detail page', () => {
     await page.getByRole('button', { name: /^open \+ closed$/i }).click()
     await expect(page.getByRole('button', { name: /^open \+ closed$/i })).toHaveAttribute('aria-pressed', 'true')
     await expect(page.getByText(/will keep moving/i)).toBeVisible()
-    await expect(page.locator('[data-testid^="suite-trend-point-"][data-open="true"]')).toHaveCount(1)
+    await expect(page.locator('[data-testid^="suite-breakdown-bar-"][data-open="true"]')).toHaveCount(1)
   })
 
   test('Scenario: Latest closed run property reflects the closed run, not a fresh open run\'s "0%"', async ({ page }) => {
@@ -1150,7 +1150,7 @@ test.describe('Requirement: Suites index and detail page', () => {
     // health" framing the removed headline number used to.
     const stabilityCard = page.locator('[data-slot="card"]', { has: page.getByText('Stability') })
     await stabilityCard.getByRole('button', { name: /^open \+ closed$/i }).click()
-    await expect(stabilityCard.getByTestId('suite-trend-endpoint-label')).toHaveText('0%')
+    await expect(stabilityCard.getByTestId('suite-breakdown-endpoint-label')).toHaveText('0%')
   })
 })
 
