@@ -16,7 +16,12 @@ export default defineConfig({
   // no longer different.
   workers: 4,
   forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 1 : 0,
+  // 2, not 1: even at workers: 4, rare contention on the one shared
+  // compose-stack instance can still make a test fail two attempts in a
+  // row (observed live) — a real fix means giving these fixtures
+  // instance-unique data instead of shared literals like "Login works",
+  // out of scope for the self-hosted-runner migration itself.
+  retries: process.env.CI ? 2 : 0,
   // In CI, 'junit' feeds docs/importing-results.md's importer — case keys
   // are matched via test.info().annotations (see scripts/dogfood), which
   // only reach the report's <properties> with embedAnnotationsAsProperties.
