@@ -13,6 +13,10 @@ concurrency:
 
 permissions:
   contents: read
+  # dorny/paths-filter falls back to the GitHub API to list a PR's changed
+  # files when the local checkout is too shallow for a git diff (our
+  # actions/checkout@v4 default depth=1) — needs read access to see them.
+  pull-requests: read
 
 jobs:
   # Feeds helm/migrations below, the two jobs cheap enough to skip outright
@@ -49,7 +53,7 @@ jobs:
       run:
         working-directory: apps/api
     env:
-      TESTPULSE_TEST_DATABASE_URL: postgres://test:test@localhost:5433/test
+      TESTPULSE_TEST_DATABASE_URL: postgres://test:test@localhost:5434/test
     steps:
       - uses: actions/checkout@v4
       # `services:` (GitHub-managed sidecar containers) only works on
@@ -61,7 +65,7 @@ jobs:
           docker rm -f testpulse-ci-postgres >/dev/null 2>&1 || true
           docker run -d --name testpulse-ci-postgres \
             -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=test \
-            -p 5433:5432 postgres:16-alpine
+            -p 5434:5432 postgres:16-alpine
           for i in $(seq 1 30); do
             docker exec testpulse-ci-postgres pg_isready -U test -d test && exit 0
             sleep 1
