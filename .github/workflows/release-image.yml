@@ -13,6 +13,17 @@ jobs:
   image:
     name: Build and push multi-arch image
     runs-on: [self-hosted, testpulse]
+    env:
+      # This self-hosted runner is a macOS LaunchAgent — its default Docker
+      # context/credential store both require an interactive keychain
+      # session it doesn't have ("current session does not allow user
+      # interaction"). DOCKER_HOST points straight at Docker Desktop's
+      # socket instead of resolving it via the "desktop-linux" context, and
+      # DOCKER_CONFIG isolates credentials to a plain file so docker/login-
+      # action's write and setup-qemu-action's anonymous pull never touch
+      # the OS keychain.
+      DOCKER_HOST: unix:///Users/migalons/.docker/run/docker.sock
+      DOCKER_CONFIG: /Users/migalons/actions-runner-testpulse/.docker-config
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3

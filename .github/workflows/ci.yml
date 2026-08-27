@@ -18,6 +18,16 @@ permissions:
   # actions/checkout@v4 default depth=1) — needs read access to see them.
   pull-requests: read
 
+env:
+  # This self-hosted runner is a macOS LaunchAgent — its default Docker
+  # context/credential store both require an interactive keychain session
+  # it doesn't have ("current session does not allow user interaction").
+  # Only bites the api/e2e jobs' docker pull/build steps when an image
+  # isn't already cached locally, but set workflow-wide since either job
+  # could hit a cold cache after a prune (self-host-ci-runner).
+  DOCKER_HOST: unix:///Users/migalons/.docker/run/docker.sock
+  DOCKER_CONFIG: /Users/migalons/actions-runner-testpulse/.docker-config
+
 jobs:
   # Feeds helm/migrations below, the two jobs cheap enough to skip outright
   # when their own files didn't change (reduce-ci-actions-usage) — api/web/e2e
