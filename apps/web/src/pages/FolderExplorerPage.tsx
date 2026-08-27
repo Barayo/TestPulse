@@ -14,6 +14,8 @@ import { AutomationPill, ClassificationPills, distinctValues, FlakyPill, StalePi
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { useMediaQuery } from '@/lib/useMediaQuery'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
@@ -28,6 +30,9 @@ import { bulkDeleteCases } from '@/lib/bulkDeleteCases'
 import { bulkMoveFolders } from '@/lib/bulkMoveFolders'
 import { bulkDeleteFolders } from '@/lib/bulkDeleteFolders'
 import { folderDeletePreviewTotal } from '@/lib/folderDeletePreviewTotal'
+import { subtreeIds } from '@/lib/subtreeIds'
+import { resolveSuiteCaseKeys } from '@/lib/resolveSuiteCaseKeys'
+import { createSuiteFromCases } from '@/lib/createSuiteFromCases'
 import type { components } from '@testpulse/shared/api'
 
 type Folder = components['schemas']['Folder']
@@ -68,28 +73,6 @@ function folderPathLabel(folders: Folder[], folderId: string): string {
     .join(' / ')
 }
 
-// subtreeIds mirrors CasePicker's own buildFolderTree().subtreeIds pattern —
-// every id in folderId's subtree, including itself, used to filter a
-// folder-move target list (moving into your own subtree is a cycle the
-// backend rejects anyway, so it's never offered).
-function subtreeIds(folders: Folder[], folderId: string): Set<string> {
-  const childrenOf = new Map<string, string[]>()
-  for (const f of folders) {
-    if (!f.parentFolderId) continue
-    const list = childrenOf.get(f.parentFolderId) ?? []
-    list.push(f.id)
-    childrenOf.set(f.parentFolderId, list)
-  }
-  const out = new Set<string>([folderId])
-  const stack = [...(childrenOf.get(folderId) ?? [])]
-  while (stack.length > 0) {
-    const id = stack.pop() as string
-    out.add(id)
-    stack.push(...(childrenOf.get(id) ?? []))
-  }
-  return out
-}
-
 // The project's auto-created root folder is surfaced to users as "Library" —
 // a UI label only, not a rename of the underlying entity (still literally
 // named "Root" in the database).
@@ -126,6 +109,8 @@ function FolderRow({
   onToggleSelect,
   focused,
   rowRef,
+  selectedCount,
+  bulkMenuItems,
 }: {
   folder: Folder
   stats: { count: number; hasCritical: boolean; criticalCount: number; automatedCount: number }
@@ -144,31 +129,40 @@ function FolderRow({
   onToggleSelect: () => void
   focused: boolean
   rowRef: (el: HTMLLIElement | null) => void
+  // add-suite-from-library-selection: total selection size and the
+  // footer bar's own bulk items, so a right-click on a row that's part of a
+  // real multi-selection (selectedCount > 1) can show them instead of this
+  // row's single-item menu (mirrors RunPage's isBulkContext pattern).
+  selectedCount: number
+  bulkMenuItems: RowActionMenuItem[]
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
-  const items: RowActionMenuItem[] = [
-    ...(canMove
-      ? [
-          {
-            label: 'Move to…',
-            icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
-            onSelect: onMoveTo,
-          } satisfies RowActionMenuItem,
-        ]
-      : []),
-    ...(canDelete
-      ? [
-          {
-            label: 'Delete',
-            danger: true,
-            dividerBefore: true,
-            icon: <Trash2Icon className="size-4" aria-hidden="true" />,
-            onSelect: onRequestDelete,
-          } satisfies RowActionMenuItem,
-        ]
-      : []),
-  ]
-  const canOpenMenu = canMove || canDelete
+  const isBulkContext = selected && selectedCount > 1
+  const items: RowActionMenuItem[] = isBulkContext
+    ? bulkMenuItems
+    : [
+        ...(canMove
+          ? [
+              {
+                label: 'Move to…',
+                icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
+                onSelect: onMoveTo,
+              } satisfies RowActionMenuItem,
+            ]
+          : []),
+        ...(canDelete
+          ? [
+              {
+                label: 'Delete',
+                danger: true,
+                dividerBefore: true,
+                icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+                onSelect: onRequestDelete,
+              } satisfies RowActionMenuItem,
+            ]
+          : []),
+      ]
+  const canOpenMenu = isBulkContext ? items.length > 0 : canMove || canDelete
 
   return (
     <li
@@ -257,6 +251,8 @@ function CaseRow({
   onToggleSelect,
   focused,
   rowRef,
+  selectedCount,
+  bulkMenuItems,
 }: {
   testCase: TestCase
   suiteNames: string[]
@@ -280,30 +276,36 @@ function CaseRow({
   // stay visually distinguishable when they overlap.
   focused: boolean
   rowRef: (el: HTMLLIElement | null) => void
+  // add-suite-from-library-selection: see FolderRow's identical props above.
+  selectedCount: number
+  bulkMenuItems: RowActionMenuItem[]
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
-  const items: RowActionMenuItem[] = [
-    ...(canMove
-      ? [
-          {
-            label: 'Move to…',
-            icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
-            onSelect: onMoveTo,
-          } satisfies RowActionMenuItem,
-        ]
-      : []),
-    ...(canDelete
-      ? [
-          {
-            label: 'Delete',
-            danger: true,
-            dividerBefore: true,
-            icon: <Trash2Icon className="size-4" aria-hidden="true" />,
-            onSelect: onRequestDelete,
-          } satisfies RowActionMenuItem,
-        ]
-      : []),
-  ]
+  const isBulkContext = selected && selectedCount > 1
+  const items: RowActionMenuItem[] = isBulkContext
+    ? bulkMenuItems
+    : [
+        ...(canMove
+          ? [
+              {
+                label: 'Move to…',
+                icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
+                onSelect: onMoveTo,
+              } satisfies RowActionMenuItem,
+            ]
+          : []),
+        ...(canDelete
+          ? [
+              {
+                label: 'Delete',
+                danger: true,
+                dividerBefore: true,
+                icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+                onSelect: onRequestDelete,
+              } satisfies RowActionMenuItem,
+            ]
+          : []),
+      ]
 
   return (
     <li
@@ -386,6 +388,8 @@ export default function FolderExplorerPage() {
   const [newFolderName, setNewFolderName] = useState('')
   const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [creatingSuiteFromSelection, setCreatingSuiteFromSelection] = useState(false)
+  const [newSuiteFromSelectionName, setNewSuiteFromSelectionName] = useState('')
   const [search, setSearch] = useState('')
   const [filters, setFilters] = useState({ tag: '', priority: '', platform: '', testType: '', automated: '', flaky: '' })
   const [searchEntireLibrary, setSearchEntireLibrary] = useState(false)
@@ -609,21 +613,59 @@ export default function FolderExplorerPage() {
   const platformOptions = distinctValues(cases, (c) => c.content.platform ?? '')
   const testTypeOptions = distinctValues(cases, (c) => c.content.testType ?? '')
 
+  const { folderIds: selectedFolderIds, caseKeys: selectedCaseKeys } = splitSelection(Array.from(selected))
+  const resolvedSuiteCaseKeys = resolveSuiteCaseKeys(selectedFolderIds, selectedCaseKeys, folders, cases)
+
+  const canBulkMove = Boolean(permissions?.caseEdit || permissions?.sectionEdit)
+  // add-suite-from-library-selection design.md D2/D7: hidden (not disabled)
+  // once the resolved count is 0 — a folder-only selection is no longer a
+  // reason to hide it, since a selected folder recursively contributes
+  // every case in its subtree.
+  const canBulkCreateSuite = Boolean(permissions?.suiteCreate) && resolvedSuiteCaseKeys.length > 0
+  const canBulkDelete = Boolean(permissions?.caseDelete || permissions?.sectionDelete)
+  const bulkCreateSuiteLabel = `Create suite from ${resolvedSuiteCaseKeys.length} case${resolvedSuiteCaseKeys.length === 1 ? '' : 's'}…`
+
+  function openBulkMove() {
+    setBulkMoveQuery('')
+    setBulkMoveKeys(Array.from(selected))
+  }
+
+  function openCreateSuiteFromSelection() {
+    setNewSuiteFromSelectionName('')
+    setCreatingSuiteFromSelection(true)
+  }
+
   const bulkActions: BulkAction[] = [
-    ...(permissions?.caseEdit || permissions?.sectionEdit
+    ...(canBulkMove ? ([{ kind: 'button', label: 'Move to…', onSelect: openBulkMove }] satisfies BulkAction[]) : []),
+    ...(canBulkCreateSuite
+      ? ([{ kind: 'button', label: bulkCreateSuiteLabel, onSelect: openCreateSuiteFromSelection }] satisfies BulkAction[])
+      : []),
+    ...(canBulkDelete
+      ? ([{ kind: 'button', label: 'Delete', onSelect: () => void requestBulkDelete(Array.from(selected)) }] satisfies BulkAction[])
+      : []),
+  ]
+
+  // Right-clicking a row that's part of a real multi-selection shows these
+  // instead of that row's own single-item menu (mirrors RunPage's existing
+  // isBulkContext pattern, add-run-row-status-actions) — same handlers as
+  // the footer bar's bulkActions above, just rendered as menu items.
+  const bulkMenuItems: RowActionMenuItem[] = [
+    ...(canBulkMove
+      ? ([{ label: 'Move to…', icon: <FolderInputIcon className="size-4" aria-hidden="true" />, onSelect: openBulkMove }] satisfies RowActionMenuItem[])
+      : []),
+    ...(canBulkCreateSuite
+      ? ([{ label: bulkCreateSuiteLabel, onSelect: openCreateSuiteFromSelection }] satisfies RowActionMenuItem[])
+      : []),
+    ...(canBulkDelete
       ? ([
           {
-            kind: 'button',
-            label: 'Move to…',
-            onSelect: () => {
-              setBulkMoveQuery('')
-              setBulkMoveKeys(Array.from(selected))
-            },
+            label: 'Delete',
+            danger: true,
+            dividerBefore: true,
+            icon: <Trash2Icon className="size-4" aria-hidden="true" />,
+            onSelect: () => void requestBulkDelete(Array.from(selected)),
           },
-        ] satisfies BulkAction[])
-      : []),
-    ...(permissions?.caseDelete || permissions?.sectionDelete
-      ? ([{ kind: 'button', label: 'Delete', onSelect: () => void requestBulkDelete(Array.from(selected)) }] satisfies BulkAction[])
+        ] satisfies RowActionMenuItem[])
       : []),
   ]
 
@@ -734,6 +776,20 @@ export default function FolderExplorerPage() {
   function openCase(caseKey: string) {
     if (!projectKey) return
     navigate(`/projects/${projectKey}/cases/${caseKey}`)
+  }
+
+  // add-suite-from-library-selection design.md D1/D6: commits immediately
+  // (no intermediate confirmation step), clears the Library selection, and
+  // navigates straight to the new suite's own page — mirroring SuitesPage's
+  // existing "+ New suite" flow.
+  async function handleCreateSuiteFromSelection() {
+    if (!projectKey || !newSuiteFromSelectionName.trim()) return
+    const suite = await createSuiteFromCases(projectKey, newSuiteFromSelectionName.trim(), resolvedSuiteCaseKeys)
+    setCreatingSuiteFromSelection(false)
+    setSelected(new Set())
+    setLastToggledId(null)
+    bumpLanding()
+    navigate(`/projects/${projectKey}/suites/${suite.key}`)
   }
 
   async function createCase(input: { title: string; steps: Step[] } & ClassificationFields) {
@@ -1005,6 +1061,8 @@ export default function FolderExplorerPage() {
                         selected={selected.has(c.key)}
                         onToggleSelect={() => toggleSelect(c.key, true)}
                         focused={orderedVisibleEntries[focusedIndex]?.id === c.key}
+                        selectedCount={selected.size}
+                        bulkMenuItems={bulkMenuItems}
                         rowRef={(el) => {
                           if (el) rowRefs.current.set(c.key, el)
                           else rowRefs.current.delete(c.key)
@@ -1044,6 +1102,8 @@ export default function FolderExplorerPage() {
                       selected={selected.has(f.id)}
                       onToggleSelect={() => toggleSelect(f.id, true)}
                       focused={orderedVisibleEntries[focusedIndex]?.id === f.id}
+                      selectedCount={selected.size}
+                      bulkMenuItems={bulkMenuItems}
                       rowRef={(el) => {
                         if (el) rowRefs.current.set(f.id, el)
                         else rowRefs.current.delete(f.id)
@@ -1068,6 +1128,8 @@ export default function FolderExplorerPage() {
                       selected={selected.has(c.key)}
                       onToggleSelect={() => toggleSelect(c.key, true)}
                       focused={orderedVisibleEntries[focusedIndex]?.id === c.key}
+                      selectedCount={selected.size}
+                      bulkMenuItems={bulkMenuItems}
                       rowRef={(el) => {
                         if (el) rowRefs.current.set(c.key, el)
                         else rowRefs.current.delete(c.key)
@@ -1147,6 +1209,37 @@ export default function FolderExplorerPage() {
             folderStats={folderStats}
             onSelect={(targetFolderId) => void handleBulkMove(targetFolderId)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={creatingSuiteFromSelection} onOpenChange={setCreatingSuiteFromSelection}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>New suite from selection</DialogTitle>
+          <DialogDescription>
+            {resolvedSuiteCaseKeys.length} case{resolvedSuiteCaseKeys.length === 1 ? '' : 's'} from your selection
+            will become this suite&apos;s members.
+          </DialogDescription>
+          <div className="space-y-1">
+            <Label htmlFor="new-suite-from-selection-name">Suite name</Label>
+            <Input
+              id="new-suite-from-selection-name"
+              autoFocus
+              value={newSuiteFromSelectionName}
+              onChange={(e) => setNewSuiteFromSelectionName(e.target.value)}
+              placeholder="Smoke"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newSuiteFromSelectionName.trim()) void handleCreateSuiteFromSelection()
+              }}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreatingSuiteFromSelection(false)}>
+              Cancel
+            </Button>
+            <Button disabled={!newSuiteFromSelectionName.trim()} onClick={() => void handleCreateSuiteFromSelection()}>
+              Create suite
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

@@ -119,6 +119,11 @@ function CaseDetailProbe() {
   return <p data-testid="case-detail-probe">case detail for {caseKey}</p>
 }
 
+function SuiteDetailProbe() {
+  const { suiteKey } = useParams<{ suiteKey: string }>()
+  return <p data-testid="suite-detail-probe">suite detail for {suiteKey}</p>
+}
+
 function renderExplorer(path = '/projects/p1/library/transferencias') {
   return render(
     <MemoryRouter initialEntries={[path]}>
@@ -127,6 +132,7 @@ function renderExplorer(path = '/projects/p1/library/transferencias') {
           <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
           <Route path="/projects/:projectKey/library/:folderId" element={<FolderExplorerPage />} />
           <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailProbe />} />
+          <Route path="/projects/:projectKey/suites/:suiteKey" element={<SuiteDetailProbe />} />
           <Route path="/login" element={<p>login stub</p>} />
         </Routes>
       </AuthProvider>
@@ -1608,6 +1614,277 @@ describe('FolderExplorerPage', () => {
         }
       })
       expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
+    })
+  })
+
+  describe('bulk "Create suite from N cases…" (add-suite-from-library-selection)', () => {
+    const caseTwo = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Case Two' } }
+    // A folder nested two levels deep under "Nacionales" (itself a subfolder
+    // of "Transferencias", the folder rendered by default) — used to prove
+    // the resolved count really recurses, not just reads a direct-children
+    // count (design.md D7).
+    const nacionalesSub = { id: 'nacionalesSub', projectId: 'p1', parentFolderId: 'nacionales', name: 'Internal Transfers', createdAt: '' }
+    const caseInNacionales = { ...limitCase, id: 'c3', key: 'c3', folderId: 'nacionales', content: { ...limitCase.content, title: 'Case In Nacionales' } }
+    const caseInNacionalesSub = {
+      ...limitCase,
+      id: 'c4',
+      key: 'c4',
+      folderId: 'nacionalesSub',
+      content: { ...limitCase.content, title: 'Case In Nacionales Sub' },
+    }
+
+    function shiftClick(el: HTMLElement) {
+      fireEvent.click(el, { shiftKey: true })
+    }
+
+    it('counts only the directly-selected cases when no folder is selected', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      shiftClick(await screen.findByText('Daily transfer limit'))
+      shiftClick(screen.getByText('Case Two'))
+
+      expect(await screen.findByRole('button', { name: /create suite from 2 cases…/i })).toBeInTheDocument()
+    })
+
+    it('recursively counts every case inside a selected folder, at any depth', async () => {
+      mockExplorerAPI({
+        folders: [root, transferencias, nacionales, nacionalesSub],
+        cases: [limitCase, caseInNacionales, caseInNacionalesSub],
+      })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      shiftClick(within(list).getByText('Nacionales'))
+
+      expect(await screen.findByRole('button', { name: /create suite from 2 cases…/i })).toBeInTheDocument()
+    })
+
+    it('sums direct and folder-recursive cases without double-counting overlap', async () => {
+      mockExplorerAPI({
+        folders: [root, transferencias, nacionales, nacionalesSub],
+        cases: [limitCase, caseTwo, caseInNacionales, caseInNacionalesSub],
+      })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      await within(list).findByText('Daily transfer limit')
+      shiftClick(within(list).getByText('Nacionales'))
+      shiftClick(within(list).getByText('Case Two'))
+
+      // Nacionales' subtree resolves to {c3, c4}; c1/c2 are outside it, so
+      // the total is 4 with no duplicates possible.
+      expect(await screen.findByRole('button', { name: /create suite from 4 cases…/i })).toBeInTheDocument()
+    })
+
+    it('is absent when the selection resolves to zero cases', async () => {
+      mockExplorerAPI({ folders: [root, transferencias, nacionales], cases: [] })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      shiftClick(within(list).getByText('Nacionales'))
+
+      expect(screen.getByText('1 selected')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /create suite from/i })).not.toBeInTheDocument()
+    })
+
+    it('is absent without suiteCreate permission', async () => {
+      mockExplorerAPI({ cases: [limitCase], permissions: { ...allPermissions, suiteCreate: false } })
+      renderExplorer()
+      shiftClick(await screen.findByText('Daily transfer limit'))
+
+      expect(screen.queryByRole('button', { name: /create suite from/i })).not.toBeInTheDocument()
+    })
+
+    it('opens a dialog naming the resolved count, disables confirm until a name is entered, and creates the suite on confirm', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      mockPOST.mockImplementation((path: string) => {
+        if (path === '/api/v1/projects/{projectKey}/suites')
+          return Promise.resolve({ data: { key: 's-new', name: 'Login smoke', caseIds: [], createdAt: '' }, response: { ok: true } })
+        return Promise.resolve({ data: undefined, response: { ok: true } })
+      })
+      mockPUT.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      shiftClick(await screen.findByText('Daily transfer limit'))
+      shiftClick(screen.getByText('Case Two'))
+
+      await userEvent.click(screen.getByRole('button', { name: /create suite from 2 cases…/i }))
+      const dialog = await screen.findByRole('dialog')
+      expect(within(dialog).getByText(/new suite from selection/i)).toBeInTheDocument()
+      expect(within(dialog).getByText(/2 cases from your selection will become this suite's members/i)).toBeInTheDocument()
+      const confirmButton = within(dialog).getByRole('button', { name: /^create suite$/i })
+      expect(confirmButton).toBeDisabled()
+
+      await userEvent.type(within(dialog).getByLabelText(/suite name/i), 'Login smoke')
+      expect(confirmButton).not.toBeDisabled()
+      await userEvent.click(confirmButton)
+
+      await waitFor(() => {
+        expect(mockPOST).toHaveBeenCalledWith(
+          '/api/v1/projects/{projectKey}/suites',
+          expect.objectContaining({ params: { path: { projectKey: 'p1' } }, body: { name: 'Login smoke' } }),
+        )
+        for (const caseKey of ['c1', 'c2']) {
+          expect(mockPUT).toHaveBeenCalledWith(
+            '/api/v1/suites/{suiteKey}/cases/{caseKey}',
+            expect.objectContaining({ params: { path: { suiteKey: 's-new', caseKey } } }),
+          )
+        }
+      })
+      expect(await screen.findByTestId('suite-detail-probe')).toHaveTextContent('suite detail for s-new')
+      expect(screen.queryByText(/^\d+ selected$/)).not.toBeInTheDocument()
+    })
+
+    it('adds a selected folder\'s recursively-resolved cases as suite members, not the folder itself', async () => {
+      mockExplorerAPI({
+        folders: [root, transferencias, nacionales, nacionalesSub],
+        cases: [limitCase, caseInNacionales, caseInNacionalesSub],
+      })
+      mockPOST.mockImplementation((path: string) => {
+        if (path === '/api/v1/projects/{projectKey}/suites')
+          return Promise.resolve({ data: { key: 's-new', name: 'Nacionales suite', caseIds: [], createdAt: '' }, response: { ok: true } })
+        return Promise.resolve({ data: undefined, response: { ok: true } })
+      })
+      mockPUT.mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      shiftClick(within(list).getByText('Nacionales'))
+
+      await userEvent.click(screen.getByRole('button', { name: /create suite from 2 cases…/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.type(within(dialog).getByLabelText(/suite name/i), 'Nacionales suite')
+      await userEvent.click(within(dialog).getByRole('button', { name: /^create suite$/i }))
+
+      await waitFor(() => {
+        for (const caseKey of ['c3', 'c4']) {
+          expect(mockPUT).toHaveBeenCalledWith(
+            '/api/v1/suites/{suiteKey}/cases/{caseKey}',
+            expect.objectContaining({ params: { path: { suiteKey: 's-new', caseKey } } }),
+          )
+        }
+      })
+      expect(mockPUT).not.toHaveBeenCalledWith(
+        '/api/v1/suites/{suiteKey}/cases/{caseKey}',
+        expect.objectContaining({ params: { path: { suiteKey: 's-new', caseKey: 'nacionales' } } }),
+      )
+    })
+
+    it('cancelling the dialog creates no suite and leaves the selection untouched', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      shiftClick(await screen.findByText('Daily transfer limit'))
+      shiftClick(screen.getByText('Case Two'))
+
+      await userEvent.click(screen.getByRole('button', { name: /create suite from 2 cases…/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: /^cancel$/i }))
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(mockPOST).not.toHaveBeenCalledWith('/api/v1/projects/{projectKey}/suites', expect.anything())
+      expect(screen.getByText('2 selected')).toBeInTheDocument()
+    })
+  })
+
+  // Mirrors RunPage's existing isBulkContext pattern (add-run-row-status-actions):
+  // right-clicking a row that's part of a real multi-selection (selection
+  // size > 1) shows the bulk actions instead of that row's own single-item
+  // menu; a lone selected row, or a right-click outside the selection, still
+  // gets the ordinary single-item menu. Opening either menu never changes
+  // which rows are selected.
+  describe('right-click on a multi-selection shows bulk actions', () => {
+    const caseTwo = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Case Two' } }
+
+    function shiftClick(el: HTMLElement) {
+      fireEvent.click(el, { shiftKey: true })
+    }
+
+    it('shows Move to…/Create suite/Delete when right-clicking a case that is part of a multi-selection', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+      shiftClick(screen.getByText('Case Two'))
+
+      fireEvent.contextMenu(title)
+      const menu = await screen.findByRole('menu')
+      expect(within(menu).getByRole('menuitem', { name: /^move to…$/i })).toBeInTheDocument()
+      expect(within(menu).getByRole('menuitem', { name: /create suite from 2 cases…/i })).toBeInTheDocument()
+      expect(within(menu).getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+      // Opening the menu must not itself change the selection.
+      expect(screen.getByText('2 selected')).toBeInTheDocument()
+    })
+
+    it('shows bulk actions when right-clicking a folder that is part of a multi-selection, resolved recursively', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      const folderTitle = within(list).getByText('Nacionales')
+      shiftClick(folderTitle)
+      shiftClick(within(list).getByText('Case Two'))
+
+      fireEvent.contextMenu(folderTitle)
+      const menu = await screen.findByRole('menu')
+      // The Shift+Click range from Nacionales to Case Two also includes
+      // "Daily transfer limit" (rendered between them); Nacionales itself
+      // has no cases in this fixture, so the resolved total is just the two
+      // directly-selected cases.
+      expect(within(menu).getByRole('menuitem', { name: /create suite from 2 cases…/i })).toBeInTheDocument()
+    })
+
+    it('still shows the ordinary single-item menu for a lone selected row (selection size 1)', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+
+      fireEvent.contextMenu(title)
+      const menu = await screen.findByRole('menu')
+      expect(within(menu).getByRole('menuitem', { name: /^move to…$/i })).toBeInTheDocument()
+      expect(within(menu).getByRole('menuitem', { name: /^delete$/i })).toBeInTheDocument()
+      expect(within(menu).queryByRole('menuitem', { name: /create suite/i })).not.toBeInTheDocument()
+    })
+
+    it('right-clicking a row outside the active selection shows its own single-item menu, not the bulk one', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+      shiftClick(screen.getByText('Case Two'))
+      // Now deselect down to just "Case Two" being the sole selection by
+      // clearing and reselecting only it.
+      await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+      shiftClick(screen.getByText('Case Two'))
+
+      fireEvent.contextMenu(title)
+      const menu = await screen.findByRole('menu')
+      expect(within(menu).queryByRole('menuitem', { name: /create suite/i })).not.toBeInTheDocument()
+      // Right-clicking Daily transfer limit (unselected) must not select it.
+      expect(title.closest('li')).not.toHaveClass('bg-primary/10')
+    })
+
+    it('clicking "Create suite from N cases…" in the bulk right-click menu opens the create-suite dialog', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+      shiftClick(screen.getByText('Case Two'))
+
+      fireEvent.contextMenu(title)
+      const menu = await screen.findByRole('menu')
+      await userEvent.click(within(menu).getByRole('menuitem', { name: /create suite from 2 cases…/i }))
+
+      expect(await screen.findByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText(/new suite from selection/i)).toBeInTheDocument()
+    })
+
+    it('clicking "Delete" in the bulk right-click menu opens the same bulk delete confirmation', async () => {
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      renderExplorer()
+      const title = await screen.findByText('Daily transfer limit')
+      shiftClick(title)
+      shiftClick(screen.getByText('Case Two'))
+
+      fireEvent.contextMenu(title)
+      const menu = await screen.findByRole('menu')
+      await userEvent.click(within(menu).getByRole('menuitem', { name: /^delete$/i }))
+
+      expect(await screen.findByRole('heading', { name: /delete 2 cases/i })).toBeInTheDocument()
     })
   })
 })
