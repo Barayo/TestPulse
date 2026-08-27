@@ -77,7 +77,13 @@ test.describe('Requirement: A Tenant Admin can choose an instance-wide color pal
     await page.getByRole('button', { name: 'Save custom palette' }).click()
     await expect(colorThemeGroup.getByRole('button', { name: 'Custom' })).toHaveAttribute('aria-pressed', 'true')
 
-    const primary = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary'))
-    expect(primary.trim().toLowerCase()).toBe('#112233')
+    // aria-pressed on "Custom" reflects the editor being open, which is
+    // already true before Save is even clicked — it doesn't tell us the
+    // save's PATCH + refreshColorTheme() round trip (which is what actually
+    // updates --primary, via AuthProvider -> ThemeProvider) has finished.
+    // Poll the real observable outcome instead of a proxy for it.
+    await expect
+      .poll(async () => page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--primary').trim().toLowerCase()))
+      .toBe('#112233')
   })
 })
