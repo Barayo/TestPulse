@@ -19,13 +19,15 @@ permissions:
   pull-requests: read
 
 env:
-  # This self-hosted runner is a macOS LaunchAgent — its default Docker
-  # context/credential store both require an interactive keychain session
-  # it doesn't have ("current session does not allow user interaction").
-  # Only bites the api/e2e jobs' docker pull/build steps when an image
-  # isn't already cached locally, but set workflow-wide since either job
-  # could hit a cold cache after a prune (self-host-ci-runner).
-  DOCKER_HOST: unix:///Users/migalons/.docker/run/docker.sock
+  # This self-hosted runner is a macOS LaunchAgent — Docker Desktop's own
+  # backend requires an interactive keychain/GUI session the LaunchAgent
+  # doesn't have, and that held true even after isolating DOCKER_CONFIG and
+  # disabling Desktop's credential-helper setting (self-host-ci-runner):
+  # Desktop still gated even fully anonymous pulls on the locked keychain.
+  # Colima is a plain Linux VM behind the docker CLI with no GUI/keychain
+  # layer in the loop at all, so this class of failure can't recur
+  # (switch-runner-docker-to-colima).
+  DOCKER_HOST: unix:///Users/migalons/.colima/default/docker.sock
   DOCKER_CONFIG: /Users/migalons/actions-runner-testpulse/.docker-config
 
 jobs:
