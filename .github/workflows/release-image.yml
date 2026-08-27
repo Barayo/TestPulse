@@ -13,19 +13,9 @@ jobs:
   image:
     name: Build and push multi-arch image
     runs-on: [self-hosted, testpulse]
-    env:
-      # This self-hosted runner is a macOS LaunchAgent — Docker Desktop's own
-      # backend requires an interactive keychain/GUI session the LaunchAgent
-      # doesn't have, and that held true even after isolating DOCKER_CONFIG
-      # and disabling Desktop's credential-helper setting: Desktop still
-      # gated even fully anonymous pulls (setup-qemu-action's binfmt image)
-      # on the locked keychain. Colima is a plain Linux VM behind the docker
-      # CLI with no GUI/keychain layer in the loop at all, so this class of
-      # failure can't recur (switch-runner-docker-to-colima). DOCKER_CONFIG
-      # still isolates credentials to a plain file, mainly so this job's
-      # GHCR login doesn't write into the shared user docker config.
-      DOCKER_HOST: unix:///Users/migalons/.colima/default/docker.sock
-      DOCKER_CONFIG: /Users/migalons/actions-runner-testpulse/.docker-config
+    # DOCKER_HOST/DOCKER_CONFIG for this machine's Docker setup are supplied
+    # by the runner's own local .env file, not committed here — they're
+    # machine-specific paths under the runner operator's home directory.
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
