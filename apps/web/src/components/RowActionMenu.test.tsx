@@ -131,6 +131,37 @@ describe('RowActionMenu', () => {
     expect(menu).toHaveStyle({ right: '760px' })
   })
 
+  it('flips the button-opened menu upward when there is not enough room below the trigger, so it never renders past the viewport bottom', async () => {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+      top: 680,
+      bottom: 700,
+      left: 200,
+      right: 240,
+      width: 40,
+      height: 20,
+      x: 200,
+      y: 680,
+      toJSON: () => ({}),
+    })
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1000)
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(720)
+
+    render(
+      <RowActionMenu
+        label="Actions for Regression run"
+        items={[
+          { label: 'Compare…', onSelect: vi.fn() },
+          { label: 'Delete', onSelect: vi.fn(), danger: true, dividerBefore: true },
+        ]}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Actions for Regression run' }))
+
+    const menu = screen.getByRole('menu')
+    expect(menu).toHaveStyle({ bottom: '44px' })
+    expect(menu.style.top).toBe('')
+  })
+
   it('renders a disabled item that does not fire onSelect when clicked', async () => {
     const onSelect = vi.fn()
     render(

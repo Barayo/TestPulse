@@ -11,6 +11,14 @@ export type RowActionMenuItem = {
   disabled?: boolean
 }
 
+// Rough per-item/divider/container pixel heights from the menu's own
+// Tailwind classes (py-1.5 item, my-1 + border-t divider, py-1 container) —
+// good enough to decide open direction before the menu paints, avoiding a
+// measure-then-reposition flicker.
+const ITEM_HEIGHT = 32
+const DIVIDER_HEIGHT = 9
+const CONTAINER_PADDING = 8
+
 export type RowActionMenuHandle = {
   // Opens the menu fixed at an explicit viewport position — the
   // right-click/contextmenu entry point, alongside the visible trigger
@@ -33,7 +41,7 @@ export const RowActionMenu = forwardRef<
 >(function RowActionMenu({ label, items, trigger, hoverReveal }, ref) {
     const [open, setOpen] = useState(false)
     const [cursorPos, setCursorPos] = useState<{ x: number; y: number } | null>(null)
-    const [anchorPos, setAnchorPos] = useState<{ top: number; right: number } | null>(null)
+    const [anchorPos, setAnchorPos] = useState<{ top: number; right: number } | { bottom: number; right: number } | null>(null)
     const wrapRef = useRef<HTMLDivElement>(null)
     const menuRef = useRef<HTMLDivElement>(null)
 
@@ -72,9 +80,7 @@ export const RowActionMenu = forwardRef<
 
     const menuStyle = cursorPos
       ? { left: cursorPos.x, top: cursorPos.y }
-      : anchorPos
-        ? { top: anchorPos.top, right: anchorPos.right }
-        : undefined
+      : (anchorPos ?? undefined)
 
     const menu = (
       <div
@@ -126,7 +132,18 @@ export const RowActionMenu = forwardRef<
           onClick={() => {
             setCursorPos(null)
             const rect = wrapRef.current?.getBoundingClientRect()
-            setAnchorPos(rect ? { top: rect.bottom + 4, right: window.innerWidth - rect.right } : null)
+            if (!rect) {
+              setAnchorPos(null)
+            } else {
+              const right = window.innerWidth - rect.right
+              const dividerCount = items.filter((i) => i.dividerBefore).length
+              const estimatedMenuHeight = items.length * ITEM_HEIGHT + dividerCount * DIVIDER_HEIGHT + CONTAINER_PADDING
+              const spaceBelow = window.innerHeight - rect.bottom
+              const openUpward = spaceBelow < estimatedMenuHeight + 4 && rect.top > estimatedMenuHeight
+              setAnchorPos(
+                openUpward ? { bottom: window.innerHeight - rect.top + 4, right } : { top: rect.bottom + 4, right },
+              )
+            }
             setOpen((o) => !o)
           }}
         >
