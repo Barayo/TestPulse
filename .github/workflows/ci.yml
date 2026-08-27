@@ -20,7 +20,7 @@ jobs:
   # stay unconditional on path, since app code can affect either indirectly.
   changes:
     name: Detect changed paths
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, testpulse]
     if: github.event_name == 'pull_request'
     outputs:
       helm: ${{ steps.filter.outputs.helm }}
@@ -38,7 +38,7 @@ jobs:
 
   api:
     name: API (Go)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, testpulse]
     # A push to main was already validated by the PR that merged it —
     # re-running here would just spend minutes confirming the same commit
     # again (reduce-ci-actions-usage). e2e is the one exception: it also
@@ -48,24 +48,25 @@ jobs:
     defaults:
       run:
         working-directory: apps/api
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_USER: test
-          POSTGRES_PASSWORD: test
-          POSTGRES_DB: test
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U test -d test"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 10
     env:
       TESTPULSE_TEST_DATABASE_URL: postgres://test:test@localhost:5433/test
     steps:
       - uses: actions/checkout@v4
+      # `services:` (GitHub-managed sidecar containers) only works on
+      # Linux-hosted runners — this self-hosted runner is macOS, so the
+      # Postgres dependency is started/stopped by hand instead
+      # (reduce-ci-actions-usage / self-host-ci-runner).
+      - name: Start postgres
+        run: |
+          docker rm -f testpulse-ci-postgres >/dev/null 2>&1 || true
+          docker run -d --name testpulse-ci-postgres \
+            -e POSTGRES_USER=test -e POSTGRES_PASSWORD=test -e POSTGRES_DB=test \
+            -p 5433:5432 postgres:16-alpine
+          for i in $(seq 1 30); do
+            docker exec testpulse-ci-postgres pg_isready -U test -d test && exit 0
+            sleep 1
+          done
+          echo "postgres never became ready"; exit 1
       - uses: actions/setup-go@v5
         with:
           go-version-file: apps/api/go.mod
@@ -84,10 +85,13 @@ jobs:
           total=$(go tool cover -func=coverage.out | awk '/^total:/ {sub(/%/,"",$3); print $3}')
           echo "internal coverage: ${total}% (minimum 80%)"
           awk "BEGIN {exit !(${total} >= 80)}"
+      - name: Stop postgres
+        if: always()
+        run: docker rm -f testpulse-ci-postgres >/dev/null 2>&1 || true
 
   web:
     name: Web (TypeScript)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, testpulse]
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -112,7 +116,7 @@ jobs:
 
   e2e:
     name: E2E (Playwright vs compose stack)
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, testpulse]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -166,7 +170,7 @@ jobs:
 
   helm:
     name: Helm chart
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, testpulse]
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.helm == 'true'
     steps:
@@ -185,7 +189,7 @@ jobs:
 
   dco:
     name: DCO
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, testpulse]
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -205,7 +209,7 @@ jobs:
 
   migrations:
     name: Migrations
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, testpulse]
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.migrations == 'true'
     steps:
