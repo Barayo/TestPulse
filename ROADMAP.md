@@ -56,7 +56,7 @@ The differentiator ships first: the MCP server is *in* the MVP, because a generi
 
 ## v0.4 — Connected: "it meets your tools where they are"
 
-- `add-jira-connector` — built as an *external* API/MCP client, not an in-process plugin (see design decision in `openspec/changes/establish-architecture/design.md`).
+- `add-jira-connector` — **shipped**. A test case or run item can link to a Jira issue key, with a working link the instant it's set (built from a Tenant-Admin-configured Jira site URL, not a connector-cached one) plus a cached summary/status kept fresh by a standalone connector (`tools/jira-connector`) — an *external* API client, not an in-process plugin, per the design decision in `openspec/changes/archive/2026-07-12-establish-architecture/design.md`. `add-mcp-server` (v0.1) turned out not to actually be implemented despite being listed above as in-scope — this connector talks to TestPulse over REST only, and that gap is tracked separately (backlog #8, #109).
 
 ## v0.5+ — Enterprise-curious
 
