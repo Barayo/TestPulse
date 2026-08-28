@@ -21,14 +21,19 @@ func (r *InstanceSettingsRepo) Get(ctx context.Context) (domain.InstanceSettings
 	var oidcIssuer, oidcClientID, oidcGroupClaim *string
 	var oidcClientSecret []byte
 	var oidcAdminClaimValues []string
+	var jiraSiteURL *string
 	err := r.pool.QueryRow(ctx,
 		`SELECT public_projects_enabled, run_retention_days, auto_archive_inactive_days, color_theme, custom_palette, updated_at,
-		        oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_group_claim, oidc_admin_claim_values, oidc_only
+		        oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_group_claim, oidc_admin_claim_values, oidc_only,
+		        jira_site_url
 		 FROM instance_settings WHERE id`,
 	).Scan(&s.PublicProjectsEnabled, &s.RunRetentionDays, &s.AutoArchiveInactiveDays, &s.ColorTheme, &customPalette, &s.UpdatedAt,
-		&oidcIssuer, &oidcClientID, &oidcClientSecret, &oidcGroupClaim, &oidcAdminClaimValues, &s.OIDCOnly)
+		&oidcIssuer, &oidcClientID, &oidcClientSecret, &oidcGroupClaim, &oidcAdminClaimValues, &s.OIDCOnly, &jiraSiteURL)
 	if err != nil {
 		return s, err
+	}
+	if jiraSiteURL != nil {
+		s.JiraSiteURL = *jiraSiteURL
 	}
 	if customPalette != nil {
 		s.CustomPalette = &domain.CustomPalette{}
@@ -112,10 +117,12 @@ func (r *InstanceSettingsRepo) Update(ctx context.Context, upd domain.InstanceSe
 		   oidc_group_claim = COALESCE($8, oidc_group_claim),
 		   oidc_admin_claim_values = COALESCE($9, oidc_admin_claim_values),
 		   oidc_only = COALESCE($10, oidc_only),
+		   jira_site_url = COALESCE($11, jira_site_url),
 		   updated_at = now()
 		 WHERE id`,
 		upd.PublicProjectsEnabled, upd.RunRetentionDays, upd.AutoArchiveInactiveDays, upd.ColorTheme, nullIfEmpty(customPaletteJSON),
 		upd.OIDCIssuer, upd.OIDCClientID, upd.OIDCGroupClaim, nullIfEmptyStrings(adminClaimValues, upd.OIDCAdminClaimValues), upd.OIDCOnly,
+		upd.JiraSiteURL,
 	); err != nil {
 		return domain.InstanceSettings{}, err
 	}

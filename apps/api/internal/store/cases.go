@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -181,12 +182,14 @@ func (r *CaseRepo) Get(ctx context.Context, caseID string) (domain.TestCase, err
 	)
 	err := r.pool.QueryRow(ctx,
 		`SELECT c.id, c.key, c.project_id, c.folder_id, c.current_version, c.created_at, v.created_at,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields,
+		        c.jira_issue_key, c.jira_issue_summary, c.jira_issue_status, c.jira_last_synced_at
 		 FROM test_cases c
 		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = c.current_version
 		 WHERE c.id = $1 AND NOT c.deleted`, caseID,
 	).Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt, &c.UpdatedAt,
-		&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)
+		&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON,
+		&c.JiraIssueKey, &c.JiraIssueSummary, &c.JiraIssueStatus, &c.JiraLastSyncedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.TestCase{}, ErrNotFound
 	}
@@ -204,7 +207,8 @@ func (r *CaseRepo) Get(ctx context.Context, caseID string) (domain.TestCase, err
 func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCase, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT c.id, c.key, c.project_id, c.folder_id, c.current_version, c.created_at, v.created_at,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields,
+		        c.jira_issue_key, c.jira_issue_summary, c.jira_issue_status, c.jira_last_synced_at
 		 FROM test_cases c
 		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = c.current_version
 		 WHERE c.project_id = $1 AND NOT c.deleted
@@ -227,7 +231,8 @@ func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCas
 			customFieldsJSON             []byte
 		)
 		if err := rows.Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt, &c.UpdatedAt,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON,
+			&c.JiraIssueKey, &c.JiraIssueSummary, &c.JiraIssueStatus, &c.JiraLastSyncedAt); err != nil {
 			return nil, err
 		}
 		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)()
@@ -291,6 +296,81 @@ func (r *CaseRepo) Move(ctx context.Context, caseID, folderID string) error {
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ListJiraLinked returns only cases with a non-null jira_issue_key, via a
+// DB-level filter — not a client-side scan of List's full result set
+// (add-jira-connector, aggregation-performance-caution).
+func (r *CaseRepo) ListJiraLinked(ctx context.Context, projectID string) ([]domain.TestCase, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT c.id, c.key, c.project_id, c.folder_id, c.current_version, c.created_at,
+		        c.jira_issue_key, c.jira_issue_summary, c.jira_issue_status, c.jira_last_synced_at
+		 FROM test_cases c
+		 WHERE c.project_id = $1 AND NOT c.deleted AND c.jira_issue_key IS NOT NULL
+		 ORDER BY c.created_at`, projectID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cases := []domain.TestCase{}
+	for rows.Next() {
+		var c domain.TestCase
+		if err := rows.Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt,
+			&c.JiraIssueKey, &c.JiraIssueSummary, &c.JiraIssueStatus, &c.JiraLastSyncedAt); err != nil {
+			return nil, err
+		}
+		cases = append(cases, c)
+	}
+	return cases, rows.Err()
+}
+
+// SetJiraLink sets or clears (jiraIssueKey == nil) a case's Jira link.
+// Clearing also clears the cached summary/status/sync-timestamp — a cache
+// belongs to a specific link, never to no link (add-jira-connector).
+func (r *CaseRepo) SetJiraLink(ctx context.Context, caseID string, jiraIssueKey *string) (domain.TestCase, error) {
+	var c domain.TestCase
+	err := r.pool.QueryRow(ctx,
+		`UPDATE test_cases
+		 SET jira_issue_key = $2,
+		     jira_issue_summary = CASE WHEN $2::text IS NULL THEN NULL ELSE jira_issue_summary END,
+		     jira_issue_status = CASE WHEN $2::text IS NULL THEN NULL ELSE jira_issue_status END,
+		     jira_last_synced_at = CASE WHEN $2::text IS NULL THEN NULL ELSE jira_last_synced_at END
+		 WHERE id = $1 AND NOT deleted
+		 RETURNING id, key, project_id, folder_id, current_version, created_at,
+		           jira_issue_key, jira_issue_summary, jira_issue_status, jira_last_synced_at`,
+		caseID, jiraIssueKey,
+	).Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt,
+		&c.JiraIssueKey, &c.JiraIssueSummary, &c.JiraIssueStatus, &c.JiraLastSyncedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.TestCase{}, ErrNotFound
+	}
+	return c, err
+}
+
+// SetJiraSync writes the Jira connector's cached issue data. Requires the
+// case to already have a jiraIssueKey set (ErrJiraLinkNotSet otherwise) —
+// cached data always describes an existing link, never an orphan one.
+func (r *CaseRepo) SetJiraSync(ctx context.Context, caseID, summary, status string, syncedAt time.Time) (domain.TestCase, error) {
+	var c domain.TestCase
+	err := r.pool.QueryRow(ctx,
+		`UPDATE test_cases
+		 SET jira_issue_summary = $2, jira_issue_status = $3, jira_last_synced_at = $4
+		 WHERE id = $1 AND NOT deleted AND jira_issue_key IS NOT NULL
+		 RETURNING id, key, project_id, folder_id, current_version, created_at,
+		           jira_issue_key, jira_issue_summary, jira_issue_status, jira_last_synced_at`,
+		caseID, summary, status, syncedAt,
+	).Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt,
+		&c.JiraIssueKey, &c.JiraIssueSummary, &c.JiraIssueStatus, &c.JiraLastSyncedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Ambiguous between "case not found" and "no jira link set" — check
+		// which, since callers need to tell a bad id from a missing link.
+		if _, getErr := r.Get(ctx, caseID); errors.Is(getErr, ErrNotFound) {
+			return domain.TestCase{}, ErrNotFound
+		}
+		return domain.TestCase{}, ErrJiraLinkNotSet
+	}
+	return c, err
 }
 
 func (r *CaseRepo) SoftDelete(ctx context.Context, caseID string) error {

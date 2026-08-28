@@ -1498,3 +1498,69 @@ func TestSeedContentShowcasesAssigneeRestrictedRecording(t *testing.T) {
 		t.Errorf("sam recording against the still-unassigned item = %v, want success", err)
 	}
 }
+
+// TestSeedContentShowcasesJiraLinks covers add-jira-connector: the Sample
+// Project links a case and a run item to Jira so the Properties sidebar
+// badge has something to demo out of the box — deliberately never-synced
+// (no cached summary/status), since there's no live Jira account to sync
+// against in the sample.
+func TestSeedContentShowcasesJiraLinks(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var login *domain.TestCase
+	for i, c := range cases {
+		if c.Content.Title == "User can log in with valid credentials" {
+			login = &cases[i]
+		}
+	}
+	if login == nil {
+		t.Fatal("no case titled \"User can log in with valid credentials\" seeded")
+	}
+	if login.JiraIssueKey == nil || *login.JiraIssueKey == "" {
+		t.Error("login case should have a seeded jiraIssueKey")
+	}
+	if login.JiraIssueSummary != nil {
+		t.Error("login case's jiraIssueSummary should stay empty — never-synced, no live Jira account in the sample")
+	}
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var sprintRun *domain.Run
+	for i, r := range runs {
+		if r.Name == "Sprint 12 execution" {
+			sprintRun = &runs[i]
+		}
+	}
+	if sprintRun == nil {
+		t.Fatal("no run named \"Sprint 12 execution\" seeded")
+	}
+	items, err := svc.RunItems(actorCtx, sprintRun.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	var badPasswordItem *domain.RunItem
+	for i, it := range items {
+		if it.Content.Title == "Login is rejected for the wrong password" {
+			badPasswordItem = &items[i]
+		}
+	}
+	if badPasswordItem == nil {
+		t.Fatal("no \"Login is rejected for the wrong password\" item in Sprint 12 execution")
+	}
+	if badPasswordItem.JiraIssueKey == nil || *badPasswordItem.JiraIssueKey == "" {
+		t.Error("the failed bad-password run item should have a seeded jiraIssueKey")
+	}
+}

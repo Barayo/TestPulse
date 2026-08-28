@@ -68,6 +68,11 @@ type AuthContextValue = {
   colorTheme: string
   // Present only when colorTheme is "custom".
   customPalette: CustomPalette | null
+  // Jira Cloud site base URL (add-jira-connector), e.g.
+  // "https://mycompany.atlassian.net", resolved from the same GET
+  // /api/v1/meta fetch. Empty when a Tenant Admin hasn't configured it —
+  // a linked issue key still shows then, just without a working link.
+  jiraSiteUrl: string
   login: (email: string, password: string) => Promise<LoginResult>
   // Creates the instance's first admin account and logs it in, in one
   // request (add-first-run-setup) — updates both `user` and `setupRequired`
@@ -98,6 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [setupRequiredLoading, setSetupRequiredLoading] = useState(true)
   const [colorTheme, setColorTheme] = useState('teal')
   const [customPalette, setCustomPalette] = useState<CustomPalette | null>(null)
+  const [jiraSiteUrl, setJiraSiteUrl] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
   const userRef = useRef<AuthUser | null>(null)
   userRef.current = user
@@ -119,15 +125,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const { data, response } = await api.GET('/api/v1/meta')
         if (cancelled) return
-        const meta = data as { setupRequired?: boolean; colorTheme?: string; customPalette?: CustomPalette } | undefined
+        const meta = data as
+          | { setupRequired?: boolean; colorTheme?: string; customPalette?: CustomPalette; jiraSiteUrl?: string }
+          | undefined
         setSetupRequired(response.ok && meta ? Boolean(meta.setupRequired) : false)
         setColorTheme(response.ok && meta?.colorTheme ? meta.colorTheme : 'teal')
         setCustomPalette(response.ok && meta?.customPalette ? meta.customPalette : null)
+        setJiraSiteUrl(response.ok && meta?.jiraSiteUrl ? meta.jiraSiteUrl : '')
       } catch {
         if (!cancelled) {
           setSetupRequired(false)
           setColorTheme('teal')
           setCustomPalette(null)
+          setJiraSiteUrl('')
         }
       } finally {
         if (!cancelled) setSetupRequiredLoading(false)
@@ -177,12 +187,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshColorTheme = useCallback(async () => {
     try {
       const { data, response } = await api.GET('/api/v1/meta')
-      const meta = data as { colorTheme?: string; customPalette?: CustomPalette } | undefined
+      const meta = data as { colorTheme?: string; customPalette?: CustomPalette; jiraSiteUrl?: string } | undefined
       setColorTheme(response.ok && meta?.colorTheme ? meta.colorTheme : 'teal')
       setCustomPalette(response.ok && meta?.customPalette ? meta.customPalette : null)
+      setJiraSiteUrl(response.ok && meta?.jiraSiteUrl ? meta.jiraSiteUrl : '')
     } catch {
       setColorTheme('teal')
       setCustomPalette(null)
+      setJiraSiteUrl('')
     }
   }, [])
 
@@ -209,6 +221,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setupRequiredLoading,
         colorTheme,
         customPalette,
+        jiraSiteUrl,
         refreshColorTheme,
         login,
         setup,

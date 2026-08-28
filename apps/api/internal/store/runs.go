@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/jackc/pgx/v5"
@@ -421,7 +422,8 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
 		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields,
+		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
 		 FROM test_run_items i
 		 JOIN test_cases c ON c.id = i.case_id
 		 JOIN test_case_versions v ON v.case_id = i.case_id AND v.version = i.case_version
@@ -451,7 +453,8 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
 			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,
 			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON); err != nil {
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON,
+			&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt); err != nil {
 			return nil, err
 		}
 		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)()
@@ -678,6 +681,85 @@ func (r *RunRepo) SetItemStatus(ctx context.Context, itemID string, status domai
 		return ErrNotFound
 	}
 	return nil
+}
+
+// ItemsJiraLinked returns an open run's items with a non-null
+// jira_issue_key, via a DB-level filter (add-jira-connector).
+func (r *RunRepo) ItemsJiraLinked(ctx context.Context, runID string) ([]domain.RunItem, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT i.id, i.run_id, i.case_id, c.key, i.case_version, i.current_status, i.created_at,
+		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
+		 FROM test_run_items i
+		 JOIN test_cases c ON c.id = i.case_id
+		 WHERE i.run_id = $1 AND i.jira_issue_key IS NOT NULL
+		 ORDER BY i.created_at`, runID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []domain.RunItem{}
+	for rows.Next() {
+		var it domain.RunItem
+		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion, &it.CurrentStatus, &it.CreatedAt,
+			&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, it)
+	}
+	return items, rows.Err()
+}
+
+// SetItemJiraLink sets or clears (jiraIssueKey == nil) a run item's Jira
+// link. Clearing also clears the cached summary/status/sync-timestamp.
+// Rejects with ErrRunClosed once the parent run is closed, consistent with
+// every other mutating run-item operation.
+func (r *RunRepo) SetItemJiraLink(ctx context.Context, itemID string, jiraIssueKey *string) (domain.RunItem, error) {
+	if err := checkItemRunOpen(ctx, r.pool, itemID); err != nil {
+		return domain.RunItem{}, err
+	}
+	var it domain.RunItem
+	err := r.pool.QueryRow(ctx,
+		`UPDATE test_run_items
+		 SET jira_issue_key = $2,
+		     jira_issue_summary = CASE WHEN $2::text IS NULL THEN NULL ELSE jira_issue_summary END,
+		     jira_issue_status = CASE WHEN $2::text IS NULL THEN NULL ELSE jira_issue_status END,
+		     jira_last_synced_at = CASE WHEN $2::text IS NULL THEN NULL ELSE jira_last_synced_at END
+		 WHERE id = $1
+		 RETURNING id, run_id, case_id, case_version, current_status, created_at,
+		           jira_issue_key, jira_issue_summary, jira_issue_status, jira_last_synced_at`,
+		itemID, jiraIssueKey,
+	).Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseVersion, &it.CurrentStatus, &it.CreatedAt,
+		&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return domain.RunItem{}, ErrNotFound
+	}
+	return it, err
+}
+
+// SetItemJiraSync writes the Jira connector's cached issue data. Requires
+// the item to already have a jiraIssueKey set (ErrJiraLinkNotSet
+// otherwise).
+func (r *RunRepo) SetItemJiraSync(ctx context.Context, itemID, summary, status string, syncedAt time.Time) (domain.RunItem, error) {
+	var it domain.RunItem
+	err := r.pool.QueryRow(ctx,
+		`UPDATE test_run_items
+		 SET jira_issue_summary = $2, jira_issue_status = $3, jira_last_synced_at = $4
+		 WHERE id = $1 AND jira_issue_key IS NOT NULL
+		 RETURNING id, run_id, case_id, case_version, current_status, created_at,
+		           jira_issue_key, jira_issue_summary, jira_issue_status, jira_last_synced_at`,
+		itemID, summary, status, syncedAt,
+	).Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseVersion, &it.CurrentStatus, &it.CreatedAt,
+		&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt)
+	if errors.Is(err, pgx.ErrNoRows) {
+		var exists bool
+		_ = r.pool.QueryRow(ctx, `SELECT true FROM test_run_items WHERE id = $1`, itemID).Scan(&exists)
+		if !exists {
+			return domain.RunItem{}, ErrNotFound
+		}
+		return domain.RunItem{}, ErrJiraLinkNotSet
+	}
+	return it, err
 }
 
 func (r *RunRepo) AssignItemToUser(ctx context.Context, itemID, userID string) error {

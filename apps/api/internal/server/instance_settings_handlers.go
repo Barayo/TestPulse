@@ -25,13 +25,15 @@ type instanceSettingsUpdateInput struct {
 	OIDCAdminClaimValues    *[]string             `json:"oidcAdminClaimValues"`
 	OIDCOnly                *bool                 `json:"oidcOnly"`
 	DisableSso              *bool                 `json:"disableSso"`
+	JiraSiteURL             *string               `json:"jiraSiteUrl"`
 }
 
 func (in instanceSettingsUpdateInput) empty() bool {
 	return in.PublicProjectsEnabled == nil && in.RunRetentionDays == nil &&
 		in.AutoArchiveInactiveDays == nil && in.ColorTheme == nil && in.CustomPalette == nil &&
 		in.OIDCIssuer == nil && in.OIDCClientID == nil && in.OIDCClientSecret == nil &&
-		in.OIDCGroupClaim == nil && in.OIDCAdminClaimValues == nil && in.OIDCOnly == nil && in.DisableSso == nil
+		in.OIDCGroupClaim == nil && in.OIDCAdminClaimValues == nil && in.OIDCOnly == nil && in.DisableSso == nil &&
+		in.JiraSiteURL == nil
 }
 
 // touchesOIDCConnection reports whether this request changes the values an
@@ -134,5 +136,6 @@ func toInstanceSettingsUpdate(in instanceSettingsUpdateInput) domain.InstanceSet
 		OIDCGroupClaim:          in.OIDCGroupClaim,
 		OIDCAdminClaimValues:    in.OIDCAdminClaimValues,
 		OIDCOnly:                in.OIDCOnly,
+		JiraSiteURL:             in.JiraSiteURL,
 	}
 }

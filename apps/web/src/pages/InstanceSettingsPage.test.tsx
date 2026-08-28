@@ -16,6 +16,7 @@ function mockAsTenantAdmin(
   runRetentionDays = 0,
   autoArchiveInactiveDays = 0,
   colorTheme = 'teal',
+  jiraSiteUrl = '',
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
@@ -23,7 +24,7 @@ function mockAsTenantAdmin(
     }
     if (path === '/api/v1/instance-settings') {
       return Promise.resolve({
-        data: { publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt: '' },
+        data: { publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, jiraSiteUrl, updatedAt: '' },
         response: { ok: true },
       })
     }
@@ -398,6 +399,39 @@ describe('InstanceSettingsPage', () => {
       // Fresh mount seeded from Ocean (the now-active preset), not the
       // abandoned #123456 draft from before switching away.
       expect(screen.getByLabelText('Primary')).toHaveValue('#1453B8')
+    })
+  })
+
+  describe('Jira integration (add-jira-connector)', () => {
+    it('shows the currently configured site URL', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', 'https://mycompany.atlassian.net')
+      renderPage()
+      expect(await screen.findByLabelText(/jira site url/i)).toHaveValue('https://mycompany.atlassian.net')
+    })
+
+    it('saving a new site URL calls PATCH /api/v1/instance-settings', async () => {
+      mockAsTenantAdmin(true)
+      mockPATCH.mockResolvedValue({
+        data: {
+          publicProjectsEnabled: true,
+          runRetentionDays: 0,
+          autoArchiveInactiveDays: 0,
+          colorTheme: 'teal',
+          jiraSiteUrl: 'https://mycompany.atlassian.net',
+          updatedAt: '',
+        },
+        response: { ok: true },
+      })
+      renderPage()
+      const input = await screen.findByLabelText(/jira site url/i)
+      await userEvent.type(input, 'https://mycompany.atlassian.net')
+      await userEvent.click(within(input.closest('section') as HTMLElement).getByRole('button', { name: /save/i }))
+
+      await waitFor(() =>
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', {
+          body: { jiraSiteUrl: 'https://mycompany.atlassian.net' },
+        }),
+      )
     })
   })
 })

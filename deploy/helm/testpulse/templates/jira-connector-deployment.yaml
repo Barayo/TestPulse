@@ -1,0 +1,50 @@
+{{- if .Values.jiraConnector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "testpulse.fullname" . }}-jira-connector
+  labels:
+    {{- include "testpulse.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "testpulse.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: jira-connector
+  template:
+    metadata:
+      labels:
+        {{- include "testpulse.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: jira-connector
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # Distroless "nonroot" user; numeric so the kubelet can verify it.
+        runAsUser: 65532
+        runAsGroup: 65532
+      containers:
+        - name: jira-connector
+          image: {{ include "testpulse.jiraConnectorImage" . }}
+          imagePullPolicy: {{ .Values.jiraConnector.image.pullPolicy }}
+          env:
+            - name: TESTPULSE_URL
+              value: "http://{{ include "testpulse.fullname" . }}:{{ .Values.service.port }}"
+            - name: TESTPULSE_JIRA_SYNC_INTERVAL
+              value: {{ .Values.jiraConnector.syncInterval | quote }}
+            - name: TESTPULSE_JIRA_BASE_URL
+              value: {{ required "jiraConnector.jiraBaseUrl is required when jiraConnector.enabled is true" .Values.jiraConnector.jiraBaseUrl | quote }}
+            - name: TESTPULSE_JIRA_EMAIL
+              value: {{ required "jiraConnector.jiraEmail is required when jiraConnector.enabled is true" .Values.jiraConnector.jiraEmail | quote }}
+            - name: TESTPULSE_JIRA_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "testpulse.jiraConnectorSecretName" . }}
+                  key: jiraApiToken
+            - name: TESTPULSE_JIRA_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "testpulse.jiraConnectorSecretName" . }}
+                  key: agentToken
+          resources:
+            {{- toYaml .Values.jiraConnector.resources | nindent 12 }}
+{{- end }}

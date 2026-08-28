@@ -503,6 +503,26 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		}
 	}
 
+	// Jira links (add-jira-connector) — a case-level link on "login" (shows
+	// the Properties sidebar badge) and a run-item-level link on the failed
+	// "bad password" sprint item (the natural "this failure is tracked as a
+	// bug" story, shown on the run's row). Cached fields stay empty: there's
+	// no live Jira account for the Sample Project to sync against, so this
+	// demonstrates the connector's never-synced state, not a live one.
+	loginKey := "PROJ-123"
+	if _, err := svc.SetCaseJiraLink(ctx, login.ID, &loginKey); err != nil {
+		return fmt.Errorf("sampledata: linking login case to Jira: %w", err)
+	}
+	for _, item := range sprintItems {
+		if item.CaseID != badPassword.ID {
+			continue
+		}
+		badPasswordKey := "PROJ-456"
+		if _, err := svc.SetRunItemJiraLink(ctx, item.ID, &badPasswordKey); err != nil {
+			return fmt.Errorf("sampledata: linking bad-password run item to Jira: %w", err)
+		}
+	}
+
 	// Turning this on (restrict-run-item-status-to-assignee) demonstrates
 	// both branches on the very same run: julia/sam can still record
 	// against their own assigned item, a different signed-in member gets a

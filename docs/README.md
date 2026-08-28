@@ -12,6 +12,7 @@ updated in the same change that alters the behavior it describes.
 | [Test management](test-management.md) | Using TestPulse: projects, versioned test cases, suites, runs, the execution board |
 | [Importing results](importing-results.md) | Bulk-importing JUnit XML reports from CI, the match-only contract, and the pytest `conftest.py` snippet |
 | [Deployment](deployment.md) | Configuration reference, Helm values, production notes |
+| [Integrations](integrations.md) | The Jira connector: what it does, deploying it, and its config reference |
 | [API](api.md) | The REST API, OpenAPI contract, and health endpoints |
 | [Database](database.md) | Schema reference and entity relationships |
 

@@ -202,3 +202,46 @@ test.describe('Requirement: Project-level case folders', () => {
     expect(cases[0].folderId).toBe(auth.id)
   })
 })
+
+// add-jira-connector: openspec/changes/add-jira-connector/specs/test-authoring/spec.md,
+// requirement "Linking a test case to a Jira issue".
+test.describe('Requirement: Linking a test case to a Jira issue', () => {
+  test('Scenario: Set a Jira issue key on a case', async ({ page }) => {
+    await createProject(page, 'Jira Link Project')
+    await openFolderExplorer(page)
+
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Login works')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await page.getByText('Login works').click()
+
+    await page.getByRole('button', { name: /link jira issue/i }).click()
+    await page.getByRole('textbox', { name: /jira issue key/i }).fill('proj-123')
+    await page.getByRole('button', { name: /^save$/i }).click()
+
+    await expect(page.getByText('PROJ-123')).toBeVisible()
+    await expect(page.getByRole('button', { name: /link jira issue/i })).not.toBeVisible()
+  })
+
+  test('Scenario: Clearing a Jira issue key also clears its cached summary', async ({ page }) => {
+    await createProject(page, 'Jira Unlink Project')
+    await openFolderExplorer(page)
+
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Login works')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    await page.getByText('Login works').click()
+
+    await page.getByRole('button', { name: /link jira issue/i }).click()
+    await page.getByRole('textbox', { name: /jira issue key/i }).fill('proj-123')
+    await page.getByRole('button', { name: /^save$/i }).click()
+    await expect(page.getByText('PROJ-123')).toBeVisible()
+
+    await page.getByRole('button', { name: /change jira link/i }).click()
+    await page.getByRole('textbox', { name: /jira issue key/i }).fill('')
+    await page.getByRole('button', { name: /^save$/i }).click()
+
+    await expect(page.getByText('PROJ-123')).not.toBeVisible()
+    await expect(page.getByRole('button', { name: /link jira issue/i })).toBeVisible()
+  })
+})

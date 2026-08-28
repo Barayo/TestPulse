@@ -58,3 +58,33 @@ resources:
     memory: 64Mi
   limits:
     memory: 256Mi
+
+# Optional Jira connector (add-jira-connector) — a separate Deployment from
+# the main app, per establish-architecture's standing decision that
+# connectors are external clients, not in-process plugins. Disabled by
+# default; most installs have no Jira site to connect to.
+jiraConnector:
+  enabled: false
+  image:
+    repository: ghcr.io/barayo/testpulse-jira-connector
+    tag: ""            # defaults to the chart appVersion
+    pullPolicy: IfNotPresent
+  syncInterval: 5m
+  jiraBaseUrl: ""      # e.g. https://mycompany.atlassian.net — keep this in
+                       # sync with the same-named Instance Settings field,
+                       # which is separate (the connector's own API calls
+                       # vs. the UI's browsable links).
+  jiraEmail: ""
+  # For evaluation only — prefer existingSecret for a real deployment, since
+  # this file may be checked into version control.
+  jiraApiToken: ""
+  agentToken: ""       # a scoped TestPulse agent token, created via the app
+  # Name of an existing Secret with "jiraApiToken"/"agentToken" keys; takes
+  # precedence over the inline values above.
+  existingSecret: ""
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 64Mi

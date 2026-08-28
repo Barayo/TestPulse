@@ -285,3 +285,35 @@ func TestInstanceSettingsUpdateAppliesAutoArchiveInactiveDaysIndependently(t *te
 		t.Errorf("PublicProjectsEnabled = %v, want unchanged true (not touched by this update)", got.PublicProjectsEnabled)
 	}
 }
+
+func TestInstanceSettingsGetReturnsJiraSiteURLDefaultingToEmpty(t *testing.T) {
+	// add-jira-connector: empty means not configured — a linked issue key
+	// still shows, just without a working browsable link.
+	s := testStore(t)
+	ctx := context.Background()
+
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.JiraSiteURL != "" {
+		t.Errorf("JiraSiteURL = %q, want empty (seeded default)", got.JiraSiteURL)
+	}
+}
+
+func TestInstanceSettingsUpdateRoundTripsJiraSiteURL(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	url := "https://mycompany.atlassian.net"
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{JiraSiteURL: &url}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.JiraSiteURL != url {
+		t.Errorf("JiraSiteURL = %q, want %q", got.JiraSiteURL, url)
+	}
+}

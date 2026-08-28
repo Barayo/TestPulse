@@ -251,6 +251,34 @@ describe('useAuth', () => {
     expect(result.current.colorTheme).toBe('ocean')
   })
 
+  it('resolves jiraSiteUrl from /api/v1/meta, defaulting to empty (add-jira-connector)', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false, colorTheme: 'teal' }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequiredLoading).toBe(false))
+    expect(result.current.jiraSiteUrl).toBe('')
+  })
+
+  it('resolves a configured jiraSiteUrl from /api/v1/meta (add-jira-connector)', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({
+          data: { setupRequired: false, colorTheme: 'teal', jiraSiteUrl: 'https://mycompany.atlassian.net' },
+          response: { ok: true },
+        })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.jiraSiteUrl).toBe('https://mycompany.atlassian.net'))
+  })
+
   it('throws when used outside an AuthProvider', () => {
     function Bad() {
       useAuth()

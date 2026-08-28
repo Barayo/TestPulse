@@ -203,6 +203,14 @@ paths:
       operationId: listCases
       summary: List test cases in a project
       tags: [cases]
+      parameters:
+        - name: jiraLinked
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: >-
+            When true, return only cases with a non-null jiraIssueKey
+            (add-jira-connector) — a DB-level filter, not client-side.
       responses:
         "200":
           description: Cases with their current version content
@@ -343,6 +351,60 @@ paths:
         "204": { description: Moved }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/cases/{caseKey}/jira-link:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setCaseJiraLink
+      summary: >-
+        Set or clear a case's Jira issue key (add-jira-connector) —
+        independent of versioned content, never creates a new version.
+        Clearing also clears the cached jiraIssueSummary/jiraIssueStatus.
+      tags: [cases, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueKey]
+              properties:
+                jiraIssueKey: { type: string, nullable: true }
+      responses:
+        "200":
+          description: The case with its updated Jira link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/cases/{caseKey}/jira-sync:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setCaseJiraSync
+      summary: >-
+        Write the Jira connector's cached issue summary/status for a case
+        (add-jira-connector) — requires an existing jiraIssueKey (409
+        otherwise); jiraLastSyncedAt is set server-side.
+      tags: [cases, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueSummary, jiraIssueStatus]
+              properties:
+                jiraIssueSummary: { type: string }
+                jiraIssueStatus: { type: string }
+      responses:
+        "200":
+          description: The case with its updated cached Jira fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/cases/{caseKey}:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
@@ -751,6 +813,13 @@ paths:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
       - { name: assignee, in: query, required: false, schema: { type: string } }
+      - name: jiraLinked
+        in: query
+        required: false
+        schema: { type: boolean }
+        description: >-
+          When true, return only items with a non-null jiraIssueKey
+          (add-jira-connector) — a DB-level filter, not client-side.
     get:
       operationId: listRunItems
       summary: List run items with pinned content, optionally by assignee
@@ -935,6 +1004,59 @@ paths:
       responses:
         "204": { description: Updated }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/jira-link:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setRunItemJiraLink
+      summary: >-
+        Set or clear a run item's Jira issue key (add-jira-connector) —
+        rejected once the parent run is closed, like other item mutations.
+      tags: [runs, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueKey]
+              properties:
+                jiraIssueKey: { type: string, nullable: true }
+      responses:
+        "200":
+          description: The run item with its updated Jira link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/jira-sync:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setRunItemJiraSync
+      summary: >-
+        Write the Jira connector's cached issue summary/status for a run
+        item (add-jira-connector) — requires an existing jiraIssueKey.
+      tags: [runs, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueSummary, jiraIssueStatus]
+              properties:
+                jiraIssueSummary: { type: string }
+                jiraIssueStatus: { type: string }
+      responses:
+        "200":
+          description: The run item with its updated cached Jira fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunItem" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/runs/{runKey}/summary:
@@ -2289,6 +2411,26 @@ components:
           type: string
           format: date-time
           description: The current version's own createdAt — when the case was last edited, not when it was originally created. Equal to createdAt for a never-edited case.
+        jiraIssueKey:
+          type: string
+          nullable: true
+          description: >-
+            Linked Jira issue key (add-jira-connector), e.g. "PROJ-123".
+            Identity-level metadata, independent of versioned content — set
+            via PUT .../jira-link, never the content-edit endpoint.
+        jiraIssueSummary:
+          type: string
+          nullable: true
+          description: Cached Jira issue summary, written only by the Jira connector via PUT .../jira-sync.
+        jiraIssueStatus:
+          type: string
+          nullable: true
+          description: Cached Jira issue status (a plain string — Jira workflows are customizable), written only by the connector.
+        jiraLastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
     CaseVersion:
       type: object
       required: [caseId, version, content, actorKind, createdAt]
@@ -2420,6 +2562,25 @@ components:
             item, independent of the pinned case's own title. Absent for
             items added manually.
         createdAt: { type: string, format: date-time }
+        jiraIssueKey:
+          type: string
+          nullable: true
+          description: >-
+            Linked Jira issue key (add-jira-connector), independent of the
+            pinned case version — set via PUT .../jira-link.
+        jiraIssueSummary:
+          type: string
+          nullable: true
+          description: Cached Jira issue summary, written only by the Jira connector via PUT .../jira-sync.
+        jiraIssueStatus:
+          type: string
+          nullable: true
+          description: Cached Jira issue status (a plain string — Jira workflows are customizable), written only by the connector.
+        jiraLastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
     AddItemInput:
       type: object
       required: [caseKey]
@@ -2902,6 +3063,13 @@ components:
           description: >
             Password-based login and password recovery are disabled
             instance-wide. Only takes effect while OIDC is configured.
+        jiraSiteUrl:
+          type: string
+          description: >-
+            Jira Cloud site base URL (add-jira-connector), e.g.
+            "https://mycompany.atlassian.net" — used only to build
+            browsable issue links in the UI. Empty when not configured; a
+            linked issue key still shows then, just without a working link.
     InstanceSettingsUpdate:
       type: object
       description: A partial update — every field is optional; omitted fields are left unchanged.
@@ -2931,6 +3099,9 @@ components:
           description: >
             Clears every OIDC/SSO field at once (add-sso-oidc) — a
             dedicated action rather than blanking oidcIssuer as a sentinel.
+        jiraSiteUrl:
+          type: string
+          description: Jira Cloud site base URL (add-jira-connector).
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]

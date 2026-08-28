@@ -22,6 +22,7 @@ import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { useProjectPermissions } from '@/lib/useProjectPermissions'
 import { useAuth } from '@/lib/useAuth'
+import { JiraLinkBadge } from '@/components/JiraLinkBadge'
 import {
   Card,
   CardContent,
@@ -64,6 +65,8 @@ function RunItemRow({
   onRetest,
   bulkVerdictItems,
   canRecord,
+  jiraSiteUrl,
+  onSaveJiraLink,
 }: {
   item: RunItem
   projectKey?: string
@@ -82,6 +85,8 @@ function RunItemRow({
   // execution"/"Go to case" are pure navigation, never gated
   // (unify-authenticated-and-public-views tasks.md 2.5).
   canRecord: boolean
+  jiraSiteUrl: string
+  onSaveJiraLink: (itemId: string, jiraIssueKey: string | null) => void | Promise<void>
 }) {
   const menuRef = useRef<RowActionMenuHandle>(null)
   const shiftHeldRef = useRef(false)
@@ -213,6 +218,15 @@ function RunItemRow({
             <StatusBadge status={item.currentStatus} />
           </span>
         </button>
+        <JiraLinkBadge
+          variant="row"
+          jiraIssueKey={item.jiraIssueKey}
+          jiraIssueStatus={item.jiraIssueStatus}
+          jiraLastSyncedAt={item.jiraLastSyncedAt}
+          jiraBaseUrl={jiraSiteUrl}
+          canEdit={canRecord}
+          onSave={(key) => onSaveJiraLink(item.id, key)}
+        />
         {projectKey && <RowActionMenu ref={menuRef} label={`Actions for ${item.content.title}`} items={menuItems} />}
       </div>
     </li>
@@ -223,7 +237,7 @@ export default function RunPage() {
   const { runKey } = useParams<{ runKey: string }>()
   const navigate = useNavigate()
   const location = useLocation()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, jiraSiteUrl } = useAuth()
   const [run, setRun] = useState<Run>()
   const [notFound, setNotFound] = useState(false)
   // Resolved by load()'s own run fetch (design.md D11) — a signed-in
@@ -461,6 +475,14 @@ export default function RunPage() {
   async function handleItemVerdict(itemId: string, verdict: Verdict) {
     const { failedCount } = await recordBulkVerdict([itemId], verdict)
     if (failedCount > 0) showRecordFailureWarning(failedCount)
+    await load()
+  }
+
+  async function handleSaveJiraLink(itemId: string, jiraIssueKey: string | null) {
+    await api.PUT('/api/v1/items/{itemId}/jira-link', {
+      params: { path: { itemId } },
+      body: { jiraIssueKey },
+    })
     await load()
   }
 
@@ -777,6 +799,8 @@ export default function RunPage() {
                           onRetest={() => void handleRetest(item.id)}
                           bulkVerdictItems={verdictMenuItems}
                           canRecord={canRecord}
+                          jiraSiteUrl={jiraSiteUrl}
+                          onSaveJiraLink={handleSaveJiraLink}
                         />
                       ))}
                     </ul>
@@ -803,6 +827,8 @@ export default function RunPage() {
                   onRetest={() => void handleRetest(item.id)}
                   bulkVerdictItems={verdictMenuItems}
                   canRecord={canRecord}
+                  jiraSiteUrl={jiraSiteUrl}
+                  onSaveJiraLink={handleSaveJiraLink}
                 />
               ))}
             </ul>

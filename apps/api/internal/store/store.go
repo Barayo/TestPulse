@@ -60,6 +60,11 @@ func New(pool *pgxpool.Pool) *Store {
 // ErrNotFound is returned when a referenced entity does not exist.
 var ErrNotFound = fmt.Errorf("not found")
 
+// ErrJiraLinkNotSet is returned by SetJiraSync when the target case/run item
+// has no jiraIssueKey set — there is no link for the cached data to describe
+// (add-jira-connector).
+var ErrJiraLinkNotSet = fmt.Errorf("jira issue key is not set")
+
 // contentColumns is the shared SELECT list for test_case_versions content.
 const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields"
 

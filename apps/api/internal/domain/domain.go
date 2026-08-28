@@ -320,7 +320,15 @@ type InstanceSettings struct {
 	OIDCGroupClaim       string    `json:"oidcGroupClaim"`
 	OIDCAdminClaimValues []string  `json:"oidcAdminClaimValues"`
 	OIDCOnly             bool      `json:"oidcOnly"`
-	UpdatedAt            time.Time `json:"updatedAt"`
+	// JiraSiteURL (add-jira-connector) is the Jira Cloud site base URL
+	// (e.g. "https://mycompany.atlassian.net"), used only to build
+	// browsable issue links in the UI — separate from the connector's own
+	// TESTPULSE_JIRA_* env config, which it needs independently since it
+	// runs as its own process with no access to instance settings. Empty
+	// until a Tenant Admin configures it; a linked issue key still shows
+	// then, just without a working link.
+	JiraSiteURL string    `json:"jiraSiteUrl"`
+	UpdatedAt   time.Time `json:"updatedAt"`
 }
 
 // InstanceSettingsUpdate is a partial update to InstanceSettings — nil
@@ -345,6 +353,7 @@ type InstanceSettingsUpdate struct {
 	OIDCAdminClaimValues *[]string
 	OIDCOnly             *bool
 	DisableOIDC          *bool
+	JiraSiteURL          *string
 }
 
 // OIDCTeamMapping maps a single OIDC group-claim value to a Team
@@ -395,6 +404,18 @@ type TestCase struct {
 	// last edited, not when it was originally created (rework-library-ux,
 	// staleness signal). Equal to CreatedAt for a never-edited case.
 	UpdatedAt time.Time `json:"updatedAt"`
+	// JiraIssueKey and the cached fields below are identity-level metadata,
+	// not versioned content (add-jira-connector) — set/cleared via the
+	// dedicated jira-link endpoint, never the content-edit endpoint.
+	// JiraIssueSummary/JiraIssueStatus/JiraLastSyncedAt are written only by
+	// the external Jira connector via the jira-sync endpoint. There's no
+	// cached issue URL here — the UI builds a browsable link from the
+	// Tenant-Admin-configured InstanceSettings.JiraSiteURL + this key, so a
+	// link works immediately, before any connector sync ever runs.
+	JiraIssueKey     *string    `json:"jiraIssueKey,omitempty"`
+	JiraIssueSummary *string    `json:"jiraIssueSummary,omitempty"`
+	JiraIssueStatus  *string    `json:"jiraIssueStatus,omitempty"`
+	JiraLastSyncedAt *time.Time `json:"jiraLastSyncedAt,omitempty"`
 }
 
 // Folder is a node in a project's case-organization tree (D8). Root
@@ -509,6 +530,14 @@ type RunItem struct {
 	// Empty for items added manually.
 	TestName  string    `json:"testName,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
+	// JiraIssueKey and the cached fields below mirror TestCase's
+	// (add-jira-connector) — identity-level metadata independent of the
+	// pinned case version, set/cleared via the dedicated jira-link
+	// endpoint, cached fields written only by the connector via jira-sync.
+	JiraIssueKey     *string    `json:"jiraIssueKey,omitempty"`
+	JiraIssueSummary *string    `json:"jiraIssueSummary,omitempty"`
+	JiraIssueStatus  *string    `json:"jiraIssueStatus,omitempty"`
+	JiraLastSyncedAt *time.Time `json:"jiraLastSyncedAt,omitempty"`
 }
 
 // CaseExecution is one run item's outcome, viewed from the case's side

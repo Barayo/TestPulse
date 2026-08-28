@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { DatabaseIcon, GlobeIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
+import { DatabaseIcon, GlobeIcon, LinkIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { AdminShell } from '@/components/AdminShell'
@@ -9,6 +9,8 @@ import { PaletteSwatch, PRESETS } from '@/components/PaletteSwatchSelector'
 import { CustomPaletteEditor } from '@/components/CustomPaletteEditor'
 import { PRESET_PALETTES } from '@/lib/presetPalettes'
 import { Switch } from '@/components/ui/switch'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
 import { SSOSettingsCard } from '@/components/SSOSettingsCard'
 import type { CustomPalette } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
@@ -30,6 +32,8 @@ export default function InstanceSettingsPage() {
   const [showCustomEditor, setShowCustomEditor] = useState(false)
   const [savingCustomPalette, setSavingCustomPalette] = useState(false)
   const [ssoSettings, setSsoSettings] = useState<InstanceSettings>()
+  const [jiraSiteUrl, setJiraSiteUrl] = useState('')
+  const [savingJiraSiteUrl, setSavingJiraSiteUrl] = useState(false)
 
   useEffect(() => {
     if (!me?.isTenantAdmin) return
@@ -42,6 +46,7 @@ export default function InstanceSettingsPage() {
       setCustomPalette(data.customPalette ?? undefined)
       if (data.colorTheme === 'custom') setShowCustomEditor(true)
       setSsoSettings(data)
+      setJiraSiteUrl(data.jiraSiteUrl ?? '')
     })
   }, [me])
 
@@ -80,6 +85,13 @@ export default function InstanceSettingsPage() {
       setShowCustomEditor(false)
       await refreshColorTheme()
     }
+  }
+
+  async function saveJiraSiteUrl() {
+    setSavingJiraSiteUrl(true)
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { jiraSiteUrl } })
+    setSavingJiraSiteUrl(false)
+    if (data) setJiraSiteUrl(data.jiraSiteUrl ?? '')
   }
 
   async function saveCustomPalette(palette: CustomPalette) {
@@ -254,6 +266,41 @@ export default function InstanceSettingsPage() {
           Authentication
         </div>
         {ssoSettings && <SSOSettingsCard settings={ssoSettings} onSettingsChange={setSsoSettings} />}
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <LinkIcon className="size-3.5" aria-hidden="true" />
+          Integrations
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Jira</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Used to build a working link out to a linked Jira issue from a test case or run item — separate from
+              the Jira connector&apos;s own credentials, which it configures independently. Leave empty to hide
+              working links (a linked issue key still shows, just without a clickable link).
+            </p>
+            <div className="flex items-end gap-2">
+              <div className="flex-1 space-y-1">
+                <label htmlFor="jira-site-url" className="text-sm font-medium">
+                  Jira site URL
+                </label>
+                <Input
+                  id="jira-site-url"
+                  value={jiraSiteUrl}
+                  onChange={(e) => setJiraSiteUrl(e.target.value)}
+                  placeholder="https://mycompany.atlassian.net"
+                />
+              </div>
+              <Button onClick={() => void saveJiraSiteUrl()} disabled={savingJiraSiteUrl}>
+                {savingJiraSiteUrl ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </section>
     </AdminShell>
   )

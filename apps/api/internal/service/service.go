@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/attachmentimage"
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -438,12 +439,51 @@ func (s *Service) RestoreVersion(ctx context.Context, caseID string, version int
 	return c, nil
 }
 
+// jiraSyncWithoutLinkAsConflict translates the store's "no link set"
+// sentinel into the service's 409 ConflictError (add-jira-connector),
+// mirroring runClosedAsConflict.
+func jiraSyncWithoutLinkAsConflict(err error) error {
+	if errors.Is(err, store.ErrJiraLinkNotSet) {
+		return conflict("jira issue key is not set")
+	}
+	return err
+}
+
+// SetCaseJiraLink sets or clears (jiraIssueKey == nil) a case's Jira issue
+// key, independent of its versioned content — never creates a new version.
+func (s *Service) SetCaseJiraLink(ctx context.Context, caseID string, jiraIssueKey *string) (domain.TestCase, error) {
+	c, err := s.store.Cases.SetJiraLink(ctx, caseID, jiraIssueKey)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	s.audit(ctx, "jira_link", "case", caseID)
+	return c, nil
+}
+
+// SetCaseJiraSync writes the Jira connector's cached issue summary/status
+// for a case (add-jira-connector) — the connector's own write path, not
+// reachable through the content-edit endpoint.
+func (s *Service) SetCaseJiraSync(ctx context.Context, caseID, summary, status string) (domain.TestCase, error) {
+	c, err := s.store.Cases.SetJiraSync(ctx, caseID, summary, status, time.Now())
+	if err != nil {
+		return domain.TestCase{}, jiraSyncWithoutLinkAsConflict(err)
+	}
+	return c, nil
+}
+
 func (s *Service) GetCase(ctx context.Context, caseID string) (domain.TestCase, error) {
 	return s.store.Cases.Get(ctx, caseID)
 }
 
 func (s *Service) ListCases(ctx context.Context, projectID string) ([]domain.TestCase, error) {
 	return s.store.Cases.List(ctx, projectID)
+}
+
+// ListJiraLinkedCases returns a project's cases with a non-null
+// jiraIssueKey (add-jira-connector) — the "jiraLinked=true" filter on the
+// case-list endpoint, resolved as a DB-level query, not a client-side scan.
+func (s *Service) ListJiraLinkedCases(ctx context.Context, projectID string) ([]domain.TestCase, error) {
+	return s.store.Cases.ListJiraLinked(ctx, projectID)
 }
 
 func (s *Service) CaseVersions(ctx context.Context, caseID string) ([]domain.CaseVersion, error) {
@@ -727,6 +767,13 @@ func (s *Service) RunItems(ctx context.Context, runID, assignee string) ([]domai
 	return s.store.Runs.Items(ctx, runID, assignee)
 }
 
+// RunItemsJiraLinked returns a run's items with a non-null jiraIssueKey
+// (add-jira-connector) — the "jiraLinked=true" filter on the run-items
+// endpoint.
+func (s *Service) RunItemsJiraLinked(ctx context.Context, runID string) ([]domain.RunItem, error) {
+	return s.store.Runs.ItemsJiraLinked(ctx, runID)
+}
+
 // RecordResult resolves the result's actor from the authenticated caller
 // when the client omits one, and always records the real actor's kind/ref
 // alongside whatever display name ends up on the result — even when the
@@ -826,6 +873,28 @@ func (s *Service) UpdateItem(ctx context.Context, itemID string, upd ItemUpdate)
 	}
 	s.audit(ctx, "update", "run_item", itemID)
 	return nil
+}
+
+// SetRunItemJiraLink sets or clears a run item's Jira issue key
+// (add-jira-connector). Rejected as a 409 once the parent run is closed,
+// consistent with every other mutating run-item operation.
+func (s *Service) SetRunItemJiraLink(ctx context.Context, itemID string, jiraIssueKey *string) (domain.RunItem, error) {
+	it, err := s.store.Runs.SetItemJiraLink(ctx, itemID, jiraIssueKey)
+	if err != nil {
+		return domain.RunItem{}, runClosedAsConflict(err)
+	}
+	s.audit(ctx, "jira_link", "run_item", itemID)
+	return it, nil
+}
+
+// SetRunItemJiraSync writes the Jira connector's cached issue summary/status
+// for a run item (add-jira-connector).
+func (s *Service) SetRunItemJiraSync(ctx context.Context, itemID, summary, status string) (domain.RunItem, error) {
+	it, err := s.store.Runs.SetItemJiraSync(ctx, itemID, summary, status, time.Now())
+	if err != nil {
+		return domain.RunItem{}, jiraSyncWithoutLinkAsConflict(err)
+	}
+	return it, nil
 }
 
 func isProjectMemberUser(m domain.ProjectMembership, userID string) bool {

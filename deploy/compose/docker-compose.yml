@@ -70,5 +70,33 @@ services:
       - "8025:8025" # web UI + REST API (E2E reads sent emails from here)
       - "1025:1025" # SMTP
 
+  # Optional Jira connector (add-jira-connector) — a separate deployable,
+  # never part of the `app` image, per establish-architecture's standing
+  # decision that connectors are external clients, not in-process plugins.
+  # Off by default: only starts with `docker compose --profile jira-connector up`,
+  # since most evaluators of this stack have no Jira site to connect to.
+  # Needs a scoped TestPulse agent token (create one via the app once it's
+  # up) and Jira Cloud API credentials — see docs/integrations.md.
+  jira-connector:
+    profiles: ["jira-connector"]
+    build:
+      context: ../../tools/jira-connector
+    image: testpulse-jira-connector:dev
+    environment:
+      # Left as plain ${VAR} substitutions (not the ${VAR:?message} required
+      # form): compose validates every service's interpolation at parse
+      # time regardless of active profiles, so a required-var form here
+      # would break plain `docker compose up` for everyone, not just Jira
+      # users. An unset value comes through empty and the connector's own
+      # config.Load fails fast, naming the specific missing variable.
+      TESTPULSE_URL: http://app:8080
+      TESTPULSE_JIRA_AGENT_TOKEN: ${TESTPULSE_JIRA_AGENT_TOKEN:-}
+      TESTPULSE_JIRA_BASE_URL: ${TESTPULSE_JIRA_BASE_URL:-}
+      TESTPULSE_JIRA_EMAIL: ${TESTPULSE_JIRA_EMAIL:-}
+      TESTPULSE_JIRA_API_TOKEN: ${TESTPULSE_JIRA_API_TOKEN:-}
+    depends_on:
+      app:
+        condition: service_started
+
 volumes:
   testpulse-db:

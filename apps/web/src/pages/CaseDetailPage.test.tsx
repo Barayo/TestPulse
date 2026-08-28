@@ -77,9 +77,17 @@ function mockDetailAPI(options?: {
   // separately overridden and the public-branch paths below never include
   // /api/v1/users.
   anonymous?: boolean
+  // add-jira-connector: resolved via GET /api/v1/meta, consumed through
+  // useAuth's context (not a per-page fetch).
+  jiraSiteUrl?: string
+  // add-jira-connector: overrides the case's own jira* fields, independent
+  // of v1Content/versions.
+  caseJiraFields?: { jiraIssueKey?: string | null; jiraIssueStatus?: string | null; jiraLastSyncedAt?: string | null }
 }) {
   const anon = options?.anonymous ?? false
   mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
+    if (path === '/api/v1/meta')
+      return Promise.resolve({ data: { jiraSiteUrl: options?.jiraSiteUrl ?? '' }, response: { ok: true } })
     if (path === '/api/v1/users/me')
       return anon
         ? Promise.resolve({ data: undefined, response: { ok: false } })
@@ -99,9 +107,13 @@ function mockDetailAPI(options?: {
       return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
     if (path === casePath && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
-        data: options?.currentCustomFieldValues
-          ? { ...limitCase, content: { ...limitCase.content, customFields: options.currentCustomFieldValues } }
-          : limitCase,
+        data: {
+          ...limitCase,
+          ...(options?.currentCustomFieldValues
+            ? { content: { ...limitCase.content, customFields: options.currentCustomFieldValues } }
+            : {}),
+          ...(options?.caseJiraFields ?? {}),
+        },
         response: { ok: true },
       })
     if (path === versionsPath && opts?.params?.path?.caseKey === 'c1')
@@ -769,6 +781,69 @@ describe('CaseDetailPage', () => {
 
     const history = await screen.findByRole('list', { name: /version history/i })
     expect(await within(history).findByText('v3')).toBeInTheDocument()
+  })
+
+  describe('Jira link (add-jira-connector)', () => {
+    it('shows a working link built from jiraSiteUrl + the linked issue key', async () => {
+      mockDetailAPI({
+        jiraSiteUrl: 'https://mycompany.atlassian.net',
+        caseJiraFields: { jiraIssueKey: 'PROJ-123', jiraIssueStatus: 'In Progress', jiraLastSyncedAt: new Date().toISOString() },
+      })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      const link = await screen.findByRole('link', { name: /proj-123/i })
+      expect(link).toHaveAttribute('href', 'https://mycompany.atlassian.net/browse/PROJ-123')
+    })
+
+    it('shows a "Link Jira issue" affordance when unlinked and the caller has caseEdit', async () => {
+      mockDetailAPI({ caseJiraFields: { jiraIssueKey: null } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      expect(screen.getByRole('button', { name: /link jira issue/i })).toBeInTheDocument()
+    })
+
+    it('setting a Jira issue key calls PUT .../jira-link and does not bump the case version', async () => {
+      mockDetailAPI({ caseJiraFields: { jiraIssueKey: null } })
+      mockPUT.mockResolvedValue({ data: { ...limitCase, jiraIssueKey: 'PROJ-999' }, response: { ok: true } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+      await userEvent.click(screen.getByRole('button', { name: /link jira issue/i }))
+      await userEvent.type(screen.getByRole('textbox', { name: /jira issue key/i }), 'proj-999')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+      await waitFor(() =>
+        expect(mockPUT).toHaveBeenCalledWith('/api/v1/cases/{caseKey}/jira-link', {
+          params: { path: { caseKey: 'c1' } },
+          body: { jiraIssueKey: 'PROJ-999' },
+        }),
+      )
+    })
+
+    it('clearing a Jira issue key calls PUT .../jira-link with a null key', async () => {
+      mockDetailAPI({ caseJiraFields: { jiraIssueKey: 'PROJ-123' } })
+      mockPUT.mockResolvedValue({ data: { ...limitCase, jiraIssueKey: null }, response: { ok: true } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+      await userEvent.click(await screen.findByRole('button', { name: /change jira link/i }))
+      await userEvent.clear(screen.getByRole('textbox', { name: /jira issue key/i }))
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+      await waitFor(() =>
+        expect(mockPUT).toHaveBeenCalledWith('/api/v1/cases/{caseKey}/jira-link', {
+          params: { path: { caseKey: 'c1' } },
+          body: { jiraIssueKey: null },
+        }),
+      )
+    })
+
+    it('does not show the Jira edit affordance when the caller lacks caseEdit', async () => {
+      mockDetailAPI({ caseJiraFields: { jiraIssueKey: null }, permissions: { ...fullPermissions, caseEdit: false } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      expect(screen.queryByRole('button', { name: /link jira issue/i })).not.toBeInTheDocument()
+    })
   })
 
   // Permission-gating retrofit (backlog #110, unify-authenticated-and-public-views

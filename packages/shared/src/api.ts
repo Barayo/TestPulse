@@ -259,6 +259,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{caseKey}/jira-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or clear a case's Jira issue key (add-jira-connector) — independent of versioned content, never creates a new version. Clearing also clears the cached jiraIssueSummary/jiraIssueStatus. */
+        put: operations["setCaseJiraLink"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cases/{caseKey}/jira-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Write the Jira connector's cached issue summary/status for a case (add-jira-connector) — requires an existing jiraIssueKey (409 otherwise); jiraLastSyncedAt is set server-side. */
+        put: operations["setCaseJiraSync"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cases/{caseKey}": {
         parameters: {
             query?: never;
@@ -659,6 +697,8 @@ export interface paths {
         parameters: {
             query?: {
                 assignee?: string;
+                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                jiraLinked?: boolean;
             };
             header?: never;
             path: {
@@ -769,6 +809,44 @@ export interface paths {
         get?: never;
         /** Set item status (e.g. retest) or assignee */
         put: operations["updateItemStatus"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/jira-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Set or clear a run item's Jira issue key (add-jira-connector) — rejected once the parent run is closed, like other item mutations. */
+        put: operations["setRunItemJiraLink"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/items/{itemId}/jira-sync": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Write the Jira connector's cached issue summary/status for a run item (add-jira-connector) — requires an existing jiraIssueKey. */
+        put: operations["setRunItemJiraSync"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1987,6 +2065,17 @@ export interface components {
              * @description The current version's own createdAt — when the case was last edited, not when it was originally created. Equal to createdAt for a never-edited case.
              */
             updatedAt: string;
+            /** @description Linked Jira issue key (add-jira-connector), e.g. "PROJ-123". Identity-level metadata, independent of versioned content — set via PUT .../jira-link, never the content-edit endpoint. */
+            jiraIssueKey?: string | null;
+            /** @description Cached Jira issue summary, written only by the Jira connector via PUT .../jira-sync. */
+            jiraIssueSummary?: string | null;
+            /** @description Cached Jira issue status (a plain string — Jira workflows are customizable), written only by the connector. */
+            jiraIssueStatus?: string | null;
+            /**
+             * Format: date-time
+             * @description When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
+             */
+            jiraLastSyncedAt?: string | null;
         };
         CaseVersion: {
             caseId: string;
@@ -2079,6 +2168,17 @@ export interface components {
             testName?: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description Linked Jira issue key (add-jira-connector), independent of the pinned case version — set via PUT .../jira-link. */
+            jiraIssueKey?: string | null;
+            /** @description Cached Jira issue summary, written only by the Jira connector via PUT .../jira-sync. */
+            jiraIssueSummary?: string | null;
+            /** @description Cached Jira issue status (a plain string — Jira workflows are customizable), written only by the connector. */
+            jiraIssueStatus?: string | null;
+            /**
+             * Format: date-time
+             * @description When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
+             */
+            jiraLastSyncedAt?: string | null;
         };
         AddItemInput: {
             caseKey: string;
@@ -2370,6 +2470,8 @@ export interface components {
             oidcAdminClaimValues?: string[];
             /** @description Password-based login and password recovery are disabled instance-wide. Only takes effect while OIDC is configured. */
             oidcOnly: boolean;
+            /** @description Jira Cloud site base URL (add-jira-connector), e.g. "https://mycompany.atlassian.net" — used only to build browsable issue links in the UI. Empty when not configured; a linked issue key still shows then, just without a working link. */
+            jiraSiteUrl?: string;
         };
         /** @description A partial update — every field is optional; omitted fields are left unchanged. */
         InstanceSettingsUpdate: {
@@ -2387,6 +2489,8 @@ export interface components {
             oidcOnly?: boolean;
             /** @description Clears every OIDC/SSO field at once (add-sso-oidc) — a dedicated action rather than blanking oidcIssuer as a sentinel. */
             disableSso?: boolean;
+            /** @description Jira Cloud site base URL (add-jira-connector). */
+            jiraSiteUrl?: string;
         };
         User: {
             id: string;
@@ -2966,7 +3070,10 @@ export interface operations {
     };
     listCases: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description When true, return only cases with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                jiraLinked?: boolean;
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -3170,6 +3277,66 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    setCaseJiraLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    jiraIssueKey: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The case with its updated Jira link */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    setCaseJiraSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    jiraIssueSummary: string;
+                    jiraIssueStatus: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The case with its updated cached Jira fields */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestCase"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getCase: {
@@ -3851,6 +4018,8 @@ export interface operations {
         parameters: {
             query?: {
                 assignee?: string;
+                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                jiraLinked?: boolean;
             };
             header?: never;
             path: {
@@ -3875,6 +4044,8 @@ export interface operations {
         parameters: {
             query?: {
                 assignee?: string;
+                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                jiraLinked?: boolean;
             };
             header?: never;
             path: {
@@ -4139,6 +4310,67 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    setRunItemJiraLink: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    jiraIssueKey: string | null;
+                };
+            };
+        };
+        responses: {
+            /** @description The run item with its updated Jira link */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunItem"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    setRunItemJiraSync: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    jiraIssueSummary: string;
+                    jiraIssueStatus: string;
+                };
+            };
+        };
+        responses: {
+            /** @description The run item with its updated cached Jira fields */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunItem"];
+                };
+            };
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };

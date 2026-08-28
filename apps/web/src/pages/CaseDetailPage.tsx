@@ -16,6 +16,7 @@ import { toResultsData, RECENT_EXECUTIONS_LIMIT } from '@/lib/caseResultsData'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { ClassificationEditor, type Priority, type CustomField } from '@/components/ClassificationEditor'
 import { ClassificationPills, AutomationPill } from '@/components/Pills'
+import { JiraLinkBadge } from '@/components/JiraLinkBadge'
 import { FolderPicker } from '@/components/FolderPicker'
 import { RowActionMenu, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { StepEditor, type Step } from '@/components/StepEditor'
@@ -51,7 +52,7 @@ export default function CaseDetailPage() {
   const { projectKey, caseKey } = useParams<{ projectKey: string; caseKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, jiraSiteUrl } = useAuth()
   const access = useProjectReadAccess(projectKey, user, authLoading)
 
   const [project, setProject] = useState<Project>()
@@ -220,6 +221,15 @@ export default function CaseDetailPage() {
       body: { folderId: targetFolderId },
     })
     setMoving(false)
+    await load()
+  }
+
+  async function saveJiraLink(jiraIssueKey: string | null) {
+    if (!caseKey) return
+    await api.PUT('/api/v1/cases/{caseKey}/jira-link', {
+      params: { path: { caseKey } },
+      body: { jiraIssueKey },
+    })
     await load()
   }
 
@@ -412,6 +422,21 @@ export default function CaseDetailPage() {
                         {name}
                       </span>
                     ))
+                  }
+                  wrap
+                />
+                <PropertyRow
+                  label="Jira"
+                  value={
+                    <JiraLinkBadge
+                      variant="property"
+                      jiraIssueKey={testCase.jiraIssueKey}
+                      jiraIssueStatus={testCase.jiraIssueStatus}
+                      jiraLastSyncedAt={testCase.jiraLastSyncedAt}
+                      jiraBaseUrl={jiraSiteUrl}
+                      canEdit={canEdit}
+                      onSave={saveJiraLink}
+                    />
                   }
                   wrap
                 />

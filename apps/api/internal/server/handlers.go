@@ -66,6 +66,8 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Post("/versions/{version}/restore", h.restoreCaseVersion)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/executions", h.listCaseExecutions)
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
+		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/jira-link", h.setCaseJiraLink)
+		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/jira-sync", h.setCaseJiraSync)
 	})
 	r.With(h.requirePermission(domain.PermSectionEdit, projectIDFromFolder)).Put("/folders/{folderID}", h.moveFolder)
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
@@ -102,6 +104,8 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Put("/status", h.updateItem)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/attachments", h.listStagedAttachments)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Post("/attachments", h.stageAttachment)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Put("/jira-link", h.setItemJiraLink)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Put("/jira-sync", h.setItemJiraSync)
 	})
 	r.Route("/results/{resultID}", func(r chi.Router) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromResult)).Get("/attachments", h.listResultAttachments)
@@ -298,7 +302,15 @@ func (h *api) removeProjectTeamRole(w http.ResponseWriter, r *http.Request) {
 // --- Cases ---
 
 func (h *api) listCases(w http.ResponseWriter, r *http.Request) {
-	cases, err := h.svc.ListCases(r.Context(), resolvedID(r, "projectKey"))
+	var (
+		cases []domain.TestCase
+		err   error
+	)
+	if r.URL.Query().Get("jiraLinked") == "true" {
+		cases, err = h.svc.ListJiraLinkedCases(r.Context(), resolvedID(r, "projectKey"))
+	} else {
+		cases, err = h.svc.ListCases(r.Context(), resolvedID(r, "projectKey"))
+	}
 	h.respond(w, http.StatusOK, cases, err)
 }
 
@@ -402,6 +414,37 @@ func (h *api) moveCase(w http.ResponseWriter, r *http.Request) {
 	}
 	err = h.svc.MoveCase(r.Context(), resolvedID(r, "caseKey"), body.FolderID)
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+// setCaseJiraLink sets or clears a case's Jira issue key (add-jira-connector)
+// — a dedicated endpoint, never the content-edit endpoint, since it's
+// identity-level metadata independent of the case's versioned content.
+func (h *api) setCaseJiraLink(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		JiraIssueKey *string `json:"jiraIssueKey"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	c, err := h.svc.SetCaseJiraLink(r.Context(), resolvedID(r, "caseKey"), body.JiraIssueKey)
+	h.respond(w, http.StatusOK, c, err)
+}
+
+// setCaseJiraSync writes the Jira connector's cached issue summary/status
+// for a case (add-jira-connector). Not reachable without an existing
+// jiraIssueKey — the service returns a 409 otherwise.
+func (h *api) setCaseJiraSync(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		JiraIssueSummary string `json:"jiraIssueSummary"`
+		JiraIssueStatus  string `json:"jiraIssueStatus"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	c, err := h.svc.SetCaseJiraSync(r.Context(), resolvedID(r, "caseKey"), body.JiraIssueSummary, body.JiraIssueStatus)
+	h.respond(w, http.StatusOK, c, err)
 }
 
 func (h *api) moveFolder(w http.ResponseWriter, r *http.Request) {
@@ -586,7 +629,15 @@ func (h *api) deleteRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *api) listRunItems(w http.ResponseWriter, r *http.Request) {
-	items, err := h.svc.RunItems(r.Context(), resolvedID(r, "runKey"), r.URL.Query().Get("assignee"))
+	var (
+		items []domain.RunItem
+		err   error
+	)
+	if r.URL.Query().Get("jiraLinked") == "true" {
+		items, err = h.svc.RunItemsJiraLinked(r.Context(), resolvedID(r, "runKey"))
+	} else {
+		items, err = h.svc.RunItems(r.Context(), resolvedID(r, "runKey"), r.URL.Query().Get("assignee"))
+	}
 	h.respond(w, http.StatusOK, items, err)
 }
 
@@ -663,4 +714,33 @@ func (h *api) updateItem(w http.ResponseWriter, r *http.Request) {
 	err = h.svc.UpdateItem(r.Context(), chi.URLParam(r, "itemID"),
 		service.ItemUpdate{Status: body.Status, AssigneeUserID: body.AssigneeUserID, AssigneeTeamID: body.AssigneeTeamID})
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+// setItemJiraLink sets or clears a run item's Jira issue key
+// (add-jira-connector).
+func (h *api) setItemJiraLink(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		JiraIssueKey *string `json:"jiraIssueKey"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	it, err := h.svc.SetRunItemJiraLink(r.Context(), chi.URLParam(r, "itemID"), body.JiraIssueKey)
+	h.respond(w, http.StatusOK, it, err)
+}
+
+// setItemJiraSync writes the Jira connector's cached issue summary/status
+// for a run item (add-jira-connector).
+func (h *api) setItemJiraSync(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		JiraIssueSummary string `json:"jiraIssueSummary"`
+		JiraIssueStatus  string `json:"jiraIssueStatus"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	it, err := h.svc.SetRunItemJiraSync(r.Context(), chi.URLParam(r, "itemID"), body.JiraIssueSummary, body.JiraIssueStatus)
+	h.respond(w, http.StatusOK, it, err)
 }

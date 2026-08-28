@@ -77,8 +77,12 @@ function mockRunAPI(
   permissions: unknown = fullPermissions,
   anonymous = false,
   trendOverride?: unknown,
+  // add-jira-connector: resolved via GET /api/v1/meta, consumed through
+  // useAuth's context (not a per-page fetch).
+  jiraSiteUrl = '',
 ) {
   mockGET.mockImplementation((path: string) => {
+    if (path === '/api/v1/meta') return Promise.resolve({ data: { jiraSiteUrl }, response: { ok: true } })
     if (path === '/api/v1/users/me')
       return anonymous
         ? Promise.resolve({ data: undefined, response: { ok: false } })
@@ -266,6 +270,61 @@ describe('Run execution board', () => {
 
     expect(await screen.findByTestId('case-library-probe')).toHaveTextContent('case p1 c1')
     expect(screen.queryByTestId('item-page-probe')).not.toBeInTheDocument()
+  })
+
+  describe('Jira link (add-jira-connector)', () => {
+    it('shows a working link built from jiraSiteUrl + the linked issue key, without the status text', async () => {
+      mockRunAPI(
+        [{ ...pendingItem, jiraIssueKey: 'PROJ-456', jiraIssueStatus: 'In Progress', jiraLastSyncedAt: new Date().toISOString() }],
+        undefined,
+        undefined,
+        undefined,
+        fullPermissions,
+        false,
+        undefined,
+        'https://mycompany.atlassian.net',
+      )
+      renderRun()
+      await screen.findByText('Login works')
+      const link = screen.getByRole('link', { name: /proj-456/i })
+      expect(link).toHaveAttribute('href', 'https://mycompany.atlassian.net/browse/PROJ-456')
+      expect(screen.queryByText('In Progress')).not.toBeInTheDocument()
+    })
+
+    it('shows a compact link affordance when unlinked and the caller has runRecordResult', async () => {
+      mockRunAPI([{ ...pendingItem, jiraIssueKey: null }])
+      renderRun()
+      await screen.findByText('Login works')
+      expect(screen.getByRole('button', { name: /link jira issue/i })).toBeInTheDocument()
+    })
+
+    it('renders nothing when unlinked and the caller lacks runRecordResult', async () => {
+      mockRunAPI([{ ...pendingItem, jiraIssueKey: null }], undefined, undefined, undefined, {
+        ...fullPermissions,
+        runRecordResult: false,
+      })
+      renderRun()
+      await screen.findByText('Login works')
+      expect(screen.queryByRole('button', { name: /link jira issue/i })).not.toBeInTheDocument()
+    })
+
+    it('setting a Jira issue key calls PUT .../jira-link', async () => {
+      mockRunAPI([{ ...pendingItem, jiraIssueKey: null }])
+      mockPUT.mockResolvedValue({ data: { ...pendingItem, jiraIssueKey: 'PROJ-1' }, response: { ok: true } })
+      renderRun()
+      await screen.findByText('Login works')
+
+      await userEvent.click(screen.getByRole('button', { name: /link jira issue/i }))
+      await userEvent.type(screen.getByRole('textbox', { name: /jira issue key/i }), 'proj-1')
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+      await waitFor(() =>
+        expect(mockPUT).toHaveBeenCalledWith('/api/v1/items/{itemId}/jira-link', {
+          params: { path: { itemId: 'i1' } },
+          body: { jiraIssueKey: 'PROJ-1' },
+        }),
+      )
+    })
   })
 
   it('"Open execution" from the menu navigates to the item\'s own page', async () => {
