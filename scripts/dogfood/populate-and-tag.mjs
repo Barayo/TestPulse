@@ -31,6 +31,7 @@ const SECTION_LABELS = {
   'run-item-attachments.spec.ts': 'Run item attachments',
   'scoped-api-tokens.spec.ts': 'Scoped API tokens',
   'session-expiry.spec.ts': 'Session expiry',
+  'session-timeout-setting.spec.ts': 'Session timeout setting',
   'teams.spec.ts': 'Teams',
   'test-authoring.spec.ts': 'Test authoring',
   'test-execution.spec.ts': 'Test execution',

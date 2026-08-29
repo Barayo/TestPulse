@@ -17,6 +17,7 @@ function mockAsTenantAdmin(
   autoArchiveInactiveDays = 0,
   colorTheme = 'teal',
   jiraSiteUrl = '',
+  sessionTimeoutDays = 30,
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
@@ -24,7 +25,15 @@ function mockAsTenantAdmin(
     }
     if (path === '/api/v1/instance-settings') {
       return Promise.resolve({
-        data: { publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, jiraSiteUrl, updatedAt: '' },
+        data: {
+          publicProjectsEnabled,
+          runRetentionDays,
+          autoArchiveInactiveDays,
+          colorTheme,
+          jiraSiteUrl,
+          sessionTimeoutDays,
+          updatedAt: '',
+        },
         response: { ok: true },
       })
     }
@@ -93,7 +102,7 @@ describe('InstanceSettingsPage', () => {
   it('toggling it off calls PATCH /instance-settings and reflects the new state', async () => {
     mockAsTenantAdmin(true, true)
     mockPATCH.mockResolvedValue({
-      data: { publicProjectsEnabled: false, runRetentionDays: 0, autoArchiveInactiveDays: 0, updatedAt: '' },
+      data: { publicProjectsEnabled: false, runRetentionDays: 0, autoArchiveInactiveDays: 0, sessionTimeoutDays: 30, updatedAt: '' },
       response: { ok: true },
     })
     renderPage()
@@ -155,7 +164,7 @@ describe('InstanceSettingsPage', () => {
     it('clicking a preset pill saves immediately, with no separate Save step', async () => {
       mockAsTenantAdmin(true, true, 0)
       mockPATCH.mockResolvedValue({
-        data: { publicProjectsEnabled: true, runRetentionDays: 90, autoArchiveInactiveDays: 0, updatedAt: '' },
+        data: { publicProjectsEnabled: true, runRetentionDays: 90, autoArchiveInactiveDays: 0, sessionTimeoutDays: 30, updatedAt: '' },
         response: { ok: true },
       })
       renderPage()
@@ -175,7 +184,7 @@ describe('InstanceSettingsPage', () => {
     it('entering and committing a custom value saves it without touching publicProjectsEnabled', async () => {
       mockAsTenantAdmin(true, true, 0)
       mockPATCH.mockResolvedValue({
-        data: { publicProjectsEnabled: true, runRetentionDays: 10, autoArchiveInactiveDays: 0, updatedAt: '' },
+        data: { publicProjectsEnabled: true, runRetentionDays: 10, autoArchiveInactiveDays: 0, sessionTimeoutDays: 30, updatedAt: '' },
         response: { ok: true },
       })
       renderPage()
@@ -229,7 +238,7 @@ describe('InstanceSettingsPage', () => {
     it('clicking a preset pill saves immediately and does not affect Run retention', async () => {
       mockAsTenantAdmin(true, true, 0, 0)
       mockPATCH.mockResolvedValue({
-        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 365, updatedAt: '' },
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 365, sessionTimeoutDays: 30, updatedAt: '' },
         response: { ok: true },
       })
       renderPage()
@@ -279,7 +288,7 @@ describe('InstanceSettingsPage', () => {
     it('selecting a different preset saves immediately, with no separate Save step, and updates the indicated selection', async () => {
       mockAsTenantAdmin(true, true, 0, 0, 'teal')
       mockPATCH.mockResolvedValue({
-        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'indigo', updatedAt: '' },
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'indigo', sessionTimeoutDays: 30, updatedAt: '' },
         response: { ok: true },
       })
       renderPage()
@@ -305,7 +314,7 @@ describe('InstanceSettingsPage', () => {
     it('refetches /api/v1/meta after selecting a preset, so the instance palette context updates immediately', async () => {
       mockAsTenantAdmin(true, true, 0, 0, 'teal')
       mockPATCH.mockResolvedValue({
-        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'ocean', updatedAt: '' },
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'ocean', sessionTimeoutDays: 30, updatedAt: '' },
         response: { ok: true },
       })
       renderPage()
@@ -351,7 +360,7 @@ describe('InstanceSettingsPage', () => {
       mockAsTenantAdmin(true, true, 0, 0, 'teal')
       mockPATCH.mockResolvedValue({
         data: {
-          publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'custom', updatedAt: '',
+          publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'custom', sessionTimeoutDays: 30, updatedAt: '',
         },
         response: { ok: true },
       })
@@ -381,7 +390,7 @@ describe('InstanceSettingsPage', () => {
     it('hides the custom editor when a preset is selected, and reopening Custom starts fresh from that preset', async () => {
       mockAsTenantAdmin(true, true, 0, 0, 'teal')
       mockPATCH.mockResolvedValue({
-        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'ocean', updatedAt: '' },
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'ocean', sessionTimeoutDays: 30, updatedAt: '' },
         response: { ok: true },
       })
       renderPage()
@@ -418,6 +427,7 @@ describe('InstanceSettingsPage', () => {
           autoArchiveInactiveDays: 0,
           colorTheme: 'teal',
           jiraSiteUrl: 'https://mycompany.atlassian.net',
+          sessionTimeoutDays: 30,
           updatedAt: '',
         },
         response: { ok: true },
@@ -432,6 +442,75 @@ describe('InstanceSettingsPage', () => {
           body: { jiraSiteUrl: 'https://mycompany.atlassian.net' },
         }),
       )
+    })
+  })
+
+  describe('Session timeout (add-session-timeout-setting)', () => {
+    it('shows the currently configured value', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 45)
+      renderPage()
+      const input = await screen.findByLabelText(/timeout/i)
+      await waitFor(() => expect(input).toHaveValue(45))
+    })
+
+    it('is grouped under the Authentication section, above Single sign-on', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30)
+      renderPage()
+      await screen.findByLabelText(/timeout/i)
+      const authHeading = screen.getByText('Authentication')
+      const section = authHeading.closest('section') as HTMLElement
+      expect(within(section).getByText('Session timeout')).toBeInTheDocument()
+      expect(within(section).getByText('Single sign-on')).toBeInTheDocument()
+    })
+
+    it('saving a valid new value calls PATCH /api/v1/instance-settings', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30)
+      mockPATCH.mockResolvedValue({
+        data: {
+          publicProjectsEnabled: true,
+          runRetentionDays: 0,
+          autoArchiveInactiveDays: 0,
+          colorTheme: 'teal',
+          sessionTimeoutDays: 14,
+          updatedAt: '',
+        },
+        response: { ok: true },
+      })
+      renderPage()
+      const input = await screen.findByLabelText(/timeout/i)
+      await userEvent.clear(input)
+      await userEvent.type(input, '14')
+      await userEvent.click(within(input.closest('[data-slot="card"]') as HTMLElement).getByRole('button', { name: /save/i }))
+
+      await waitFor(() =>
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', {
+          body: { sessionTimeoutDays: 14 },
+        }),
+      )
+    })
+
+    it('shows a validation message and disables Save for a value below 1', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30)
+      renderPage()
+      const input = await screen.findByLabelText(/timeout/i)
+      await userEvent.clear(input)
+      await userEvent.type(input, '0')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/between 1 and 90/i)
+      expect(within(input.closest('[data-slot="card"]') as HTMLElement).getByRole('button', { name: /save/i })).toBeDisabled()
+      expect(mockPATCH).not.toHaveBeenCalled()
+    })
+
+    it('shows a validation message and disables Save for a value above 90', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30)
+      renderPage()
+      const input = await screen.findByLabelText(/timeout/i)
+      await userEvent.clear(input)
+      await userEvent.type(input, '91')
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/between 1 and 90/i)
+      expect(within(input.closest('[data-slot="card"]') as HTMLElement).getByRole('button', { name: /save/i })).toBeDisabled()
+      expect(mockPATCH).not.toHaveBeenCalled()
     })
   })
 })

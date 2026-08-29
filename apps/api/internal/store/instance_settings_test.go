@@ -317,3 +317,35 @@ func TestInstanceSettingsUpdateRoundTripsJiraSiteURL(t *testing.T) {
 		t.Errorf("JiraSiteURL = %q, want %q", got.JiraSiteURL, url)
 	}
 }
+
+func TestInstanceSettingsGetReturnsSessionTimeoutDaysDefaultingTo30(t *testing.T) {
+	// add-session-timeout-setting: 30 preserves the behavior of the
+	// hardcoded constant this setting replaced.
+	s := testStore(t)
+	ctx := context.Background()
+
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SessionTimeoutDays != 30 {
+		t.Errorf("SessionTimeoutDays = %d, want 30 (seeded default)", got.SessionTimeoutDays)
+	}
+}
+
+func TestInstanceSettingsUpdateRoundTripsSessionTimeoutDays(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	days := 7
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{SessionTimeoutDays: &days}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.SessionTimeoutDays != days {
+		t.Errorf("SessionTimeoutDays = %d, want %d", got.SessionTimeoutDays, days)
+	}
+}

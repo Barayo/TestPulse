@@ -22,6 +22,7 @@ const unconfiguredSettings = {
   oidcGroupClaim: '',
   oidcAdminClaimValues: [] as string[],
   oidcOnly: false,
+  sessionTimeoutDays: 30,
 }
 
 beforeEach(() => {

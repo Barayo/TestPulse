@@ -2512,6 +2512,8 @@ export interface components {
             oidcOnly: boolean;
             /** @description Jira Cloud site base URL (add-jira-connector), e.g. "https://mycompany.atlassian.net" — used only to build browsable issue links in the UI. Empty when not configured; a linked issue key still shows then, just without a working link. */
             jiraSiteUrl?: string;
+            /** @description Instance-wide, Tenant-Admin-configurable sliding session expiry window in days (add-session-timeout-setting). Default 30. Changing it only affects sessions created or extended afterward — already-active sessions keep their existing expiry. */
+            sessionTimeoutDays: number;
         };
         /** @description A partial update — every field is optional; omitted fields are left unchanged. */
         InstanceSettingsUpdate: {
@@ -2531,6 +2533,8 @@ export interface components {
             disableSso?: boolean;
             /** @description Jira Cloud site base URL (add-jira-connector). */
             jiraSiteUrl?: string;
+            /** @description Sliding session expiry window in days (add-session-timeout-setting), 1-90. */
+            sessionTimeoutDays?: number;
         };
         User: {
             id: string;

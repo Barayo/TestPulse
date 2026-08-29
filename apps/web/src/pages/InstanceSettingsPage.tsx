@@ -34,6 +34,10 @@ export default function InstanceSettingsPage() {
   const [ssoSettings, setSsoSettings] = useState<InstanceSettings>()
   const [jiraSiteUrl, setJiraSiteUrl] = useState('')
   const [savingJiraSiteUrl, setSavingJiraSiteUrl] = useState(false)
+  const [sessionTimeoutDays, setSessionTimeoutDays] = useState<number>()
+  const [sessionTimeoutInput, setSessionTimeoutInput] = useState('')
+  const [savingSessionTimeout, setSavingSessionTimeout] = useState(false)
+  const [sessionTimeoutError, setSessionTimeoutError] = useState<string>()
 
   useEffect(() => {
     if (!me?.isTenantAdmin) return
@@ -47,6 +51,8 @@ export default function InstanceSettingsPage() {
       if (data.colorTheme === 'custom') setShowCustomEditor(true)
       setSsoSettings(data)
       setJiraSiteUrl(data.jiraSiteUrl ?? '')
+      setSessionTimeoutDays(data.sessionTimeoutDays)
+      setSessionTimeoutInput(String(data.sessionTimeoutDays))
     })
   }, [me])
 
@@ -92,6 +98,31 @@ export default function InstanceSettingsPage() {
     const { data } = await api.PATCH('/api/v1/instance-settings', { body: { jiraSiteUrl } })
     setSavingJiraSiteUrl(false)
     if (data) setJiraSiteUrl(data.jiraSiteUrl ?? '')
+  }
+
+  const parsedSessionTimeout = Number(sessionTimeoutInput)
+  const sessionTimeoutInvalid =
+    sessionTimeoutInput.trim() === '' ||
+    !Number.isInteger(parsedSessionTimeout) ||
+    parsedSessionTimeout < 1 ||
+    parsedSessionTimeout > 90
+
+  async function saveSessionTimeout() {
+    if (sessionTimeoutInvalid) return
+    setSavingSessionTimeout(true)
+    setSessionTimeoutError(undefined)
+    const { data, error } = await api.PATCH('/api/v1/instance-settings', {
+      body: { sessionTimeoutDays: parsedSessionTimeout },
+    })
+    setSavingSessionTimeout(false)
+    if (error) {
+      setSessionTimeoutError((error as { error?: string }).error ?? 'Could not save session timeout.')
+      return
+    }
+    if (data) {
+      setSessionTimeoutDays(data.sessionTimeoutDays)
+      setSessionTimeoutInput(String(data.sessionTimeoutDays))
+    }
   }
 
   async function saveCustomPalette(palette: CustomPalette) {
@@ -265,6 +296,57 @@ export default function InstanceSettingsPage() {
           <LockIcon className="size-3.5" aria-hidden="true" />
           Authentication
         </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Session timeout</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              How long a signed-in session stays valid before requiring another sign-in — a sliding window that
+              resets on activity, so nobody working stays logged out mid-session. Changing this only affects
+              sessions created or renewed from now on; anyone already signed in keeps their current session&apos;s
+              original expiry.
+            </p>
+            <div className="flex items-end gap-2">
+              <div className="space-y-1">
+                <label htmlFor="session-timeout-days" className="text-sm font-medium">
+                  Timeout
+                </label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="session-timeout-days"
+                    type="number"
+                    min={1}
+                    max={90}
+                    className="w-20"
+                    value={sessionTimeoutInput}
+                    onChange={(e) => setSessionTimeoutInput(e.target.value)}
+                    disabled={sessionTimeoutDays === undefined}
+                    aria-invalid={sessionTimeoutInvalid}
+                  />
+                  <span className="text-sm text-muted-foreground">days</span>
+                </div>
+              </div>
+              <Button
+                onClick={() => void saveSessionTimeout()}
+                disabled={sessionTimeoutDays === undefined || savingSessionTimeout || sessionTimeoutInvalid}
+              >
+                {savingSessionTimeout ? 'Saving…' : 'Save'}
+              </Button>
+            </div>
+            {sessionTimeoutInvalid ? (
+              <p role="alert" className="text-xs text-destructive">
+                Enter a whole number of days between 1 and 90.
+              </p>
+            ) : sessionTimeoutError ? (
+              <p role="alert" className="text-xs text-destructive">
+                {sessionTimeoutError}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">1–90 days. Default 30.</p>
+            )}
+          </CardContent>
+        </Card>
         {ssoSettings && <SSOSettingsCard settings={ssoSettings} onSettingsChange={setSsoSettings} />}
       </section>
 

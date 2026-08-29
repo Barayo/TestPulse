@@ -3061,7 +3061,7 @@ components:
         dark: { $ref: '#/components/schemas/CustomPaletteMode' }
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays]
       properties:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays:
@@ -3117,6 +3117,15 @@ components:
             "https://mycompany.atlassian.net" — used only to build
             browsable issue links in the UI. Empty when not configured; a
             linked issue key still shows then, just without a working link.
+        sessionTimeoutDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: >-
+            Instance-wide, Tenant-Admin-configurable sliding session expiry
+            window in days (add-session-timeout-setting). Default 30.
+            Changing it only affects sessions created or extended
+            afterward — already-active sessions keep their existing expiry.
     InstanceSettingsUpdate:
       type: object
       description: A partial update — every field is optional; omitted fields are left unchanged.
@@ -3149,6 +3158,11 @@ components:
         jiraSiteUrl:
           type: string
           description: Jira Cloud site base URL (add-jira-connector).
+        sessionTimeoutDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: Sliding session expiry window in days (add-session-timeout-setting), 1-90.
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]

@@ -327,8 +327,13 @@ type InstanceSettings struct {
 	// runs as its own process with no access to instance settings. Empty
 	// until a Tenant Admin configures it; a linked issue key still shows
 	// then, just without a working link.
-	JiraSiteURL string    `json:"jiraSiteUrl"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	JiraSiteURL string `json:"jiraSiteUrl"`
+	// SessionTimeoutDays is a Tenant-Admin-configurable, instance-wide
+	// sliding session expiry window in days (add-session-timeout-setting),
+	// bounded 1-90 by the service layer. Default 30 preserves the behavior
+	// of the hardcoded constant this setting replaced.
+	SessionTimeoutDays int       `json:"sessionTimeoutDays"`
+	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
 // InstanceSettingsUpdate is a partial update to InstanceSettings — nil
@@ -354,6 +359,7 @@ type InstanceSettingsUpdate struct {
 	OIDCOnly             *bool
 	DisableOIDC          *bool
 	JiraSiteURL          *string
+	SessionTimeoutDays   *int
 }
 
 // OIDCTeamMapping maps a single OIDC group-claim value to a Team

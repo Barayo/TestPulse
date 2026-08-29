@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
@@ -754,6 +755,67 @@ func TestAuthenticateSessionResolvesActorAndExtendsExpiry(t *testing.T) {
 	}
 	if actor.ID != user.ID || actor.Kind != domain.ActorKindUser || !actor.IsTenantAdmin || actor.EffectiveUserID != user.ID {
 		t.Errorf("actor = %+v", actor)
+	}
+}
+
+// add-session-timeout-setting: sessionLifetime is no longer a hardcoded
+// constant — both session creation and the sliding-window extension must
+// read the currently-configured instance setting.
+
+func TestLoginUsesConfiguredSessionTimeout(t *testing.T) {
+	pool := testutil.Pool(t, "identity_session_timeout_login")
+	st := store.New(pool)
+	s := service.New(st)
+	admin := mustCreateUser(t, s, "admin@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	days := 5
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{SessionTimeoutDays: &days}); err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+
+	mustCreateUser(t, s, "user@example.com", "correcthorse", false)
+	sess, _, err := s.Login(context.Background(), "user@example.com", "correcthorse")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+
+	untilExpiry := time.Until(sess.ExpiresAt)
+	if untilExpiry < 4*24*time.Hour || untilExpiry > 6*24*time.Hour {
+		t.Errorf("session expires in %v, want ~5 days (the configured sessionTimeoutDays), not the old hardcoded 30", untilExpiry)
+	}
+}
+
+func TestAuthenticateSessionExtendsUsingConfiguredTimeout(t *testing.T) {
+	pool := testutil.Pool(t, "identity_session_timeout_extend")
+	st := store.New(pool)
+	s := service.New(st)
+	admin := mustCreateUser(t, s, "admin@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	days := 5
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{SessionTimeoutDays: &days}); err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+
+	user := mustCreateUser(t, s, "user@example.com", "correcthorse", false)
+	sess, _, err := s.Login(context.Background(), "user@example.com", "correcthorse")
+	if err != nil {
+		t.Fatalf("Login: %v", err)
+	}
+	if _, err := s.AuthenticateSession(context.Background(), sess.ID); err != nil {
+		t.Fatalf("AuthenticateSession: %v", err)
+	}
+
+	var expiresAt time.Time
+	if err := pool.QueryRow(context.Background(),
+		`SELECT expires_at FROM sessions WHERE user_id = $1`, user.ID,
+	).Scan(&expiresAt); err != nil {
+		t.Fatalf("querying session expires_at: %v", err)
+	}
+	untilExpiry := time.Until(expiresAt)
+	if untilExpiry < 4*24*time.Hour || untilExpiry > 6*24*time.Hour {
+		t.Errorf("extended session expires in %v, want ~5 days (the configured sessionTimeoutDays), not the old hardcoded 30", untilExpiry)
 	}
 }
 

@@ -169,3 +169,40 @@ func TestInstanceSettingsDefaultsToPublicProjectsEnabled(t *testing.T) {
 		t.Errorf("PublicProjectsEnabled = %v, want true (seeded default)", got.PublicProjectsEnabled)
 	}
 }
+
+func TestUpdateInstanceSettingsRejectsSessionTimeoutBelowMinimum(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-sto-low@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	days := 0
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{SessionTimeoutDays: &days}); err == nil {
+		t.Fatal("UpdateInstanceSettings(sessionTimeoutDays=0): want error, got nil")
+	}
+}
+
+func TestUpdateInstanceSettingsRejectsSessionTimeoutAboveMaximum(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-sto-high@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	days := 91
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{SessionTimeoutDays: &days}); err == nil {
+		t.Fatal("UpdateInstanceSettings(sessionTimeoutDays=91): want error, got nil")
+	}
+}
+
+func TestUpdateInstanceSettingsAcceptsSessionTimeoutInBounds(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-sto-ok@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	days := 7
+	got, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{SessionTimeoutDays: &days})
+	if err != nil {
+		t.Fatalf("UpdateInstanceSettings(sessionTimeoutDays=7): %v", err)
+	}
+	if got.SessionTimeoutDays != 7 {
+		t.Errorf("SessionTimeoutDays = %d, want 7", got.SessionTimeoutDays)
+	}
+}

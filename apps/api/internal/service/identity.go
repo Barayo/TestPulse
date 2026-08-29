@@ -15,8 +15,17 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-// sessionLifetime is the sliding session expiry window (design D2).
-const sessionLifetime = 30 * 24 * time.Hour
+// sessionLifetime is the sliding session expiry window — a Tenant-Admin-
+// configurable instance setting (add-session-timeout-setting), read fresh
+// on every call rather than cached, matching every other inline
+// s.store.InstanceSettings.Get(ctx) call already in this file.
+func (s *Service) sessionLifetime(ctx context.Context) (time.Duration, error) {
+	settings, err := s.store.InstanceSettings.Get(ctx)
+	if err != nil {
+		return 0, err
+	}
+	return time.Duration(settings.SessionTimeoutDays) * 24 * time.Hour, nil
+}
 
 // passwordResetTokenLifetime is how long a forgot-password link stays
 // redeemable (add-forgot-password design.md).
@@ -85,7 +94,11 @@ func (s *Service) createSession(ctx context.Context, userID string) (domain.Sess
 	if err != nil {
 		return domain.Session{}, err
 	}
-	sess, err := s.store.Sessions.Create(ctx, hashToken(id), userID, time.Now().Add(sessionLifetime))
+	lifetime, err := s.sessionLifetime(ctx)
+	if err != nil {
+		return domain.Session{}, err
+	}
+	sess, err := s.store.Sessions.Create(ctx, hashToken(id), userID, time.Now().Add(lifetime))
 	if err != nil {
 		return domain.Session{}, err
 	}
@@ -185,7 +198,11 @@ func (s *Service) AuthenticateSession(ctx context.Context, sessionID string) (do
 	if user.DeactivatedAt != nil {
 		return domain.Actor{}, unauthorized("account deactivated")
 	}
-	if err := s.store.Sessions.Extend(ctx, hashToken(sessionID), time.Now().Add(sessionLifetime)); err != nil {
+	lifetime, err := s.sessionLifetime(ctx)
+	if err != nil {
+		return domain.Actor{}, err
+	}
+	if err := s.store.Sessions.Extend(ctx, hashToken(sessionID), time.Now().Add(lifetime)); err != nil {
 		return domain.Actor{}, err
 	}
 	return domain.Actor{

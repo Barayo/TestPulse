@@ -59,6 +59,9 @@ func (s *Service) UpdateInstanceSettings(ctx context.Context, upd domain.Instanc
 	if upd.AutoArchiveInactiveDays != nil && *upd.AutoArchiveInactiveDays < 0 {
 		return domain.InstanceSettings{}, invalid("autoArchiveInactiveDays must not be negative")
 	}
+	if upd.SessionTimeoutDays != nil && (*upd.SessionTimeoutDays < 1 || *upd.SessionTimeoutDays > 90) {
+		return domain.InstanceSettings{}, invalid("sessionTimeoutDays must be between 1 and 90")
+	}
 	if upd.ColorTheme != nil && !validColorThemes[*upd.ColorTheme] {
 		return domain.InstanceSettings{}, invalid("colorTheme must be one of teal, indigo, ocean, forest, custom")
 	}

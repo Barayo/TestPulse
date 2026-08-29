@@ -9,12 +9,12 @@
         {
           "testTitle": "Scenario: Changing the password with the correct current password",
           "caseKey": "TD-1",
-          "caseTitle": "Self-service password change — Changing the password with the correct current password"
+          "caseTitle": "Self-service password change \u2014 Changing the password with the correct current password"
         },
         {
           "testTitle": "Scenario: A flagged account is gated at login until it changes its password",
           "caseKey": "TD-2",
-          "caseTitle": "Required password change at next login — A flagged account is gated at login until it changes its password"
+          "caseTitle": "Required password change at next login \u2014 A flagged account is gated at login until it changes its password"
         }
       ]
     },
@@ -25,22 +25,22 @@
         {
           "testTitle": "Scenario: A folder row's menu trigger is not shown without sectionDelete permission",
           "caseKey": "TD-3",
-          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — A folder row's menu trigger is not shown without sectionDelete permission"
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation \u2014 A folder row's menu trigger is not shown without sectionDelete permission"
         },
         {
           "testTitle": "Scenario: Opening a folder row's menu reveals Delete; deleting a folder cascades to its subtree",
           "caseKey": "TD-4",
-          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — Opening a folder row's menu reveals Delete; deleting a folder cascades to its subtree"
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation \u2014 Opening a folder row's menu reveals Delete; deleting a folder cascades to its subtree"
         },
         {
           "testTitle": "Scenario: Right-clicking a case or folder row opens its menu at the cursor",
           "caseKey": "TD-5",
-          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — Right-clicking a case or folder row opens its menu at the cursor"
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation \u2014 Right-clicking a case or folder row opens its menu at the cursor"
         },
         {
           "testTitle": "Scenario: The section tree's \"New section\" action has a visible trigger, not just right-click",
           "caseKey": "TD-6",
-          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation — The section tree's \"New section\" action has a visible trigger, not just right-click"
+          "caseTitle": "Destructive actions are tucked behind a per-row menu and require confirmation \u2014 The section tree's \"New section\" action has a visible trigger, not just right-click"
         }
       ]
     },
@@ -51,7 +51,7 @@
         {
           "testTitle": "Scenario: Unavailable once any user exists (stale /setup visit redirects to /login)",
           "caseKey": "TD-7",
-          "caseTitle": "First-run instance setup — Unavailable once any user exists (stale /setup visit redirects to /login)"
+          "caseTitle": "First-run instance setup \u2014 Unavailable once any user exists (stale /setup visit redirects to /login)"
         }
       ]
     },
@@ -62,12 +62,12 @@
         {
           "testTitle": "Scenario: Request a reset, redeem the emailed link, and log in with the new password",
           "caseKey": "TD-8",
-          "caseTitle": "Self-service password recovery — Request a reset, redeem the emailed link, and log in with the new password"
+          "caseTitle": "Self-service password recovery \u2014 Request a reset, redeem the emailed link, and log in with the new password"
         },
         {
           "testTitle": "Scenario: The login page offers self-service recovery when the instance has SMTP configured",
           "caseKey": "TD-9",
-          "caseTitle": "Self-service password recovery — The login page offers self-service recovery when the instance has SMTP configured"
+          "caseTitle": "Self-service password recovery \u2014 The login page offers self-service recovery when the instance has SMTP configured"
         }
       ]
     },
@@ -76,29 +76,29 @@
       "sectionLabel": "Platform & deployment",
       "cases": [
         {
-          "testTitle": "Scenario: Fresh checkout starts successfully — UI is reachable and healthy",
+          "testTitle": "Scenario: Fresh checkout starts successfully \u2014 UI is reachable and healthy",
           "caseKey": "TD-10",
-          "caseTitle": "Single-command evaluation via docker-compose — Fresh checkout starts successfully — UI is reachable and healthy"
+          "caseTitle": "Single-command evaluation via docker-compose \u2014 Fresh checkout starts successfully \u2014 UI is reachable and healthy"
         },
         {
           "testTitle": "Scenario: SPA routes are served after a full page load",
           "caseKey": "TD-11",
-          "caseTitle": "Single-command evaluation via docker-compose — SPA routes are served after a full page load"
+          "caseTitle": "Single-command evaluation via docker-compose \u2014 SPA routes are served after a full page load"
         },
         {
           "testTitle": "Scenario: Ready when database is reachable",
           "caseKey": "TD-12",
-          "caseTitle": "Health and readiness endpoints — Ready when database is reachable"
+          "caseTitle": "Health and readiness endpoints \u2014 Ready when database is reachable"
         },
         {
           "testTitle": "Scenario: Liveness reports process health",
           "caseKey": "TD-13",
-          "caseTitle": "Health and readiness endpoints — Liveness reports process health"
+          "caseTitle": "Health and readiness endpoints \u2014 Liveness reports process health"
         },
         {
           "testTitle": "Scenario: Service metadata is exposed",
           "caseKey": "TD-14",
-          "caseTitle": "Versioned API under /api/v1 — Service metadata is exposed"
+          "caseTitle": "Versioned API under /api/v1 \u2014 Service metadata is exposed"
         }
       ]
     },
@@ -109,7 +109,7 @@
         {
           "testTitle": "Scenario: Uploading a custom photo avatar replaces it everywhere, removing reverts to the generated default",
           "caseKey": "TD-15",
-          "caseTitle": "Self-service profile — Uploading a custom photo avatar replaces it everywhere, removing reverts to the generated default"
+          "caseTitle": "Self-service profile \u2014 Uploading a custom photo avatar replaces it everywhere, removing reverts to the generated default"
         }
       ]
     },
@@ -120,22 +120,22 @@
         {
           "testTitle": "Scenario: User with no membership cannot see a project",
           "caseKey": "TD-16",
-          "caseTitle": "Effective project role from membership and teams — User with no membership cannot see a project"
+          "caseTitle": "Effective project role from membership and teams \u2014 User with no membership cannot see a project"
         },
         {
           "testTitle": "Scenario: Tester can read but cannot modify cases",
           "caseKey": "TD-17",
-          "caseTitle": "Effective project role from membership and teams — Tester can read but cannot modify cases"
+          "caseTitle": "Effective project role from membership and teams \u2014 Tester can read but cannot modify cases"
         },
         {
           "testTitle": "Scenario: Contributor can edit but cannot delete a case",
           "caseKey": "TD-18",
-          "caseTitle": "Effective project role from membership and teams — Contributor can edit but cannot delete a case"
+          "caseTitle": "Effective project role from membership and teams \u2014 Contributor can edit but cannot delete a case"
         },
         {
           "testTitle": "Scenario: Project Admin can delete a case",
           "caseKey": "TD-19",
-          "caseTitle": "Effective project role from membership and teams — Project Admin can delete a case"
+          "caseTitle": "Effective project role from membership and teams \u2014 Project Admin can delete a case"
         }
       ]
     },
@@ -146,72 +146,72 @@
         {
           "testTitle": "Scenario: Project Admin enables public access and an anonymous visitor can read it, with no write controls",
           "caseKey": "TD-20",
-          "caseTitle": "Per-project public read access — Project Admin enables public access and an anonymous visitor can read it, with no write controls"
+          "caseTitle": "Per-project public read access \u2014 Project Admin enables public access and an anonymous visitor can read it, with no write controls"
         },
         {
           "testTitle": "Scenario: Disabling public access immediately revokes anonymous reads",
           "caseKey": "TD-21",
-          "caseTitle": "Per-project public read access — Disabling public access immediately revokes anonymous reads"
+          "caseTitle": "Per-project public read access \u2014 Disabling public access immediately revokes anonymous reads"
         },
         {
           "testTitle": "Scenario: A non-public project is unreachable anonymously",
           "caseKey": "TD-22",
-          "caseTitle": "Per-project public read access — A non-public project is unreachable anonymously"
+          "caseTitle": "Per-project public read access \u2014 A non-public project is unreachable anonymously"
         },
         {
           "testTitle": "Scenario: Instance-wide switch overrides a project's own setting, and re-enabling restores it without touching the project flag",
           "caseKey": "TD-23",
-          "caseTitle": "Instance-wide kill switch for public project access — Instance-wide switch overrides a project's own setting, and re-enabling restores it without touching the project flag"
+          "caseTitle": "Instance-wide kill switch for public project access \u2014 Instance-wide switch overrides a project's own setting, and re-enabling restores it without touching the project flag"
         },
         {
           "testTitle": "Scenario: A private or nonexistent project shows the same not-found handling regardless of cause, with an option to log in",
           "caseKey": "TD-24",
-          "caseTitle": "Anonymous visitors see the same pages as authenticated members, read-only — A private or nonexistent project shows the same not-found handling regardless of cause, with an option to log in"
+          "caseTitle": "Anonymous visitors see the same pages as authenticated members, read-only \u2014 A private or nonexistent project shows the same not-found handling regardless of cause, with an option to log in"
         },
         {
           "testTitle": "Scenario: An old direct public-project link still works",
           "caseKey": "TD-25",
-          "caseTitle": "Anonymous visitors see the same pages as authenticated members, read-only — An old direct public-project link still works"
+          "caseTitle": "Anonymous visitors see the same pages as authenticated members, read-only \u2014 An old direct public-project link still works"
         },
         {
           "testTitle": "Scenario: An old discovery-index link still works",
           "caseKey": "TD-26",
-          "caseTitle": "Anonymous visitors see the same pages as authenticated members, read-only — An old discovery-index link still works"
+          "caseTitle": "Anonymous visitors see the same pages as authenticated members, read-only \u2014 An old discovery-index link still works"
         },
         {
           "testTitle": "Scenario: Exactly one public project redirects directly",
           "caseKey": "TD-27",
-          "caseTitle": "Project list resolves to zero, one, or many public projects for anonymous visitors — Exactly one public project redirects directly"
+          "caseTitle": "Project list resolves to zero, one, or many public projects for anonymous visitors \u2014 Exactly one public project redirects directly"
         },
         {
           "testTitle": "Scenario: Multiple public projects show a list",
           "caseKey": "TD-28",
-          "caseTitle": "Project list resolves to zero, one, or many public projects for anonymous visitors — Multiple public projects show a list"
+          "caseTitle": "Project list resolves to zero, one, or many public projects for anonymous visitors \u2014 Multiple public projects show a list"
         },
         {
           "testTitle": "Scenario: No public projects shows an empty state",
           "caseKey": "TD-29",
-          "caseTitle": "Project list resolves to zero, one, or many public projects for anonymous visitors — No public projects shows an empty state"
+          "caseTitle": "Project list resolves to zero, one, or many public projects for anonymous visitors \u2014 No public projects shows an empty state"
         },
         {
           "testTitle": "Scenario: Link shown when public access is enabled instance-wide, hidden when disabled",
           "caseKey": "TD-30",
-          "caseTitle": "Discovery entry point on the login page — Link shown when public access is enabled instance-wide, hidden when disabled"
+          "caseTitle": "Discovery entry point on the login page \u2014 Link shown when public access is enabled instance-wide, hidden when disabled"
         },
         {
           "testTitle": "Scenario: Member returns to the project they were viewing",
           "caseKey": "TD-31",
-          "caseTitle": "Logging in from a public project returns to it — Member returns to the project they were viewing"
+          "caseTitle": "Logging in from a public project returns to it \u2014 Member returns to the project they were viewing"
         },
         {
           "testTitle": "Scenario: A member with a read-only role sees no write controls across the retrofitted pages",
           "caseKey": "TD-32",
-          "caseTitle": "Permission-gating retrofit hides write controls from an under-permissioned member — A member with a read-only role sees no write controls across the retrofitted pages"
+          "caseTitle": "Permission-gating retrofit hides write controls from an under-permissioned member \u2014 A member with a read-only role sees no write controls across the retrofitted pages"
         },
         {
           "testTitle": "Scenario: A user with no membership on the project reads it read-only instead of hitting \"not found\"",
           "caseKey": "TD-33",
-          "caseTitle": "A signed-in non-member reads a public project exactly like an anonymous visitor — A user with no membership on the project reads it read-only instead of hitting \"not found\""
+          "caseTitle": "A signed-in non-member reads a public project exactly like an anonymous visitor \u2014 A user with no membership on the project reads it read-only instead of hitting \"not found\""
         }
       ]
     },
@@ -222,7 +222,7 @@
         {
           "testTitle": "Scenario: Attaching directly to an existing result, then opening the full-size view",
           "caseKey": "TD-34",
-          "caseTitle": "Serving and deleting attachments — Attaching directly to an existing result, then opening the full-size view"
+          "caseTitle": "Serving and deleting attachments \u2014 Attaching directly to an existing result, then opening the full-size view"
         }
       ]
     },
@@ -233,7 +233,7 @@
         {
           "testTitle": "Scenario: A token scoped to Viewer can read but not write within its project",
           "caseKey": "TD-35",
-          "caseTitle": "Scoped API tokens — A token scoped to Viewer can read but not write within its project"
+          "caseTitle": "Scoped API tokens \u2014 A token scoped to Viewer can read but not write within its project"
         }
       ]
     },
@@ -244,22 +244,22 @@
         {
           "testTitle": "Scenario: A 401 after an established session opens the modal, explains why, and pre-fills email",
           "caseKey": "TD-36",
-          "caseTitle": "Session expiry mid-use prompts re-login without losing place — A 401 after an established session opens the modal, explains why, and pre-fills email"
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place \u2014 A 401 after an established session opens the modal, explains why, and pre-fills email"
         },
         {
           "testTitle": "Scenario: The modal cannot be dismissed without logging in",
           "caseKey": "TD-37",
-          "caseTitle": "Session expiry mid-use prompts re-login without losing place — The modal cannot be dismissed without logging in"
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place \u2014 The modal cannot be dismissed without logging in"
         },
         {
           "testTitle": "Scenario: Re-authenticating as the same user resumes the same view",
           "caseKey": "TD-38",
-          "caseTitle": "Session expiry mid-use prompts re-login without losing place — Re-authenticating as the same user resumes the same view"
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place \u2014 Re-authenticating as the same user resumes the same view"
         },
         {
           "testTitle": "Scenario: Re-authenticating as a different user goes home",
           "caseKey": "TD-39",
-          "caseTitle": "Session expiry mid-use prompts re-login without losing place — Re-authenticating as a different user goes home"
+          "caseTitle": "Session expiry mid-use prompts re-login without losing place \u2014 Re-authenticating as a different user goes home"
         }
       ]
     },
@@ -270,7 +270,7 @@
         {
           "testTitle": "Scenario: Tenant Admin views a team's deletion preview, then deletes it and access is revoked",
           "caseKey": "TD-40",
-          "caseTitle": "Team management — Tenant Admin views a team's deletion preview, then deletes it and access is revoked"
+          "caseTitle": "Team management \u2014 Tenant Admin views a team's deletion preview, then deletes it and access is revoked"
         }
       ]
     },
@@ -281,42 +281,42 @@
         {
           "testTitle": "Scenario: Create a project",
           "caseKey": "TD-41",
-          "caseTitle": "Project management — Create a project"
+          "caseTitle": "Project management \u2014 Create a project"
         },
         {
           "testTitle": "Scenario: Project name is required",
           "caseKey": "TD-42",
-          "caseTitle": "Project management — Project name is required"
+          "caseTitle": "Project management \u2014 Project name is required"
         },
         {
           "testTitle": "Scenario: Create a test case, then edit it to create a new version",
           "caseKey": "TD-43",
-          "caseTitle": "Test case creation and immutable versioning — Create a test case, then edit it to create a new version"
+          "caseTitle": "Test case creation and immutable versioning \u2014 Create a test case, then edit it to create a new version"
         },
         {
           "testTitle": "Scenario: Add cases to a suite; removing one does not delete the case",
           "caseKey": "TD-44",
-          "caseTitle": "Test suite grouping — Add cases to a suite; removing one does not delete the case"
+          "caseTitle": "Test suite grouping \u2014 Add cases to a suite; removing one does not delete the case"
         },
         {
           "testTitle": "Scenario: New project has a root folder; case defaults into it",
           "caseKey": "TD-45",
-          "caseTitle": "Project-level case folders — New project has a root folder; case defaults into it"
+          "caseTitle": "Project-level case folders \u2014 New project has a root folder; case defaults into it"
         },
         {
           "testTitle": "Scenario: Create a nested folder and place a case in it",
           "caseKey": "TD-46",
-          "caseTitle": "Project-level case folders — Create a nested folder and place a case in it"
+          "caseTitle": "Project-level case folders \u2014 Create a nested folder and place a case in it"
         },
         {
           "testTitle": "Scenario: Set a Jira issue key on a case",
           "caseKey": "TD-47",
-          "caseTitle": "Linking a test case to a Jira issue — Set a Jira issue key on a case"
+          "caseTitle": "Linking a test case to a Jira issue \u2014 Set a Jira issue key on a case"
         },
         {
           "testTitle": "Scenario: Clearing a Jira issue key also clears its cached summary",
           "caseKey": "TD-48",
-          "caseTitle": "Linking a test case to a Jira issue — Clearing a Jira issue key also clears its cached summary"
+          "caseTitle": "Linking a test case to a Jira issue \u2014 Clearing a Jira issue key also clears its cached summary"
         }
       ]
     },
@@ -327,107 +327,107 @@
         {
           "testTitle": "Scenario: Run pins versions at creation; board shows pinned content",
           "caseKey": "TD-49",
-          "caseTitle": "Run creation pins case versions — Run pins versions at creation; board shows pinned content"
+          "caseTitle": "Run creation pins case versions \u2014 Run pins versions at creation; board shows pinned content"
         },
         {
           "testTitle": "Scenario: Execute a case from the board (pass with comment)",
           "caseKey": "TD-50",
-          "caseTitle": "Run execution board — Execute a case from the board (pass with comment)"
+          "caseTitle": "Run execution board \u2014 Execute a case from the board (pass with comment)"
         },
         {
           "testTitle": "Scenario: Run header links to its source suite",
           "caseKey": "TD-51",
-          "caseTitle": "Run execution board — Run header links to its source suite"
+          "caseTitle": "Run execution board \u2014 Run header links to its source suite"
         },
         {
           "testTitle": "Scenario: Right-click a run item, jump straight to its case in the Library",
           "caseKey": "TD-52",
-          "caseTitle": "Run execution board — Right-click a run item, jump straight to its case in the Library"
+          "caseTitle": "Run execution board \u2014 Right-click a run item, jump straight to its case in the Library"
         },
         {
           "testTitle": "Scenario: Item page breadcrumb ends at the run, not the item's own title",
           "caseKey": "TD-53",
-          "caseTitle": "Run execution board — Item page breadcrumb ends at the run, not the item's own title"
+          "caseTitle": "Run execution board \u2014 Item page breadcrumb ends at the run, not the item's own title"
         },
         {
           "testTitle": "Scenario: j/k moves the board's focus cursor and Enter opens the focused item",
           "caseKey": "TD-54",
-          "caseTitle": "Run execution board — j/k moves the board's focus cursor and Enter opens the focused item"
+          "caseTitle": "Run execution board \u2014 j/k moves the board's focus cursor and Enter opens the focused item"
         },
         {
           "testTitle": "Scenario: Recording a verdict via keyboard auto-advances to the next pending item",
           "caseKey": "TD-55",
-          "caseTitle": "Run item detail page — Recording a verdict via keyboard auto-advances to the next pending item"
+          "caseTitle": "Run item detail page \u2014 Recording a verdict via keyboard auto-advances to the next pending item"
         },
         {
           "testTitle": "Scenario: Item page links to its test case",
           "caseKey": "TD-56",
-          "caseTitle": "Run item detail page — Item page links to its test case"
+          "caseTitle": "Run item detail page \u2014 Item page links to its test case"
         },
         {
           "testTitle": "Scenario: Item page shows the case's cross-run Results",
           "caseKey": "TD-57",
-          "caseTitle": "Run item detail page — Item page shows the case's cross-run Results"
+          "caseTitle": "Run item detail page \u2014 Item page shows the case's cross-run Results"
         },
         {
           "testTitle": "Scenario: Marking retest after a failed verdict",
           "caseKey": "TD-58",
-          "caseTitle": "Run item status lifecycle — Marking retest after a failed verdict"
+          "caseTitle": "Run item status lifecycle \u2014 Marking retest after a failed verdict"
         },
         {
           "testTitle": "Scenario: Closing a run blocks recording; reopening allows it again",
           "caseKey": "TD-59",
-          "caseTitle": "Run open/closed lifecycle — Closing a run blocks recording; reopening allows it again"
+          "caseTitle": "Run open/closed lifecycle \u2014 Closing a run blocks recording; reopening allows it again"
         },
         {
           "testTitle": "Scenario: Summary counts by status",
           "caseKey": "TD-60",
-          "caseTitle": "Run summary — Summary counts by status"
+          "caseTitle": "Run summary \u2014 Summary counts by status"
         },
         {
           "testTitle": "Scenario: Assign an item from the board, then filter by assignee and by Unassigned",
           "caseKey": "TD-61",
-          "caseTitle": "Run item assignment — Assign an item from the board, then filter by assignee and by Unassigned"
+          "caseTitle": "Run item assignment \u2014 Assign an item from the board, then filter by assignee and by Unassigned"
         },
         {
           "testTitle": "Scenario: Bulk-assigning two selected items in one action",
           "caseKey": "TD-62",
-          "caseTitle": "Run item assignment — Bulk-assigning two selected items in one action"
+          "caseTitle": "Run item assignment \u2014 Bulk-assigning two selected items in one action"
         },
         {
           "testTitle": "Scenario: Bulk-recording a verdict for selected items on an open run",
           "caseKey": "TD-63",
-          "caseTitle": "Run item assignment — Bulk-recording a verdict for selected items on an open run"
+          "caseTitle": "Run item assignment \u2014 Bulk-recording a verdict for selected items on an open run"
         },
         {
           "testTitle": "Scenario: Right-clicking a checked row shows the bulk menu instead of single-item actions",
           "caseKey": "TD-64",
-          "caseTitle": "Run item assignment — Right-clicking a checked row shows the bulk menu instead of single-item actions"
+          "caseTitle": "Run item assignment \u2014 Right-clicking a checked row shows the bulk menu instead of single-item actions"
         },
         {
           "testTitle": "Scenario: Right-clicking an unchecked row leaves an active selection untouched",
           "caseKey": "TD-65",
-          "caseTitle": "Run item assignment — Right-clicking an unchecked row leaves an active selection untouched"
+          "caseTitle": "Run item assignment \u2014 Right-clicking an unchecked row leaves an active selection untouched"
         },
         {
           "testTitle": "Scenario: Space selects the focused row and Shift+click extends the range (add-run-board-select-shortcuts)",
           "caseKey": "TD-66",
-          "caseTitle": "Run item assignment — Space selects the focused row and Shift+click extends the range (add-run-board-select-shortcuts)"
+          "caseTitle": "Run item assignment \u2014 Space selects the focused row and Shift+click extends the range (add-run-board-select-shortcuts)"
         },
         {
           "testTitle": "Scenario: Creating a run with a default assignee pre-assigns every item",
           "caseKey": "TD-67",
-          "caseTitle": "Run item assignment — Creating a run with a default assignee pre-assigns every item"
+          "caseTitle": "Run item assignment \u2014 Creating a run with a default assignee pre-assigns every item"
         },
         {
           "testTitle": "Scenario: Someone outside the project is not offered as an assignee",
           "caseKey": "TD-68",
-          "caseTitle": "Run item assignment — Someone outside the project is not offered as an assignee"
+          "caseTitle": "Run item assignment \u2014 Someone outside the project is not offered as an assignee"
         },
         {
           "testTitle": "Scenario: Reports page assembles all three sections",
           "caseKey": "TD-69",
-          "caseTitle": "Project Reports page — Reports page assembles all three sections"
+          "caseTitle": "Project Reports page \u2014 Reports page assembles all three sections"
         }
       ]
     },
@@ -438,352 +438,352 @@
         {
           "testTitle": "Scenario: No breadcrumb on a project's own landing page",
           "caseKey": "TD-70",
-          "caseTitle": "Breadcrumb trail — No breadcrumb on a project's own landing page"
+          "caseTitle": "Breadcrumb trail \u2014 No breadcrumb on a project's own landing page"
         },
         {
           "testTitle": "Scenario: Breadcrumb reflects folder depth",
           "caseKey": "TD-71",
-          "caseTitle": "Breadcrumb trail — Breadcrumb reflects folder depth"
+          "caseTitle": "Breadcrumb trail \u2014 Breadcrumb reflects folder depth"
         },
         {
           "testTitle": "Scenario: Deep section nesting collapses the middle of the trail",
           "caseKey": "TD-72",
-          "caseTitle": "Breadcrumb trail — Deep section nesting collapses the middle of the trail"
+          "caseTitle": "Breadcrumb trail \u2014 Deep section nesting collapses the middle of the trail"
         },
         {
-          "testTitle": "Scenario: No breadcrumb on a run page — the header chip covers the project, the run name is already the heading",
+          "testTitle": "Scenario: No breadcrumb on a run page \u2014 the header chip covers the project, the run name is already the heading",
           "caseKey": "TD-73",
-          "caseTitle": "Breadcrumb trail — No breadcrumb on a run page — the header chip covers the project, the run name is already the heading"
+          "caseTitle": "Breadcrumb trail \u2014 No breadcrumb on a run page \u2014 the header chip covers the project, the run name is already the heading"
         },
         {
           "testTitle": "Scenario: Case detail breadcrumb does not repeat the case title",
           "caseKey": "TD-74",
-          "caseTitle": "Breadcrumb trail — Case detail breadcrumb does not repeat the case title"
+          "caseTitle": "Breadcrumb trail \u2014 Case detail breadcrumb does not repeat the case title"
         },
         {
           "testTitle": "Scenario: Navigating to the active project via the header",
           "caseKey": "TD-75",
-          "caseTitle": "Project switcher — Navigating to the active project via the header"
+          "caseTitle": "Project switcher \u2014 Navigating to the active project via the header"
         },
         {
           "testTitle": "Scenario: Switching project via the header icon",
           "caseKey": "TD-76",
-          "caseTitle": "Project switcher — Switching project via the header icon"
+          "caseTitle": "Project switcher \u2014 Switching project via the header icon"
         },
         {
           "testTitle": "Scenario: Switching project via keyboard",
           "caseKey": "TD-77",
-          "caseTitle": "Project switcher — Switching project via keyboard"
+          "caseTitle": "Project switcher \u2014 Switching project via keyboard"
         },
         {
           "testTitle": "Scenario: Wordmark links home",
           "caseKey": "TD-78",
-          "caseTitle": "Brand wordmark — Wordmark links home"
+          "caseTitle": "Brand wordmark \u2014 Wordmark links home"
         },
         {
           "testTitle": "Scenario: Empty project shows per-panel empty states",
           "caseKey": "TD-79",
-          "caseTitle": "Project landing shows top-level structure only — Empty project shows per-panel empty states"
+          "caseTitle": "Project landing shows top-level structure only \u2014 Empty project shows per-panel empty states"
         },
         {
           "testTitle": "Scenario: Entirely empty project shows a getting-started checklist instead of three empty panels",
           "caseKey": "TD-80",
-          "caseTitle": "Project landing shows top-level structure only — Entirely empty project shows a getting-started checklist instead of three empty panels"
+          "caseTitle": "Project landing shows top-level structure only \u2014 Entirely empty project shows a getting-started checklist instead of three empty panels"
         },
         {
           "testTitle": "Scenario: Dense project stays legible",
           "caseKey": "TD-81",
-          "caseTitle": "Project landing shows top-level structure only — Dense project stays legible"
+          "caseTitle": "Project landing shows top-level structure only \u2014 Dense project stays legible"
         },
         {
           "testTitle": "Scenario: Reports panel is a fourth, full-width row below the other three",
           "caseKey": "TD-82",
-          "caseTitle": "Project landing shows top-level structure only — Reports panel is a fourth, full-width row below the other three"
+          "caseTitle": "Project landing shows top-level structure only \u2014 Reports panel is a fourth, full-width row below the other three"
         },
         {
           "testTitle": "Scenario: Navigating into a nested folder",
           "caseKey": "TD-83",
-          "caseTitle": "Library with two-pane navigation — Navigating into a nested folder"
+          "caseTitle": "Library with two-pane navigation \u2014 Navigating into a nested folder"
         },
         {
           "testTitle": "Scenario: A folder can contain both subfolders and cases",
           "caseKey": "TD-84",
-          "caseTitle": "Library with two-pane navigation — A folder can contain both subfolders and cases"
+          "caseTitle": "Library with two-pane navigation \u2014 A folder can contain both subfolders and cases"
         },
         {
           "testTitle": "Scenario: Section tree is hidden below 768px",
           "caseKey": "TD-85",
-          "caseTitle": "Library with two-pane navigation — Section tree is hidden below 768px"
+          "caseTitle": "Library with two-pane navigation \u2014 Section tree is hidden below 768px"
         },
         {
           "testTitle": "Scenario: Resized tree width persists across reloads",
           "caseKey": "TD-86",
-          "caseTitle": "Library with two-pane navigation — Resized tree width persists across reloads"
+          "caseTitle": "Library with two-pane navigation \u2014 Resized tree width persists across reloads"
         },
         {
           "testTitle": "Scenario: Breadcrumbs cover upward navigation on mobile",
           "caseKey": "TD-87",
-          "caseTitle": "Library with two-pane navigation — Breadcrumbs cover upward navigation on mobile"
+          "caseTitle": "Library with two-pane navigation \u2014 Breadcrumbs cover upward navigation on mobile"
         },
         {
           "testTitle": "Scenario: Browse sections covers sideways navigation on mobile",
           "caseKey": "TD-88",
-          "caseTitle": "Library with two-pane navigation — Browse sections covers sideways navigation on mobile"
+          "caseTitle": "Library with two-pane navigation \u2014 Browse sections covers sideways navigation on mobile"
         },
         {
           "testTitle": "Scenario: A section row shows its case count and a critical-priority indicator",
           "caseKey": "TD-89",
-          "caseTitle": "Library with two-pane navigation — A section row shows its case count and a critical-priority indicator"
+          "caseTitle": "Library with two-pane navigation \u2014 A section row shows its case count and a critical-priority indicator"
         },
         {
           "testTitle": "Scenario: Filtering the toolbar narrows the section, with a distinct filtered-to-zero state",
           "caseKey": "TD-90",
-          "caseTitle": "Library with two-pane navigation — Filtering the toolbar narrows the section, with a distinct filtered-to-zero state"
+          "caseTitle": "Library with two-pane navigation \u2014 Filtering the toolbar narrows the section, with a distinct filtered-to-zero state"
         },
         {
           "testTitle": "Scenario: Search entire Library flattens matches across sections with their section path",
           "caseKey": "TD-91",
-          "caseTitle": "Library with two-pane navigation — Search entire Library flattens matches across sections with their section path"
+          "caseTitle": "Library with two-pane navigation \u2014 Search entire Library flattens matches across sections with their section path"
         },
         {
           "testTitle": "Scenario: A currently-flaky case shows a Flaky indicator and surfaces via the Flaky filter",
           "caseKey": "TD-92",
-          "caseTitle": "Library with two-pane navigation — A currently-flaky case shows a Flaky indicator and surfaces via the Flaky filter"
+          "caseTitle": "Library with two-pane navigation \u2014 A currently-flaky case shows a Flaky indicator and surfaces via the Flaky filter"
         },
         {
           "testTitle": "Scenario: Creating a folder in the currently open folder",
           "caseKey": "TD-93",
-          "caseTitle": "Creating a folder — Creating a folder in the currently open folder"
+          "caseTitle": "Creating a folder \u2014 Creating a folder in the currently open folder"
         },
         {
           "testTitle": "Scenario: Creating a subfolder from the tree without navigating",
           "caseKey": "TD-94",
-          "caseTitle": "Creating a folder — Creating a subfolder from the tree without navigating"
+          "caseTitle": "Creating a folder \u2014 Creating a subfolder from the tree without navigating"
         },
         {
           "testTitle": "Scenario: Creating a case with steps",
           "caseKey": "TD-95",
-          "caseTitle": "Creating a test case — Creating a case with steps"
+          "caseTitle": "Creating a test case \u2014 Creating a case with steps"
         },
         {
           "testTitle": "Scenario: Expected result per step is optional",
           "caseKey": "TD-96",
-          "caseTitle": "Creating a test case — Expected result per step is optional"
+          "caseTitle": "Creating a test case \u2014 Expected result per step is optional"
         },
         {
           "testTitle": "Scenario: Viewing steps and suite membership",
           "caseKey": "TD-97",
-          "caseTitle": "Viewing an existing test case — Viewing steps and suite membership"
+          "caseTitle": "Viewing an existing test case \u2014 Viewing steps and suite membership"
         },
         {
           "testTitle": "Scenario: Version history is visible",
           "caseKey": "TD-98",
-          "caseTitle": "Viewing an existing test case — Version history is visible"
+          "caseTitle": "Viewing an existing test case \u2014 Version history is visible"
         },
         {
           "testTitle": "Scenario: Opening a version's execution history dialog",
           "caseKey": "TD-99",
-          "caseTitle": "Viewing an existing test case — Opening a version's execution history dialog"
+          "caseTitle": "Viewing an existing test case \u2014 Opening a version's execution history dialog"
         },
         {
           "testTitle": "Scenario: Diff shows only changed fields",
           "caseKey": "TD-100",
-          "caseTitle": "Viewing an existing test case — Diff shows only changed fields"
+          "caseTitle": "Viewing an existing test case \u2014 Diff shows only changed fields"
         },
         {
           "testTitle": "Scenario: Oldest version has nothing to diff against",
           "caseKey": "TD-101",
-          "caseTitle": "Viewing an existing test case — Oldest version has nothing to diff against"
+          "caseTitle": "Viewing an existing test case \u2014 Oldest version has nothing to diff against"
         },
         {
           "testTitle": "Scenario: Executions list and Flaky flag reflect mixed results for the same version",
           "caseKey": "TD-102",
-          "caseTitle": "Viewing an existing test case — Executions list and Flaky flag reflect mixed results for the same version"
+          "caseTitle": "Viewing an existing test case \u2014 Executions list and Flaky flag reflect mixed results for the same version"
         },
         {
           "testTitle": "Scenario: Opening a case navigates to its own route",
           "caseKey": "TD-103",
-          "caseTitle": "Viewing an existing test case — Opening a case navigates to its own route"
+          "caseTitle": "Viewing an existing test case \u2014 Opening a case navigates to its own route"
         },
         {
           "testTitle": "Scenario: Properties render as labeled pairs",
           "caseKey": "TD-104",
-          "caseTitle": "Viewing an existing test case — Properties render as labeled pairs"
+          "caseTitle": "Viewing an existing test case \u2014 Properties render as labeled pairs"
         },
         {
           "testTitle": "Scenario: Results section shows a designed empty state",
           "caseKey": "TD-105",
-          "caseTitle": "Viewing an existing test case — Results section shows a designed empty state"
+          "caseTitle": "Viewing an existing test case \u2014 Results section shows a designed empty state"
         },
         {
           "testTitle": "Scenario: Results section shows recent execution history",
           "caseKey": "TD-106",
-          "caseTitle": "Viewing an existing test case — Results section shows recent execution history"
+          "caseTitle": "Viewing an existing test case \u2014 Results section shows recent execution history"
         },
         {
           "testTitle": "Scenario: Sidebar collapses to stacked sections on narrow viewports",
           "caseKey": "TD-107",
-          "caseTitle": "Viewing an existing test case — Sidebar collapses to stacked sections on narrow viewports"
+          "caseTitle": "Viewing an existing test case \u2014 Sidebar collapses to stacked sections on narrow viewports"
         },
         {
-          "testTitle": "Scenario: Header actions menu — Move to… and Delete",
+          "testTitle": "Scenario: Header actions menu \u2014 Move to\u2026 and Delete",
           "caseKey": "TD-108",
-          "caseTitle": "Viewing an existing test case — Header actions menu — Move to… and Delete"
+          "caseTitle": "Viewing an existing test case \u2014 Header actions menu \u2014 Move to\u2026 and Delete"
         },
         {
           "testTitle": "Scenario: Version history shows a change signal, with an inline diff expand",
           "caseKey": "TD-109",
-          "caseTitle": "Viewing an existing test case — Version history shows a change signal, with an inline diff expand"
+          "caseTitle": "Viewing an existing test case \u2014 Version history shows a change signal, with an inline diff expand"
         },
         {
           "testTitle": "Scenario: Saving an edit creates a new version",
           "caseKey": "TD-110",
-          "caseTitle": "Editing a test case creates a new version — Saving an edit creates a new version"
+          "caseTitle": "Editing a test case creates a new version \u2014 Saving an edit creates a new version"
         },
         {
           "testTitle": "Scenario: A version history row shows who made the change",
           "caseKey": "TD-111",
-          "caseTitle": "Editing a test case creates a new version — A version history row shows who made the change"
+          "caseTitle": "Editing a test case creates a new version \u2014 A version history row shows who made the change"
         },
         {
           "testTitle": "Scenario: Listing projects",
           "caseKey": "TD-112",
-          "caseTitle": "Project list with permission-ready create action — Listing projects"
+          "caseTitle": "Project list with permission-ready create action \u2014 Listing projects"
         },
         {
           "testTitle": "Scenario: Manual view choice persists across reloads",
           "caseKey": "TD-113",
-          "caseTitle": "Project list with permission-ready create action — Manual view choice persists across reloads"
+          "caseTitle": "Project list with permission-ready create action \u2014 Manual view choice persists across reloads"
         },
         {
           "testTitle": "Scenario: Searching filters by name",
           "caseKey": "TD-114",
-          "caseTitle": "Project list with permission-ready create action — Searching filters by name"
+          "caseTitle": "Project list with permission-ready create action \u2014 Searching filters by name"
         },
         {
           "testTitle": "Scenario: Expanded card shows tag chips",
           "caseKey": "TD-115",
-          "caseTitle": "Project list with permission-ready create action — Expanded card shows tag chips"
+          "caseTitle": "Project list with permission-ready create action \u2014 Expanded card shows tag chips"
         },
         {
           "testTitle": "Scenario: Filtering by tag",
           "caseKey": "TD-116",
-          "caseTitle": "Project list with permission-ready create action — Filtering by tag"
+          "caseTitle": "Project list with permission-ready create action \u2014 Filtering by tag"
         },
         {
           "testTitle": "Scenario: Opening the Runs page shows the runs list first",
           "caseKey": "TD-117",
-          "caseTitle": "Run creation — Opening the Runs page shows the runs list first"
+          "caseTitle": "Run creation \u2014 Opening the Runs page shows the runs list first"
         },
         {
           "testTitle": "Scenario: Runs are grouped into Open and Closed sections",
           "caseKey": "TD-118",
-          "caseTitle": "Run creation — Runs are grouped into Open and Closed sections"
+          "caseTitle": "Run creation \u2014 Runs are grouped into Open and Closed sections"
         },
         {
           "testTitle": "Scenario: Creating a run navigates to it with a confirmation",
           "caseKey": "TD-119",
-          "caseTitle": "Run creation — Creating a run navigates to it with a confirmation"
+          "caseTitle": "Run creation \u2014 Creating a run navigates to it with a confirmation"
         },
         {
           "testTitle": "Scenario: Selecting a suite in the New run form seeds the case selection",
           "caseKey": "TD-120",
-          "caseTitle": "Run creation — Selecting a suite in the New run form seeds the case selection"
+          "caseTitle": "Run creation \u2014 Selecting a suite in the New run form seeds the case selection"
         },
         {
           "testTitle": "Scenario: Resizing the case picker's section tree",
           "caseKey": "TD-121",
-          "caseTitle": "Suites index and detail page — Resizing the case picker's section tree"
+          "caseTitle": "Suites index and detail page \u2014 Resizing the case picker's section tree"
         },
         {
           "testTitle": "Scenario: Running a suite from its detail page",
           "caseKey": "TD-122",
-          "caseTitle": "Suites index and detail page — Running a suite from its detail page"
+          "caseTitle": "Suites index and detail page \u2014 Running a suite from its detail page"
         },
         {
           "testTitle": "Scenario: Customize selection hands off to the New run form pre-seeded",
           "caseKey": "TD-123",
-          "caseTitle": "Suites index and detail page — Customize selection hands off to the New run form pre-seeded"
+          "caseTitle": "Suites index and detail page \u2014 Customize selection hands off to the New run form pre-seeded"
         },
         {
           "testTitle": "Scenario: Renaming a suite from its index card menu",
           "caseKey": "TD-124",
-          "caseTitle": "Suites index and detail page — Renaming a suite from its index card menu"
+          "caseTitle": "Suites index and detail page \u2014 Renaming a suite from its index card menu"
         },
         {
           "testTitle": "Scenario: Deleting a suite via right-click on its index card",
           "caseKey": "TD-125",
-          "caseTitle": "Suites index and detail page — Deleting a suite via right-click on its index card"
+          "caseTitle": "Suites index and detail page \u2014 Deleting a suite via right-click on its index card"
         },
         {
           "testTitle": "Scenario: Suite detail page defaults to view mode",
           "caseKey": "TD-126",
-          "caseTitle": "Suites index and detail page — Suite detail page defaults to view mode"
+          "caseTitle": "Suites index and detail page \u2014 Suite detail page defaults to view mode"
         },
         {
           "testTitle": "Scenario: Toggling Edit cases / View cases and back",
           "caseKey": "TD-127",
-          "caseTitle": "Suites index and detail page — Toggling Edit cases / View cases and back"
+          "caseTitle": "Suites index and detail page \u2014 Toggling Edit cases / View cases and back"
         },
         {
           "testTitle": "Scenario: Confirmation toast is visible without scrolling",
           "caseKey": "TD-128",
-          "caseTitle": "Suites index and detail page — Confirmation toast is visible without scrolling"
+          "caseTitle": "Suites index and detail page \u2014 Confirmation toast is visible without scrolling"
         },
         {
           "testTitle": "Scenario: Stability's \"Closed runs\"/\"Open + closed\" toggle switches views, distinguishing an open run's point",
           "caseKey": "TD-129",
-          "caseTitle": "Suites index and detail page — Stability's \"Closed runs\"/\"Open + closed\" toggle switches views, distinguishing an open run's point"
+          "caseTitle": "Suites index and detail page \u2014 Stability's \"Closed runs\"/\"Open + closed\" toggle switches views, distinguishing an open run's point"
         },
         {
           "testTitle": "Scenario: Latest closed run property reflects the closed run, not a fresh open run's \"0%\"",
           "caseKey": "TD-130",
-          "caseTitle": "Suites index and detail page — Latest closed run property reflects the closed run, not a fresh open run's \"0%\""
+          "caseTitle": "Suites index and detail page \u2014 Latest closed run property reflects the closed run, not a fresh open run's \"0%\""
         },
         {
           "testTitle": "Scenario: Comparing two runs shows both status charts",
           "caseKey": "TD-131",
-          "caseTitle": "Run comparison — Comparing two runs shows both status charts"
+          "caseTitle": "Run comparison \u2014 Comparing two runs shows both status charts"
         },
         {
           "testTitle": "Scenario: Item-level diff is categorized into five sections",
           "caseKey": "TD-132",
-          "caseTitle": "Run comparison — Item-level diff is categorized into five sections"
+          "caseTitle": "Run comparison \u2014 Item-level diff is categorized into five sections"
         },
         {
           "testTitle": "Scenario: \"Compare to previous run\" appears only when a prior closed run exists",
           "caseKey": "TD-133",
-          "caseTitle": "Run comparison — \"Compare to previous run\" appears only when a prior closed run exists"
+          "caseTitle": "Run comparison \u2014 \"Compare to previous run\" appears only when a prior closed run exists"
         },
         {
           "testTitle": "Scenario: The explicit picker only offers closed runs from the same project",
           "caseKey": "TD-134",
-          "caseTitle": "Run comparison — The explicit picker only offers closed runs from the same project"
+          "caseTitle": "Run comparison \u2014 The explicit picker only offers closed runs from the same project"
         },
         {
-          "testTitle": "Scenario: A run row menu inside a short Run history card is not clipped by the card, and Compare… is reachable",
+          "testTitle": "Scenario: A run row menu inside a short Run history card is not clipped by the card, and Compare\u2026 is reachable",
           "caseKey": "TD-135",
-          "caseTitle": "Run comparison — A run row menu inside a short Run history card is not clipped by the card, and Compare… is reachable"
+          "caseTitle": "Run comparison \u2014 A run row menu inside a short Run history card is not clipped by the card, and Compare\u2026 is reachable"
         },
         {
-          "testTitle": "Scenario: \"Compare…\" from a run row's context menu pre-selects that run in the picker",
+          "testTitle": "Scenario: \"Compare\u2026\" from a run row's context menu pre-selects that run in the picker",
           "caseKey": "TD-136",
-          "caseTitle": "Run comparison — \"Compare…\" from a run row's context menu pre-selects that run in the picker"
+          "caseTitle": "Run comparison \u2014 \"Compare\u2026\" from a run row's context menu pre-selects that run in the picker"
         },
         {
           "testTitle": "Scenario: Same-named runs are distinguishable in the picker, and picking one removes it from the other side",
           "caseKey": "TD-137",
-          "caseTitle": "Run comparison — Same-named runs are distinguishable in the picker, and picking one removes it from the other side"
+          "caseTitle": "Run comparison \u2014 Same-named runs are distinguishable in the picker, and picking one removes it from the other side"
         },
         {
           "testTitle": "Scenario: A text and a select field are defined, reordered, and used on a case",
           "caseKey": "TD-138",
-          "caseTitle": "Project-scoped custom field definitions — A text and a select field are defined, reordered, and used on a case"
+          "caseTitle": "Project-scoped custom field definitions \u2014 A text and a select field are defined, reordered, and used on a case"
         },
         {
           "testTitle": "Scenario: Deleting a field shows how many cases have a value, and removes it from the case afterward",
           "caseKey": "TD-139",
-          "caseTitle": "Project-scoped custom field definitions — Deleting a field shows how many cases have a value, and removes it from the case afterward"
+          "caseTitle": "Project-scoped custom field definitions \u2014 Deleting a field shows how many cases have a value, and removes it from the case afterward"
         }
       ]
     },
@@ -794,22 +794,22 @@
         {
           "testTitle": "Scenario: Explicit Dark choice overrides a light OS preference, and persists across sessions",
           "caseKey": "TD-140",
-          "caseTitle": "A user can explicitly choose a theme — Explicit Dark choice overrides a light OS preference, and persists across sessions"
+          "caseTitle": "A user can explicitly choose a theme \u2014 Explicit Dark choice overrides a light OS preference, and persists across sessions"
         },
         {
           "testTitle": "Scenario: Tenant Admin selects a preset",
           "caseKey": "TD-141",
-          "caseTitle": "A Tenant Admin can choose an instance-wide color palette — Tenant Admin selects a preset"
+          "caseTitle": "A Tenant Admin can choose an instance-wide color palette \u2014 Tenant Admin selects a preset"
         },
         {
           "testTitle": "Scenario: The choice is visible to every user, not only admins",
           "caseKey": "TD-142",
-          "caseTitle": "A Tenant Admin can choose an instance-wide color palette — The choice is visible to every user, not only admins"
+          "caseTitle": "A Tenant Admin can choose an instance-wide color palette \u2014 The choice is visible to every user, not only admins"
         },
         {
           "testTitle": "Scenario: Tenant Admin saves a custom palette",
           "caseKey": "TD-143",
-          "caseTitle": "A Tenant Admin can choose an instance-wide color palette — Tenant Admin saves a custom palette"
+          "caseTitle": "A Tenant Admin can choose an instance-wide color palette \u2014 Tenant Admin saves a custom palette"
         }
       ]
     },
@@ -820,12 +820,28 @@
         {
           "testTitle": "Scenario: Tenant Admin changes a user's email",
           "caseKey": "TD-144",
-          "caseTitle": "Local user accounts — Tenant Admin changes a user's email"
+          "caseTitle": "Local user accounts \u2014 Tenant Admin changes a user's email"
         },
         {
           "testTitle": "Scenario: Tenant Admin triggers a password reset email for a user",
           "caseKey": "TD-145",
-          "caseTitle": "Local user accounts — Tenant Admin triggers a password reset email for a user"
+          "caseTitle": "Local user accounts \u2014 Tenant Admin triggers a password reset email for a user"
+        }
+      ]
+    },
+    "session-timeout-setting.spec.ts": {
+      "sectionId": "40cac7a6-30a6-4760-a0cf-8f02a12c8406",
+      "sectionLabel": "Session timeout setting",
+      "cases": [
+        {
+          "testTitle": "Scenario: A Tenant Admin configures the session timeout",
+          "caseKey": "TD-146",
+          "caseTitle": "Session-based login \u2014 A Tenant Admin configures the session timeout"
+        },
+        {
+          "testTitle": "Scenario: Out-of-bounds timeout values are rejected",
+          "caseKey": "TD-147",
+          "caseTitle": "Session-based login \u2014 Out-of-bounds timeout values are rejected"
         }
       ]
     }
