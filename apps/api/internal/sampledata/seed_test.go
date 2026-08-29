@@ -1564,3 +1564,23 @@ func TestSeedContentShowcasesJiraLinks(t *testing.T) {
 		t.Error("the failed bad-password run item should have a seeded jiraIssueKey")
 	}
 }
+
+func TestSeedContentShowcasesProjectTags(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+
+	summaries, err := svc.ProjectSummaries(actorCtx)
+	if err != nil {
+		t.Fatalf("ProjectSummaries: %v", err)
+	}
+	if len(summaries) == 0 {
+		t.Fatal("no projects seeded")
+	}
+	if len(summaries[0].Tags) == 0 {
+		t.Error("Sample Project should have at least one tag assigned, want project-tags showcased")
+	}
+}

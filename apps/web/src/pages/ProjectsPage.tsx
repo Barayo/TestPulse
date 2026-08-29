@@ -1,6 +1,10 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, Navigate, useNavigate } from 'react-router'
-import { StarIcon, Grid2x2, Grid3x3 } from 'lucide-react'
+import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon } from 'lucide-react'
+import { TagChipsEditor } from '@/components/TagChipsEditor'
+import { useTagVocabulary } from '@/lib/useTagVocabulary'
+import { useFloatingPosition } from '@/lib/useFloatingPosition'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,6 +23,7 @@ import { sortProjects, DEFAULT_SORT_DIRECTION, type SortKey } from '@/lib/sortPr
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Pill } from '@/components/ui/Pill'
+import { tagPills } from '@/components/Pills'
 import type { components } from '@testpulse/shared/api'
 
 type Project = components['schemas']['Project']
@@ -44,6 +49,7 @@ export default function ProjectsPage() {
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
   const projects = useProjectSummaries()
+  const tagVocabulary = useTagVocabulary()
   const bump = useBumpDataRevision()
   const isMobile = useIsMobile()
   const [manualOverride, setManualOverride] = useViewModeOverride()
@@ -54,8 +60,10 @@ export default function ProjectsPage() {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [error, setError] = useState<string>()
+  const [stagedTags, setStagedTags] = useState<string[]>([])
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null)
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
 
   const isTenantAdmin = user?.isTenantAdmin ?? false
   // Design D6: a non-Tenant-Admin who can see exactly one project (now a
@@ -117,7 +125,17 @@ export default function ProjectsPage() {
     }
     setName('')
     setDescription('')
-    if (data) navigate(`/projects/${data.key}`)
+    if (data) {
+      // Tags stage client-side during creation — the assign endpoint needs
+      // a real project key that doesn't exist until after this POST.
+      for (const tag of stagedTags) {
+        await api.PUT('/api/v1/projects/{projectKey}/tags/{tagName}', {
+          params: { path: { projectKey: data.key, tagName: tag } },
+        })
+      }
+      setStagedTags([])
+      navigate(`/projects/${data.key}`)
+    }
   }
 
   async function toggleFavorite(p: ProjectSummary) {
@@ -126,6 +144,20 @@ export default function ProjectsPage() {
     } else {
       await api.POST('/api/v1/projects/{projectKey}/favorite', { params: { path: { projectKey: p.id } } })
     }
+    bump()
+  }
+
+  async function addProjectTag(p: ProjectSummary, tag: string) {
+    await api.PUT('/api/v1/projects/{projectKey}/tags/{tagName}', {
+      params: { path: { projectKey: p.id, tagName: tag } },
+    })
+    bump()
+  }
+
+  async function removeProjectTag(p: ProjectSummary, tag: string) {
+    await api.DELETE('/api/v1/projects/{projectKey}/tags/{tagName}', {
+      params: { path: { projectKey: p.id, tagName: tag } },
+    })
     bump()
   }
 
@@ -162,12 +194,21 @@ export default function ProjectsPage() {
 
   if (skipToSingleProject) return null
 
-  const filtered = projects.filter(
+  const searchAndStatusFiltered = projects.filter(
     (p) =>
       (search.trim() === '' || p.name.toLowerCase().includes(search.trim().toLowerCase())) &&
       (statusFilter === null || statusOf(p) === statusFilter),
   )
+  const filtered = searchAndStatusFiltered.filter((p) => tagFilter === null || p.tags.includes(tagFilter))
   const visible = sortProjects(filtered, sort.key, sort.direction)
+
+  // Tag filter is only worth showing once some project actually has a tag
+  // (Favorites-section precedent: don't render a control with nothing to do).
+  const anyProjectHasTags = projects.some((p) => p.tags.length > 0)
+  const tagCounts = new Map<string, number>()
+  for (const p of searchAndStatusFiltered) {
+    for (const t of p.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1)
+  }
 
   const favorites = viewMode === 'expanded' ? visible.filter((p) => p.isFavorite) : []
   const rest = viewMode === 'expanded' ? visible.filter((p) => !p.isFavorite) : visible
@@ -220,6 +261,15 @@ export default function ProjectsPage() {
                   placeholder="What this project covers (optional)"
                 />
               </div>
+              <div className="space-y-1">
+                <Label>Tags</Label>
+                <TagChipsEditor
+                  tags={stagedTags}
+                  vocabulary={tagVocabulary}
+                  onAdd={(tag) => setStagedTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]))}
+                  onRemove={(tag) => setStagedTags((prev) => prev.filter((t) => t !== tag))}
+                />
+              </div>
             </form>
             {error && <p className="mt-2 text-sm text-destructive">{error}</p>}
           </CardContent>
@@ -246,6 +296,14 @@ export default function ProjectsPage() {
                   {s}
                 </Pill>
               ))}
+              {anyProjectHasTags && (
+                <TagFilterControl
+                  tagCounts={tagCounts}
+                  activeTag={tagFilter}
+                  onSelectTag={setTagFilter}
+                  onClear={() => setTagFilter(null)}
+                />
+              )}
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -353,17 +411,199 @@ export default function ProjectsPage() {
                 projects={rest}
                 onNavigate={(id) => navigate(`/projects/${id}`)}
                 onToggleFavorite={toggleFavorite}
+                tagVocabulary={tagVocabulary}
+                onAddTag={addProjectTag}
+                onRemoveTag={removeProjectTag}
               />
             ) : (
               <CompactList
                 projects={rest}
                 onNavigate={(id) => navigate(`/projects/${id}`)}
                 onToggleFavorite={toggleFavorite}
+                tagVocabulary={tagVocabulary}
+                onAddTag={addProjectTag}
+                onRemoveTag={removeProjectTag}
               />
             )}
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+// Dashed pill (distinct at rest from the fixed status pills) opening a
+// ProjectSwitcher-style anchored search popover — tag vocabulary is
+// open-ended, unlike the five fixed status filters, so a pill-per-tag row
+// doesn't scale. Counts reflect the search/status-filtered set, before tag
+// narrowing, so they always answer "if I pick this now, how many remain."
+function TagFilterControl({
+  tagCounts,
+  activeTag,
+  onSelectTag,
+  onClear,
+}: {
+  tagCounts: Map<string, number>
+  activeTag: string | null
+  onSelectTag: (tag: string) => void
+  onClear: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const tags = Array.from(tagCounts.keys()).sort()
+  const position = useFloatingPosition(open, containerRef, 'left')
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (containerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative flex items-center gap-1">
+      <button
+        type="button"
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+        className={
+          activeTag
+            ? 'whitespace-nowrap rounded-full border border-foreground bg-foreground px-3 py-1.5 text-xs font-medium text-background'
+            : 'whitespace-nowrap rounded-full border border-dashed border-input px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/40'
+        }
+      >
+        {activeTag ?? 'Tag'}
+      </button>
+      {activeTag && (
+        <button
+          type="button"
+          aria-label="Clear tag filter"
+          onClick={onClear}
+          className="text-muted-foreground hover:text-destructive"
+        >
+          <XIcon className="size-3.5" aria-hidden="true" />
+        </button>
+      )}
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            role="dialog"
+            aria-label="Filter by tag"
+            style={{ top: position.top, left: position.left }}
+            className="fixed z-50 w-56 rounded-md border bg-card p-2 shadow-lg"
+          >
+            <ul className="max-h-64 space-y-0.5 overflow-y-auto">
+              {tags.map((t) => (
+                <li key={t}>
+                  <button
+                    type="button"
+                    className="flex w-full items-center justify-between rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                    onClick={() => {
+                      onSelectTag(t)
+                      setOpen(false)
+                    }}
+                  >
+                    <span>{t}</span>
+                    <span className="text-xs text-muted-foreground">{tagCounts.get(t)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>,
+          document.body,
+        )}
+    </div>
+  )
+}
+
+// Reachable by anyone who can see the card at all (same `read` permission
+// bar as favoriting — the list only ever contains readable projects), so
+// this lives inline on the card, not gated behind ProjectSettingsPage
+// (manageProject-only, too high a bar for tag assignment's design).
+function CardTagEditor({
+  project: p,
+  vocabulary,
+  onAdd,
+  onRemove,
+}: {
+  project: ProjectSummary
+  vocabulary: string[]
+  onAdd: (p: ProjectSummary, tag: string) => void
+  onRemove: (p: ProjectSummary, tag: string) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const position = useFloatingPosition(open, containerRef, 'right')
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (containerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        type="button"
+        aria-label={`Edit tags for ${p.name}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation()
+          setOpen((o) => !o)
+        }}
+        className="text-muted-foreground hover:text-primary"
+      >
+        <TagIcon className="size-4" aria-hidden="true" />
+      </button>
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            role="dialog"
+            aria-label={`Edit tags for ${p.name}`}
+            style={{ top: position.top, right: position.right }}
+            className="fixed z-50 w-64 rounded-md border bg-card p-3 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <TagChipsEditor
+              tags={p.tags}
+              vocabulary={vocabulary}
+              onAdd={(tag) => onAdd(p, tag)}
+              onRemove={(tag) => onRemove(p, tag)}
+            />
+          </div>,
+          document.body,
+        )}
     </div>
   )
 }
@@ -416,6 +656,25 @@ function StatTile({ value, label }: { value: number; label: string }) {
   )
 }
 
+// Expanded cards have more room than the 2-tag cap CasePicker-style rows use
+// (tagPills() in Pills.tsx) — 4 before overflowing, per the approved mockup.
+function expandedTagPills(tags: string[]) {
+  const shown = tags.slice(0, 4)
+  const overflow = tags.length - shown.length
+  return (
+    <>
+      {shown.map((t) => (
+        <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+          {t}
+        </span>
+      ))}
+      {overflow > 0 && (
+        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">+{overflow}</span>
+      )}
+    </>
+  )
+}
+
 function isValidDate(iso: string): boolean {
   return iso !== '' && !Number.isNaN(new Date(iso).getTime())
 }
@@ -427,10 +686,16 @@ function ExpandedGrid({
   projects,
   onNavigate,
   onToggleFavorite,
+  tagVocabulary,
+  onAddTag,
+  onRemoveTag,
 }: {
   projects: ProjectSummary[]
   onNavigate: (id: string) => void
   onToggleFavorite: (p: ProjectSummary) => void
+  tagVocabulary: string[]
+  onAddTag: (p: ProjectSummary, tag: string) => void
+  onRemoveTag: (p: ProjectSummary, tag: string) => void
 }) {
   return (
     <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -458,9 +723,16 @@ function ExpandedGrid({
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.description}</p>
                     )}
                   </span>
-                  {/* Spacer matching the star button's footprint so the title never runs under it. */}
-                  <span className="size-4 shrink-0" aria-hidden="true" />
+                  {/* Spacer matching the tag-edit + star buttons' combined footprint so the title never runs under them. */}
+                  <span className="flex shrink-0 gap-1.5" aria-hidden="true">
+                    <span className="size-4" />
+                    <span className="size-4" />
+                  </span>
                 </span>
+
+                {p.tags.length > 0 && (
+                  <span className="flex flex-wrap gap-1.5">{expandedTagPills(p.tags)}</span>
+                )}
 
                 <StatusPill rate={p.passRate} />
                 <ProgressBar rate={p.passRate} />
@@ -479,21 +751,24 @@ function ExpandedGrid({
                 )}
               </button>
 
-              <button
-                type="button"
-                aria-label={p.isFavorite ? `Unstar ${p.name}` : `Star ${p.name}`}
-                aria-pressed={p.isFavorite}
-                onClick={(e) => {
-                  e.stopPropagation()
-                  void onToggleFavorite(p)
-                }}
-                className="absolute right-4 top-4 text-muted-foreground hover:text-secondary"
-              >
-                <StarIcon
-                  className={`size-4 ${p.isFavorite ? 'fill-secondary text-secondary' : ''}`}
-                  aria-hidden="true"
-                />
-              </button>
+              <span className="absolute right-4 top-4 flex items-center gap-1.5">
+                <CardTagEditor project={p} vocabulary={tagVocabulary} onAdd={onAddTag} onRemove={onRemoveTag} />
+                <button
+                  type="button"
+                  aria-label={p.isFavorite ? `Unstar ${p.name}` : `Star ${p.name}`}
+                  aria-pressed={p.isFavorite}
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    void onToggleFavorite(p)
+                  }}
+                  className="text-muted-foreground hover:text-secondary"
+                >
+                  <StarIcon
+                    className={`size-4 ${p.isFavorite ? 'fill-secondary text-secondary' : ''}`}
+                    aria-hidden="true"
+                  />
+                </button>
+              </span>
             </div>
           </li>
         )
@@ -513,10 +788,16 @@ function CompactList({
   projects,
   onNavigate,
   onToggleFavorite,
+  tagVocabulary,
+  onAddTag,
+  onRemoveTag,
 }: {
   projects: ProjectSummary[]
   onNavigate: (id: string) => void
   onToggleFavorite: (p: ProjectSummary) => void
+  tagVocabulary: string[]
+  onAddTag: (p: ProjectSummary, tag: string) => void
+  onRemoveTag: (p: ProjectSummary, tag: string) => void
 }) {
   return (
     <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
@@ -532,8 +813,15 @@ function CompactList({
                   {p.isSample && <Badge variant="secondary">Sample</Badge>}
                   {p.archived && <Badge variant="outline">Archived</Badge>}
                 </span>
-                <span className="size-4 shrink-0" aria-hidden="true" />
+                <span className="flex shrink-0 gap-1.5" aria-hidden="true">
+                  <span className="size-4" />
+                  <span className="size-4" />
+                </span>
               </span>
+
+              {p.tags.length > 0 && (
+                <span className="flex flex-wrap gap-1.5 text-xs text-muted-foreground">{tagPills(p.tags)}</span>
+              )}
 
               <StatusPill rate={p.passRate} />
               <ProgressBar rate={p.passRate} />
@@ -543,21 +831,24 @@ function CompactList({
               </span>
             </button>
 
-            <button
-              type="button"
-              aria-label={p.isFavorite ? `Unstar ${p.name}` : `Star ${p.name}`}
-              aria-pressed={p.isFavorite}
-              onClick={(e) => {
-                e.stopPropagation()
-                void onToggleFavorite(p)
-              }}
-              className="absolute right-4 top-4 text-muted-foreground hover:text-secondary"
-            >
-              <StarIcon
-                className={`size-4 ${p.isFavorite ? 'fill-secondary text-secondary' : ''}`}
-                aria-hidden="true"
-              />
-            </button>
+            <span className="absolute right-4 top-4 flex items-center gap-1.5">
+              <CardTagEditor project={p} vocabulary={tagVocabulary} onAdd={onAddTag} onRemove={onRemoveTag} />
+              <button
+                type="button"
+                aria-label={p.isFavorite ? `Unstar ${p.name}` : `Star ${p.name}`}
+                aria-pressed={p.isFavorite}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  void onToggleFavorite(p)
+                }}
+                className="text-muted-foreground hover:text-secondary"
+              >
+                <StarIcon
+                  className={`size-4 ${p.isFavorite ? 'fill-secondary text-secondary' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+            </span>
           </div>
         </li>
       ))}

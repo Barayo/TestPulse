@@ -18,6 +18,7 @@ export type ProjectSummary = {
   lastRunAt: string | null
   isFavorite: boolean
   archived: boolean
+  tags: string[]
 }
 
 // Per-project suite/case counts and latest-run pass rate, fetched in one
@@ -58,6 +59,7 @@ export function useProjectSummaries(): ProjectSummary[] {
             // (add-data-retention design.md D7) — always present, no
             // dependency on the summaries fetch succeeding.
             archived: p.archived ?? false,
+            tags: stat?.tags ?? [],
           }
         })
         if (!cancelled) setSummaries(results)

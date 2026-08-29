@@ -76,6 +76,7 @@ describe('useProjectSummaries', () => {
       lastRunAt: null,
       isFavorite: false,
       archived: false,
+      tags: [],
     })
     expect(result.current[1]).toEqual({
       id: 'p1',
@@ -89,6 +90,7 @@ describe('useProjectSummaries', () => {
       lastRunAt: null,
       isFavorite: false,
       archived: false,
+      tags: [],
     })
   })
 
@@ -166,7 +168,38 @@ describe('useProjectSummaries', () => {
       lastRunAt: '2026-01-02T00:00:00Z',
       isFavorite: true,
       archived: false,
+      tags: [],
     })
+  })
+
+  it('passes through tags from the summaries response (add-project-tags)', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects') {
+        return Promise.resolve({
+          data: [{ id: 'id0', key: 'p0', name: 'Project 0', archived: false, description: '', isSample: false, createdAt: '' }],
+          response: { ok: true },
+        })
+      }
+      if (path === '/api/v1/projects/summaries') {
+        return Promise.resolve({
+          data: [{ projectId: 'id0', suiteCount: 0, caseCount: 0, passRate: null, isFavorite: false, tags: ['mobile', 'internal'] }],
+          response: { ok: true },
+        })
+      }
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    const { result } = renderHook(() => useProjectSummaries(), { wrapper })
+    await waitFor(() => expect(result.current).toHaveLength(1))
+
+    expect(result.current[0].tags).toEqual(['mobile', 'internal'])
+  })
+
+  it('defaults tags to an empty array when the summary omits them', async () => {
+    mockBatchedAPI(1)
+    const { result } = renderHook(() => useProjectSummaries(), { wrapper })
+    await waitFor(() => expect(result.current).toHaveLength(1))
+
+    expect(result.current[0].tags).toEqual([])
   })
 
   it('aborts in-flight requests when the component unmounts', async () => {

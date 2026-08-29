@@ -120,6 +120,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tags": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the full shared project tag vocabulary (add-project-tags), for the project list's filter control and the tag picker's autocomplete. */
+        get: operations["listTagNames"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}": {
         parameters: {
             query?: never;
@@ -156,6 +173,27 @@ export interface paths {
         post: operations["starProject"];
         /** Unstar a project for the calling user */
         delete: operations["unstarProject"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/tags/{tagName}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                tagName: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Assign a tag to a project, creating the shared vocabulary entry if it doesn't already exist (case-insensitive reuse). */
+        put: operations["assignProjectTag"];
+        post?: never;
+        /** Remove a tag from a project. The tag itself stays in the shared vocabulary for reuse, even if this was its last assignment. */
+        delete: operations["removeProjectTag"];
         options?: never;
         head?: never;
         patch?: never;
@@ -2390,6 +2428,8 @@ export interface components {
             isFavorite: boolean;
             /** @description The project's current archived state (add-data-retention) — summaries now include archived projects (previously excluded), since the delete-project confirmation needs real counts for the one project this always excluded before. */
             archived: boolean;
+            /** @description The project's assigned tag names (add-project-tags), from the shared instance-wide tag vocabulary. Empty, not null, when untagged. */
+            tags: string[];
         };
         HealthStatus: {
             /** @enum {string} */
@@ -2950,6 +2990,26 @@ export interface operations {
             };
         };
     };
+    listTagNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Every tag name currently in the shared vocabulary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+        };
+    };
     getProject: {
         parameters: {
             query?: never;
@@ -3066,6 +3126,53 @@ export interface operations {
                 content?: never;
             };
             400: components["responses"]["ValidationError"];
+        };
+    };
+    assignProjectTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                tagName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The project now has this tag assigned */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    removeProjectTag: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                tagName: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The tag is no longer assigned to this project */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listCases: {

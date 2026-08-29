@@ -59,12 +59,15 @@ internal `id` in paths — they aren't in scope for this scheme.
 |---|---|---|
 | GET | `/api/v1/projects` | List projects. Every project carries `isSample`, `true` for the one automatically-seeded showroom project a fresh instance gets on first startup (see [Getting started](getting-started.md)), `false` otherwise |
 | POST | `/api/v1/projects` | Create a project (`name`; optional `description`) — Tenant Admin only; the response's `key` is auto-derived from `name`; `isSample` is always `false` for a project created this way |
-| GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), and whether the calling user has favorited it, for every non-archived project, in one request — computed server-side (4 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
+| GET | `/api/v1/projects/summaries` | Suite count, case count, latest-run pass rate and timestamp (`lastRunAt`), whether the calling user has favorited it, and its assigned tags (`tags`, `add-project-tags`), for every non-archived project, in one request — computed server-side (5 grouped SQL queries) so the request count stays constant regardless of how many projects exist. Consumed by the project list and switcher. |
 | GET | `/api/v1/projects/{projectKey}` | Get a project |
 | PATCH | `/api/v1/projects/{projectKey}` | Rename, describe, archive/unarchive (`archived: true`/`false`, both directions — `add-data-retention` D7), and/or set `publicAccess` — Project Admin+ (renaming never changes `key`). `autoArchiveExempt` (`add-data-retention` D9 — exempts the project from the instance-wide auto-archive policy) is accepted in the same request body but enforced separately: rejected with `403` from anyone but a Tenant Admin, even a Project Admin who otherwise passes this route's `manageProject` gate |
 | DELETE | `/api/v1/projects/{projectKey}` | Permanently delete an **already-archived** project and everything scoped to it — `400` if the project isn't archived first. Returns `202 Accepted`: the project is hidden from lists immediately, but the actual purge (sections, cases, versions, suites, runs, items, results, membership) happens asynchronously in the background over the following seconds-to-minutes. Requires `projectDelete`, kept separate from `manageProject` (`add-data-retention` D4) |
 | POST | `/api/v1/projects/{projectKey}/favorite` | Star the project for the calling user (idempotent) |
 | DELETE | `/api/v1/projects/{projectKey}/favorite` | Unstar the project for the calling user (idempotent) |
+| PUT | `/api/v1/projects/{projectKey}/tags/{tagName}` | Assign a tag to the project (`add-project-tags`) — requires `read` on the project, same bar as favoriting; creates the shared vocabulary entry if it doesn't already exist, case-insensitively (idempotent) |
+| DELETE | `/api/v1/projects/{projectKey}/tags/{tagName}` | Remove a tag from the project (idempotent) — the tag itself stays in the shared vocabulary for reuse |
+| GET | `/api/v1/tags` | List the full shared tag vocabulary, for the project list's filter control and the tag picker's autocomplete |
 
 **Test cases** — every edit creates a new immutable version; see
 [Database](database.md) for the versioning model.

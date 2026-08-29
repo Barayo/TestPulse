@@ -332,6 +332,32 @@ func (s *Service) UnstarProject(ctx context.Context, projectID string) error {
 	return nil
 }
 
+// AssignProjectTag and RemoveProjectTag manage a project's tags
+// (add-project-tags) — shared project state, not per-user like favorites,
+// so unlike StarProject/UnstarProject these are open to any actor (human
+// or agent) the router's read-permission middleware already let through.
+func (s *Service) AssignProjectTag(ctx context.Context, projectID, tagName string) error {
+	if err := s.store.Tags.Assign(ctx, projectID, tagName); err != nil {
+		return err
+	}
+	s.audit(ctx, "tag", "project", projectID)
+	return nil
+}
+
+func (s *Service) RemoveProjectTag(ctx context.Context, projectID, tagName string) error {
+	if err := s.store.Tags.Remove(ctx, projectID, tagName); err != nil {
+		return err
+	}
+	s.audit(ctx, "untag", "project", projectID)
+	return nil
+}
+
+// ListTagNames returns the full shared tag vocabulary, for the project
+// list's filter control and the tag picker's autocomplete options.
+func (s *Service) ListTagNames(ctx context.Context) ([]string, error) {
+	return s.store.Tags.ListNames(ctx)
+}
+
 func (s *Service) userActor(ctx context.Context) (domain.Actor, error) {
 	actor, ok := domain.ActorFromContext(ctx)
 	if !ok {

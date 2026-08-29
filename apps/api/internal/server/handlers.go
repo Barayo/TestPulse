@@ -24,6 +24,7 @@ import (
 // `manageProject`, and project creation plus membership/role assignment
 // are Tenant-Admin-only.
 func mountAPI(r chi.Router, h *api) {
+	r.Get("/tags", h.listTagNames)
 	r.Route("/projects", func(r chi.Router) {
 		r.Get("/", h.listProjects)
 		r.Get("/summaries", h.projectSummaries)
@@ -35,6 +36,8 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermProjectDelete, projectIDParam)).Delete("/", h.deleteProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Post("/favorite", h.starProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/favorite", h.unstarProject)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Put("/tags/{tagName}", h.assignProjectTag)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/tags/{tagName}", h.removeProjectTag)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/cases", h.listCases)
 			r.With(h.requirePermission(domain.PermCaseCreate, projectIDParam)).Post("/cases", h.createCase)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/folders", h.listFolders)
@@ -246,6 +249,23 @@ func (h *api) starProject(w http.ResponseWriter, r *http.Request) {
 func (h *api) unstarProject(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.UnstarProject(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+// --- Tags (add-project-tags) ---
+
+func (h *api) assignProjectTag(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.AssignProjectTag(r.Context(), resolvedID(r, "projectKey"), chi.URLParam(r, "tagName"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) removeProjectTag(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.RemoveProjectTag(r.Context(), resolvedID(r, "projectKey"), chi.URLParam(r, "tagName"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) listTagNames(w http.ResponseWriter, r *http.Request) {
+	names, err := h.svc.ListTagNames(r.Context())
+	h.respond(w, http.StatusOK, names, err)
 }
 
 // --- Project membership (add-project-rbac) ---

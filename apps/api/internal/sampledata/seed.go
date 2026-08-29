@@ -65,6 +65,12 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: marking project public: %w", err)
 	}
 
+	// Showcase project-level tags (add-project-tags) so the feature is
+	// visible on the project list without any manual setup.
+	if err := svc.AssignProjectTag(ctx, p.ID, "showcase"); err != nil {
+		return fmt.Errorf("sampledata: tagging project: %w", err)
+	}
+
 	// Real project members (link-run-item-assignee-to-identity): assignment
 	// only accepts a real user or team now, so the Sample Project needs at
 	// least one more real user beyond the bootstrap admin to demonstrate

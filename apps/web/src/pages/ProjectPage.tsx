@@ -80,6 +80,7 @@ export default function ProjectPage() {
           lastRunAt: landing.runs[0]?.createdAt ?? null,
           isFavorite: false,
           archived: project?.archived ?? false,
+          tags: [],
         }
       : undefined
   const summary = access === 'member' ? summaries.find((s) => s.id === projectKey) : anonymousSummary

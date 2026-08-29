@@ -6,9 +6,10 @@ import ProjectsPage from './ProjectsPage'
 import { AuthProvider } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), DELETE: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn(), PUT: vi.fn(), DELETE: vi.fn() } }))
 const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
+const mockPUT = vi.mocked(api.PUT)
 const mockDELETE = vi.mocked(api.DELETE)
 
 const ME_TENANT_ADMIN = { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }
@@ -144,6 +145,40 @@ describe('ProjectsPage', () => {
     expect(screen.queryByText('Archived')).not.toBeInTheDocument()
   })
 
+  // add-project-tags: tag chips on the card.
+  it('shows tag chips on an expanded card', async () => {
+    mockProjectsList([project()], [summary({ tags: ['mobile', 'internal'] })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.getByText('mobile')).toBeInTheDocument()
+    expect(screen.getByText('internal')).toBeInTheDocument()
+  })
+
+  it('shows no tag chips for an untagged project in expanded view', async () => {
+    mockProjectsList([project()], [summary({ tags: [] })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.queryByText('mobile')).not.toBeInTheDocument()
+  })
+
+  it('caps expanded-card tag chips at 4 with a "+N" overflow chip', async () => {
+    mockProjectsList([project()], [summary({ tags: ['a', 'b', 'c', 'd', 'e', 'f'] })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.getByText('a')).toBeInTheDocument()
+    expect(screen.getByText('d')).toBeInTheDocument()
+    expect(screen.queryByText('e')).not.toBeInTheDocument()
+    expect(screen.getByText('+2')).toBeInTheDocument()
+  })
+
+  it('shows tag chips on a compact card', async () => {
+    window.localStorage.setItem('testpulse.projectListViewMode', 'compact')
+    mockProjectsList([project()], [summary({ tags: ['mobile'] })])
+    renderPage()
+    await screen.findByText('Banca Móvil')
+    expect(screen.getByText('mobile')).toBeInTheDocument()
+  })
+
   it('shows an "Archived" badge next to an archived project in compact view', async () => {
     window.localStorage.setItem('testpulse.projectListViewMode', 'compact')
     mockProjectsList([project({ archived: true })])
@@ -217,6 +252,30 @@ describe('ProjectsPage', () => {
       expect(mockPOST).toHaveBeenCalledWith(
         '/api/v1/projects',
         expect.objectContaining({ body: expect.objectContaining({ name: 'New Proj' }) }),
+      )
+    })
+    expect(await screen.findByText('Project page stub')).toBeInTheDocument()
+  })
+
+  it('stages tags in the create form and assigns them after creation (add-project-tags)', async () => {
+    mockProjectsList([])
+    mockPOST.mockResolvedValue({
+      data: { id: 'p2', key: 'p2', name: 'Tagged Proj', archived: false, description: '', createdAt: '' },
+      response: { ok: true },
+    })
+    mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
+    renderPage()
+
+    await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+    await userEvent.type(screen.getByLabelText(/^name$/i), 'Tagged Proj')
+    await userEvent.type(screen.getByPlaceholderText(/add a tag/i), 'mobile{Enter}')
+    expect(screen.getByText('mobile')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/tags/{tagName}',
+        expect.objectContaining({ params: { path: { projectKey: 'p2', tagName: 'mobile' } } }),
       )
     })
     expect(await screen.findByText('Project page stub')).toBeInTheDocument()
@@ -423,6 +482,42 @@ describe('ProjectsPage', () => {
     })
   })
 
+  describe('inline tag editing (add-project-tags)', () => {
+    it('adds a new tag to a project from its card', async () => {
+      mockProjectsList([project()], [summary({ tags: [] })])
+      mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
+      renderPage()
+      await screen.findByText('Banca Móvil')
+
+      await userEvent.click(screen.getByRole('button', { name: /edit tags for banca móvil/i }))
+      await userEvent.type(screen.getByPlaceholderText(/add a tag/i), 'mobile{Enter}')
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/projects/{projectKey}/tags/{tagName}',
+          expect.objectContaining({ params: { path: { projectKey: 'p1', tagName: 'mobile' } } }),
+        )
+      })
+    })
+
+    it('removes a tag from a project via the inline editor', async () => {
+      mockProjectsList([project()], [summary({ tags: ['mobile'] })])
+      mockDELETE.mockResolvedValue({ data: undefined, response: { ok: true } })
+      renderPage()
+      await screen.findByText('Banca Móvil')
+
+      await userEvent.click(screen.getByRole('button', { name: /edit tags for banca móvil/i }))
+      await userEvent.click(screen.getByRole('button', { name: /remove mobile/i }))
+
+      await waitFor(() => {
+        expect(mockDELETE).toHaveBeenCalledWith(
+          '/api/v1/projects/{projectKey}/tags/{tagName}',
+          expect.objectContaining({ params: { path: { projectKey: 'p1', tagName: 'mobile' } } }),
+        )
+      })
+    })
+  })
+
   describe('search and status filter', () => {
     it('filters the list by name via the search input', async () => {
       mockProjectsList(manyProjects(11), manySummaries(11))
@@ -455,6 +550,75 @@ describe('ProjectsPage', () => {
       await userEvent.type(screen.getByLabelText(/search projects/i), 'Project 1')
       expect(screen.getByText('Project 1')).toBeInTheDocument()
       expect(screen.queryByText('Project 0')).not.toBeInTheDocument()
+    })
+  })
+
+  describe('tag filter (add-project-tags)', () => {
+    it('does not render a tag filter control when no project has any tags', async () => {
+      mockProjectsList([project()], [summary({ tags: [] })])
+      renderPage()
+      await screen.findByText('Banca Móvil')
+      expect(screen.queryByRole('button', { name: /^tag$/i })).not.toBeInTheDocument()
+    })
+
+    it('renders a tag filter control when at least one project has a tag', async () => {
+      mockProjectsList([project()], [summary({ tags: ['mobile'] })])
+      renderPage()
+      await screen.findByText('Banca Móvil')
+      expect(screen.getByRole('button', { name: /^tag$/i })).toBeInTheDocument()
+    })
+
+    it('filters the list by tag via the tag filter popover', async () => {
+      const projects = [project({ id: 'p1' }), project({ id: 'p2', name: 'Second' })]
+      const summaries = [
+        summary({ projectId: 'p1', tags: ['mobile'] }),
+        summary({ projectId: 'p2', tags: ['backend'] }),
+      ]
+      mockProjectsList(projects, summaries)
+      renderPage()
+      await screen.findByText('Banca Móvil')
+
+      await userEvent.click(screen.getByRole('button', { name: /^tag$/i }))
+      await userEvent.click(within(screen.getByRole('dialog', { name: /filter by tag/i })).getByRole('button', { name: /mobile/i }))
+
+      expect(screen.getByText('Banca Móvil')).toBeInTheDocument()
+      expect(screen.queryByText('Second')).not.toBeInTheDocument()
+    })
+
+    it('composes the tag filter with the status filter', async () => {
+      const projects = [project({ id: 'p1' }), project({ id: 'p2', name: 'Second' })]
+      const summaries = [
+        summary({ projectId: 'p1', tags: ['mobile'], passRate: 90 }),
+        summary({ projectId: 'p2', tags: ['mobile'], passRate: 20 }),
+      ]
+      mockProjectsList(projects, summaries)
+      renderPage()
+      await screen.findByText('Banca Móvil')
+
+      await userEvent.click(screen.getByRole('button', { name: /^tag$/i }))
+      await userEvent.click(within(screen.getByRole('dialog', { name: /filter by tag/i })).getByRole('button', { name: /mobile/i }))
+      await userEvent.click(screen.getByRole('button', { name: 'At risk' }))
+
+      expect(screen.getByText('Second')).toBeInTheDocument()
+      expect(screen.queryByText('Banca Móvil')).not.toBeInTheDocument()
+    })
+
+    it('clears the active tag filter', async () => {
+      const projects = [project({ id: 'p1' }), project({ id: 'p2', name: 'Second' })]
+      const summaries = [
+        summary({ projectId: 'p1', tags: ['mobile'] }),
+        summary({ projectId: 'p2', tags: ['backend'] }),
+      ]
+      mockProjectsList(projects, summaries)
+      renderPage()
+      await screen.findByText('Banca Móvil')
+
+      await userEvent.click(screen.getByRole('button', { name: /^tag$/i }))
+      await userEvent.click(within(screen.getByRole('dialog', { name: /filter by tag/i })).getByRole('button', { name: /mobile/i }))
+      expect(screen.queryByText('Second')).not.toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: /clear tag filter/i }))
+      expect(screen.getByText('Second')).toBeInTheDocument()
     })
   })
 

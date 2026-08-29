@@ -58,14 +58,14 @@ async function createCase(
 
 test.describe('Requirement: Breadcrumb trail', () => {
   test("Scenario: No breadcrumb on a project's own landing page", async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-29' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-70' })
     const name = await createProject(page, 'Landing Breadcrumb Project')
     await expect(page.getByRole('heading', { name })).toBeVisible()
     await expect(page.getByRole('navigation', { name: 'Breadcrumb' })).toHaveCount(0)
   })
 
   test('Scenario: Breadcrumb reflects folder depth', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-30' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-71' })
     await createProject(page, 'Folder Depth Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -79,7 +79,7 @@ test.describe('Requirement: Breadcrumb trail', () => {
   })
 
   test('Scenario: Deep section nesting collapses the middle of the trail', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-31' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-72' })
     await createProject(page, 'Deep Nesting Project')
     await openFolderExplorer(page)
     for (const name of ['Transfers', 'National', 'SEPA', 'Domestic', 'Recurring']) {
@@ -109,7 +109,7 @@ test.describe('Requirement: Breadcrumb trail', () => {
   })
 
   test('Scenario: No breadcrumb on a run page — the header chip covers the project, the run name is already the heading', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-32' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-73' })
     await createProject(page, 'Run Breadcrumb Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -136,6 +136,7 @@ test.describe('Requirement: Breadcrumb trail', () => {
   })
 
   test('Scenario: Case detail breadcrumb does not repeat the case title', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-74' })
     await createProject(page, 'Case Detail Breadcrumb Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -152,7 +153,7 @@ test.describe('Requirement: Breadcrumb trail', () => {
 
 test.describe('Requirement: Project switcher', () => {
   test('Scenario: Navigating to the active project via the header', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-33' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-75' })
     const name = await createProject(page, 'Header Link Project')
     const projectUrl = page.url()
     await openFolderExplorer(page)
@@ -162,7 +163,7 @@ test.describe('Requirement: Project switcher', () => {
   })
 
   test('Scenario: Switching project via the header icon', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-34' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-76' })
     const first = await createProject(page, 'Switcher First Project')
     await createProject(page, 'Switcher Second Project')
 
@@ -174,7 +175,7 @@ test.describe('Requirement: Project switcher', () => {
   })
 
   test('Scenario: Switching project via keyboard', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-35' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-77' })
     await createProject(page, 'Keyboard Switcher Project')
     await expect(page.getByRole('dialog')).toHaveCount(0)
     await page.keyboard.press('Control+k')
@@ -184,7 +185,7 @@ test.describe('Requirement: Project switcher', () => {
 
 test.describe('Requirement: Brand wordmark', () => {
   test('Scenario: Wordmark links home', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-36' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-78' })
     await createProject(page, 'Wordmark Home Project')
     await page.getByRole('link', { name: 'TestPulse' }).click()
     await expect(page).toHaveURL('/')
@@ -193,7 +194,7 @@ test.describe('Requirement: Brand wordmark', () => {
 
 test.describe('Requirement: Project landing shows top-level structure only', () => {
   test('Scenario: Empty project shows per-panel empty states', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-37' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-79' })
     // Spec WHEN clause: "a project has cases or suites already, but one
     // panel has nothing in it yet" — a *totally* empty project (no cases,
     // no suites, no runs at all) instead shows the get-started checklist
@@ -211,7 +212,7 @@ test.describe('Requirement: Project landing shows top-level structure only', () 
   })
 
   test('Scenario: Entirely empty project shows a getting-started checklist instead of three empty panels', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-38' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-80' })
     await createProject(page, 'Entirely Empty Project')
     await expect(page.getByText(/get started/i)).toBeVisible()
     await expect(page.getByText(/no sections yet/i)).not.toBeVisible()
@@ -225,7 +226,7 @@ test.describe('Requirement: Project landing shows top-level structure only', () 
   })
 
   test('Scenario: Dense project stays legible', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-39' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-81' })
     await createProject(page, 'Dense Landing Project')
     await openFolderExplorer(page)
     for (const name of ['Alpha', 'Bravo', 'Charlie', 'Delta', 'Echo']) {
@@ -242,6 +243,7 @@ test.describe('Requirement: Project landing shows top-level structure only', () 
 
   // add-project-reports-page
   test('Scenario: Reports panel is a fourth, full-width row below the other three', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-82' })
     await createProject(page, 'Reports Panel Project')
     await openFolderExplorer(page)
     await createCase(page, 'Placeholder case')
@@ -266,7 +268,7 @@ test.describe('Requirement: Project landing shows top-level structure only', () 
 
 test.describe('Requirement: Library with two-pane navigation', () => {
   test('Scenario: Navigating into a nested folder', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-40' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-83' })
     await createProject(page, 'Nested Nav Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -276,7 +278,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: A folder can contain both subfolders and cases', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-41' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-84' })
     await createProject(page, 'Mixed Content Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -286,7 +288,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: Section tree is hidden below 768px', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-42' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-85' })
     await createProject(page, 'Mobile Tree Hidden Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -297,7 +299,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: Resized tree width persists across reloads', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-87' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-86' })
     await createProject(page, 'Resize Persist Project')
     await openFolderExplorer(page)
     const tree = page.getByRole('navigation', { name: 'Section tree' })
@@ -315,7 +317,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: Breadcrumbs cover upward navigation on mobile', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-43' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-87' })
     await createProject(page, 'Mobile Breadcrumb Nav Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -329,7 +331,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: Browse sections covers sideways navigation on mobile', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-44' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-88' })
     await createProject(page, 'Mobile Browse Sections Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -343,7 +345,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: A section row shows its case count and a critical-priority indicator', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-67' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-89' })
     await createProject(page, 'Section Richness Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -365,7 +367,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: Filtering the toolbar narrows the section, with a distinct filtered-to-zero state', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-68' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-90' })
     await createProject(page, 'Library Filter Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -380,7 +382,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   })
 
   test('Scenario: Search entire Library flattens matches across sections with their section path', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-69' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-91' })
     await createProject(page, 'Library Cross-Search Project')
     await openFolderExplorer(page)
     await createCase(page, 'Root level case')
@@ -402,7 +404,7 @@ test.describe('Requirement: Library with two-pane navigation', () => {
   // checked against the Library's project-scoped Flaky filter/indicator
   // instead of the version-detail dialog.
   test('Scenario: A currently-flaky case shows a Flaky indicator and surfaces via the Flaky filter', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-77' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-92' })
     await createProject(page, 'Flaky Filter Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -449,14 +451,14 @@ test.describe('Requirement: Library with two-pane navigation', () => {
 
 test.describe('Requirement: Creating a folder', () => {
   test('Scenario: Creating a folder in the currently open folder', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-45' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-93' })
     await createProject(page, 'Toolbar Folder Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Onboarding')
   })
 
   test('Scenario: Creating a subfolder from the tree without navigating', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-46' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-94' })
     await createProject(page, 'Right Click Folder Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
@@ -475,7 +477,7 @@ test.describe('Requirement: Creating a folder', () => {
 
 test.describe('Requirement: Creating a test case', () => {
   test('Scenario: Creating a case with steps', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-47' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-95' })
     await createProject(page, 'Case With Steps Project')
     await openFolderExplorer(page)
     await createCase(page, 'Daily transfer limit', [
@@ -485,7 +487,7 @@ test.describe('Requirement: Creating a test case', () => {
   })
 
   test('Scenario: Expected result per step is optional', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-48' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-96' })
     await createProject(page, 'Case Without Expected Project')
     await openFolderExplorer(page)
     await createCase(page, 'Case with bare step', [{ action: 'Do the thing' }])
@@ -495,7 +497,7 @@ test.describe('Requirement: Creating a test case', () => {
 
 test.describe('Requirement: Viewing an existing test case', () => {
   test('Scenario: Viewing steps and suite membership', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-49' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-97' })
     await createProject(page, 'View Case Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works', [{ action: 'Enter valid credentials', expected: 'Signed in' }])
@@ -528,7 +530,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Version history is visible', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-50' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-98' })
     await createProject(page, 'Version History Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -543,7 +545,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Opening a version\'s execution history dialog', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-51' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-99' })
     await createProject(page, 'Version Dialog Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -560,7 +562,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Diff shows only changed fields', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-52' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-100' })
     await createProject(page, 'Diff Fields Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -577,7 +579,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Oldest version has nothing to diff against', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-53' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-101' })
     await createProject(page, 'Oldest Version Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -589,7 +591,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Executions list and Flaky flag reflect mixed results for the same version', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-54' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-102' })
     await createProject(page, 'Flaky Version Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -636,7 +638,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Opening a case navigates to its own route', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-55' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-103' })
     await createProject(page, 'Case Route Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -649,7 +651,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Properties render as labeled pairs', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-56' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-104' })
     await createProject(page, 'Labeled Properties Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -661,7 +663,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Results section shows a designed empty state', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-57' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-105' })
     await createProject(page, 'Results Empty State Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -673,7 +675,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Results section shows recent execution history', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-100' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-106' })
     await createProject(page, 'Results History Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -712,7 +714,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Sidebar collapses to stacked sections on narrow viewports', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-58' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-107' })
     await createProject(page, 'Mobile Sidebar Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -731,7 +733,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Header actions menu — Move to… and Delete', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-72' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-108' })
     await createProject(page, 'Case Actions Project')
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Archive')
@@ -754,7 +756,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
   })
 
   test('Scenario: Version history shows a change signal, with an inline diff expand', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-73' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-109' })
     await createProject(page, 'Version Signal Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -776,7 +778,7 @@ test.describe('Requirement: Viewing an existing test case', () => {
 
 test.describe('Requirement: Editing a test case creates a new version', () => {
   test('Scenario: Saving an edit creates a new version', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-59' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-110' })
     await createProject(page, 'Edit Case Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -790,7 +792,7 @@ test.describe('Requirement: Editing a test case creates a new version', () => {
   })
 
   test('Scenario: A version history row shows who made the change', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-73' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-111' })
     await createProject(page, 'Version Actor Project')
     await openFolderExplorer(page)
     await createCase(page, 'Login works')
@@ -812,14 +814,14 @@ test.describe('Requirement: Editing a test case creates a new version', () => {
 
 test.describe('Requirement: Project list with permission-ready create action', () => {
   test('Scenario: Listing projects', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-60' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-112' })
     const name = await createProject(page, 'Listed Project')
     await page.goto('/')
     await expect(page.getByText(name)).toBeVisible()
   })
 
   test('Scenario: Manual view choice persists across reloads', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-61' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-113' })
     await createProject(page, 'View Toggle Project')
     await page.goto('/')
     await page.getByRole('button', { name: /compact view/i }).click()
@@ -830,12 +832,56 @@ test.describe('Requirement: Project list with permission-ready create action', (
   })
 
   test('Scenario: Searching filters by name', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-62' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-114' })
     const findable = await createProject(page, 'Findable Alpha')
     await page.goto('/')
     await page.getByRole('button', { name: /compact view/i }).click()
     await page.getByLabel(/search projects/i).fill('Findable Alpha')
     await expect(page.getByText(findable)).toBeVisible()
+  })
+
+  // add-project-tags
+  test('Scenario: Expanded card shows tag chips', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-115' })
+    const name = unique('Tagged Project')
+    await page.goto('/')
+    await page.getByRole('button', { name: /new project/i }).click()
+    await page.getByLabel('Name').fill(name)
+    await page.getByPlaceholder(/add a tag/i).fill('mobile')
+    await page.getByPlaceholder(/add a tag/i).press('Enter')
+    await page.getByRole('button', { name: /^create$/i }).click()
+    await page.waitForURL(/\/projects\//)
+
+    await page.goto('/')
+    // Scoped to this test's own card — other tests/runs against the same
+    // persistent dev DB may have left other "mobile"-tagged projects around.
+    const card = page.locator('li').filter({ hasText: name })
+    await expect(card.getByText('mobile', { exact: true })).toBeVisible()
+  })
+
+  test('Scenario: Filtering by tag', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-116' })
+    const tagged = unique('Filterable Tagged')
+    const untagged = unique('Filterable Untagged')
+
+    await page.goto('/')
+    await page.getByRole('button', { name: /new project/i }).click()
+    await page.getByLabel('Name').fill(tagged)
+    await page.getByPlaceholder(/add a tag/i).fill('backend')
+    await page.getByPlaceholder(/add a tag/i).press('Enter')
+    await page.getByRole('button', { name: /^create$/i }).click()
+    await page.waitForURL(/\/projects\//)
+    await createProject(page, untagged)
+
+    await page.goto('/')
+    await expect(page.getByText(tagged)).toBeVisible()
+    await expect(page.getByText(untagged)).toBeVisible()
+
+    await page.getByRole('button', { name: /^tag$/i }).click()
+    await page.getByRole('dialog', { name: /filter by tag/i }).getByText('backend', { exact: true }).click()
+
+    await expect(page.getByText(tagged)).toBeVisible()
+    await expect(page.getByText(untagged)).not.toBeVisible()
   })
 })
 
@@ -872,7 +918,7 @@ async function createSuiteWithOneCase(page: Page, projectLabel: string, suiteNam
 
 test.describe('Requirement: Run creation', () => {
   test('Scenario: Opening the Runs page shows the runs list first', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-70' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-117' })
     const projectId = await createSuiteWithOneCase(page, 'Runs List Project', 'Smoke', 'Login works')
 
     await page.goto(`/projects/${projectId}/runs`)
@@ -886,7 +932,7 @@ test.describe('Requirement: Run creation', () => {
   })
 
   test('Scenario: Runs are grouped into Open and Closed sections', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-74' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-118' })
     const projectId = await createSuiteWithOneCase(page, 'Runs Grouping Project', 'Smoke', 'Login works')
 
     await page.goto(`/projects/${projectId}/runs/new`)
@@ -903,7 +949,7 @@ test.describe('Requirement: Run creation', () => {
   })
 
   test('Scenario: Creating a run navigates to it with a confirmation', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-71' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-119' })
     const projectId = await createSuiteWithOneCase(page, 'Run Created Banner Project', 'Smoke', 'Login works')
 
     await page.goto(`/projects/${projectId}/runs/new`)
@@ -920,7 +966,7 @@ test.describe('Requirement: Run creation', () => {
   })
 
   test('Scenario: Selecting a suite in the New run form seeds the case selection', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-63' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-120' })
     const projectId = await createSuiteWithOneCase(page, 'Run Creation Project', 'Smoke', 'Login works')
 
     await page.goto(`/projects/${projectId}/runs/new`)
@@ -939,7 +985,7 @@ test.describe('Requirement: Run creation', () => {
 
 test.describe('Requirement: Suites index and detail page', () => {
   test('Scenario: Resizing the case picker\'s section tree', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-88' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-121' })
     await createSuiteWithOneCase(page, 'Suite Rail Resize Project', 'Regression', 'Checkout works')
     // The case picker (and its section tree) only renders in edit mode.
     await page.getByRole('button', { name: /edit cases/i }).click()
@@ -966,7 +1012,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Running a suite from its detail page', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-64' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-122' })
     await createSuiteWithOneCase(page, 'Suite Quick Run Project', 'Regression', 'Checkout works')
 
     const sidebar = page.getByTestId('suite-sidebar')
@@ -992,7 +1038,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Customize selection hands off to the New run form pre-seeded', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-65' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-123' })
     await createSuiteWithOneCase(page, 'Suite Customize Run Project', 'Nightly', 'Deploy works')
 
     await page.getByRole('button', { name: /^run suite$/i }).click()
@@ -1015,7 +1061,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   // directly from each card on the index — via the visible "⋯" trigger or a
   // right-click — without navigating into the suite first.
   test('Scenario: Renaming a suite from its index card menu', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-75' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-124' })
     // Deliberately avoids "Name" as a substring anywhere in the project
     // label — the Star button's aria-label ("Star {project label}") would
     // otherwise collide with page.getByLabel(/suite name/i)'s fuzzy match.
@@ -1032,7 +1078,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Deleting a suite via right-click on its index card', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-76' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-125' })
     const projectId = await createSuiteWithOneCase(page, 'Suite Index Delete Project', 'Nightly', 'Deploy works')
     await page.goto(`/projects/${projectId}/suites`)
 
@@ -1044,7 +1090,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Suite detail page defaults to view mode', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-93' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-126' })
     await createSuiteWithOneCase(page, 'Suite View Mode Project', 'Smoke', 'Login works')
 
     await expect(page.getByRole('checkbox')).toHaveCount(0)
@@ -1053,7 +1099,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Toggling Edit cases / View cases and back', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-94' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-127' })
     await createSuiteWithOneCase(page, 'Suite Mode Toggle Project', 'Smoke', 'Login works')
 
     await page.getByRole('button', { name: /edit cases/i }).click()
@@ -1067,7 +1113,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Confirmation toast is visible without scrolling', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-95' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-128' })
     await createSuiteWithOneCase(page, 'Suite Toast Visibility Project', 'Smoke', 'Login works')
 
     // rework-suite-run-flow D1: the confirmation used to render inline,
@@ -1084,7 +1130,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Stability\'s "Closed runs"/"Open + closed" toggle switches views, distinguishing an open run\'s point', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-97' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-129' })
     await createSuiteWithOneCase(page, 'Stability Toggle Project', 'Smoke', 'Login works')
 
     // First run: close it, so there's real closed-run history.
@@ -1112,7 +1158,7 @@ test.describe('Requirement: Suites index and detail page', () => {
   })
 
   test('Scenario: Latest closed run property reflects the closed run, not a fresh open run\'s "0%"', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-99' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-130' })
     await createSuiteWithOneCase(page, 'Stability Headline Project', 'Smoke', 'Login works')
 
     // Closed run: the sole case passes, so the closed history is 100%.
@@ -1197,7 +1243,7 @@ async function createTwoClosedRunsWithRegression(
 
 test.describe('Requirement: Run comparison', () => {
   test('Scenario: Comparing two runs shows both status charts', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-89' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-131' })
     await createTwoClosedRunsWithRegression(page, 'Run Compare Charts Project', 'Regression', 'Login works')
     await page.getByRole('link', { name: /compare to previous run/i }).click()
     await page.waitForURL(/\/runs\/compare\//)
@@ -1206,7 +1252,7 @@ test.describe('Requirement: Run comparison', () => {
   })
 
   test('Scenario: Item-level diff is categorized into five sections', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-90' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-132' })
     await createTwoClosedRunsWithRegression(page, 'Run Compare Diff Project', 'Regression', 'Login works')
     await page.getByRole('link', { name: /compare to previous run/i }).click()
     await page.waitForURL(/\/runs\/compare\//)
@@ -1215,7 +1261,7 @@ test.describe('Requirement: Run comparison', () => {
   })
 
   test('Scenario: "Compare to previous run" appears only when a prior closed run exists', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-91' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-133' })
     const projectId = await createSuiteWithOneCase(page, 'Run Compare First Project', 'Regression', 'Login works')
     const suiteKey = new URL(page.url()).pathname.split('/').pop()!
     await page.getByRole('button', { name: /^run suite$/i }).click()
@@ -1240,7 +1286,7 @@ test.describe('Requirement: Run comparison', () => {
   })
 
   test('Scenario: The explicit picker only offers closed runs from the same project', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-92' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-134' })
     const { projectId } = await createTwoClosedRunsWithRegression(page, 'Run Compare Picker Project', 'Regression', 'Login works')
     await page.goto(`/projects/${projectId}/runs/compare`)
     const firstTrigger = page.getByLabel('First run')
@@ -1256,7 +1302,7 @@ test.describe('Requirement: Run comparison', () => {
   })
 
   test('Scenario: A run row menu inside a short Run history card is not clipped by the card, and Compare… is reachable', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-101' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-135' })
     // A regression test for a real bug: RowActionMenu's button-anchored
     // dropdown used to render un-portaled inside the row, so when the
     // triggering row sat near the bottom of a Card (routine for a suite
@@ -1308,7 +1354,7 @@ test.describe('Requirement: Run comparison', () => {
   })
 
   test('Scenario: "Compare…" from a run row\'s context menu pre-selects that run in the picker', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-96' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-136' })
     const { projectId } = await createTwoClosedRunsWithRegression(page, 'Run Compare Row Menu Project', 'Regression', 'Login works')
 
     await page.goto(`/projects/${projectId}/runs`)
@@ -1321,7 +1367,7 @@ test.describe('Requirement: Run comparison', () => {
   })
 
   test('Scenario: Same-named runs are distinguishable in the picker, and picking one removes it from the other side', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-98' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-137' })
     // Deliberately avoids the word "Name" in the fixture project title — it
     // collides with every other test's getByLabel('Name') on the create-
     // project dialog's own field, since a previously-created project's Star
@@ -1372,6 +1418,7 @@ test.describe('Requirement: Run comparison', () => {
 test.describe('Requirement: Project-scoped custom field definitions', () => {
   // add-case-custom-fields
   test('Scenario: A text and a select field are defined, reordered, and used on a case', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-138' })
     await createProject(page, 'Custom Fields Project')
     const projectId = new URL(page.url()).pathname.split('/')[2]
     await openFolderExplorer(page)
@@ -1416,6 +1463,7 @@ test.describe('Requirement: Project-scoped custom field definitions', () => {
   })
 
   test('Scenario: Deleting a field shows how many cases have a value, and removes it from the case afterward', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-139' })
     await createProject(page, 'Delete Custom Field Project')
     const projectId = new URL(page.url()).pathname.split('/')[2]
     await openFolderExplorer(page)

@@ -286,10 +286,11 @@ func (r *ProjectRepo) IsFavorite(ctx context.Context, userID, projectID string) 
 // Summaries returns, per project not queued for deletion (archived or
 // not — add-data-retention design.md D7: the delete-project confirmation
 // dialog needs real counts for the one project this always excluded
-// before), its suite count, case count, latest-run pass rate, and whether
-// userID has favorited it — as four grouped queries (design.md D3), not
-// one query per project, so the cost stays O(1) in the number of HTTP
-// round trips regardless of how many projects exist.
+// before), its suite count, case count, latest-run pass rate, whether
+// userID has favorited it, and its assigned tags — as five grouped queries
+// (add-project-tags design.md D3, extending project-stats's original
+// four), not one query per project, so the cost stays O(1) in the number
+// of HTTP round trips regardless of how many projects exist.
 func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.ProjectSummary, error) {
 	ids, err := r.pool.Query(ctx, `SELECT id, archived FROM projects WHERE deleting_at IS NULL ORDER BY created_at`)
 	if err != nil {
@@ -305,7 +306,7 @@ func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.Pr
 			return nil, err
 		}
 		order = append(order, id)
-		summaries[id] = &domain.ProjectSummary{ProjectID: id, Archived: archived}
+		summaries[id] = &domain.ProjectSummary{ProjectID: id, Archived: archived, Tags: []string{}}
 	}
 	ids.Close()
 	if err := ids.Err(); err != nil {
@@ -407,6 +408,28 @@ func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.Pr
 	}
 	favorites.Close()
 	if err := favorites.Err(); err != nil {
+		return nil, err
+	}
+
+	tags, err := r.pool.Query(ctx,
+		`SELECT project_tags.project_id, tags.name
+		 FROM project_tags
+		 JOIN tags ON tags.id = project_tags.tag_id`)
+	if err != nil {
+		return nil, err
+	}
+	for tags.Next() {
+		var projectID, name string
+		if err := tags.Scan(&projectID, &name); err != nil {
+			tags.Close()
+			return nil, err
+		}
+		if s, ok := summaries[projectID]; ok {
+			s.Tags = append(s.Tags, name)
+		}
+	}
+	tags.Close()
+	if err := tags.Err(); err != nil {
 		return nil, err
 	}
 

@@ -134,6 +134,21 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/ProjectSummary" }
+  /api/v1/tags:
+    get:
+      operationId: listTagNames
+      summary: >-
+        List the full shared project tag vocabulary (add-project-tags), for
+        the project list's filter control and the tag picker's autocomplete.
+      tags: [projects]
+      responses:
+        "200":
+          description: Every tag name currently in the shared vocabulary
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
   /api/v1/projects/{projectKey}:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -196,6 +211,31 @@ paths:
       responses:
         "204": { description: Project is no longer favorited by the caller }
         "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/projects/{projectKey}/tags/{tagName}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+      - { name: tagName, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: assignProjectTag
+      summary: >-
+        Assign a tag to a project, creating the shared vocabulary entry if
+        it doesn't already exist (case-insensitive reuse).
+      tags: [projects]
+      responses:
+        "204": { description: The project now has this tag assigned }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeProjectTag
+      summary: >-
+        Remove a tag from a project. The tag itself stays in the shared
+        vocabulary for reuse, even if this was its last assignment.
+      tags: [projects]
+      responses:
+        "204": { description: The tag is no longer assigned to this project }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/projects/{projectKey}/cases:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -2887,7 +2927,7 @@ components:
           description: The project's current cases with a value set for this field.
     ProjectSummary:
       type: object
-      required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite, archived]
+      required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite, archived, tags]
       properties:
         projectId: { type: string }
         suiteCount: { type: integer }
@@ -2911,6 +2951,13 @@ components:
             summaries now include archived projects (previously excluded),
             since the delete-project confirmation needs real counts for
             the one project this always excluded before.
+        tags:
+          type: array
+          items: { type: string }
+          description: >-
+            The project's assigned tag names (add-project-tags), from the
+            shared instance-wide tag vocabulary. Empty, not null, when
+            untagged.
     HealthStatus:
       type: object
       required: [status]

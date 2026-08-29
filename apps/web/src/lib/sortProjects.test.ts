@@ -15,6 +15,7 @@ function project(overrides: Partial<ProjectSummary>): ProjectSummary {
     lastRunAt: null,
     isFavorite: false,
     archived: false,
+    tags: [],
     ...overrides,
   }
 }

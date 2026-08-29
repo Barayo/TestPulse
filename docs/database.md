@@ -104,6 +104,9 @@ The top-level container for all test assets. `archived` is a soft flag, not a de
 ### `project_favorites`
 Per-user starred projects (`enrich-project-list`), added alongside the identity tables since both its FKs reference `users`. Composite PK `(user_id, project_id)`; both FKs `ON DELETE CASCADE` — a favorite has no meaning once either side is gone, unlike audit or result history, which must survive deletion.
 
+### `tags` + `project_tags`
+A shared, deduplicated tag vocabulary (`add-project-tags`) — `tags.name` is `UNIQUE`, always stored normalized (lowercase, trimmed) by the service layer so the same typed name always resolves to the same row regardless of caller casing. `project_tags` is the n:m join, composite PK `(project_id, tag_id)`, both FKs `ON DELETE CASCADE`. Unlike `project_favorites`, tag assignment is shared project state, not per-user — any actor with `read` on a project can assign/remove. Removing a project's last use of a tag leaves the `tags` row in place, available for reuse, rather than garbage-collecting it.
+
 ### `test_case_folders`
 A self-referencing tree per project for **organizing** cases (independent of suites, which are for **executing** them). Exactly one row per project has `parent_folder_id IS NULL` — the auto-created root — enforced by a partial unique index (`test_case_folders_one_root_idx`). Every other folder requires an explicit parent; the API never allows creating a second root. `deleted boolean NOT NULL DEFAULT false` (`add-delete-mode`) mirrors `test_cases.deleted` — `test_case_folders_project_idx`/`test_case_folders_parent_idx` are `WHERE NOT deleted` filtered indexes. Deleting a non-root folder soft-deletes it and every folder and case anywhere in its subtree in one transaction (a `WITH RECURSIVE` walk of `parent_folder_id`), replacing the previous reparent-on-delete behavior; the root folder cannot be deleted.
 

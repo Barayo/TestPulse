@@ -738,6 +738,17 @@ type ProjectSummary struct {
 	// (add-data-retention design.md D7) — Summaries() no longer excludes
 	// archived projects, so callers need this to badge them correctly.
 	Archived bool `json:"archived"`
+	// Tags is the project's assigned tag names (add-project-tags), always
+	// a non-nil empty slice rather than null when the project has none.
+	Tags []string `json:"tags"`
+}
+
+// Tag is an entry in the shared, deduplicated project tag vocabulary
+// (add-project-tags) — Name is stored normalized-lowercase by the service
+// layer so the same typed name always resolves to the same tag.
+type Tag struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
 }
 
 // --- Identity (add-identity-basics) ---
