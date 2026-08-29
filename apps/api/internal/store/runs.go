@@ -422,7 +422,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
 		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields,
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source,
 		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
 		 FROM test_run_items i
 		 JOIN test_cases c ON c.id = i.case_id
@@ -449,15 +449,16 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 			platform, testType                                                                  string
 			automated                                                                           bool
 			customFieldsJSON                                                                    []byte
+			format, gherkinSource                                                               string
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
 			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,
 			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON,
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource,
 			&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt); err != nil {
 			return nil, err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource)()
 		if err != nil {
 			return nil, err
 		}

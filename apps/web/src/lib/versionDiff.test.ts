@@ -27,6 +27,30 @@ describe('diffContent', () => {
   })
 })
 
+describe('diffContent format (add-case-authoring-formats)', () => {
+  it('treats two same-format (text) versions as a normal Description field diff', () => {
+    const textBefore = { ...base, format: 'text' as const, steps: [], description: 'Old narrative' }
+    const textAfter = { ...textBefore, description: 'New narrative' }
+    const diff = diffContent(textBefore, textAfter)
+    expect(diff.fields).toEqual([{ label: 'Description', before: 'Old narrative', after: 'New narrative' }])
+  })
+
+  it('treats two same-format (gherkin) versions as a normal Scenario field diff', () => {
+    const gherkinBefore = { ...base, format: 'gherkin' as const, steps: [], gherkinSource: 'Given a user' }
+    const gherkinAfter = { ...gherkinBefore, gherkinSource: 'Given a logged-in user' }
+    const diff = diffContent(gherkinBefore, gherkinAfter)
+    expect(diff.fields).toEqual([{ label: 'Scenario', before: 'Given a user', after: 'Given a logged-in user' }])
+  })
+
+  it('surfaces a format change itself as a Format field diff, not a garbled steps diff alone', () => {
+    const stepsVersion = { ...base, format: 'steps' as const }
+    const gherkinVersion = { ...base, format: 'gherkin' as const, steps: [], gherkinSource: 'Given a user' }
+    const diff = diffContent(stepsVersion, gherkinVersion)
+    expect(diff.fields).toContainEqual({ label: 'Format', before: 'steps', after: 'gherkin' })
+    expect(diff.fields).toContainEqual({ label: 'Scenario', before: '', after: 'Given a user' })
+  })
+})
+
 describe('diffContent custom fields', () => {
   const customFieldDefs = [{ id: 'f1', name: 'Automation Owner' }]
 

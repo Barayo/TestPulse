@@ -610,6 +610,63 @@ describe('CaseDetailPage', () => {
     })
   })
 
+  describe('content format (add-case-authoring-formats)', () => {
+    it('shows Format as a property on the read-only sidebar', async () => {
+      mockDetailAPI()
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      const sidebar = screen.getByTestId('case-sidebar')
+      expect(within(sidebar).getByText('Steps')).toBeInTheDocument()
+    })
+
+    it('switching to Free text in edit mode hides the step editor and shows a description field', async () => {
+      mockDetailAPI()
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      await userEvent.click(screen.getByRole('button', { name: /free text/i }))
+      await userEvent.click(screen.getByRole('button', { name: /switch format/i }))
+      expect(screen.queryByLabelText(/^action for step/i)).not.toBeInTheDocument()
+      expect(screen.getByLabelText(/description/i)).toHaveValue('')
+    })
+
+    it('saving after switching to Gherkin sends format and gherkinSource', async () => {
+      mockDetailAPI()
+      mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      await userEvent.click(screen.getByRole('button', { name: /gherkin/i }))
+      await userEvent.click(screen.getByRole('button', { name: /switch format/i }))
+      await userEvent.type(screen.getByLabelText(/scenario/i), 'Given a user')
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({
+            body: expect.objectContaining({ format: 'gherkin', gherkinSource: 'Given a user' }),
+          }),
+        )
+      })
+    })
+
+    it('warns before switching away from Steps when it has content, and cancel keeps it', async () => {
+      mockDetailAPI()
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      await userEvent.click(screen.getByRole('button', { name: /free text/i }))
+      expect(screen.getByRole('dialog', { name: /switch to free text/i })).toBeInTheDocument()
+
+      await userEvent.click(screen.getByRole('button', { name: /^cancel$/i }))
+      expect(screen.getByLabelText(/^action for step 1/i)).toHaveValue('Start a transfer over the limit')
+    })
+  })
+
   it('editing a custom field value and saving includes it in the request', async () => {
     mockDetailAPI({
       customFields: [{ id: 'f1', name: 'Automation Owner', fieldType: 'text', createdAt: '' }],
@@ -676,7 +733,7 @@ describe('CaseDetailPage', () => {
     expect(screen.queryByText(/show \d+ more/i)).not.toBeInTheDocument()
   })
 
-  it('entering edit mode keeps Results and Version History visible, and turns Properties into an inline form', async () => {
+  it('entering edit mode keeps Results and Version History visible, and Properties stays the same rows with inline edit controls', async () => {
     mockDetailAPI()
     renderDetail()
     await screen.findByRole('heading', { name: 'Daily transfer limit' })
@@ -685,12 +742,119 @@ describe('CaseDetailPage', () => {
 
     expect(screen.getByText('Results')).toBeInTheDocument()
     expect(await screen.findByRole('list', { name: /version history/i })).toBeInTheDocument()
-    expect(screen.getByLabelText(/^priority$/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/^automated$/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/^platform$/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/^test type$/i)).toBeInTheDocument()
-    expect(screen.getByLabelText(/^tags$/i)).toBeInTheDocument()
-    expect(screen.queryByText('In suites')).not.toBeInTheDocument()
+    const sidebar = screen.getByTestId('case-sidebar')
+    expect(within(sidebar).getByLabelText(/^priority$/i)).toBeInTheDocument()
+    expect(within(sidebar).getByLabelText(/^automated$/i)).toBeInTheDocument()
+    expect(within(sidebar).getByLabelText(/^platform$/i)).toBeInTheDocument()
+    expect(within(sidebar).getByLabelText(/^test type$/i)).toBeInTheDocument()
+    // Every read-mode row — including non-editable ones — stays in place;
+    // editing only swaps the leaf value, not the row list itself.
+    expect(within(sidebar).getByText('Version')).toBeInTheDocument()
+    expect(within(sidebar).getByText('In suites')).toBeInTheDocument()
+  })
+
+  describe('in-place editing (add-case-authoring-formats)', () => {
+    it('edits the title inline in its heading slot, with no separate Title field', async () => {
+      mockDetailAPI()
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      const heading = screen.getByRole('textbox', { name: /title/i })
+      expect(heading).toHaveValue('Daily transfer limit')
+      await userEvent.clear(heading)
+      await userEvent.type(heading, 'Daily transfer limit v2')
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({ body: expect.objectContaining({ title: 'Daily transfer limit v2' }) }),
+        )
+      })
+    })
+
+    it('edits priority via a select in the Priority row and saves it', async () => {
+      mockDetailAPI()
+      mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      await userEvent.selectOptions(screen.getByLabelText(/^priority$/i), 'critical')
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({ body: expect.objectContaining({ priority: 'critical' }) }),
+        )
+      })
+    })
+
+    it('edits automated via a switch in the Automation row', async () => {
+      mockDetailAPI()
+      mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      const toggle = screen.getByLabelText(/^automated$/i)
+      expect(toggle).toHaveAttribute('aria-checked', 'true')
+      await userEvent.click(toggle)
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({ body: expect.objectContaining({ automated: false }) }),
+        )
+      })
+    })
+
+    it('edits tags as removable chips in the Tags row and saves the resulting list', async () => {
+      mockDetailAPI()
+      mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      const sidebar = screen.getByTestId('case-sidebar')
+      await userEvent.click(within(sidebar).getByLabelText(/remove smoke/i))
+      await userEvent.type(within(sidebar).getByPlaceholderText(/add a tag/i), 'urgent{enter}')
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({ body: expect.objectContaining({ tags: ['regression', 'urgent'] }) }),
+        )
+      })
+    })
+
+    it('edits steps in place using the same card/circle shell as the read view', async () => {
+      mockDetailAPI()
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      expect(screen.getByTestId('step-number-0')).toHaveTextContent('1')
+      const actionField = screen.getByLabelText(/^action for step 1/i)
+      await userEvent.clear(actionField)
+      await userEvent.type(actionField, 'Start a transfer above the daily limit')
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({
+            body: expect.objectContaining({
+              steps: [{ action: 'Start a transfer above the daily limit', expected: 'Blocked before confirming' }],
+            }),
+          }),
+        )
+      })
+    })
   })
 
   it('opens a header actions menu offering Move to… and Delete', async () => {

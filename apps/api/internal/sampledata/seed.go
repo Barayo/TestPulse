@@ -348,6 +348,37 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
+	// Showcases the two non-steps authoring formats (add-case-authoring-formats)
+	// on a section that already demonstrates structured steps, so the
+	// Library's case list has a real mix of all three to render, not just steps.
+	if _, err := svc.CreateCase(ctx, p.ID, checkout.ID, domain.CaseContent{
+		Title:  "Explore the guest checkout experience",
+		Format: domain.FormatText,
+		Description: "Walk through checkout as a first-time guest with no saved payment method or address. " +
+			"Look for anything confusing about the flow, unclear error states, or friction points that a " +
+			"structured step list wouldn't naturally surface.",
+		Priority: domain.PriorityMedium,
+		Tags:     []string{"checkout", "exploratory"},
+		Platform: "web",
+		TestType: "manual",
+	}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if _, err := svc.CreateCase(ctx, p.ID, checkout.ID, domain.CaseContent{
+		Title:  "Applying a loyalty discount at checkout",
+		Format: domain.FormatGherkin,
+		GherkinSource: "Given a logged-in customer with an active loyalty discount code\n" +
+			"And at least one item in their cart\n" +
+			"When they apply the code at checkout\n" +
+			"Then the order total reflects the discount\n" +
+			"And the discount is itemized on the confirmation page",
+		Priority: domain.PriorityHigh,
+		Tags:     []string{"checkout", "loyalty"},
+		Platform: "web",
+		TestType: "e2e",
+	}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
 	if _, err := Filler(ctx, svc, p.ID, checkout.ID, "Checkout", "case", 3); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}

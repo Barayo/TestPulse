@@ -27,7 +27,7 @@ import { ClassificationPills, AutomationPill } from '@/components/Pills'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel, type CaseResultsData } from '@/components/CaseResultsPanel'
 import { toResultsData, RECENT_EXECUTIONS_LIMIT } from '@/lib/caseResultsData'
-import { CaseStepsList } from '@/components/CaseStepsList'
+import { CaseContentView, caseContentHeading } from '@/components/CaseContentView'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
 import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
@@ -453,8 +453,10 @@ export default function RunItemDetailPage() {
       <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">Steps</p>
-            <CaseStepsList steps={item.content.steps} />
+            <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              {caseContentHeading(item.content.format)}
+            </p>
+            <CaseContentView content={item.content} />
           </div>
           {item.content.expectedResult && (
             <div>

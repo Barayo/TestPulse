@@ -64,6 +64,32 @@ func TestCaseContentValidation(t *testing.T) {
 	}
 }
 
+func TestCaseContentFormatValidation(t *testing.T) {
+	unset := CaseContent{Title: "Login works", Priority: PriorityMedium}
+	if err := unset.Validate(); err != nil {
+		t.Errorf("content with no format rejected: %v", err)
+	}
+	if unset.Format != "" {
+		t.Errorf("Format zero value = %q, want empty (defaulting happens at storage layer)", unset.Format)
+	}
+
+	for _, valid := range []Format{FormatSteps, FormatText, FormatGherkin} {
+		c := CaseContent{Title: "x", Priority: PriorityMedium, Format: valid}
+		if err := c.Validate(); err != nil {
+			t.Errorf("Format %q rejected: %v", valid, err)
+		}
+	}
+
+	badFormat := CaseContent{Title: "x", Priority: PriorityMedium, Format: "bogus"}
+	err := badFormat.Validate()
+	if err == nil {
+		t.Fatal("invalid format accepted")
+	}
+	if !strings.Contains(err.Error(), "format") {
+		t.Errorf("error %q does not name the invalid field", err)
+	}
+}
+
 func TestResultValidation(t *testing.T) {
 	valid := NewResult{Actor: "ana", Verdict: VerdictPass}
 	if err := valid.Validate(); err != nil {

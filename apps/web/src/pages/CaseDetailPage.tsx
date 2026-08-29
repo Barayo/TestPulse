@@ -1,25 +1,31 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { FolderInputIcon, Trash2Icon } from 'lucide-react'
+import { FolderInputIcon, Trash2Icon, ListChecksIcon, FileTextIcon, ScrollTextIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
+import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Avatar } from '@/components/Avatar'
 import { PropertyRow } from '@/components/PropertyRow'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel, type CaseResultsData } from '@/components/CaseResultsPanel'
 import { toResultsData, RECENT_EXECUTIONS_LIMIT } from '@/lib/caseResultsData'
-import { CaseStepsList } from '@/components/CaseStepsList'
-import { ClassificationEditor, type Priority, type CustomField } from '@/components/ClassificationEditor'
+import { CaseContentView, caseContentHeading } from '@/components/CaseContentView'
+import { PRIORITIES, type Priority, type CustomField } from '@/components/ClassificationEditor'
 import { ClassificationPills, AutomationPill } from '@/components/Pills'
 import { JiraLinkBadge } from '@/components/JiraLinkBadge'
 import { FolderPicker } from '@/components/FolderPicker'
 import { RowActionMenu, type RowActionMenuItem } from '@/components/RowActionMenu'
-import { StepEditor, type Step } from '@/components/StepEditor'
+import { CaseStepsList } from '@/components/CaseStepsList'
+import { TagChipsEditor } from '@/components/TagChipsEditor'
+import { GherkinEditor } from '@/components/GherkinEditor'
+import { useCaseFormatSwitch, CASE_FORMAT_LABELS, type CaseFormat } from '@/lib/useCaseFormatSwitch'
 import { VersionDetailDialog } from '@/components/VersionDetailDialog'
 import { ContentDiffView } from '@/components/ContentDiffView'
 import { diffContent, diffSignal } from '@/lib/versionDiff'
@@ -27,25 +33,21 @@ import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPer
 import { useAuth } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
 
+const FORMAT_ICONS: Record<CaseFormat, typeof ListChecksIcon> = {
+  steps: ListChecksIcon,
+  text: FileTextIcon,
+  gherkin: ScrollTextIcon,
+}
+
 type TestCase = components['schemas']['TestCase']
 type Project = components['schemas']['Project']
 type Folder = components['schemas']['Folder']
 type CaseVersion = components['schemas']['CaseVersion']
 type Suite = components['schemas']['Suite']
+type Step = components['schemas']['Step']
 
 function firstNameOf(displayName: string): string {
   return displayName.split(' ')[0]
-}
-
-function tagsToText(tags: string[]): string {
-  return tags.join(', ')
-}
-
-function textToTags(text: string): string[] {
-  return text
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean)
 }
 
 export default function CaseDetailPage() {
@@ -73,9 +75,12 @@ export default function CaseDetailPage() {
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [isEditing, setIsEditing] = useState(false)
   const [title, setTitle] = useState('')
+  const [format, setFormat] = useState<CaseFormat>('steps')
   const [steps, setSteps] = useState<Step[]>([])
+  const [description, setDescription] = useState('')
+  const [gherkinSource, setGherkinSource] = useState('')
   const [priority, setPriority] = useState<Priority>('medium')
-  const [tagsText, setTagsText] = useState('')
+  const [tags, setTags] = useState<string[]>([])
   const [platform, setPlatform] = useState('')
   const [testType, setTestType] = useState('')
   const [automated, setAutomated] = useState(false)
@@ -86,6 +91,27 @@ export default function CaseDetailPage() {
   const [moveQuery, setMoveQuery] = useState('')
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null)
+
+  const hasContentFor = (f: CaseFormat) => {
+    if (f === 'steps') return steps.some((s) => s.action.trim())
+    if (f === 'text') return description.trim() !== ''
+    return gherkinSource.trim() !== ''
+  }
+  const { pendingFormat, requestFormat, confirmSwitch, cancelSwitch } = useCaseFormatSwitch(format, hasContentFor)
+
+  function pickFormat(next: CaseFormat) {
+    const applied = requestFormat(next)
+    if (applied) setFormat(applied)
+  }
+
+  function confirmFormatSwitch() {
+    const next = confirmSwitch()
+    if (!next) return
+    setSteps([{ action: '', expected: '' }])
+    setDescription('')
+    setGherkinSource('')
+    setFormat(next)
+  }
 
   const load = useCallback(async () => {
     // Waits for the session check and confirmed project read access before
@@ -160,9 +186,12 @@ export default function CaseDetailPage() {
   useEffect(() => {
     if (!testCase) return
     setTitle(testCase.content.title)
+    setFormat(testCase.content.format ?? 'steps')
     setSteps((testCase.content.steps ?? []).map((s) => ({ action: s.action, expected: s.expected ?? '' })))
+    setDescription(testCase.content.description ?? '')
+    setGherkinSource(testCase.content.gherkinSource ?? '')
     setPriority(testCase.content.priority ?? 'medium')
-    setTagsText(tagsToText(testCase.content.tags ?? []))
+    setTags(testCase.content.tags ?? [])
     setPlatform(testCase.content.platform ?? '')
     setTestType(testCase.content.testType ?? '')
     setAutomated(testCase.content.automated ?? false)
@@ -201,10 +230,12 @@ export default function CaseDetailPage() {
       body: {
         title: title.trim(),
         steps: steps.filter((s) => s.action.trim()),
-        description: testCase!.content.description ?? '',
+        description,
+        format,
+        gherkinSource,
         expectedResult: testCase!.content.expectedResult ?? '',
         priority,
-        tags: textToTags(tagsText),
+        tags,
         platform: platform.trim(),
         testType: testType.trim(),
         automated,
@@ -307,7 +338,16 @@ export default function CaseDetailPage() {
                 ←
               </Link>
             )}
-            <h1 className="tp-heading text-2xl">{testCase.content.title}</h1>
+            {isEditing ? (
+              <input
+                aria-label="Title"
+                className="tp-heading w-full min-w-0 border-b border-transparent bg-transparent text-2xl outline-none focus-visible:border-ring"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            ) : (
+              <h1 className="tp-heading text-2xl">{testCase.content.title}</h1>
+            )}
           </div>
         </div>
         {!isEditing && (canEdit || actionMenuItems.length > 0) && (
@@ -324,13 +364,43 @@ export default function CaseDetailPage() {
         <div className="space-y-2">
           {isEditing ? (
             <div className="space-y-4">
-              <div className="space-y-1">
-                <label htmlFor="case-title" className="text-sm font-medium">
-                  Title
-                </label>
-                <Input id="case-title" value={title} onChange={(e) => setTitle(e.target.value)} />
+              <div role="group" aria-label="Format" className="inline-flex gap-0.5 rounded-2xl bg-muted p-1">
+                {(Object.keys(CASE_FORMAT_LABELS) as CaseFormat[]).map((f) => {
+                  const Icon = FORMAT_ICONS[f]
+                  const isActive = f === format
+                  return (
+                    <button
+                      key={f}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => pickFormat(f)}
+                      className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-sm font-semibold ${
+                        isActive ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                      }`}
+                    >
+                      <Icon className={`size-4 ${isActive ? 'text-primary' : ''}`} aria-hidden="true" />
+                      {CASE_FORMAT_LABELS[f]}
+                    </button>
+                  )
+                })}
               </div>
-              <StepEditor steps={steps} onChange={setSteps} />
+
+              {format === 'steps' && <CaseStepsList steps={steps} onChange={setSteps} />}
+              {format === 'text' && (
+                <Card>
+                  <CardContent>
+                    <Textarea
+                      aria-label="Description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Describe the scenario, prerequisites, and expected outcome in your own words…"
+                      className="min-h-40 border-none bg-transparent p-0 text-base leading-relaxed shadow-none focus-visible:ring-0"
+                    />
+                  </CardContent>
+                </Card>
+              )}
+              {format === 'gherkin' && <GherkinEditor value={gherkinSource} onChange={setGherkinSource} />}
+
               <div className="flex justify-end gap-2 border-t pt-4">
                 <Button variant="outline" onClick={() => setIsEditing(false)}>
                   Cancel
@@ -346,9 +416,11 @@ export default function CaseDetailPage() {
             </div>
           ) : (
             <>
-              <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">Steps</p>
-              <CaseStepsList
-                steps={testCase.content.steps}
+              <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                {caseContentHeading(testCase.content.format)}
+              </p>
+              <CaseContentView
+                content={testCase.content}
                 emptyStateAction={canEdit ? <Button onClick={() => setIsEditing(true)}>+ Add steps</Button> : undefined}
               />
             </>
@@ -360,132 +432,189 @@ export default function CaseDetailPage() {
           data-testid="case-sidebar"
         >
           <CaseSidebarSection title="Properties">
-            {isEditing ? (
-              <ClassificationEditor
-                priority={priority}
-                tagsText={tagsText}
-                platform={platform}
-                testType={testType}
-                automated={automated}
-                onPriorityChange={setPriority}
-                onTagsTextChange={setTagsText}
-                onPlatformChange={setPlatform}
-                onTestTypeChange={setTestType}
-                onAutomatedChange={setAutomated}
-                customFieldDefs={customFieldDefs}
-                customFieldValues={customFieldValues}
-                onCustomFieldValueChange={(fieldId, value) =>
-                  setCustomFieldValues((prev) => ({ ...prev, [fieldId]: value }))
-                }
-              />
-            ) : (
-              <>
-                <PropertyRow
-                  label="Priority"
-                  value={<ClassificationPills priority={testCase.content.priority ?? 'medium'} />}
-                  wrap
+            <PropertyRow label="Format" value={CASE_FORMAT_LABELS[(isEditing ? format : testCase.content.format) ?? 'steps']} />
+            <PropertyRow
+              label="Priority"
+              value={
+                isEditing ? (
+                  <select
+                    aria-label="Priority"
+                    value={priority}
+                    onChange={(e) => setPriority(e.target.value as Priority)}
+                    className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+                  >
+                    {PRIORITIES.map((p) => (
+                      <option key={p} value={p}>
+                        {p}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <ClassificationPills priority={testCase.content.priority ?? 'medium'} />
+                )
+              }
+              wrap
+            />
+            <PropertyRow
+              label="Test type"
+              value={
+                isEditing ? (
+                  <Input
+                    aria-label="Test type"
+                    value={testType}
+                    onChange={(e) => setTestType(e.target.value)}
+                    placeholder="e.g. unit, e2e"
+                  />
+                ) : (
+                  testCase.content.testType && <ClassificationPills testType={testCase.content.testType} />
+                )
+              }
+              wrap
+            />
+            <PropertyRow
+              label="Automation"
+              value={
+                isEditing ? (
+                  <Switch aria-label="Automated" checked={automated} onCheckedChange={setAutomated} />
+                ) : (
+                  <AutomationPill automated={Boolean(testCase.content.automated)} />
+                )
+              }
+              wrap
+            />
+            <PropertyRow
+              label="Platform"
+              value={
+                isEditing ? (
+                  <Input
+                    aria-label="Platform"
+                    value={platform}
+                    onChange={(e) => setPlatform(e.target.value)}
+                    placeholder="e.g. web, iOS"
+                  />
+                ) : (
+                  testCase.content.platform && <ClassificationPills platform={testCase.content.platform} />
+                )
+              }
+              wrap
+            />
+            <PropertyRow
+              label="Tags"
+              value={
+                isEditing ? (
+                  <TagChipsEditor
+                    tags={tags}
+                    vocabulary={[]}
+                    onAdd={(tag) => setTags((prev) => (prev.includes(tag) ? prev : [...prev, tag]))}
+                    onRemove={(tag) => setTags((prev) => prev.filter((t) => t !== tag))}
+                  />
+                ) : (
+                  (testCase.content.tags ?? []).length > 0 &&
+                  (testCase.content.tags ?? []).map((tag) => (
+                    <span key={tag} className="rounded-full bg-muted px-2 py-0.5">
+                      {tag}
+                    </span>
+                  ))
+                )
+              }
+              wrap
+            />
+            <PropertyRow label="Version" value={`v${testCase.currentVersion}`} />
+            <PropertyRow
+              label="In suites"
+              value={
+                suiteNames.length > 0 &&
+                suiteNames.map((name) => (
+                  <span key={name} className="rounded-full bg-accent px-2 py-0.5">
+                    {name}
+                  </span>
+                ))
+              }
+              wrap
+            />
+            <PropertyRow
+              label="Jira"
+              value={
+                <JiraLinkBadge
+                  variant="property"
+                  jiraIssueKey={testCase.jiraIssueKey}
+                  jiraIssueStatus={testCase.jiraIssueStatus}
+                  jiraLastSyncedAt={testCase.jiraLastSyncedAt}
+                  jiraBaseUrl={jiraSiteUrl}
+                  canEdit={canEdit}
+                  onSave={saveJiraLink}
                 />
-                <PropertyRow
-                  label="Test type"
-                  value={testCase.content.testType && <ClassificationPills testType={testCase.content.testType} />}
-                  wrap
-                />
-                <PropertyRow
-                  label="Automation"
-                  value={<AutomationPill automated={Boolean(testCase.content.automated)} />}
-                  wrap
-                />
-                <PropertyRow
-                  label="Platform"
-                  value={testCase.content.platform && <ClassificationPills platform={testCase.content.platform} />}
-                  wrap
-                />
-                <PropertyRow
-                  label="Tags"
-                  value={
-                    (testCase.content.tags ?? []).length > 0 &&
-                    (testCase.content.tags ?? []).map((tag) => (
-                      <span key={tag} className="rounded-full bg-muted px-2 py-0.5">
-                        {tag}
-                      </span>
-                    ))
-                  }
-                  wrap
-                />
-                <PropertyRow label="Version" value={`v${testCase.currentVersion}`} />
-                <PropertyRow
-                  label="In suites"
-                  value={
-                    suiteNames.length > 0 &&
-                    suiteNames.map((name) => (
-                      <span key={name} className="rounded-full bg-accent px-2 py-0.5">
-                        {name}
-                      </span>
-                    ))
-                  }
-                  wrap
-                />
-                <PropertyRow
-                  label="Jira"
-                  value={
-                    <JiraLinkBadge
-                      variant="property"
-                      jiraIssueKey={testCase.jiraIssueKey}
-                      jiraIssueStatus={testCase.jiraIssueStatus}
-                      jiraLastSyncedAt={testCase.jiraLastSyncedAt}
-                      jiraBaseUrl={jiraSiteUrl}
-                      canEdit={canEdit}
-                      onSave={saveJiraLink}
-                    />
-                  }
-                  wrap
-                />
-                {customFieldDefs.length > 0 &&
-                  (() => {
-                    const values = testCase.content.customFields ?? {}
-                    const visible = customFieldDefs.slice(0, 3)
-                    const hidden = customFieldDefs.slice(3)
-                    const renderField = (field: CustomField) => {
-                      const raw = values[field.id]
-                      const display =
-                        field.fieldType === 'select'
-                          ? (field.options ?? []).find((o) => o.id === raw)?.value
-                          : raw
-                      return (
-                        <PropertyRow
-                          key={field.id}
-                          label={field.name}
-                          value={
-                            field.fieldType === 'select' && display ? (
-                              <span className="rounded-full bg-muted px-2 py-0.5">{display}</span>
-                            ) : (
-                              display
-                            )
-                          }
-                          wrap
-                        />
-                      )
-                    }
-                    return (
-                      <>
-                        {visible.map(renderField)}
-                        {hidden.length > 0 &&
-                          (showAllCustomFields ? (
-                            hidden.map(renderField)
-                          ) : (
-                            <button
-                              type="button"
-                              className="text-xs text-primary hover:underline"
-                              onClick={() => setShowAllCustomFields(true)}
+              }
+              wrap
+            />
+            {customFieldDefs.length > 0 &&
+              (() => {
+                const values = isEditing ? customFieldValues : (testCase.content.customFields ?? {})
+                const visible = customFieldDefs.slice(0, 3)
+                const hidden = customFieldDefs.slice(3)
+                const renderField = (field: CustomField) => {
+                  const raw = values[field.id]
+                  const display =
+                    field.fieldType === 'select' ? (field.options ?? []).find((o) => o.id === raw)?.value : raw
+                  return (
+                    <PropertyRow
+                      key={field.id}
+                      label={field.name}
+                      value={
+                        isEditing ? (
+                          field.fieldType === 'select' ? (
+                            <select
+                              aria-label={field.name}
+                              value={raw ?? ''}
+                              onChange={(e) =>
+                                setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))
+                              }
+                              className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
                             >
-                              Show {hidden.length} more
-                            </button>
-                          ))}
-                      </>
-                    )
-                  })()}
-              </>
-            )}
+                              <option value="">—</option>
+                              {(field.options ?? []).map((opt) => (
+                                <option key={opt.id} value={opt.id}>
+                                  {opt.value}
+                                </option>
+                              ))}
+                            </select>
+                          ) : (
+                            <Input
+                              aria-label={field.name}
+                              value={raw ?? ''}
+                              onChange={(e) =>
+                                setCustomFieldValues((prev) => ({ ...prev, [field.id]: e.target.value }))
+                              }
+                            />
+                          )
+                        ) : field.fieldType === 'select' && display ? (
+                          <span className="rounded-full bg-muted px-2 py-0.5">{display}</span>
+                        ) : (
+                          display
+                        )
+                      }
+                      wrap
+                    />
+                  )
+                }
+                return (
+                  <>
+                    {visible.map(renderField)}
+                    {hidden.length > 0 &&
+                      (showAllCustomFields ? (
+                        hidden.map(renderField)
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-xs text-primary hover:underline"
+                          onClick={() => setShowAllCustomFields(true)}
+                        >
+                          Show {hidden.length} more
+                        </button>
+                      ))}
+                  </>
+                )
+              })()}
           </CaseSidebarSection>
 
           <CaseSidebarSection title="Results">
@@ -587,6 +716,27 @@ export default function CaseDetailPage() {
             onQueryChange={setMoveQuery}
             onSelect={(targetFolderId) => void moveTo(targetFolderId)}
           />
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pendingFormat !== null} onOpenChange={(next) => !next && cancelSwitch()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogTitle>Switch to {pendingFormat ? CASE_FORMAT_LABELS[pendingFormat] : ''}?</DialogTitle>
+          <DialogDescription>
+            Switching clears{' '}
+            {format === 'steps'
+              ? "the steps you've written"
+              : format === 'text'
+                ? "the description you've written"
+                : "the Given/When/Then scenario you've written"}
+            . This only changes what&rsquo;s in the editor — nothing is saved until you save this case.
+          </DialogDescription>
+          <DialogFooter>
+            <Button variant="outline" onClick={cancelSwitch}>
+              Cancel
+            </Button>
+            <Button onClick={confirmFormatSwitch}>Switch format</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

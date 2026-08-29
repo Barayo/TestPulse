@@ -11,7 +11,9 @@ type ScalarField = { label: string; get: (c: CaseContent) => string }
 
 const SCALAR_FIELDS: ScalarField[] = [
   { label: 'Title', get: (c) => c.title },
+  { label: 'Format', get: (c) => c.format ?? 'steps' },
   { label: 'Description', get: (c) => c.description ?? '' },
+  { label: 'Scenario', get: (c) => c.gherkinSource ?? '' },
   { label: 'Expected result', get: (c) => c.expectedResult ?? '' },
   { label: 'Priority', get: (c) => c.priority ?? '' },
   { label: 'Tags', get: (c) => (c.tags ?? []).join(', ') },

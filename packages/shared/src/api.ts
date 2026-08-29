@@ -2033,6 +2033,13 @@ export interface components {
             customFields?: {
                 [key: string]: string;
             };
+            /**
+             * @description The case's content authoring format (add-case-authoring-formats). Defaults to "steps" when omitted. "text" uses description as the full narrative with no structured steps; "gherkin" uses gherkinSource for a free-form Given/When/Then block.
+             * @enum {string}
+             */
+            format?: "steps" | "text" | "gherkin";
+            /** @description The raw Given/When/Then source, meaningful when format is "gherkin" (add-case-authoring-formats). */
+            gherkinSource?: string;
         };
         CaseCreateInput: components["schemas"]["CaseContent"] & {
             /** @description Defaults to the project's root folder when omitted. */

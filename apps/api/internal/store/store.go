@@ -68,7 +68,7 @@ var ErrNotFound = fmt.Errorf("not found")
 var ErrJiraLinkNotSet = fmt.Errorf("jira issue key is not set")
 
 // contentColumns is the shared SELECT list for test_case_versions content.
-const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields"
+const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields, format, gherkin_source"
 
 func marshalSteps(steps []domain.Step) ([]byte, error) {
 	if steps == nil {
@@ -110,7 +110,7 @@ func claimEntityKey(ctx context.Context, tx pgx.Tx, projectID, entityType, forma
 	return fmt.Sprintf(format, projectKey, n), nil
 }
 
-func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool, customFieldsJSON *[]byte) func() (domain.CaseContent, error) {
+func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool, customFieldsJSON *[]byte, format, gherkinSource *string) func() (domain.CaseContent, error) {
 	return func() (domain.CaseContent, error) {
 		var steps []domain.Step
 		if err := json.Unmarshal(*stepsJSON, &steps); err != nil {
@@ -133,6 +133,8 @@ func scanContent(title, description *string, stepsJSON *[]byte, expected *string
 			TestType:       *testType,
 			Automated:      *automated,
 			CustomFields:   customFields,
+			Format:         domain.Format(*format),
+			GherkinSource:  *gherkinSource,
 		}, nil
 	}
 }

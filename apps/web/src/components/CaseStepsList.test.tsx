@@ -1,5 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { CaseStepsList } from './CaseStepsList'
 
 describe('CaseStepsList', () => {
@@ -48,5 +49,57 @@ describe('CaseStepsList', () => {
   it('renders a provided emptyStateAction inside the empty state', () => {
     render(<CaseStepsList steps={[]} emptyStateAction={<button>+ Add steps</button>} />)
     expect(screen.getByRole('button', { name: '+ Add steps' })).toBeInTheDocument()
+  })
+})
+
+describe('CaseStepsList — editable (in-place edit, add-case-authoring-formats)', () => {
+  it('renders editable action/expected fields inside the same card shape as read mode, when onChange is provided', () => {
+    render(
+      <CaseStepsList
+        steps={[{ action: 'open login page', expected: 'form visible' }]}
+        onChange={vi.fn()}
+      />,
+    )
+    expect(screen.getByTestId('step-number-0')).toHaveTextContent('1')
+    expect(screen.getByLabelText(/^action for step 1/i)).toHaveValue('open login page')
+    expect(screen.getByLabelText(/^expected result for step 1/i)).toHaveValue('form visible')
+  })
+
+  it('reports an edited action via onChange', async () => {
+    const onChange = vi.fn()
+    render(<CaseStepsList steps={[{ action: 'open login page', expected: '' }]} onChange={onChange} />)
+    await userEvent.type(screen.getByLabelText(/^action for step 1/i), '!')
+    expect(onChange).toHaveBeenCalledWith([{ action: 'open login page!', expected: '' }])
+  })
+
+  it('removes a step via its remove control', async () => {
+    const onChange = vi.fn()
+    render(
+      <CaseStepsList
+        steps={[
+          { action: 'first', expected: '' },
+          { action: 'second', expected: '' },
+        ]}
+        onChange={onChange}
+      />,
+    )
+    await userEvent.click(screen.getByLabelText(/remove step 1/i))
+    expect(onChange).toHaveBeenCalledWith([{ action: 'second', expected: '' }])
+  })
+
+  it('adds a step via an in-card "+ Add step" control', async () => {
+    const onChange = vi.fn()
+    render(<CaseStepsList steps={[{ action: 'first', expected: '' }]} onChange={onChange} />)
+    await userEvent.click(screen.getByRole('button', { name: /add step/i }))
+    expect(onChange).toHaveBeenCalledWith([
+      { action: 'first', expected: '' },
+      { action: '', expected: '' },
+    ])
+  })
+
+  it('renders the card (with an Add step control) rather than the empty state when editable with zero steps', () => {
+    render(<CaseStepsList steps={[]} onChange={vi.fn()} />)
+    expect(screen.queryByText(/no steps yet/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /add step/i })).toBeInTheDocument()
   })
 })

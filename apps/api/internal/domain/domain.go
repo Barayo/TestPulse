@@ -78,6 +78,22 @@ var validPriorities = map[Priority]bool{
 	PriorityLow: true, PriorityMedium: true, PriorityHigh: true, PriorityCritical: true,
 }
 
+// Format is a test case's content authoring format (add-case-authoring-formats).
+// The zero value means "unset" — callers that persist a CaseContent default
+// it to FormatSteps at the storage layer, matching every case created before
+// this field existed.
+type Format string
+
+const (
+	FormatSteps   Format = "steps"
+	FormatText    Format = "text"
+	FormatGherkin Format = "gherkin"
+)
+
+var validFormats = map[Format]bool{
+	FormatSteps: true, FormatText: true, FormatGherkin: true,
+}
+
 // CaseContent is the immutable payload of one test case version.
 type CaseContent struct {
 	Title          string   `json:"title"`
@@ -98,6 +114,13 @@ type CaseContent struct {
 	// this version was created, or never given a value, is simply absent
 	// — never a zero-value entry.
 	CustomFields map[string]string `json:"customFields,omitempty"`
+	// Format selects which of Steps/Description/GherkinSource holds the
+	// case's authored content (add-case-authoring-formats). Steps remains
+	// populated only when Format is FormatSteps; GherkinSource only when
+	// FormatGherkin; Description is meaningful for both FormatText (the
+	// full narrative) and the other formats (an optional summary).
+	Format        Format `json:"format,omitempty"`
+	GherkinSource string `json:"gherkinSource,omitempty"`
 }
 
 // Step is a single test case step.
@@ -112,6 +135,9 @@ func (c CaseContent) Validate() error {
 	}
 	if c.Priority != "" && !validPriorities[c.Priority] {
 		return fmt.Errorf("invalid priority %q: must be one of low, medium, high, critical", c.Priority)
+	}
+	if c.Format != "" && !validFormats[c.Format] {
+		return fmt.Errorf("invalid format %q: must be one of steps, text, gherkin", c.Format)
 	}
 	return nil
 }
@@ -314,12 +340,12 @@ type InstanceSettings struct {
 	// OIDC/SSO settings (add-sso-oidc) — Tenant-Admin-configurable, same
 	// row as every other instance-wide setting. OIDCClientSecretSet is
 	// computed (never the raw or encrypted secret itself).
-	OIDCIssuer           string    `json:"oidcIssuer"`
-	OIDCClientID         string    `json:"oidcClientId"`
-	OIDCClientSecretSet  bool      `json:"oidcClientSecretSet"`
-	OIDCGroupClaim       string    `json:"oidcGroupClaim"`
-	OIDCAdminClaimValues []string  `json:"oidcAdminClaimValues"`
-	OIDCOnly             bool      `json:"oidcOnly"`
+	OIDCIssuer           string   `json:"oidcIssuer"`
+	OIDCClientID         string   `json:"oidcClientId"`
+	OIDCClientSecretSet  bool     `json:"oidcClientSecretSet"`
+	OIDCGroupClaim       string   `json:"oidcGroupClaim"`
+	OIDCAdminClaimValues []string `json:"oidcAdminClaimValues"`
+	OIDCOnly             bool     `json:"oidcOnly"`
 	// JiraSiteURL (add-jira-connector) is the Jira Cloud site base URL
 	// (e.g. "https://mycompany.atlassian.net"), used only to build
 	// browsable issue links in the UI — separate from the connector's own

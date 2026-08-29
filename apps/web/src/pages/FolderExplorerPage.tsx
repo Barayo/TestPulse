@@ -8,7 +8,7 @@ import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { ResizeHandle } from '@/components/ResizeHandle'
 import { useResizableWidth } from '@/lib/useResizableWidth'
 import { FolderPicker } from '@/components/FolderPicker'
-import { CaseDrawer, type ClassificationFields, type Step } from '@/components/CaseDrawer'
+import { CaseDrawer, type CaseFormat, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { AutomationPill, ClassificationPills, distinctValues, FlakyPill, StalePill, tagPills } from '@/components/Pills'
 import { Button } from '@/components/ui/button'
@@ -792,7 +792,9 @@ export default function FolderExplorerPage() {
     navigate(`/projects/${projectKey}/suites/${suite.key}`)
   }
 
-  async function createCase(input: { title: string; steps: Step[] } & ClassificationFields) {
+  async function createCase(
+    input: { title: string; steps: Step[]; description: string; format: CaseFormat; gherkinSource: string } & ClassificationFields,
+  ) {
     if (!projectKey || !selectedFolderId) return
     await api.POST('/api/v1/projects/{projectKey}/cases', {
       params: { path: { projectKey } },
@@ -800,6 +802,9 @@ export default function FolderExplorerPage() {
         title: input.title,
         folderId: selectedFolderId,
         steps: input.steps,
+        description: input.description,
+        format: input.format,
+        gherkinSource: input.gherkinSource,
         priority: input.priority,
         tags: input.tags,
         platform: input.platform,

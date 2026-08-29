@@ -1124,6 +1124,49 @@ func TestSeedContentShowcasesLibraryRichness(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesCaseAuthoringFormats covers add-case-authoring-formats'
+// Sample-Project-showcase task: without this, a fresh instance's Library
+// would only ever contain "steps"-format cases, leaving the format picker,
+// free-text/Gherkin read views, and their empty/diff states entirely
+// untested against real seeded content.
+func TestSeedContentShowcasesCaseAuthoringFormats(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+
+	var sawText, sawGherkin bool
+	for _, c := range cases {
+		if c.Content.Format == domain.FormatText {
+			sawText = true
+			if c.Content.Description == "" {
+				t.Errorf("text-format case %q has no description", c.Content.Title)
+			}
+		}
+		if c.Content.Format == domain.FormatGherkin {
+			sawGherkin = true
+			if c.Content.GherkinSource == "" {
+				t.Errorf("gherkin-format case %q has no gherkinSource", c.Content.Title)
+			}
+		}
+	}
+	if !sawText {
+		t.Error("no free-text-format case seeded — the format picker/read view has nothing real to show")
+	}
+	if !sawGherkin {
+		t.Error("no gherkin-format case seeded — the format picker/read view has nothing real to show")
+	}
+}
+
 // TestSeedContentShowcasesScopedApiToken covers add-scoped-api-tokens'
 // Sample-Project-showcase task: without this, a fresh instance's token list
 // would only ever show unscoped tokens, leaving the project+role picker and

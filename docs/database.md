@@ -56,8 +56,10 @@ erDiagram
         uuid case_id FK
         int version PK
         text title
+        text format "steps|text|gherkin, default steps"
         text description
         jsonb steps
+        text gherkin_source
         text expected_result
         text priority
         text_array tags
@@ -114,7 +116,7 @@ A self-referencing tree per project for **organizing** cases (independent of sui
 **Every edit to a test case creates a new immutable version row; nothing in `test_case_versions` is ever updated or deleted.**
 
 - `test_cases` holds identity and two pointers: `current_version` (the version editors see and new runs pin to) and `folder_id` (mandatory FK to `test_case_folders`, defaulting to the project's root when not specified) — plus `deleted` (soft delete — case disappears from authoring lists, but its versions remain joinable).
-- `test_case_versions` holds the actual content per version: `title`, `description`, `steps` (JSONB array of `{action, expected}`), `expected_result`, `priority`, `tags`. Primary key `(case_id, version)`. `actor_kind` (`user`/`agent`/`unknown`) and `actor_ref_id` (`link-case-version-actor-to-identity`) denormalize the authenticated actor who created the version, the same pattern `test_run_results` already uses — no FK on `actor_ref_id`, so attribution survives that actor being deleted, and versions created before this capability shipped read back as `unknown` rather than a fabricated identity.
+- `test_case_versions` holds the actual content per version: `title`, `format` (`steps`/`text`/`gherkin`, default `steps` — which of `steps`/`description`/`gherkin_source` is the case's authored content), `description`, `steps` (JSONB array of `{action, expected}`), `gherkin_source` (raw `Given`/`When`/`Then` text, meaningful when `format` is `gherkin`), `expected_result`, `priority`, `tags`. Primary key `(case_id, version)`. `actor_kind` (`user`/`agent`/`unknown`) and `actor_ref_id` (`link-case-version-actor-to-identity`) denormalize the authenticated actor who created the version, the same pattern `test_run_results` already uses — no FK on `actor_ref_id`, so attribution survives that actor being deleted, and versions created before this capability shipped read back as `unknown` rather than a fabricated identity.
 
 This split exists so a run can reference `(case_id, version)` directly (via FK) and get immutable content forever, regardless of later edits — see [architecture.md](architecture.md) and the `add-core-domain` design doc for the reasoning.
 

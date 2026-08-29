@@ -88,6 +88,24 @@ test.describe('Requirement: Test case creation and immutable versioning', () => 
     // under load, not-so-briefly) ambiguous between the two pages.
     await expect(page.getByRole('list', { name: 'Section contents' }).getByText('Login works v2')).toBeVisible()
   })
+
+  test('Scenario: Creating a Gherkin case', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-148' })
+    await createProject(page, 'Gherkin Project')
+    await openFolderExplorer(page)
+
+    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Login BDD')
+    await page.getByRole('button', { name: /gherkin/i }).click()
+    await page
+      .getByLabel(/scenario/i)
+      .fill('Given a user\nWhen they log in\nThen they see the dashboard')
+    await page.getByRole('button', { name: /create test case/i }).click()
+
+    await page.getByText('Login BDD').click()
+    await expect(page.getByText('Given')).toBeVisible()
+    await expect(page.getByText('When')).toBeVisible()
+  })
 })
 
 test.describe('Requirement: Test suite grouping', () => {

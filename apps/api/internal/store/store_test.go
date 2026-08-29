@@ -426,6 +426,56 @@ func TestCaseClassificationFieldsRoundTripOnCreateAndUpdate(t *testing.T) {
 	}
 }
 
+func TestCaseWithoutFormatDefaultsToSteps(t *testing.T) {
+	s := testStore(t)
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "Login works")
+
+	if c.Content.Format != domain.FormatSteps {
+		t.Errorf("Content.Format = %q, want %q", c.Content.Format, domain.FormatSteps)
+	}
+}
+
+func TestCaseFormatAndGherkinSourceRoundTripOnCreateGetAndUpdate(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	content := domain.CaseContent{
+		Title:         "Login works",
+		Priority:      domain.PriorityMedium,
+		Format:        domain.FormatGherkin,
+		GherkinSource: "Given a user\nWhen they log in\nThen they see the dashboard",
+	}
+	c, err := s.Cases.Create(ctx, p.ID, "", content, domain.ResultActorUnknown, "")
+	if err != nil {
+		t.Fatalf("create case: %v", err)
+	}
+	if c.Content.Format != domain.FormatGherkin || c.Content.GherkinSource != content.GherkinSource {
+		t.Fatalf("Content after create = %+v, want format=gherkin gherkinSource=%q", c.Content, content.GherkinSource)
+	}
+
+	got, err := s.Cases.Get(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("get case: %v", err)
+	}
+	if got.Content.Format != domain.FormatGherkin || got.Content.GherkinSource != content.GherkinSource {
+		t.Fatalf("Content after Get = %+v, want format=gherkin gherkinSource=%q", got.Content, content.GherkinSource)
+	}
+
+	edited := got.Content
+	edited.Format = domain.FormatText
+	edited.GherkinSource = ""
+	edited.Description = "Log in as a user and confirm the dashboard appears."
+	c2, err := s.Cases.NewVersion(ctx, c.ID, edited, domain.ResultActorUnknown, "")
+	if err != nil {
+		t.Fatalf("new version: %v", err)
+	}
+	if c2.Content.Format != domain.FormatText || c2.Content.GherkinSource != "" {
+		t.Fatalf("Content after NewVersion = %+v, want format=text gherkinSource=empty", c2.Content)
+	}
+}
+
 func TestCaseCustomFieldValuesRoundTripOnCreateGetListAndVersions(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

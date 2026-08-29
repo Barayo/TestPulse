@@ -2344,6 +2344,19 @@ components:
             The project's custom field values, keyed by field id (a select
             field's value is one of its option ids). Sparse — a field with
             no recorded value is simply absent, not a default (add-case-custom-fields).
+        format:
+          type: string
+          enum: [steps, text, gherkin]
+          description: >-
+            The case's content authoring format (add-case-authoring-formats).
+            Defaults to "steps" when omitted. "text" uses description as the
+            full narrative with no structured steps; "gherkin" uses
+            gherkinSource for a free-form Given/When/Then block.
+        gherkinSource:
+          type: string
+          description: >-
+            The raw Given/When/Then source, meaningful when format is
+            "gherkin" (add-case-authoring-formats).
     CaseCreateInput:
       allOf:
         - $ref: "#/components/schemas/CaseContent"
