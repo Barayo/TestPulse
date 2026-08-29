@@ -112,6 +112,12 @@ steps — the default), `text` (free-form narrative in `description`, no
 structured steps), or `gherkin` (a free-form `Given/When/Then` source
 block). A case not given an explicit format defaults to `steps`.
 
+Creating a case in the web UI SHALL use a dedicated page
+(`/projects/{projectKey}/cases/new`), not a drawer or dialog — the same
+breadcrumb/header/content-plus-sidebar shape used for viewing and editing
+a case, so creation, viewing, and editing present as the same page in
+different states.
+
 #### Scenario: Create a test case
 - **WHEN** a user with `caseCreate` permission creates a case with a title and steps
 - **THEN** the case exists at version 1 and is listed in its project
@@ -132,11 +138,11 @@ block). A case not given an explicit format defaults to `steps`.
 - **WHEN** a user updates an existing case with a platform, testType, and automated status
 - **THEN** the case reflects all three on subsequent reads
 
-#### Scenario: Classification fields are editable from the case authoring drawer
+#### Scenario: Classification fields are editable from the case creation page
 - **WHEN** a user creates or edits a case in the web UI
-- **THEN** the drawer shows editable controls for priority, tags, platform, test type, and automated status, not just title and steps
+- **THEN** the page shows editable controls for priority, tags, platform, test type, and automated status, not just title and content
 
-#### Scenario: Editing a case from the UI preserves fields the drawer doesn't show
+#### Scenario: Editing a case from the UI preserves fields the editor doesn't show
 - **WHEN** a user edits a case's title or steps from the UI without changing its description or expected result
 - **THEN** the case's description and expected result are unchanged in the new version, not reset to empty
 
@@ -158,11 +164,19 @@ block). A case not given an explicit format defaults to `steps`.
 
 #### Scenario: Format is selectable when authoring a case
 - **WHEN** a user creates a case in the web UI, or edits an existing case's content
-- **THEN** a format picker offers a choice between structured steps, free text, and Gherkin, showing only the fields relevant to the selected format — in the same in-place shell the read view uses when editing an existing case
+- **THEN** a format picker offers a choice between structured steps, free text, and Gherkin, showing only the fields relevant to the selected format — in the same shell the read view uses
 
 #### Scenario: Switching format on an existing case
 - **WHEN** a user changes an existing case's format to one different from its current format
 - **THEN** the new version reflects the new format, and the UI warns before discarding content from the format being abandoned if that content is non-empty
+
+#### Scenario: Creating a case opens a dedicated page scoped to its target section
+- **WHEN** a user clicks "New test case" while browsing a section in the Library
+- **THEN** the browser navigates to a case-creation page addressed to that section, rather than opening an overlay on the current page
+
+#### Scenario: Creating a case lands on the new case's own page
+- **WHEN** a user successfully creates a case from the case-creation page
+- **THEN** the browser navigates to the new case's own detail page
 
 ### Requirement: Immutable test case versioning
 Every edit to a test case's content SHALL create a new immutable
