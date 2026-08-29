@@ -739,7 +739,7 @@ was created.
 - **THEN** the app navigates to that run's detail page and shows a one-shot "Run created successfully" confirmation, which does not reappear on a later visit or refresh
 
 ### Requirement: Project list with permission-ready create action
-Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section. A project marked as the sample project SHALL show a "Sample" badge next to its name, in both view modes.
+Without an active project selected, the web UI SHALL show a list of all projects, with the create-project action and the empty-state call to action kept structurally separate from the list itself. The list SHALL render in one of two view modes, expanded or compact, chosen automatically from the project count and device, with a manual override always available. Each project SHALL show a status label derived from its pass rate, alongside the existing numeric value. A non-admin user who can see exactly one project SHALL be navigated directly into it instead of landing on the list. The list SHALL be orderable by name, suite count, case count, or creation date, in either direction, with the chosen order applied consistently across both view modes and within the pinned Favorites section. A project marked as the sample project SHALL show a "Sample" badge next to its name, in both view modes. The expanded view SHALL show each project's assigned tags as chips, and the filter row (shared across both view modes, alongside the existing status filter chips) SHALL offer a filter-by-tag control whenever at least one project carries a tag.
 
 #### Scenario: Listing projects
 - **WHEN** a user navigates to the project list with no project selected
@@ -820,6 +820,22 @@ Without an active project selected, the web UI SHALL show a list of all projects
 #### Scenario: Non-sample projects show no badge
 - **WHEN** the project list includes projects that are not the sample project
 - **THEN** their rows show no "Sample" badge
+
+#### Scenario: Expanded card shows tag chips
+- **WHEN** a project has one or more tags assigned and the list renders in expanded view
+- **THEN** its card shows a chip for each assigned tag
+
+#### Scenario: Untagged project shows no tag chips
+- **WHEN** a project has no tags assigned
+- **THEN** its card shows no tag chips, in either view mode
+
+#### Scenario: Filtering by tag
+- **WHEN** a user selects a tag from the filter row's filter-by-tag control
+- **THEN** only projects with that tag assigned remain visible, in either view mode
+
+#### Scenario: Tag and status filters compose
+- **WHEN** a user has both a status filter and a tag filter active
+- **THEN** only projects matching both filters remain visible
 
 ### Requirement: Routes address projects, cases, runs, and suites by key
 The web UI SHALL address projects, test cases, runs, and suites in the URL by their human-readable `key`, not their internal `id`. Folder routes are unaffected and continue to use the folder's internal id.
