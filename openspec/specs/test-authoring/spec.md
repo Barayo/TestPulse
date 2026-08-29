@@ -283,8 +283,39 @@ Deleting a folder SHALL soft-delete that folder and every folder and test case a
 - **WHEN** a user whose effective permissions on a project do not include `sectionDelete` attempts to delete a folder
 - **THEN** the request is rejected with `403`
 
+### Requirement: Moving a folder to a different parent
+
+The system SHALL let a user with `sectionEdit` permission move (reparent) a
+folder to a different parent folder within the same project. The move
+SHALL be rejected when the target is the folder itself or any descendant
+of the folder — a cycle — regardless of client-side filtering, since the
+server is the authoritative guard. The project's root folder MUST NOT be
+moved (it has no parent to leave, and no folder may become its parent).
+Moving a folder SHALL NOT change which suites its cases belong to, the
+same independence folders and suites already have for a single case.
+
+#### Scenario: Move a folder to a different parent
+- **WHEN** a user with `sectionEdit` permission moves a folder to a different, non-descendant parent
+- **THEN** the folder (and its entire existing subtree) now appears under the new parent, and no longer under the old one
+
+#### Scenario: Moving a folder into its own descendant is rejected
+- **WHEN** a user attempts to move a folder into one of its own subfolders
+- **THEN** the request is rejected and the folder's parent is unchanged
+
+#### Scenario: Moving a folder into itself is rejected
+- **WHEN** a user attempts to move a folder to itself as its own parent
+- **THEN** the request is rejected and the folder's parent is unchanged
+
+#### Scenario: The root folder cannot be moved
+- **WHEN** a user attempts to move a project's root folder
+- **THEN** the request is rejected
+
+#### Scenario: A permission that doesn't include sectionEdit cannot move a folder
+- **WHEN** a user whose effective permissions on a project do not include `sectionEdit` attempts to move a folder
+- **THEN** the request is rejected with `403`
+
 ### Requirement: Destructive actions are tucked behind a per-row menu and require confirmation
-The web UI SHALL present every destructive or reorganizing row action (case: "Move to…", "Delete"; folder: "Delete"; section-tree node: "New section") through a closed-by-default contextual menu attached to that row, opened via either a visible trigger or a right-click anywhere on the row — never a standalone always-visible delete icon, an app-wide mode toggle, or a right-click-only trigger with no visible affordance. Right-clicking a row SHALL open its menu at the cursor position and SHALL NOT show the browser's native context menu. A row's menu SHALL include "Delete" only when the actor's effective project permissions include `caseDelete` (for a case row) or `sectionDelete` (for a folder row); a folder row's trigger SHALL NOT render at all for an actor without `sectionDelete`, since a folder row currently has no other menu item. A case row's trigger SHALL always render "Move to…" regardless of permission, since moving a case requires no explicit permission check today. Every delete action, once selected from the menu, SHALL show a confirmation dialog stating what will be removed before it executes; for a folder, the dialog states the number of cases and subfolders in its subtree. Canceling the dialog SHALL make no change.
+The web UI SHALL present every destructive or reorganizing row action (case: "Move to…", "Delete"; folder: "Move to…", "Delete"; section-tree node: "New section") through a closed-by-default contextual menu attached to that row, opened via either a visible trigger or a right-click anywhere on the row — never a standalone always-visible delete icon, an app-wide mode toggle, or a right-click-only trigger with no visible affordance. Right-clicking a row SHALL open its menu at the cursor position and SHALL NOT show the browser's native context menu. A row's menu SHALL include "Delete" only when the actor's effective project permissions include `caseDelete` (for a case row) or `sectionDelete` (for a folder row); SHALL include "Move to…" on a folder row only when the actor's effective permissions include `sectionEdit`. A folder row's trigger SHALL render whenever the actor has `sectionEdit`, `sectionDelete`, or both — rendering neither item, and hiding the trigger entirely, only when the actor has neither permission. A case row's trigger SHALL always render "Move to…" regardless of permission, since moving a case requires no explicit permission check today. Every delete action, once selected from the menu, SHALL show a confirmation dialog stating what will be removed before it executes; for a folder, the dialog states the number of cases and subfolders in its subtree. Canceling the dialog SHALL make no change.
 
 #### Scenario: Row menu is closed by default
 - **WHEN** a user with delete permission opens the Library view
@@ -298,12 +329,20 @@ The web UI SHALL present every destructive or reorganizing row action (case: "Mo
 - **WHEN** a user whose effective permissions do not include `caseDelete` opens a case row's menu
 - **THEN** the menu lists "Move to…" only
 
-#### Scenario: Opening a folder row's menu reveals Delete
-- **WHEN** a user with `sectionDelete` permission opens a folder row's menu
-- **THEN** the menu lists "Delete"
+#### Scenario: Opening a folder row's menu with both permissions reveals Move to… and Delete
+- **WHEN** a user with both `sectionEdit` and `sectionDelete` permission opens a folder row's menu
+- **THEN** the menu lists "Move to…" and, below a divider, "Delete"
 
-#### Scenario: A folder row's menu trigger is not shown without sectionDelete permission
-- **WHEN** a user whose effective project permissions do not include `sectionDelete` opens the Library view
+#### Scenario: A folder row's menu offers Move to… without sectionDelete permission
+- **WHEN** a user with `sectionEdit` but not `sectionDelete` opens a folder row's menu
+- **THEN** the menu lists "Move to…" only
+
+#### Scenario: A folder row's menu offers Delete without sectionEdit permission
+- **WHEN** a user with `sectionDelete` but not `sectionEdit` opens a folder row's menu
+- **THEN** the menu lists "Delete" only
+
+#### Scenario: A folder row's menu trigger is not shown without either permission
+- **WHEN** a user whose effective project permissions include neither `sectionEdit` nor `sectionDelete` opens the Library view
 - **THEN** no menu trigger is shown on any folder row
 
 #### Scenario: Deleting a folder requires confirming its subtree size
