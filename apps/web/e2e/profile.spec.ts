@@ -12,6 +12,7 @@ test.describe('Requirement: Self-service profile', () => {
   test('Scenario: Uploading a custom photo avatar replaces it everywhere, removing reverts to the generated default', async ({
     page,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-15' })
     await page.goto('/settings/profile')
 
     await expect(page.getByRole('button', { name: /upload a photo/i })).toBeVisible()

@@ -13,7 +13,7 @@ async function createUser(page: Page, email: string, password: string) {
 
 test.describe('Requirement: Local user accounts', () => {
   test('Scenario: Tenant Admin changes a user\'s email', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-79' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-144' })
     const originalEmail = `${unique('edit-email-target').replace(/\s+/g, '-').toLowerCase()}@example.com`
     const newEmail = `${unique('edit-email-new').replace(/\s+/g, '-').toLowerCase()}@example.com`
     await createUser(page, originalEmail, 'correcthorse')
@@ -42,7 +42,7 @@ test.describe('Requirement: Local user accounts', () => {
   // change-own-password.spec.ts for the replacement admin actions
   // (trigger a reset email, require a password change at next login).
   test('Scenario: Tenant Admin triggers a password reset email for a user', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-83' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-145' })
     const email = `${unique('admin-reset-target').replace(/\s+/g, '-').toLowerCase()}@example.com`
     await createUser(page, email, 'correcthorse')
 

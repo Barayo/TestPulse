@@ -9,7 +9,7 @@ import { unique } from './support'
 
 test.describe('Requirement: Scoped API tokens', () => {
   test('Scenario: A token scoped to Viewer can read but not write within its project', async ({ page, request }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-77' })
+test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-35' })
 
     const projectName = unique('Scoped Token Project')
     await page.goto('/')

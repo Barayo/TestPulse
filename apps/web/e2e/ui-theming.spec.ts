@@ -13,6 +13,7 @@ test.describe('Requirement: A user can explicitly choose a theme', () => {
   test('Scenario: Explicit Dark choice overrides a light OS preference, and persists across sessions', async ({
     page,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-140' })
     await page.goto('/')
     await expect(page.locator('html')).not.toHaveClass(/dark/)
 
@@ -51,6 +52,7 @@ test.describe('Requirement: A Tenant Admin can choose an instance-wide color pal
   })
 
   test('Scenario: Tenant Admin selects a preset', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-141' })
     await page.goto('/settings/instance')
     await page.getByRole('group', { name: 'Color theme' }).getByRole('button', { name: 'Ocean' }).click()
     await expect(page.locator('html')).toHaveAttribute('data-palette', 'ocean')
@@ -59,6 +61,7 @@ test.describe('Requirement: A Tenant Admin can choose an instance-wide color pal
   })
 
   test('Scenario: The choice is visible to every user, not only admins', async ({ browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-142' })
     // The previous (serial) test already set the instance palette to
     // Ocean — confirm an anonymous visitor, with no session at all, sees
     // it too, not just the admin who set it.
@@ -70,6 +73,7 @@ test.describe('Requirement: A Tenant Admin can choose an instance-wide color pal
   })
 
   test('Scenario: Tenant Admin saves a custom palette', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-143' })
     await page.goto('/settings/instance')
     const colorThemeGroup = page.getByRole('group', { name: 'Color theme' })
     await colorThemeGroup.getByRole('button', { name: 'Custom' }).click()

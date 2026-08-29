@@ -33,7 +33,7 @@ test.describe('Requirement: Team management', () => {
     page,
     browser,
   }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-78' })
+test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-40' })
 
     const projectId = await createProjectId(page, 'Team Delete Preview')
     const teamName = unique('QA Core E2E')

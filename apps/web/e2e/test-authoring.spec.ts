@@ -43,7 +43,7 @@ function content(page: Page) {
 
 test.describe('Requirement: Project management', () => {
   test('Scenario: Create a project', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-18' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-41' })
     const name = unique('QA Platform')
     await page.goto('/')
     await page.getByRole('button', { name: /new project/i }).click()
@@ -55,7 +55,7 @@ test.describe('Requirement: Project management', () => {
   })
 
   test('Scenario: Project name is required', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-19' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-42' })
     await page.goto('/')
     await page.getByRole('button', { name: /new project/i }).click()
     await page.getByRole('button', { name: /^create$/i }).click()
@@ -65,7 +65,7 @@ test.describe('Requirement: Project management', () => {
 
 test.describe('Requirement: Test case creation and immutable versioning', () => {
   test('Scenario: Create a test case, then edit it to create a new version', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-20' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-43' })
     await createProject(page, 'Versioning Project')
     await openFolderExplorer(page)
 
@@ -92,7 +92,7 @@ test.describe('Requirement: Test case creation and immutable versioning', () => 
 
 test.describe('Requirement: Test suite grouping', () => {
   test('Scenario: Add cases to a suite; removing one does not delete the case', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-21' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-44' })
     await createProject(page, 'Suites Project')
     await openFolderExplorer(page)
     await page.getByRole('button', { name: /new test case/i }).click()
@@ -163,7 +163,7 @@ test.describe('Requirement: Test suite grouping', () => {
 
 test.describe('Requirement: Project-level case folders', () => {
   test('Scenario: New project has a root folder; case defaults into it', async ({ page, request }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-22' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-45' })
     await createProject(page, 'Folders Project')
     await openFolderExplorer(page)
     const projectId = new URL(page.url()).pathname.split('/')[2]
@@ -180,7 +180,7 @@ test.describe('Requirement: Project-level case folders', () => {
   })
 
   test('Scenario: Create a nested folder and place a case in it', async ({ page, request }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-23' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-46' })
     await createProject(page, 'Nested Folders Project')
     await openFolderExplorer(page)
     const projectId = new URL(page.url()).pathname.split('/')[2]
@@ -207,6 +207,7 @@ test.describe('Requirement: Project-level case folders', () => {
 // requirement "Linking a test case to a Jira issue".
 test.describe('Requirement: Linking a test case to a Jira issue', () => {
   test('Scenario: Set a Jira issue key on a case', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-47' })
     await createProject(page, 'Jira Link Project')
     await openFolderExplorer(page)
 
@@ -224,6 +225,7 @@ test.describe('Requirement: Linking a test case to a Jira issue', () => {
   })
 
   test('Scenario: Clearing a Jira issue key also clears its cached summary', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-48' })
     await createProject(page, 'Jira Unlink Project')
     await openFolderExplorer(page)
 

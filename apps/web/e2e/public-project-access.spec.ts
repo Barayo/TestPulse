@@ -61,6 +61,7 @@ test.describe('Requirement: Per-project public read access', () => {
     page,
     browser,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-20' })
     const { projectId, projectKey } = await createProject(page, 'Public Access')
 
     await page.goto(`/projects/${projectId}/settings`)
@@ -77,6 +78,7 @@ test.describe('Requirement: Per-project public read access', () => {
   })
 
   test('Scenario: Disabling public access immediately revokes anonymous reads', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-21' })
     const { projectId, projectKey } = await createProject(page, 'Public Access Revoke')
 
     await page.goto(`/projects/${projectId}/settings`)
@@ -94,6 +96,7 @@ test.describe('Requirement: Per-project public read access', () => {
   })
 
   test('Scenario: A non-public project is unreachable anonymously', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-22' })
     const { projectKey } = await createProject(page, 'Never Public')
 
     const anon = await anonymousPage(browser)
@@ -112,6 +115,7 @@ test.describe('Requirement: Instance-wide kill switch for public project access'
     page,
     browser,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-23' })
     const { projectId, projectKey } = await createProject(page, 'Kill Switch')
     await page.goto(`/projects/${projectId}/settings`)
     await page.getByRole('switch', { name: /public access/i }).click()
@@ -145,6 +149,7 @@ test.describe('Requirement: Anonymous visitors see the same pages as authenticat
     page,
     browser,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-24' })
     const { projectKey } = await createProject(page, 'Not Found Login Option')
 
     const anon = await anonymousPage(browser)
@@ -162,6 +167,7 @@ test.describe('Requirement: Anonymous visitors see the same pages as authenticat
   })
 
   test('Scenario: An old direct public-project link still works', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-25' })
     const { projectId, projectKey } = await createProject(page, 'Legacy Direct Link')
     await page.request.patch(`/api/v1/projects/${projectId}`, { data: { publicAccess: true } })
 
@@ -175,6 +181,7 @@ test.describe('Requirement: Anonymous visitors see the same pages as authenticat
   })
 
   test('Scenario: An old discovery-index link still works', async ({ browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-26' })
     const anon = await anonymousPage(browser)
     await anon.goto('/public')
     await anon.waitForURL('/')
@@ -196,6 +203,7 @@ async function disableAllPublicProjects(page: Page) {
 
 test.describe('Requirement: Project list resolves to zero, one, or many public projects for anonymous visitors', () => {
   test('Scenario: Exactly one public project redirects directly', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-27' })
     await disableAllPublicProjects(page)
     const { projectId, projectKey } = await createProject(page, 'Only Public')
     await page.request.patch(`/api/v1/projects/${projectId}`, { data: { publicAccess: true } })
@@ -212,6 +220,7 @@ test.describe('Requirement: Project list resolves to zero, one, or many public p
   })
 
   test('Scenario: Multiple public projects show a list', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-28' })
     await disableAllPublicProjects(page)
     const first = await createProject(page, 'Public List A')
     const second = await createProject(page, 'Public List B')
@@ -233,6 +242,7 @@ test.describe('Requirement: Project list resolves to zero, one, or many public p
   })
 
   test('Scenario: No public projects shows an empty state', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-29' })
     await disableAllPublicProjects(page)
 
     const anon = await anonymousPage(browser)
@@ -249,6 +259,7 @@ test.describe('Requirement: Discovery entry point on the login page', () => {
     page,
     browser,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-30' })
     const anon = await anonymousPage(browser)
     await anon.goto('/login')
     await expect(anon.getByRole('link', { name: /browse public projects/i })).toHaveAttribute('href', '/')
@@ -271,6 +282,7 @@ test.describe('Requirement: Discovery entry point on the login page', () => {
 
 test.describe('Requirement: Logging in from a public project returns to it', () => {
   test('Scenario: Member returns to the project they were viewing', async ({ page, browser }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-31' })
     const { projectId, projectKey } = await createProject(page, 'Login Return')
     await page.request.patch(`/api/v1/projects/${projectId}`, { data: { publicAccess: true } })
 
@@ -305,6 +317,7 @@ test.describe('Requirement: Permission-gating retrofit hides write controls from
     page,
     browser,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-32' })
     const { projectId, projectKey } = await createProject(page, 'Read Only Retrofit')
 
     // Seed a section, a case, a suite containing it, and a run — enough
@@ -419,6 +432,7 @@ test.describe('Requirement: A signed-in non-member reads a public project exactl
     page,
     browser,
   }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-33' })
     const { projectId, projectKey } = await createProject(page, 'Non-Member Read')
     await page.request.patch(`/api/v1/projects/${projectId}`, { data: { publicAccess: true } })
 

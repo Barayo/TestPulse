@@ -36,6 +36,7 @@ async function createRun(page: Page, name: string, caseTitles: string[]) {
 
 test.describe('Requirement: Serving and deleting attachments', () => {
   test('Scenario: Attaching directly to an existing result, then opening the full-size view', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-34' })
     const projectId = await createProjectWithCase(page, 'Attachments Project')
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])

@@ -20,13 +20,23 @@ const REPO_ROOT = join(import.meta.dirname, '..', '..')
 const E2E_DIR = join(REPO_ROOT, 'apps/web/e2e')
 
 const SECTION_LABELS = {
+  'change-own-password.spec.ts': 'Change own password',
   'delete-mode.spec.ts': 'Delete mode',
+  'first-run-setup.spec.ts': 'First-run setup',
+  'forgot-password.spec.ts': 'Forgot password',
   'platform-deployment.spec.ts': 'Platform & deployment',
+  'profile.spec.ts': 'Profile',
   'project-rbac.spec.ts': 'Project RBAC',
+  'public-project-access.spec.ts': 'Public project access',
+  'run-item-attachments.spec.ts': 'Run item attachments',
+  'scoped-api-tokens.spec.ts': 'Scoped API tokens',
   'session-expiry.spec.ts': 'Session expiry',
+  'teams.spec.ts': 'Teams',
   'test-authoring.spec.ts': 'Test authoring',
   'test-execution.spec.ts': 'Test execution',
   'ui-navigation.spec.ts': 'UI navigation',
+  'ui-theming.spec.ts': 'UI theming',
+  'update-user.spec.ts': 'Update user',
 }
 
 async function api(method, path, body) {

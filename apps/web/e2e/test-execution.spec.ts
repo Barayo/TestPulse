@@ -59,7 +59,7 @@ async function addProjectMember(page: Page, projectId: string, label: string): P
 
 test.describe('Requirement: Run creation pins case versions', () => {
   test('Scenario: Run pins versions at creation; board shows pinned content', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-24' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-49' })
     const projectId = await createProjectWithCase(page, 'Pinning Project')
 
     await page.goto(`/projects/${projectId}/runs/new`)
@@ -87,7 +87,7 @@ test.describe('Requirement: Run creation pins case versions', () => {
 
 test.describe('Requirement: Run execution board', () => {
   test('Scenario: Execute a case from the board (pass with comment)', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-25' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-50' })
     const projectId = await createProjectWithCase(page, 'Execution Project')
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
@@ -105,7 +105,7 @@ test.describe('Requirement: Run execution board', () => {
   })
 
   test('Scenario: Run header links to its source suite', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-66' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-51' })
     const projectId = await createProjectWithCase(page, 'Suite Link Project')
 
     await page.goto(`/projects/${projectId}/suites`)
@@ -135,6 +135,7 @@ test.describe('Requirement: Run execution board', () => {
   })
 
   test('Scenario: Right-click a run item, jump straight to its case in the Library', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-52' })
     const projectId = await createProjectWithCase(page, 'Right-Click Project')
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
@@ -148,6 +149,7 @@ test.describe('Requirement: Run execution board', () => {
   })
 
   test('Scenario: Item page breadcrumb ends at the run, not the item\'s own title', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-53' })
     const projectId = await createProjectWithCase(page, 'Item Breadcrumb Project')
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
@@ -160,6 +162,7 @@ test.describe('Requirement: Run execution board', () => {
 
   // add-run-keyboard-shortcuts
   test('Scenario: j/k moves the board\'s focus cursor and Enter opens the focused item', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-54' })
     const projectId = await createProjectWithCase(page, 'Keyboard List Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
@@ -189,6 +192,7 @@ test.describe('Requirement: Run execution board', () => {
 test.describe('Requirement: Run item detail page', () => {
   // add-run-keyboard-shortcuts
   test('Scenario: Recording a verdict via keyboard auto-advances to the next pending item', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-55' })
     const projectId = await createProjectWithCase(page, 'Keyboard Verdict Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
@@ -208,6 +212,7 @@ test.describe('Requirement: Run item detail page', () => {
 
   // unify-case-result-sidebar
   test('Scenario: Item page links to its test case', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-56' })
     const projectId = await createProjectWithCase(page, 'Case Link Project')
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
@@ -225,6 +230,7 @@ test.describe('Requirement: Run item detail page', () => {
 
   // unify-case-result-sidebar
   test('Scenario: Item page shows the case\'s cross-run Results', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-57' })
     const projectId = await createProjectWithCase(page, 'Cross Run Results Project')
 
     await page.goto(`/projects/${projectId}/runs/new`)
@@ -249,7 +255,7 @@ test.describe('Requirement: Run item detail page', () => {
 
 test.describe('Requirement: Run item status lifecycle', () => {
   test('Scenario: Marking retest after a failed verdict', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-26' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-58' })
     const projectId = await createProjectWithCase(page, 'Retest Project')
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
@@ -275,7 +281,7 @@ test.describe('Requirement: Run item status lifecycle', () => {
 
 test.describe('Requirement: Run open/closed lifecycle', () => {
   test('Scenario: Closing a run blocks recording; reopening allows it again', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-27' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-59' })
     const projectId = await createProjectWithCase(page, 'Lifecycle Project')
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works'])
@@ -303,7 +309,7 @@ test.describe('Requirement: Run open/closed lifecycle', () => {
 
 test.describe('Requirement: Run summary', () => {
   test('Scenario: Summary counts by status', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-28' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-60' })
     const projectId = await createProjectWithCase(page, 'Summary Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
@@ -343,6 +349,7 @@ test.describe('Requirement: Run summary', () => {
 test.describe('Requirement: Run item assignment', () => {
   // add-run-item-assignment-ui, link-run-item-assignee-to-identity
   test('Scenario: Assign an item from the board, then filter by assignee and by Unassigned', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-61' })
     const projectId = await createProjectWithCase(page, 'Assignment Project')
     const ana = await addProjectMember(page, projectId, 'Ana')
     await page.getByRole('button', { name: /new test case/i }).click()
@@ -370,6 +377,7 @@ test.describe('Requirement: Run item assignment', () => {
   })
 
   test('Scenario: Bulk-assigning two selected items in one action', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-62' })
     const projectId = await createProjectWithCase(page, 'Bulk Assign Project')
     const ana = await addProjectMember(page, projectId, 'Ana')
     await page.getByRole('button', { name: /new test case/i }).click()
@@ -394,6 +402,7 @@ test.describe('Requirement: Run item assignment', () => {
   })
 
   test('Scenario: Bulk-recording a verdict for selected items on an open run', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-63' })
     const projectId = await createProjectWithCase(page, 'Bulk Verdict Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
@@ -417,6 +426,7 @@ test.describe('Requirement: Run item assignment', () => {
   })
 
   test('Scenario: Right-clicking a checked row shows the bulk menu instead of single-item actions', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-64' })
     const projectId = await createProjectWithCase(page, 'Right-Click Bulk Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
@@ -445,6 +455,7 @@ test.describe('Requirement: Run item assignment', () => {
   })
 
   test('Scenario: Right-clicking an unchecked row leaves an active selection untouched', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-65' })
     const projectId = await createProjectWithCase(page, 'Right-Click Unchecked Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
@@ -472,6 +483,7 @@ test.describe('Requirement: Run item assignment', () => {
   })
 
   test('Scenario: Space selects the focused row and Shift+click extends the range (add-run-board-select-shortcuts)', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-66' })
     const projectId = await createProjectWithCase(page, 'Select Shortcuts Project')
     await page.getByRole('button', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Second case')
@@ -512,6 +524,7 @@ test.describe('Requirement: Run item assignment', () => {
   })
 
   test('Scenario: Creating a run with a default assignee pre-assigns every item', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-67' })
     const projectId = await createProjectWithCase(page, 'Default Assignee Project')
     const ana = await addProjectMember(page, projectId, 'Ana')
     await page.getByRole('button', { name: /new test case/i }).click()
@@ -531,6 +544,7 @@ test.describe('Requirement: Run item assignment', () => {
   })
 
   test('Scenario: Someone outside the project is not offered as an assignee', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-68' })
     const projectId = await createProjectWithCase(page, 'Non-Member Assignee Project')
     const ana = await addProjectMember(page, projectId, 'Ana')
     const outsiderEmail = `${unique('Outsider').replace(/\s+/g, '-').toLowerCase()}@example.com`
@@ -551,6 +565,7 @@ test.describe('Requirement: Run item assignment', () => {
 test.describe('Requirement: Project Reports page', () => {
   // add-project-reports-page
   test('Scenario: Reports page assembles all three sections', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-69' })
     const projectId = await createProjectWithCase(page, 'Reports Page Project')
 
     await page.goto(`/projects/${projectId}/runs/new`)

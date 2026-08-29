@@ -26,7 +26,7 @@ import { test, expect } from '@playwright/test'
 
 test.describe('Requirement: First-run instance setup', () => {
   test('Scenario: Unavailable once any user exists (stale /setup visit redirects to /login)', async ({ page }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-86' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-7' })
     // No storageState here — a genuinely unauthenticated visit, the same
     // way anyone reaching /setup by URL/bookmark would.
     const context = await page.context().browser()!.newContext()

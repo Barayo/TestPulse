@@ -45,7 +45,7 @@ test.describe('Requirement: Self-service password recovery', () => {
     page,
     browser,
   }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-81' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-8' })
     const email = `${unique('forgot-password').replace(/\s+/g, '-').toLowerCase()}@example.com`
     const oldPassword = 'correcthorse-original'
     const newPassword = 'correcthorse-reset'
@@ -89,7 +89,7 @@ test.describe('Requirement: Self-service password recovery', () => {
   test('Scenario: The login page offers self-service recovery when the instance has SMTP configured', async ({
     browser,
   }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-82' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-9' })
     const context = await browser.newContext({ storageState: { cookies: [], origins: [] } })
     const anon = await context.newPage()
 

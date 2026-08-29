@@ -25,7 +25,7 @@ async function loginViaUI(page: Page, email: string, password: string) {
 
 test.describe('Requirement: Self-service password change', () => {
   test('Scenario: Changing the password with the correct current password', async ({ page, browser }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-84' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-1' })
     const email = `${unique('change-own-password').replace(/\s+/g, '-').toLowerCase()}@example.com`
     const oldPassword = 'correcthorse-original'
     const newPassword = 'correcthorse-changed'
@@ -55,7 +55,7 @@ test.describe('Requirement: Self-service password change', () => {
 
 test.describe('Requirement: Required password change at next login', () => {
   test('Scenario: A flagged account is gated at login until it changes its password', async ({ page, browser }) => {
-    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-85' })
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-2' })
     const email = `${unique('require-change-target').replace(/\s+/g, '-').toLowerCase()}@example.com`
     const oldPassword = 'correcthorse-original'
     const newPassword = 'correcthorse-changed'
