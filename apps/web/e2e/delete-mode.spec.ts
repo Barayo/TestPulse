@@ -35,10 +35,21 @@ async function createFolderInOpenFolder(page: Page, name: string) {
 }
 
 async function createCase(page: Page, title: string) {
-  await page.getByRole('button', { name: /new test case/i }).click()
+  await page.getByRole('link', { name: /new test case/i }).click()
   await page.getByLabel(/^title$/i).fill(title)
   await page.getByRole('button', { name: /create test case/i }).click()
-  await expect(page.getByText(title)).toBeVisible()
+  // Creating a case now navigates to its own detail page
+  // (redesign-case-creation-as-page) — unwind both pushed history entries
+  // to return to the Library (goBack(), not goto(): goto() would push a
+  // third entry instead of reusing the original one). The wait must
+  // exclude /cases/new itself — /\/cases\// alone matches both the
+  // create page and the new case's own page, so it would resolve
+  // instantly against the still-current create-page URL instead of
+  // waiting for the real post-creation navigation.
+  await page.waitForURL(/\/cases\/(?!new)/)
+  await page.goBack()
+  await page.goBack()
+  await expect(content(page).getByText(title)).toBeVisible()
 }
 
 async function loginAsNewUser(adminPage: Page, browser: Browser, label: string): Promise<{ page: Page; userId: string }> {

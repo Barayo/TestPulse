@@ -8,7 +8,6 @@ import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { ResizeHandle } from '@/components/ResizeHandle'
 import { useResizableWidth } from '@/lib/useResizableWidth'
 import { FolderPicker } from '@/components/FolderPicker'
-import { CaseDrawer, type CaseFormat, type ClassificationFields, type Step } from '@/components/CaseDrawer'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { AutomationPill, ClassificationPills, distinctValues, FlakyPill, StalePill, tagPills } from '@/components/Pills'
 import { Button } from '@/components/ui/button'
@@ -48,8 +47,6 @@ type DeleteTarget =
   // precomputed sum (directly selected cases + every selected folder's own
   // subtree preview) shown by the confirmation dialog.
   | { kind: 'bulk'; keys: string[]; folderIds: string[]; caseCount: number; folderCount: number }
-
-type DrawerState = { mode: 'create' }
 
 // add-library-folder-selection design.md D4: one combined, rendered-order
 // list of folder and case rows backs Shift+Click ranging and keyboard nav —
@@ -386,7 +383,6 @@ export default function FolderExplorerPage() {
   const [treeCreatingIn, setTreeCreatingIn] = useState<string | null>(null)
   const [contentCreatingFolder, setContentCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
-  const [drawer, setDrawer] = useState<DrawerState | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
   const [creatingSuiteFromSelection, setCreatingSuiteFromSelection] = useState(false)
   const [newSuiteFromSelectionName, setNewSuiteFromSelectionName] = useState('')
@@ -792,31 +788,6 @@ export default function FolderExplorerPage() {
     navigate(`/projects/${projectKey}/suites/${suite.key}`)
   }
 
-  async function createCase(
-    input: { title: string; steps: Step[]; description: string; format: CaseFormat; gherkinSource: string } & ClassificationFields,
-  ) {
-    if (!projectKey || !selectedFolderId) return
-    await api.POST('/api/v1/projects/{projectKey}/cases', {
-      params: { path: { projectKey } },
-      body: {
-        title: input.title,
-        folderId: selectedFolderId,
-        steps: input.steps,
-        description: input.description,
-        format: input.format,
-        gherkinSource: input.gherkinSource,
-        priority: input.priority,
-        tags: input.tags,
-        platform: input.platform,
-        testType: input.testType,
-        automated: input.automated,
-      },
-    })
-    setDrawer(null)
-    await load()
-    bumpLanding()
-  }
-
   const folderAncestors = ancestorChain(folders, selectedFolderId)
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
     { label: 'Projects', href: '/' },
@@ -908,8 +879,8 @@ export default function FolderExplorerPage() {
               </Button>
             )}
             {permissions?.caseCreate && (
-              <Button type="button" onClick={() => setDrawer({ mode: 'create' })}>
-                + New test case
+              <Button type="button" asChild>
+                <Link to={`/projects/${projectKey}/cases/new?folderId=${selectedFolderId}`}>+ New test case</Link>
               </Button>
             )}
           </div>
@@ -1265,15 +1236,6 @@ export default function FolderExplorerPage() {
         </DialogContent>
       </Dialog>
 
-      {drawer?.mode === 'create' && (
-        <CaseDrawer
-          mode="create"
-          open
-          folderName={displayFolderName(selectedFolder, root.id)}
-          onClose={() => setDrawer(null)}
-          onCreate={(input) => void createCase(input)}
-        />
-      )}
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">

@@ -5,9 +5,28 @@ import { unique } from './support'
 // openspec/changes/add-core-domain/specs/test-execution/spec.md scenarios.
 // GIVEN: the compose stack is up (make e2e), with a fresh database.
 //
-// Only the project/case setup helper changed for redesign-ui (case creation
-// now happens in the folder explorer's drawer) — the run execution board
-// itself (RunPage) kept its structure, so those interactions are unchanged.
+// Only the project/case setup helper changed for redesign-ui and
+// redesign-case-creation-as-page (case creation is now its own dedicated
+// page, not a drawer) — the run execution board itself (RunPage) kept its
+// structure, so those interactions are unchanged.
+
+async function createCase(page: Page, title: string) {
+  await page.getByRole('link', { name: /new test case/i }).click()
+  await page.getByLabel(/^title$/i).fill(title)
+  await page.getByRole('button', { name: /create test case/i }).click()
+  // Creating a case now navigates to its own detail page
+  // (redesign-case-creation-as-page) — unwind both pushed history entries
+  // to return to the Library (goBack(), not goto(): goto() would push a
+  // third entry instead of reusing the original one). The wait must
+  // exclude /cases/new itself — /\/cases\// alone matches both the
+  // create page and the new case's own page, so it would resolve
+  // instantly against the still-current create-page URL instead of
+  // waiting for the real post-creation navigation.
+  await page.waitForURL(/\/cases\/(?!new)/)
+  await page.goBack()
+  await page.goBack()
+  await expect(page.getByText(title)).toBeVisible()
+}
 
 async function createProjectWithCase(page: Page, label: string): Promise<string> {
   const projectName = unique(label)
@@ -24,10 +43,7 @@ async function createProjectWithCase(page: Page, label: string): Promise<string>
   const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
   const getStarted = page.getByRole('button', { name: /add your first test case/i })
   await goToLibrary.or(getStarted).click()
-  await page.getByRole('button', { name: /new test case/i }).click()
-  await page.getByLabel(/^title$/i).fill('Login works')
-  await page.getByRole('button', { name: /create test case/i }).click()
-  await expect(page.getByText('Login works')).toBeVisible()
+  await createCase(page, 'Login works')
   return projectId
 }
 
@@ -164,10 +180,7 @@ test.describe('Requirement: Run execution board', () => {
   test('Scenario: j/k moves the board\'s focus cursor and Enter opens the focused item', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-54' })
     const projectId = await createProjectWithCase(page, 'Keyboard List Project')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
@@ -194,10 +207,7 @@ test.describe('Requirement: Run item detail page', () => {
   test('Scenario: Recording a verdict via keyboard auto-advances to the next pending item', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-55' })
     const projectId = await createProjectWithCase(page, 'Keyboard Verdict Project')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
@@ -311,10 +321,7 @@ test.describe('Requirement: Run summary', () => {
   test('Scenario: Summary counts by status', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-60' })
     const projectId = await createProjectWithCase(page, 'Summary Project')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
@@ -352,10 +359,7 @@ test.describe('Requirement: Run item assignment', () => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-61' })
     const projectId = await createProjectWithCase(page, 'Assignment Project')
     const ana = await addProjectMember(page, projectId, 'Ana')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
@@ -380,10 +384,7 @@ test.describe('Requirement: Run item assignment', () => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-62' })
     const projectId = await createProjectWithCase(page, 'Bulk Assign Project')
     const ana = await addProjectMember(page, projectId, 'Ana')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
@@ -404,10 +405,7 @@ test.describe('Requirement: Run item assignment', () => {
   test('Scenario: Bulk-recording a verdict for selected items on an open run', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-63' })
     const projectId = await createProjectWithCase(page, 'Bulk Verdict Project')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
@@ -428,10 +426,7 @@ test.describe('Requirement: Run item assignment', () => {
   test('Scenario: Right-clicking a checked row shows the bulk menu instead of single-item actions', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-64' })
     const projectId = await createProjectWithCase(page, 'Right-Click Bulk Project')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case'])
@@ -457,14 +452,8 @@ test.describe('Requirement: Run item assignment', () => {
   test('Scenario: Right-clicking an unchecked row leaves an active selection untouched', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-65' })
     const projectId = await createProjectWithCase(page, 'Right-Click Unchecked Project')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Third case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Third case')).toBeVisible()
+    await createCase(page, 'Second case')
+    await createCase(page, 'Third case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case', 'Third case'])
@@ -485,14 +474,8 @@ test.describe('Requirement: Run item assignment', () => {
   test('Scenario: Space selects the focused row and Shift+click extends the range (add-run-board-select-shortcuts)', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-66' })
     const projectId = await createProjectWithCase(page, 'Select Shortcuts Project')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Third case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Third case')).toBeVisible()
+    await createCase(page, 'Second case')
+    await createCase(page, 'Third case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await createRun(page, 'Run 1', ['Login works', 'Second case', 'Third case'])
@@ -527,10 +510,7 @@ test.describe('Requirement: Run item assignment', () => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-67' })
     const projectId = await createProjectWithCase(page, 'Default Assignee Project')
     const ana = await addProjectMember(page, projectId, 'Ana')
-    await page.getByRole('button', { name: /new test case/i }).click()
-    await page.getByLabel(/^title$/i).fill('Second case')
-    await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Second case')).toBeVisible()
+    await createCase(page, 'Second case')
 
     await page.goto(`/projects/${projectId}/runs/new`)
     await page.getByRole('button', { name: /default assignee/i }).click()

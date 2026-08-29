@@ -5,15 +5,21 @@ import { unique } from './support'
 // openspec/changes/add-core-domain/specs/test-authoring/spec.md scenarios.
 // GIVEN: the compose stack is up (make e2e), with a fresh database.
 //
-// Interaction steps updated for redesign-ui: case/folder creation now lives
-// in the folder explorer's drawer/inline rows, not directly on the project
-// page — the domain requirements below are unchanged, only how you reach
-// them. The one prior scenario dropped ("Folder name is required") was
-// UI-only coverage never mapped to a spec.md scenario; the new inline
-// creation row simply no-ops on an empty name rather than showing an error,
-// a deliberate, lower-stakes UX for an inline row (see CaseDrawer/
-// FolderExplorerPage for the equivalent title-required validation, which is
-// still covered).
+// Interaction steps updated for redesign-ui: folder creation lives in the
+// folder explorer's inline rows, not directly on the project page — the
+// domain requirements below are unchanged, only how you reach them. The
+// one prior scenario dropped ("Folder name is required") was UI-only
+// coverage never mapped to a spec.md scenario; the new inline creation row
+// simply no-ops on an empty name rather than showing an error, a
+// deliberate, lower-stakes UX for an inline row (see FolderExplorerPage
+// for the equivalent title-required validation, which is still covered).
+//
+// Case creation moved from a drawer to a dedicated page
+// (redesign-case-creation-as-page) — "+ New test case" is now a link, and
+// creating a case navigates to its own detail page rather than staying in
+// the Library, so flows that create several cases in a row navigate back
+// to the Library explicitly instead of relying on the drawer's old
+// stay-in-place behavior.
 
 async function createProject(page: Page, label: string) {
   const name = unique(label)
@@ -70,7 +76,7 @@ test.describe('Requirement: Test case creation and immutable versioning', () => 
     await openFolderExplorer(page)
 
     // Create.
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works')
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Login works')).toBeVisible()
@@ -94,7 +100,7 @@ test.describe('Requirement: Test case creation and immutable versioning', () => 
     await createProject(page, 'Gherkin Project')
     await openFolderExplorer(page)
 
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Login BDD')
     await page.getByRole('button', { name: /gherkin/i }).click()
     await page
@@ -102,7 +108,9 @@ test.describe('Requirement: Test case creation and immutable versioning', () => 
       .fill('Given a user\nWhen they log in\nThen they see the dashboard')
     await page.getByRole('button', { name: /create test case/i }).click()
 
-    await page.getByText('Login BDD').click()
+    // Creating a case navigates straight to its own detail page
+    // (redesign-case-creation-as-page) — no need to click back into it.
+    await expect(page.getByRole('heading', { name: 'Login BDD' })).toBeVisible()
     await expect(page.getByText('Given')).toBeVisible()
     await expect(page.getByText('When')).toBeVisible()
   })
@@ -112,27 +120,29 @@ test.describe('Requirement: Test suite grouping', () => {
   test('Scenario: Add cases to a suite; removing one does not delete the case', async ({ page }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-44' })
     await createProject(page, 'Suites Project')
+    const projectKey = new URL(page.url()).pathname.split('/')[2]
     await openFolderExplorer(page)
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Case A')
     await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Case A')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Case A' })).toBeVisible()
 
     // A second case in its own section, to exercise the case grid's section
-    // scoping (rework-suite-case-picker-scale) in the same flow.
+    // scoping (rework-suite-case-picker-scale) in the same flow. Creating a
+    // case now navigates to its own detail page (redesign-case-creation-
+    // as-page), so return to the Library directly rather than chaining
+    // goBack() calls through a now-different-depth history stack.
+    await page.goto(`/projects/${projectKey}/library`)
     await page.getByRole('button', { name: /^\+ new section$/i }).click()
     await page.getByLabel('New section name').fill('Checkout')
     await page.getByLabel('New section name').press('Enter')
     await content(page).getByText('Checkout').click()
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Case B')
     await page.getByRole('button', { name: /create test case/i }).click()
-    await expect(page.getByText('Case B')).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Case B' })).toBeVisible()
 
-    // Two entries back: navigating into "Checkout" pushed one on top of the
-    // library root that "Case A" was created against.
-    await page.goBack()
-    await page.goBack()
+    await page.goto(`/projects/${projectKey}`)
     await page.getByRole('button', { name: 'Go to Suites' }).click()
     // Creating a suite opens straight into its own detail page
     // (rework-suites-landing-ux) — no inline form on the index.
@@ -186,7 +196,7 @@ test.describe('Requirement: Project-level case folders', () => {
     await openFolderExplorer(page)
     const projectId = new URL(page.url()).pathname.split('/')[2]
 
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works')
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Login works')).toBeVisible()
@@ -209,7 +219,7 @@ test.describe('Requirement: Project-level case folders', () => {
     await expect(content(page).getByText('Auth')).toBeVisible()
 
     await content(page).getByText('Auth').click()
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works')
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Login works')).toBeVisible()
@@ -229,7 +239,7 @@ test.describe('Requirement: Linking a test case to a Jira issue', () => {
     await createProject(page, 'Jira Link Project')
     await openFolderExplorer(page)
 
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works')
     await page.getByRole('button', { name: /create test case/i }).click()
     await page.getByText('Login works').click()
@@ -247,7 +257,7 @@ test.describe('Requirement: Linking a test case to a Jira issue', () => {
     await createProject(page, 'Jira Unlink Project')
     await openFolderExplorer(page)
 
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Login works')
     await page.getByRole('button', { name: /create test case/i }).click()
     await page.getByText('Login works').click()

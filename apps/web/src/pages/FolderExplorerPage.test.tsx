@@ -274,63 +274,12 @@ describe('FolderExplorerPage', () => {
     expect(within(nav).getByText('Transferencias')).toBeInTheDocument()
   })
 
-  it('creates a test case with steps via the drawer', async () => {
+  it('links "+ New test case" to the dedicated create-case page, scoped to the open folder', async () => {
     mockExplorerAPI()
-    mockPOST.mockResolvedValue({ data: limitCase, response: { ok: true } })
     renderExplorer()
     await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
-    await userEvent.click(screen.getByRole('button', { name: /new test case/i }))
-    await userEvent.type(screen.getByLabelText(/title/i), 'New case')
-    await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
-
-    await waitFor(() => {
-      expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectKey}/cases',
-        expect.objectContaining({
-          params: { path: { projectKey: 'p1' } },
-          body: expect.objectContaining({
-            title: 'New case',
-            folderId: 'transferencias',
-            priority: 'medium',
-            tags: [],
-            platform: '',
-            testType: '',
-            automated: false,
-          }),
-        }),
-      )
-    })
-  })
-
-  it('creates a test case with classification fields set in the drawer', async () => {
-    mockExplorerAPI()
-    mockPOST.mockResolvedValue({ data: limitCase, response: { ok: true } })
-    renderExplorer()
-    await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')
-    await userEvent.click(screen.getByRole('button', { name: /new test case/i }))
-    const drawer = within(screen.getByRole('dialog', { name: /new test case/i }))
-    await userEvent.type(drawer.getByLabelText(/title/i), 'New case')
-    await userEvent.selectOptions(drawer.getByLabelText(/priority/i), 'critical')
-    await userEvent.type(drawer.getByLabelText(/^tags/i), 'smoke, regression')
-    await userEvent.type(drawer.getByLabelText(/platform/i), 'iOS')
-    await userEvent.type(drawer.getByLabelText(/test type/i), 'unit')
-    await userEvent.click(drawer.getByLabelText(/automated/i))
-    await userEvent.click(drawer.getByRole('button', { name: /create test case/i }))
-
-    await waitFor(() => {
-      expect(mockPOST).toHaveBeenCalledWith(
-        '/api/v1/projects/{projectKey}/cases',
-        expect.objectContaining({
-          body: expect.objectContaining({
-            priority: 'critical',
-            tags: ['smoke', 'regression'],
-            platform: 'iOS',
-            testType: 'unit',
-            automated: true,
-          }),
-        }),
-      )
-    })
+    const link = screen.getByRole('link', { name: /new test case/i })
+    expect(link).toHaveAttribute('href', '/projects/p1/cases/new?folderId=transferencias')
   })
 
   it('navigates to the case detail route when a case is selected', async () => {
@@ -622,7 +571,7 @@ describe('FolderExplorerPage', () => {
       mockExplorerAPI({ permissions: { ...allPermissions, caseCreate: false } })
       renderExplorer()
       await screen.findByRole('list', { name: 'Section contents' })
-      expect(screen.queryByRole('button', { name: /\+ new test case/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /\+ new test case/i })).not.toBeInTheDocument()
     })
 
     it('omits "Move to…" from a case row\'s menu without caseEdit', async () => {
@@ -1145,7 +1094,7 @@ describe('FolderExplorerPage', () => {
       await screen.findByText('Daily transfer limit')
       expect(screen.getByText('high')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /\+ new section/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: /\+ new test case/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole('link', { name: /\+ new test case/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /new section in/i })).not.toBeInTheDocument()
       expect(screen.queryByRole('button', { name: /actions for daily transfer limit/i })).not.toBeInTheDocument()
     })

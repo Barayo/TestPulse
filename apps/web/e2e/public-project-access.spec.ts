@@ -326,7 +326,7 @@ test.describe('Requirement: Permission-gating retrofit hides write controls from
     const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
     const getStarted = page.getByRole('button', { name: /add your first test case/i })
     await goToLibrary.or(getStarted).click()
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Read-only retrofit case')
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Read-only retrofit case')).toBeVisible()
@@ -439,7 +439,7 @@ test.describe('Requirement: A signed-in non-member reads a public project exactl
     const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
     const getStarted = page.getByRole('button', { name: /add your first test case/i })
     await goToLibrary.or(getStarted).click()
-    await page.getByRole('button', { name: /new test case/i }).click()
+    await page.getByRole('link', { name: /new test case/i }).click()
     await page.getByLabel(/^title$/i).fill('Non-member read case')
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Non-member read case')).toBeVisible()
@@ -460,7 +460,7 @@ test.describe('Requirement: A signed-in non-member reads a public project exactl
 
     await nonMemberPage.goto(`/projects/${projectKey}/library`)
     await expect(nonMemberPage.getByText('Non-member read case')).toBeVisible()
-    await expect(nonMemberPage.getByRole('button', { name: /new test case/i })).toHaveCount(0)
+    await expect(nonMemberPage.getByRole('link', { name: /new test case/i })).toHaveCount(0)
 
     await context.close()
     await page.request.patch(`/api/v1/projects/${projectId}`, { data: { publicAccess: false } })

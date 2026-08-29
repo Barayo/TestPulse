@@ -22,7 +22,7 @@ async function createProjectWithCase(page: Page, label: string): Promise<{ proje
   const goToLibrary = page.getByRole('button', { name: 'Go to Library' })
   const getStarted = page.getByRole('button', { name: /add your first test case/i })
   await goToLibrary.or(getStarted).click()
-  await page.getByRole('button', { name: /new test case/i }).click()
+  await page.getByRole('link', { name: /new test case/i }).click()
   await page.getByLabel(/^title$/i).fill('Login works')
   await page.getByRole('button', { name: /create test case/i }).click()
   await expect(page.getByText('Login works')).toBeVisible()

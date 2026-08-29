@@ -13,6 +13,7 @@ import RunsPage from '@/pages/RunsPage'
 import NewRunPage from '@/pages/NewRunPage'
 import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import CaseDetailPage from '@/pages/CaseDetailPage'
+import CreateCasePage from '@/pages/CreateCasePage'
 import RunPage from '@/pages/RunPage'
 import RunItemDetailPage from '@/pages/RunItemDetailPage'
 import RunComparePage from '@/pages/RunComparePage'
@@ -127,6 +128,7 @@ const PROJECT_CONTENT_ROUTES: RouteEntry[] = [
 // create-run form). Always rendered through `RequireAuth`.
 const ACCOUNT_ONLY_ROUTES: RouteEntry[] = [
   { path: '/projects/:projectKey/runs/new', element: <NewRunPage /> },
+  { path: '/projects/:projectKey/cases/new', element: <CreateCasePage /> },
   { path: '/projects/:projectKey/members', element: <ProjectMembersPage /> },
   { path: '/projects/:projectKey/settings', element: <ProjectSettingsPage /> },
   { path: '/settings/people', element: <PeoplePage /> },

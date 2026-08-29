@@ -44,7 +44,7 @@ async function createCase(
   title: string,
   steps: { action: string; expected?: string }[] = [],
 ) {
-  await page.getByRole('button', { name: /new test case/i }).click()
+  await page.getByRole('link', { name: /new test case/i }).click()
   await page.getByLabel(/^title$/i).fill(title)
   for (let i = 0; i < steps.length; i++) {
     if (i > 0) await page.getByRole('button', { name: /add step/i }).click()
@@ -54,6 +54,21 @@ async function createCase(
     }
   }
   await page.getByRole('button', { name: /create test case/i }).click()
+  // Creating a case now navigates to its own detail page
+  // (redesign-case-creation-as-page) — unwind both pushed history entries
+  // (the create-case page, then the new case's own page) to return to the
+  // Library, so every caller of this helper can keep relying on its
+  // long-standing "still on the Library afterward" contract. Deliberately
+  // goBack() rather than goto(libraryUrl): goto() would push a *third*
+  // history entry instead of reusing the original one, silently breaking
+  // any caller that does its own goBack() afterward. The wait must exclude
+  // /cases/new itself — /\/cases\// alone matches both the create page and
+  // the new case's own page, so it resolves instantly against the
+  // still-current create-page URL instead of waiting for the real
+  // post-creation navigation, racing goBack() against the async POST.
+  await page.waitForURL(/\/cases\/(?!new)/)
+  await page.goBack()
+  await page.goBack()
 }
 
 test.describe('Requirement: Breadcrumb trail', () => {
@@ -350,11 +365,16 @@ test.describe('Requirement: Library with two-pane navigation', () => {
     await openFolderExplorer(page)
     await createFolderInOpenFolder(page, 'Transfers')
     await content(page).getByText('Transfers').click()
-    await page.getByRole('button', { name: /new test case/i }).click()
-    const drawer = page.getByRole('dialog', { name: /new test case/i })
-    await drawer.getByLabel(/^title$/i).fill('Daily limit')
-    await drawer.getByLabel(/^priority$/i).selectOption('critical')
-    await drawer.getByRole('button', { name: /create test case/i }).click()
+    const libraryUrl = page.url()
+    await page.getByRole('link', { name: /new test case/i }).click()
+    await page.getByLabel(/^title$/i).fill('Daily limit')
+    await page.getByLabel(/^priority$/i).selectOption('critical')
+    await page.getByRole('button', { name: /create test case/i }).click()
+    // Creating a case now navigates to its own detail page
+    // (redesign-case-creation-as-page) — return to the Library to check
+    // the section row's case count/critical indicator.
+    await expect(page.getByRole('heading', { name: 'Daily limit' })).toBeVisible()
+    await page.goto(libraryUrl)
     await expect(content(page).getByText('Daily limit')).toBeVisible()
 
     // Up one level, where Transfers itself is a row (with its count/critical
