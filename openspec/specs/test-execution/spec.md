@@ -493,8 +493,12 @@ be offered when the run is closed.
 ### Requirement: Run item detail page
 The web UI SHALL provide a dedicated page per run item, reached from the
 run execution board, showing the pinned case version's steps and expected
-result, item properties (status, test name, platform, tags, pinned
-version, assignee), and the item's result history. The assignee property
+result, item properties (status, test name, platform, priority, test type,
+automation status, tags, pinned version, assignee, and a link to the item's
+test case), a cross-run "Results" section showing the case's recent
+execution history across all runs (the same success-rate-and-bars panel
+shown on the test case's own detail page), and a "This run" section listing
+only the results recorded on this specific item. The assignee property
 SHALL be shown as "Unassigned" when absent, and SHALL offer an "Assign
 to…" control matching the one on the board. When the run is open and the
 viewer has `runRecordResult` permission, the page SHALL provide controls
@@ -525,7 +529,7 @@ the comment field and the actor-override field) has focus.
   item's page on an open run, reviews its steps, and records verdict
   `pass` with a comment
 - **THEN** the item's status updates to `pass` and the result appears in
-  the item's history
+  the item's "This run" section
 
 #### Scenario: Item page shows and updates the assignee
 - **WHEN** a user opens an item's page and uses its "Assign to…" control
@@ -546,7 +550,7 @@ the comment field and the actor-override field) has focus.
 #### Scenario: Closed run shows the item read-only
 - **WHEN** a user opens an item's page on a closed run
 - **THEN** verdict-recording controls are not shown, and the item's
-  content and history are visible read-only
+  content, Results, and "This run" sections are visible read-only
 
 #### Scenario: Item page breadcrumb does not repeat the item's own heading
 - **WHEN** a user opens a run item's page
@@ -596,6 +600,25 @@ the comment field and the actor-override field) has focus.
 - **WHEN** a user presses `?` on the item page
 - **THEN** an overlay opens listing the page's keyboard shortcuts,
   dismissible with `Escape` or `?`
+
+#### Scenario: Item page links to its test case
+- **WHEN** a user views a run item's page
+- **THEN** the Properties panel shows a "Test case" property linking to
+  that case's own detail page, identified by its case key
+
+#### Scenario: Item page shows the case's cross-run Results
+- **WHEN** a user views a run item's page for a case that has been
+  executed in other runs before
+- **THEN** the Results section shows the same success-rate-and-bars
+  summary the case's own detail page shows, covering executions across
+  all runs, not just this one
+
+#### Scenario: This run section only lists this item's own results
+- **WHEN** a case has execution history from other runs as well as this
+  one
+- **THEN** the "This run" section lists only the results recorded on this
+  specific run item, while the cross-run history appears solely in the
+  Results section above it
 
 ### Requirement: Querying executions by case version
 The system SHALL let a caller list every execution (run item) that has ever pinned a given
