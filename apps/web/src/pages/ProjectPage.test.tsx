@@ -115,6 +115,12 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
       })
     if (path === flakyCasesPath)
       return Promise.resolve({ data: overrides.flakyCases ?? [], response: { ok: true } })
+    if (!anonymous && path === '/api/v1/projects/{projectKey}/releases')
+      return Promise.resolve({ data: overrides.releases ?? [], response: { ok: true } })
+    if (path === '/api/v1/releases/{releaseKey}/rollup')
+      return Promise.resolve({ data: overrides.releaseRollup ?? { runCount: 0, passRate: null }, response: { ok: true } })
+    if (path === '/api/v1/releases/{releaseKey}/plans')
+      return Promise.resolve({ data: overrides.releasePlans ?? [], response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
       return Promise.resolve({ data: overrides.permissions ?? fullPermissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
@@ -172,6 +178,26 @@ describe('ProjectPage landing', () => {
     renderProject()
     await screen.findByRole('heading', { name: 'QA Platform' })
     expect(screen.getByText('Archived')).toBeInTheDocument()
+  })
+
+  it('shows no Releases panel when the project has no releases (introduce-release-test-plan)', async () => {
+    mockProjectAPI()
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(screen.queryByText('Releases')).not.toBeInTheDocument()
+  })
+
+  it('shows a Releases panel with rollup and plan count once the project has at least one', async () => {
+    mockProjectAPI({
+      releases: [{ id: 'r1', key: 'p1-REL1', projectId: 'p1', name: '2026.1', description: '', status: 'active', createdAt: '' }],
+      releaseRollup: { runCount: 14, passRate: 84 },
+      releasePlans: [{ id: 't1' }, { id: 't2' }],
+    })
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(await screen.findByText('Releases')).toBeInTheDocument()
+    expect(screen.getByText('2026.1')).toBeInTheDocument()
+    expect(screen.getByText(/2 plans/)).toBeInTheDocument()
   })
 
   it('shows no "Archived" badge for an active project', async () => {

@@ -641,6 +641,207 @@ paths:
               schema: { $ref: "#/components/schemas/Run" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/releases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listReleases
+      summary: List a project's releases, newest first, optionally filtered by status
+      tags: [releases]
+      parameters:
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/ReleaseStatus" } }
+      responses:
+        "200":
+          description: Releases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Release" }
+    post:
+      operationId: createRelease
+      summary: Create a release
+      tags: [releases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReleaseInput" }
+      responses:
+        "201":
+          description: Created release
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Release" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/releases/{releaseKey}:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRelease
+      summary: Get a release
+      tags: [releases]
+      responses:
+        "200":
+          description: Release
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Release" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: updateRelease
+      summary: Update a release's name, description, and status
+      tags: [releases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReleaseInput" }
+      responses:
+        "200":
+          description: Updated release
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Release" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteRelease
+      summary: Delete a release (rejected while it still has Test Plans)
+      tags: [releases]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Release still has Test Plans }
+  /api/v1/releases/{releaseKey}/rollup:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getReleaseRollup
+      summary: Aggregated pass rate/run count across the release's Test Plans' runs
+      tags: [releases]
+      responses:
+        "200":
+          description: Rollup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rollup" }
+  /api/v1/projects/{projectKey}/plans:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listTestPlansByProject
+      summary: List every test plan across all of a project's releases, in one batched request
+      description: >-
+        Populates a Test Plan picker (e.g. the run-creation flow) without an
+        N+1 releases-then-plans client-side fetch loop.
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Test plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TestPlan" }
+  /api/v1/releases/{releaseKey}/plans:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listTestPlans
+      summary: List a release's test plans, newest first
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Test plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TestPlan" }
+    post:
+      operationId: createTestPlan
+      summary: Create a test plan scoped to a release
+      tags: [testPlans]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestPlanInput" }
+      responses:
+        "201":
+          description: Created test plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestPlan" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/plans/{planKey}:
+    parameters:
+      - { name: planKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTestPlan
+      summary: Get a test plan
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Test plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestPlan" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: updateTestPlan
+      summary: Update a test plan's name and description
+      tags: [testPlans]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestPlanInput" }
+      responses:
+        "200":
+          description: Updated test plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestPlan" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteTestPlan
+      summary: Delete a test plan (rejected while it still has runs)
+      tags: [testPlans]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Test plan still has runs }
+  /api/v1/plans/{planKey}/rollup:
+    parameters:
+      - { name: planKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTestPlanRollup
+      summary: Aggregated pass rate/run count across the test plan's runs
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Rollup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rollup" }
+  /api/v1/plans/{planKey}/runs:
+    parameters:
+      - { name: planKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listRunsByTestPlan
+      summary: List the runs scoped to a single test plan, newest first
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Run" }
   /api/v1/projects/{projectKey}/runs/status-summary:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -2562,6 +2763,10 @@ components:
           type: integer
           nullable: true
           description: This run's own items' pass rate; null if it has no items yet. Computed alongside the list query — cheap, not a per-run round trip.
+        testPlanKey:
+          type: string
+          nullable: true
+          description: The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself.
     RunInput:
       type: object
       required: [name]
@@ -2570,10 +2775,79 @@ components:
         suiteKey:
           type: string
           description: Include all cases of this suite
+        testPlanKey:
+          type: string
+          description: Optionally scope this run to a Test Plan (introduce-release-test-plan). Must belong to the same project.
         caseKeys:
           type: array
           items: { type: string }
           description: Explicit cases to include
+    ReleaseStatus:
+      type: string
+      enum: [active, maintained, eol]
+    Release:
+      type: object
+      required: [id, key, projectId, name, description, status, createdAt]
+      description: >-
+        A project-scoped, long-lived entity tracking one supported release's
+        lifecycle (introduce-release-test-plan) — optional: a project with no
+        Releases is unaffected.
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-REL{n}. Immutable."
+        projectId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/ReleaseStatus" }
+        createdAt: { type: string, format: date-time }
+    ReleaseInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/ReleaseStatus" }
+    TestPlan:
+      type: object
+      required: [id, key, projectId, releaseId, releaseKey, name, description, createdAt]
+      description: >-
+        The execution-scope grouping of Runs belonging to one Release
+        (introduce-release-test-plan) — e.g. one Test Plan per platform being
+        tested against a release. A Test Plan's Release never changes after
+        creation.
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-PLAN{n}. Immutable."
+        projectId: { type: string }
+        releaseId: { type: string }
+        releaseKey: { type: string }
+        name: { type: string }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+    TestPlanInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+    Rollup:
+      type: object
+      required: [runCount]
+      description: >-
+        A server-side aggregated pass rate + run count across a Test Plan's
+        or Release's runs (introduce-release-test-plan design.md D5) —
+        always a single aggregate query, never a client-side per-entity
+        fetch loop.
+      properties:
+        runCount: { type: integer }
+        passRate:
+          type: integer
+          nullable: true
+          description: Null when runCount is 0 (or every run has no items yet).
     RunItemAssignee:
       type: object
       required: [kind, id, name]

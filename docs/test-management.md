@@ -268,6 +268,20 @@ An **Edit cases** button (**View cases** for a visitor without Edit Suite Member
 
 A suite's pass rate — shown on its index card and in its own Properties sidebar — reflects its most recently **closed** run, the same rule the Stability section's Latest closed run property above uses, and is `nil` ("not run yet") when no closed run exists yet even if an open run has recorded results. This is deliberately *not* the same "latest run regardless of status" semantic the project list uses for a project's own pass rate: a suite's number is meant to answer "how healthy is this, right now, as settled fact," so a fresh open run can never override or manufacture a misleading figure. Both are computed via one batched query alongside the suite list itself, not a separate request per suite; only the "which run counts" rule differs from the project-level figure — a suite's **last-run time**, unlike its pass rate, still reflects the true most recent run regardless of status, since "when was this last touched" is a different, unfiltered question.
 
+## Releases and Test Plans
+
+Releases and Test Plans are **optional** — a project that never creates one is completely unaffected, and a run can still be created directly under a project exactly as before this capability existed. They exist for teams that need to track several concurrently-supported releases (each with its own status) or run the same regression pass across several platforms against one release.
+
+A **Release** is a project-scoped, long-lived entity with a `name`, an optional `description`, and a `status` of **Active**, **Maintained**, or **EOL** (defaulting to Active). Note on naming: "Test Plan" here follows the TestRail/Xray/Zephyr tool convention (an execution-scope grouping) rather than ISTQB's "Test Plan" (a planning *document*) — a deliberate choice, since that's the term the tools most TestPulse users are migrating from already use this way.
+
+A **Test Plan** is scoped to exactly one Release and groups the Runs that exercise it — typically one Test Plan per platform (iOS, Android, Web…). A Run may optionally be scoped to a Test Plan at creation; deleting a Test Plan later clears that reference on its runs without affecting them or their results.
+
+Creating, editing, or deleting a Release or a Test Plan requires Manage Project — the same permission that governs reopening a closed run and deleting a suite, rather than a dedicated flag, since release/plan lifecycle changes are infrequent, project-structural decisions.
+
+For a project with no Releases, nothing in the navigation changes. Once a project has at least one, a **Releases** panel appears on the project landing page (below Library/Suites/Runs, above Reports) listing each release with its status and rolled-up pass rate; the very first Release is created from **Project Settings**, which is where every other opt-in project configuration lives. A Release's own page lists its Test Plans; a Test Plan's own page lists its scoped Runs using the same Open/Closed triage view as the project-wide Runs page. Deleting a Release or Test Plan is blocked while it still has Test Plans or Runs, respectively — never a silent orphan of execution history.
+
+Release- and Test-Plan-level pass rate/run-count rollups are always computed as a single server-side aggregate query, never assembled by fetching every child entity individually — the same discipline the project list's own summary aggregation follows.
+
 ## Runs: version pinning in practice
 
 Creating a run requires Create Run; recording a verdict or marking retest requires Record Result — the seeded Tester role, the least-privileged default, already has both.

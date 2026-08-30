@@ -90,6 +90,48 @@ func TestCaseContentFormatValidation(t *testing.T) {
 	}
 }
 
+func TestReleaseValidation(t *testing.T) {
+	valid := Release{Name: "2026.1", Status: ReleaseStatusActive}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid release rejected: %v", err)
+	}
+
+	missingName := Release{Status: ReleaseStatusActive}
+	err := missingName.Validate()
+	if err == nil {
+		t.Fatal("release without a name accepted")
+	}
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("error %q does not name the missing field", err)
+	}
+
+	badStatus := Release{Name: "2026.1", Status: "shipped"}
+	if err := badStatus.Validate(); err == nil {
+		t.Error("invalid status accepted")
+	}
+
+	unset := Release{Name: "2026.1"}
+	if err := unset.Validate(); err != nil {
+		t.Errorf("release with no status rejected: %v", err)
+	}
+}
+
+func TestTestPlanValidation(t *testing.T) {
+	valid := TestPlan{Name: "iOS", ReleaseID: "rel-1"}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid test plan rejected: %v", err)
+	}
+
+	missingName := TestPlan{ReleaseID: "rel-1"}
+	err := missingName.Validate()
+	if err == nil {
+		t.Fatal("test plan without a name accepted")
+	}
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("error %q does not name the missing field", err)
+	}
+}
+
 func TestResultValidation(t *testing.T) {
 	valid := NewResult{Actor: "ana", Verdict: VerdictPass}
 	if err := valid.Validate(); err != nil {

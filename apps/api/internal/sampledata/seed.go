@@ -495,6 +495,40 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	// --- Release & Test Plans (introduce-release-test-plan) ---------
+	// A real Release with two per-platform Test Plans, each with its own
+	// run — the multi-platform-per-release use case from GH #15. Created
+	// before the main run sequence below so neither of these two runs
+	// becomes the project's "most recent run" (ProjectRepo.Summaries), which
+	// is deliberately reserved for the healthy run created last.
+	if _, err := Release(ctx, svc, p.ID, "2025.4", "Previous release, now in maintenance", domain.ReleaseStatusMaintained); err != nil {
+		return fmt.Errorf("sampledata: creating maintained release: %w", err)
+	}
+	// Created after 2025.4 so it sorts first (ListReleases: newest-first) —
+	// the one with test plans/runs is the one a fresh Releases page shows up top.
+	release, err := Release(ctx, svc, p.ID, "2026.1", "First GA of the year", domain.ReleaseStatusActive)
+	if err != nil {
+		return fmt.Errorf("sampledata: creating release: %w", err)
+	}
+	iosPlan, err := TestPlan(ctx, svc, p.ID, release.ID, "iOS", "iOS regression pass")
+	if err != nil {
+		return fmt.Errorf("sampledata: creating iOS test plan: %w", err)
+	}
+	androidPlan, err := TestPlan(ctx, svc, p.ID, release.ID, "Android", "Android regression pass")
+	if err != nil {
+		return fmt.Errorf("sampledata: creating Android test plan: %w", err)
+	}
+	if err := RunFromTestPlanWithVerdicts(ctx, svc, p.ID, iosPlan.ID, "iOS regression — build 4021",
+		[]string{login.ID, checkoutValid.ID, twoFactor.ID},
+		[]domain.Verdict{domain.VerdictPass, domain.VerdictPass, domain.VerdictPass}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := RunFromTestPlanWithVerdicts(ctx, svc, p.ID, androidPlan.ID, "Android regression — build 4021",
+		[]string{login.ID, checkoutValid.ID, timezone.ID},
+		[]domain.Verdict{domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
 	// --- Runs -------------------------------------------------------
 	// Created in order — the LAST run created is what drives the project's
 	// shown pass rate (ProjectRepo.Summaries uses only the most recent run),

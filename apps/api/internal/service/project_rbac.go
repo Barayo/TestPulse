@@ -189,6 +189,14 @@ func (s *Service) ProjectIDForCustomField(ctx context.Context, fieldID string) (
 	return s.store.CustomFields.ProjectID(ctx, fieldID)
 }
 
+func (s *Service) ProjectIDForRelease(ctx context.Context, releaseID string) (string, error) {
+	return s.store.Releases.ProjectID(ctx, releaseID)
+}
+
+func (s *Service) ProjectIDForTestPlan(ctx context.Context, testPlanID string) (string, error) {
+	return s.store.TestPlans.ProjectID(ctx, testPlanID)
+}
+
 // --- Human-readable key resolution (add-human-readable-keys D4) ---
 // Resolves a client-supplied key to its internal id, once, at the API
 // boundary — everything below this point (RBAC resolvers, other service
@@ -209,6 +217,14 @@ func (s *Service) RunIDByKey(ctx context.Context, key string) (string, error) {
 
 func (s *Service) SuiteIDByKey(ctx context.Context, key string) (string, error) {
 	return s.store.Suites.IDByKey(ctx, key)
+}
+
+func (s *Service) ReleaseIDByKey(ctx context.Context, key string) (string, error) {
+	return s.store.Releases.IDByKey(ctx, key)
+}
+
+func (s *Service) TestPlanIDByKey(ctx context.Context, key string) (string, error) {
+	return s.store.TestPlans.IDByKey(ctx, key)
 }
 
 // --- Teams ---

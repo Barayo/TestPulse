@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { FoldersPanel, SuitesPanel, RunsPanel } from './ProjectLandingPanels'
+import { FoldersPanel, SuitesPanel, RunsPanel, ReleasesPanel } from './ProjectLandingPanels'
 
 describe('FoldersPanel', () => {
   it('shows top folders with their case count, a magnitude bar, and a link to the rest', () => {
@@ -233,5 +233,33 @@ describe('RunsPanel', () => {
     expect(screen.getByText(/no runs yet/i)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /go to runs/i }))
     expect(onSeeAll).toHaveBeenCalled()
+  })
+})
+
+describe('ReleasesPanel', () => {
+  it('shows each release with its status, rollup, and test plan count', () => {
+    render(
+      <ReleasesPanel
+        releases={[{ key: 'SHOP-REL1', name: '2026.1', status: 'active', passRate: 84, planCount: 2 }]}
+        onSeeAll={vi.fn()}
+        onSelectRelease={vi.fn()}
+      />,
+    )
+    expect(screen.getByText('2026.1')).toBeInTheDocument()
+    expect(screen.getByText('Active')).toBeInTheDocument()
+    expect(screen.getByText(/2 plans/)).toBeInTheDocument()
+  })
+
+  it('navigates to a release when its row is clicked', async () => {
+    const onSelectRelease = vi.fn()
+    render(
+      <ReleasesPanel
+        releases={[{ key: 'SHOP-REL1', name: '2026.1', status: 'active', passRate: 84, planCount: 2 }]}
+        onSeeAll={vi.fn()}
+        onSelectRelease={onSelectRelease}
+      />,
+    )
+    await userEvent.click(screen.getByText('2026.1'))
+    expect(onSelectRelease).toHaveBeenCalledWith('SHOP-REL1')
   })
 })

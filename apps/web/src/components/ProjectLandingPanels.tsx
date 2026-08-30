@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { FolderIcon, LayersIcon, CirclePlayIcon, ChevronRightIcon, BarChartIcon } from 'lucide-react'
+import { FolderIcon, LayersIcon, CirclePlayIcon, ChevronRightIcon, BarChartIcon, PackageIcon } from 'lucide-react'
 import type { LandingFolder, LandingSuite, LandingRun } from '@/lib/useProjectLanding'
-import { HealthBar, healthColorVar, statusBorderClass } from '@/components/HealthBar'
+import { HealthBar, StatusPill, healthColorVar, statusBorderClass } from '@/components/HealthBar'
+import { ReleaseStatusBadge } from '@/components/ReleaseStatusBadge'
 import { STATUS_COLOR, STATUS_ORDER } from '@/components/RunStatusBreakdown'
 import { timeAgo } from '@/lib/timeAgo'
 import type { components } from '@testpulse/shared/api'
 
 type Status = components['schemas']['Status']
+type ReleaseStatus = components['schemas']['ReleaseStatus']
 
-function PanelShell({
+export function PanelShell({
   icon,
   title,
   seeAllLabel,
@@ -294,6 +296,63 @@ export function RunsPanel({
                 </span>
               </span>
             )}
+          </button>
+        </li>
+      ))}
+    </PanelShell>
+  )
+}
+
+// A landing-page row for a project's Releases (introduce-release-test-plan)
+// — reuses PanelShell exactly, but unlike Folders/Suites/Runs (always
+// rendered, even empty) the caller never mounts this at all for a project
+// with zero Releases: Release is opt-in at the data-model level, so
+// "doesn't exist yet" and "exists but empty" are different states here,
+// and only the first is truly invisible (design.md, Pepe mock screen 1).
+export type LandingRelease = {
+  key: string
+  name: string
+  status: ReleaseStatus
+  passRate: number | null
+  planCount: number
+}
+
+export function ReleasesPanel({
+  releases,
+  onSeeAll,
+  onSelectRelease,
+}: {
+  releases: LandingRelease[]
+  onSeeAll: () => void
+  onSelectRelease: (releaseKey: string) => void
+}) {
+  return (
+    <PanelShell
+      icon={<PackageIcon className="size-4" aria-hidden="true" />}
+      title="Releases"
+      seeAllLabel="see all ›"
+      seeAllAriaLabel="Go to Releases"
+      onSeeAll={onSeeAll}
+      isEmpty={false}
+      emptyLabel=""
+    >
+      {releases.map((r) => (
+        <li key={r.key} className="border-b border-border last:border-b-0">
+          <button
+            type="button"
+            className="flex w-full items-center justify-between gap-3 px-4 py-2.5 text-left hover:bg-accent"
+            onClick={() => onSelectRelease(r.key)}
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="truncate text-sm font-bold">{r.name}</span>
+              <ReleaseStatusBadge status={r.status} />
+            </span>
+            <span className="flex shrink-0 items-center gap-1.5 text-xs">
+              <StatusPill rate={r.passRate} />
+              <span className="text-muted-foreground">
+                {r.planCount} plan{r.planCount === 1 ? '' : 's'}
+              </span>
+            </span>
           </button>
         </li>
       ))}

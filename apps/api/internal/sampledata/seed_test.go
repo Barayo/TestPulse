@@ -1167,6 +1167,54 @@ func TestSeedContentShowcasesCaseAuthoringFormats(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesReleaseAndTestPlans covers
+// introduce-release-test-plan's Sample-Project-showcase task: a Release
+// with two Test Plans (one per platform), each with its own Run — without
+// this, a fresh instance's Releases page would only ever show its own
+// empty state, leaving the whole capability untested against real seeded
+// content.
+func TestSeedContentShowcasesReleaseAndTestPlans(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	releases, err := svc.ListReleases(actorCtx, p.ID, "")
+	if err != nil {
+		t.Fatalf("ListReleases: %v", err)
+	}
+	if len(releases) == 0 {
+		t.Fatal("no release seeded — the Releases page has nothing real to show")
+	}
+	release := releases[0]
+
+	plans, err := svc.ListTestPlans(actorCtx, release.ID)
+	if err != nil {
+		t.Fatalf("ListTestPlans: %v", err)
+	}
+	if len(plans) < 2 {
+		t.Fatalf("release %q has %d test plans, want at least 2 (one per platform)", release.Name, len(plans))
+	}
+
+	sawRun := false
+	for _, plan := range plans {
+		runs, err := svc.ListRunsByTestPlan(actorCtx, plan.ID)
+		if err != nil {
+			t.Fatalf("ListRunsByTestPlan(%q): %v", plan.Name, err)
+		}
+		if len(runs) > 0 {
+			sawRun = true
+		}
+	}
+	if !sawRun {
+		t.Error("no test plan has a run — the Test Plan detail page's Runs list has nothing real to show")
+	}
+}
+
 // TestSeedContentShowcasesScopedApiToken covers add-scoped-api-tokens'
 // Sample-Project-showcase task: without this, a fresh instance's token list
 // would only ever show unscoped tokens, leaving the project+role picker and

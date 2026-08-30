@@ -112,16 +112,24 @@ func (r *RunRepo) ResultProjectID(ctx context.Context, resultID string) (string,
 // Create inserts a run and pins each case to its current version (D2), all
 // in one transaction.
 func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []string) (domain.Run, error) {
-	return r.create(ctx, projectID, name, "", caseIDs)
+	return r.create(ctx, projectID, name, "", "", caseIDs)
 }
 
 // CreateWithSuite is Create for a run built from a suite (link-runs-to-suite)
 // — the run records suiteID as its source, exposed as Run.SuiteKey.
 func (r *RunRepo) CreateWithSuite(ctx context.Context, projectID, name, suiteID string, caseIDs []string) (domain.Run, error) {
-	return r.create(ctx, projectID, name, suiteID, caseIDs)
+	return r.create(ctx, projectID, name, suiteID, "", caseIDs)
 }
 
-func (r *RunRepo) create(ctx context.Context, projectID, name, suiteID string, caseIDs []string) (domain.Run, error) {
+// CreateWithOptions is Create/CreateWithSuite generalized to also accept an
+// optional Test Plan scope (introduce-release-test-plan design.md D1) —
+// suiteID and/or testPlanID may be empty; a run created with both empty
+// behaves exactly as Create.
+func (r *RunRepo) CreateWithOptions(ctx context.Context, projectID, name, suiteID, testPlanID string, caseIDs []string) (domain.Run, error) {
+	return r.create(ctx, projectID, name, suiteID, testPlanID, caseIDs)
+}
+
+func (r *RunRepo) create(ctx context.Context, projectID, name, suiteID, testPlanID string, caseIDs []string) (domain.Run, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.Run{}, err
@@ -133,15 +141,18 @@ func (r *RunRepo) create(ctx context.Context, projectID, name, suiteID string, c
 		return domain.Run{}, fmt.Errorf("claiming run key: %w", err)
 	}
 
-	var suiteIDArg any
+	var suiteIDArg, testPlanIDArg any
 	if suiteID != "" {
 		suiteIDArg = suiteID
+	}
+	if testPlanID != "" {
+		testPlanIDArg = testPlanID
 	}
 
 	var run domain.Run
 	err = tx.QueryRow(ctx,
-		`INSERT INTO test_runs (key, project_id, name, suite_id) VALUES ($1, $2, $3, $4)
-		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name, suiteIDArg,
+		`INSERT INTO test_runs (key, project_id, name, suite_id, test_plan_id) VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, key, project_id, name, status, created_at`, key, projectID, name, suiteIDArg, testPlanIDArg,
 	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.Status, &run.CreatedAt)
 	if err != nil {
 		return domain.Run{}, err
@@ -155,6 +166,14 @@ func (r *RunRepo) create(ctx context.Context, projectID, name, suiteID string, c
 			return domain.Run{}, err
 		}
 		run.SuiteKey = &suiteKey
+	}
+	if testPlanID != "" {
+		var testPlanKey string
+		if err := tx.QueryRow(ctx, `SELECT key FROM test_plans WHERE id = $1`, testPlanID).Scan(&testPlanKey); err != nil {
+			return domain.Run{}, err
+		}
+		run.TestPlanID = &testPlanID
+		run.TestPlanKey = &testPlanKey
 	}
 	for _, caseID := range caseIDs {
 		if err := pinItem(ctx, tx, run.ID, caseID, ""); err != nil {
@@ -285,12 +304,13 @@ func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID, testName string) err
 func (r *RunRepo) Get(ctx context.Context, runID string) (domain.Run, error) {
 	var run domain.Run
 	err := r.pool.QueryRow(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.created_at
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at
 		 FROM test_runs tr
 		 JOIN projects p ON p.id = tr.project_id
 		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
+		 LEFT JOIN test_plans tp ON tp.id = tr.test_plan_id
 		 WHERE tr.id = $1`, runID,
-	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.CreatedAt)
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Run{}, ErrNotFound
 	}
@@ -383,15 +403,16 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	// list, not a round trip per run) — same LEFT JOIN + FILTER shape as
 	// SuiteRepo.latestRunStats and ProjectRepo's summaries query.
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.created_at,
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at,
 		        count(i.id) AS total,
 		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
 		 FROM test_runs tr
 		 JOIN projects p ON p.id = tr.project_id
 		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
+		 LEFT JOIN test_plans tp ON tp.id = tr.test_plan_id
 		 LEFT JOIN test_run_items i ON i.run_id = tr.id
 		 WHERE tr.project_id = $1
-		 GROUP BY tr.id, p.key, ts.key
+		 GROUP BY tr.id, p.key, ts.key, tp.key
 		 ORDER BY tr.created_at DESC`, projectID)
 	if err != nil {
 		return nil, err
@@ -402,7 +423,44 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	for rows.Next() {
 		var run domain.Run
 		var total, passCount int
-		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.CreatedAt, &total, &passCount); err != nil {
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt, &total, &passCount); err != nil {
+			return nil, err
+		}
+		if total > 0 {
+			rate := int(float64(passCount) / float64(total) * 100)
+			run.PassRate = &rate
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
+// ListByTestPlan returns the runs scoped to a single Test Plan, newest-first
+// (introduce-release-test-plan spec: "Runs may be listed filtered to a
+// single Test Plan"), same pass-rate aggregation shape as List.
+func (r *RunRepo) ListByTestPlan(ctx context.Context, testPlanID string) ([]domain.Run, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at,
+		        count(i.id) AS total,
+		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
+		 FROM test_runs tr
+		 JOIN projects p ON p.id = tr.project_id
+		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
+		 LEFT JOIN test_plans tp ON tp.id = tr.test_plan_id
+		 LEFT JOIN test_run_items i ON i.run_id = tr.id
+		 WHERE tr.test_plan_id = $1
+		 GROUP BY tr.id, p.key, ts.key, tp.key
+		 ORDER BY tr.created_at DESC`, testPlanID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	runs := []domain.Run{}
+	for rows.Next() {
+		var run domain.Run
+		var total, passCount int
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt, &total, &passCount); err != nil {
 			return nil, err
 		}
 		if total > 0 {

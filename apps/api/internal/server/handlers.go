@@ -48,6 +48,9 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs", h.listRuns)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/runs", h.createRun)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs/status-summary", h.projectStatusSummary)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/releases", h.listReleases)
+			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/releases", h.createRelease)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/plans", h.listTestPlansByProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/custom-fields", h.listCustomFields)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/custom-fields", h.createCustomField)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Put("/custom-fields/order", h.reorderCustomFields)
@@ -100,6 +103,23 @@ func mountAPI(r chi.Router, h *api) {
 			r.Use(h.resolveKey("otherRunKey", h.svc.RunIDByKey))
 			r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.compareRuns)
 		})
+	})
+	r.Route("/releases/{releaseKey}", func(r chi.Router) {
+		r.Use(h.resolveKey("releaseKey", h.svc.ReleaseIDByKey))
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRelease)).Get("/", h.getRelease)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRelease)).Put("/", h.updateRelease)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRelease)).Delete("/", h.deleteRelease)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRelease)).Get("/rollup", h.releaseRollup)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRelease)).Get("/plans", h.listTestPlans)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRelease)).Post("/plans", h.createTestPlan)
+	})
+	r.Route("/plans/{planKey}", func(r chi.Router) {
+		r.Use(h.resolveKey("planKey", h.svc.TestPlanIDByKey))
+		r.With(h.requirePermission(domain.PermRead, projectIDFromTestPlan)).Get("/", h.getTestPlan)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromTestPlan)).Put("/", h.updateTestPlan)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromTestPlan)).Delete("/", h.deleteTestPlan)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromTestPlan)).Get("/rollup", h.testPlanRollup)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromTestPlan)).Get("/runs", h.listRunsByTestPlan)
 	})
 	r.Route("/items/{itemID}", func(r chi.Router) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/results", h.listResults)
@@ -154,6 +174,8 @@ func (h *api) respond(w http.ResponseWriter, status int, v any, err error) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 		case errors.Is(err, store.ErrRootFolder), errors.Is(err, store.ErrFolderCycle):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		case errors.Is(err, store.ErrHasChildren):
+			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		default:
 			h.logger.Error("request failed", "error", err)
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal error"})
@@ -549,9 +571,10 @@ func (h *api) listRuns(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name     string   `json:"name"`
-		SuiteKey string   `json:"suiteKey"`
-		CaseKeys []string `json:"caseKeys"`
+		Name        string   `json:"name"`
+		SuiteKey    string   `json:"suiteKey"`
+		TestPlanKey string   `json:"testPlanKey"`
+		CaseKeys    []string `json:"caseKeys"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
@@ -560,6 +583,14 @@ func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 	var suiteID string
 	if body.SuiteKey != "" {
 		suiteID, err = h.svc.SuiteIDByKey(r.Context(), body.SuiteKey)
+		if err != nil {
+			h.respond(w, 0, nil, err)
+			return
+		}
+	}
+	var testPlanID string
+	if body.TestPlanKey != "" {
+		testPlanID, err = h.svc.TestPlanIDByKey(r.Context(), body.TestPlanKey)
 		if err != nil {
 			h.respond(w, 0, nil, err)
 			return
@@ -574,8 +605,121 @@ func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	run, err := h.svc.CreateRun(r.Context(), resolvedID(r, "projectKey"),
-		service.RunInput{Name: body.Name, SuiteID: suiteID, CaseIDs: caseIDs})
+		service.RunInput{Name: body.Name, SuiteID: suiteID, TestPlanID: testPlanID, CaseIDs: caseIDs})
 	h.respond(w, http.StatusCreated, run, err)
+}
+
+// --- Releases & Test Plans ---
+
+func (h *api) listReleases(w http.ResponseWriter, r *http.Request) {
+	status := domain.ReleaseStatus(r.URL.Query().Get("status"))
+	releases, err := h.svc.ListReleases(r.Context(), resolvedID(r, "projectKey"), status)
+	h.respond(w, http.StatusOK, releases, err)
+}
+
+func (h *api) createRelease(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Name        string              `json:"name"`
+		Description string              `json:"description"`
+		Status      domain.ReleaseStatus `json:"status"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	rel, err := h.svc.CreateRelease(r.Context(), resolvedID(r, "projectKey"), body.Name, body.Description, body.Status)
+	h.respond(w, http.StatusCreated, rel, err)
+}
+
+func (h *api) getRelease(w http.ResponseWriter, r *http.Request) {
+	rel, err := h.svc.GetRelease(r.Context(), resolvedID(r, "releaseKey"))
+	h.respond(w, http.StatusOK, rel, err)
+}
+
+func (h *api) updateRelease(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Name        string              `json:"name"`
+		Description string              `json:"description"`
+		Status      domain.ReleaseStatus `json:"status"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	rel, err := h.svc.UpdateRelease(r.Context(), resolvedID(r, "releaseKey"), body.Name, body.Description, body.Status)
+	h.respond(w, http.StatusOK, rel, err)
+}
+
+func (h *api) deleteRelease(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.DeleteRelease(r.Context(), resolvedID(r, "releaseKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) releaseRollup(w http.ResponseWriter, r *http.Request) {
+	rollup, err := h.svc.ReleaseRollup(r.Context(), resolvedID(r, "releaseKey"))
+	h.respond(w, http.StatusOK, rollup, err)
+}
+
+func (h *api) listTestPlans(w http.ResponseWriter, r *http.Request) {
+	plans, err := h.svc.ListTestPlans(r.Context(), resolvedID(r, "releaseKey"))
+	h.respond(w, http.StatusOK, plans, err)
+}
+
+func (h *api) listTestPlansByProject(w http.ResponseWriter, r *http.Request) {
+	plans, err := h.svc.ListTestPlansByProject(r.Context(), resolvedID(r, "projectKey"))
+	h.respond(w, http.StatusOK, plans, err)
+}
+
+func (h *api) createTestPlan(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	releaseID := resolvedID(r, "releaseKey")
+	projectID, err := h.svc.ProjectIDForRelease(r.Context(), releaseID)
+	if err != nil {
+		h.respond(w, 0, nil, err)
+		return
+	}
+	plan, err := h.svc.CreateTestPlan(r.Context(), projectID, releaseID, body.Name, body.Description)
+	h.respond(w, http.StatusCreated, plan, err)
+}
+
+func (h *api) getTestPlan(w http.ResponseWriter, r *http.Request) {
+	plan, err := h.svc.GetTestPlan(r.Context(), resolvedID(r, "planKey"))
+	h.respond(w, http.StatusOK, plan, err)
+}
+
+func (h *api) updateTestPlan(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	plan, err := h.svc.UpdateTestPlan(r.Context(), resolvedID(r, "planKey"), body.Name, body.Description)
+	h.respond(w, http.StatusOK, plan, err)
+}
+
+func (h *api) deleteTestPlan(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.DeleteTestPlan(r.Context(), resolvedID(r, "planKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) testPlanRollup(w http.ResponseWriter, r *http.Request) {
+	rollup, err := h.svc.TestPlanRollup(r.Context(), resolvedID(r, "planKey"))
+	h.respond(w, http.StatusOK, rollup, err)
+}
+
+func (h *api) listRunsByTestPlan(w http.ResponseWriter, r *http.Request) {
+	runs, err := h.svc.ListRunsByTestPlan(r.Context(), resolvedID(r, "planKey"))
+	h.respond(w, http.StatusOK, runs, err)
 }
 
 // unmatchedTestJSON is the wire shape of one unmatched entry in an

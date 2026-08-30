@@ -17,8 +17,14 @@ type TestCase = components['schemas']['TestCase']
 type Project = components['schemas']['Project']
 type Suite = components['schemas']['Suite']
 type Folder = components['schemas']['Folder']
+type TestPlan = components['schemas']['TestPlan']
+type Release = components['schemas']['Release']
 
-type NewRunLocationState = { seedFromSuiteKey?: string; seedName?: string } | null
+type NewRunLocationState = {
+  seedFromSuiteKey?: string
+  seedFromTestPlanKey?: string
+  seedName?: string
+} | null
 
 function toGridCase(c: TestCase): CasePickerCase {
   return {
@@ -43,12 +49,16 @@ export default function NewRunPage() {
   const [cases, setCases] = useState<TestCase[]>([])
   const [folders, setFolders] = useState<Folder[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
+  const [plans, setPlans] = useState<TestPlan[]>([])
+  const [releases, setReleases] = useState<Release[]>([])
   const [runName, setRunName] = useState('')
   const [defaultAssignee, setDefaultAssignee] = useState<AssigneePick | null>(null)
   const [assignDialogOpen, setAssignDialogOpen] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectedSuiteKey, setSelectedSuiteKey] = useState('')
   const [seededFromSuiteName, setSeededFromSuiteName] = useState('')
+  const [selectedTestPlanKey, setSelectedTestPlanKey] = useState('')
+  const [seededFromTestPlanName, setSeededFromTestPlanName] = useState('')
   const [loaded, setLoaded] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const justSeededNameRef = useRef(false)
@@ -57,11 +67,13 @@ export default function NewRunPage() {
     if (!projectKey) return
     setNotFound(false)
     try {
-      const [{ data: p }, { data: c }, { data: f }, { data: s }] = await Promise.all([
+      const [{ data: p }, { data: c }, { data: f }, { data: s }, { data: pl }, { data: rel }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/plans', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/releases', { params: { path: { projectKey } } }),
       ])
       if (!p) {
         setNotFound(true)
@@ -71,10 +83,14 @@ export default function NewRunPage() {
       setCases(c ?? [])
       setFolders(f ?? [])
       setSuites(s ?? [])
+      setPlans(pl ?? [])
+      setReleases(rel ?? [])
     } catch {
       setCases([])
       setFolders([])
       setSuites([])
+      setPlans([])
+      setReleases([])
     } finally {
       setLoaded(true)
     }
@@ -90,8 +106,9 @@ export default function NewRunPage() {
   useEffect(() => {
     if (!loaded) return
     const state = location.state as NewRunLocationState
-    if (!state?.seedFromSuiteKey) return
-    seedSelectionFromSuite(state.seedFromSuiteKey)
+    if (!state?.seedFromSuiteKey && !state?.seedFromTestPlanKey) return
+    if (state.seedFromSuiteKey) seedSelectionFromSuite(state.seedFromSuiteKey)
+    if (state.seedFromTestPlanKey) seedTestPlan(state.seedFromTestPlanKey)
     if (state.seedName) {
       setRunName(state.seedName)
       justSeededNameRef.current = true
@@ -131,6 +148,18 @@ export default function NewRunPage() {
     seedSelectionFromSuite(suiteKey)
   }
 
+  function seedTestPlan(testPlanKey: string) {
+    const plan = plans.find((p) => p.key === testPlanKey)
+    if (!plan) return
+    setSelectedTestPlanKey(testPlanKey)
+    setSeededFromTestPlanName(plan.name)
+  }
+
+  function handleTestPlanChange(testPlanKey: string) {
+    setSelectedTestPlanKey(testPlanKey)
+    setSeededFromTestPlanName('')
+  }
+
   function toggleCase(caseKey: string) {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -161,6 +190,7 @@ export default function NewRunPage() {
         name: runName,
         caseKeys: Array.from(selected),
         ...(selectedSuiteKey ? { suiteKey: selectedSuiteKey } : {}),
+        ...(selectedTestPlanKey ? { testPlanKey: selectedTestPlanKey } : {}),
       },
     })
     bumpLanding()
@@ -270,6 +300,40 @@ export default function NewRunPage() {
               <p className="text-sm text-muted-foreground">
                 Pre-filled from <span className="font-medium text-foreground">{seededFromSuiteName}</span> — adjust the
                 selection below as needed.
+              </p>
+            )}
+
+            {plans.length > 0 && (
+              <div className="max-w-70 space-y-1">
+                <Label htmlFor="run-test-plan">Test Plan (optional)</Label>
+                <select
+                  id="run-test-plan"
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
+                  value={selectedTestPlanKey}
+                  onChange={(e) => handleTestPlanChange(e.target.value)}
+                >
+                  <option value="">No test plan — ad hoc run</option>
+                  {releases.map((release) => {
+                    const releasePlans = plans.filter((p) => p.releaseKey === release.key)
+                    if (releasePlans.length === 0) return null
+                    return (
+                      <optgroup key={release.key} label={release.name}>
+                        {releasePlans.map((p) => (
+                          <option key={p.key} value={p.key}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </optgroup>
+                    )
+                  })}
+                </select>
+              </div>
+            )}
+
+            {seededFromTestPlanName && (
+              <p className="text-sm text-muted-foreground">
+                Pre-filled from <span className="font-medium text-foreground">{seededFromTestPlanName}</span> — adjust
+                as needed.
               </p>
             )}
 

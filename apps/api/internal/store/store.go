@@ -33,6 +33,8 @@ type Store struct {
 	CustomFields        *CustomFieldRepo
 	OIDCTeamMappings    *OIDCTeamMappingRepo
 	Tags                *TagRepo
+	Releases            *ReleaseRepo
+	TestPlans           *TestPlanRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -56,11 +58,18 @@ func New(pool *pgxpool.Pool) *Store {
 		CustomFields:        &CustomFieldRepo{pool: pool},
 		OIDCTeamMappings:    &OIDCTeamMappingRepo{pool: pool},
 		Tags:                &TagRepo{pool: pool},
+		Releases:            &ReleaseRepo{pool: pool},
+		TestPlans:           &TestPlanRepo{pool: pool},
 	}
 }
 
 // ErrNotFound is returned when a referenced entity does not exist.
 var ErrNotFound = fmt.Errorf("not found")
+
+// ErrHasChildren is returned when deleting a Release or Test Plan that
+// still has dependent Test Plans/Runs (introduce-release-test-plan) — never
+// silently orphans execution history.
+var ErrHasChildren = fmt.Errorf("has dependent children")
 
 // ErrJiraLinkNotSet is returned by SetJiraSync when the target case/run item
 // has no jiraIssueKey set — there is no link for the cached data to describe

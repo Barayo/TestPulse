@@ -118,11 +118,24 @@ exactly one folder, defaulting to the project's root; see
 | PUT / DELETE | `/api/v1/suites/{suiteKey}/cases/{caseKey}` | Add / remove a case (n:m; removing does not delete the case) |
 | GET | `/api/v1/suites/{suiteKey}/trend?includeOpen=` | Status-breakdown trend across the suite's most recent 15 closed runs, oldest first; `includeOpen=true` adds the current open run as a trailing, marked point |
 
+**Releases and Test Plans** — optional (`introduce-release-test-plan`); a project that never creates one is unaffected.
+
+| Method | Path | Description |
+|---|---|---|
+| GET / POST | `/api/v1/projects/{projectKey}/releases` | List (optionally `?status=active\|maintained\|eol`) / create a release. Create requires `manageProject` |
+| GET | `/api/v1/projects/{projectKey}/plans` | Every test plan across all of the project's releases, in one batched request — populates a Test Plan picker without an N+1 releases-then-plans fetch |
+| GET / PUT / DELETE | `/api/v1/releases/{releaseKey}` | Get / update (`name`, `description`, `status`) / delete a release. Delete is `409` while it still has test plans. Write requires `manageProject` |
+| GET | `/api/v1/releases/{releaseKey}/rollup` | Aggregated `{runCount, passRate}` across every run belonging to any of the release's test plans — a single server-side aggregate query |
+| GET / POST | `/api/v1/releases/{releaseKey}/plans` | List / create a test plan scoped to the release. Create requires `manageProject` |
+| GET / PUT / DELETE | `/api/v1/plans/{planKey}` | Get / update (`name`, `description`) / delete a test plan. Delete is `409` while it still has runs. Write requires `manageProject` |
+| GET | `/api/v1/plans/{planKey}/rollup` | Aggregated `{runCount, passRate}` across the test plan's own runs |
+| GET | `/api/v1/plans/{planKey}/runs` | The runs scoped to a single test plan, newest first |
+
 **Runs and execution**
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectKey}/runs` | List / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys` |
+| GET / POST | `/api/v1/projects/{projectKey}/runs` | List / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys`, plus an optional `testPlanKey` (`introduce-release-test-plan`) to scope the run to a Test Plan |
 | GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's, and `status` (`open`/`closed`) |
 | POST | `/api/v1/runs/{runKey}/close` | Seal a run — requires `runRecordResult`, the same permission needed to record a verdict |
 | POST | `/api/v1/runs/{runKey}/reopen` | Reopen a closed run — requires `manageProject`, the project-admin-level permission |

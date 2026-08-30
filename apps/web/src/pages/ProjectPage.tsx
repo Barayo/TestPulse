@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router'
 import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import { FoldersPanel, SuitesPanel, RunsPanel, ReportsPanel } from '@/components/ProjectLandingPanels'
+import { FoldersPanel, SuitesPanel, RunsPanel, ReportsPanel, ReleasesPanel, type LandingRelease } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
 import { useProjectReportsTeaser } from '@/lib/useProjectReportsTeaser'
@@ -106,6 +106,38 @@ export default function ProjectPage() {
   useEffect(() => {
     void load()
   }, [load])
+
+  // Releases have no public endpoint (introduce-release-test-plan) — only
+  // fetched for a confirmed member, and the panel itself is never mounted
+  // for a project with none (design.md: "doesn't exist yet" is invisible,
+  // unlike Reports' always-rendered empty state).
+  const [releases, setReleases] = useState<LandingRelease[]>([])
+  useEffect(() => {
+    if (!projectKey || access !== 'member') return
+    let cancelled = false
+    void (async () => {
+      const { data: list } = await api.GET('/api/v1/projects/{projectKey}/releases', { params: { path: { projectKey } } })
+      const rows = await Promise.all(
+        (list ?? []).map(async (release) => {
+          const [{ data: rollup }, { data: plans }] = await Promise.all([
+            api.GET('/api/v1/releases/{releaseKey}/rollup', { params: { path: { releaseKey: release.key } } }),
+            api.GET('/api/v1/releases/{releaseKey}/plans', { params: { path: { releaseKey: release.key } } }),
+          ])
+          return {
+            key: release.key,
+            name: release.name,
+            status: release.status,
+            passRate: rollup?.passRate ?? null,
+            planCount: plans?.length ?? 0,
+          }
+        }),
+      )
+      if (!cancelled) setReleases(rows)
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectKey, access])
 
   if (!projectKey) return null
   if (notFound) {
@@ -287,6 +319,13 @@ export default function ProjectPage() {
               onSelectRun={(runId) => navigate(`/runs/${runId}`)}
             />
           </div>
+          {releases.length > 0 && (
+            <ReleasesPanel
+              releases={releases}
+              onSeeAll={() => navigate(`/projects/${projectKey}/releases`)}
+              onSelectRelease={(releaseKey) => navigate(`/projects/${projectKey}/releases/${releaseKey}`)}
+            />
+          )}
           <ReportsPanel
             total={reportsTeaser.total}
             counts={reportsTeaser.counts}

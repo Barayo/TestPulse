@@ -71,6 +71,31 @@ func TestCreateRunRequiresName(t *testing.T) {
 	wantValidation(t, err, "name")
 }
 
+func TestCreateReleaseRequiresName(t *testing.T) {
+	_, err := nilService().CreateRelease(context.Background(), "p1", "", "", domain.ReleaseStatusActive)
+	wantValidation(t, err, "name")
+}
+
+func TestCreateReleaseValidatesStatus(t *testing.T) {
+	_, err := nilService().CreateRelease(context.Background(), "p1", "2026.1", "", "shipped")
+	wantValidation(t, err, "status")
+}
+
+func TestUpdateReleaseValidates(t *testing.T) {
+	_, err := nilService().UpdateRelease(context.Background(), "rel1", "", "", domain.ReleaseStatusActive)
+	wantValidation(t, err, "name")
+}
+
+func TestCreateTestPlanRequiresName(t *testing.T) {
+	_, err := nilService().CreateTestPlan(context.Background(), "p1", "rel1", "", "")
+	wantValidation(t, err, "name")
+}
+
+func TestUpdateTestPlanRequiresName(t *testing.T) {
+	_, err := nilService().UpdateTestPlan(context.Background(), "plan1", "", "")
+	wantValidation(t, err, "name")
+}
+
 func TestRecordResultValidates(t *testing.T) {
 	s := nilService()
 	_, err := s.RecordResult(context.Background(), "i1", domain.NewResult{Actor: "ana", Verdict: "retest"})

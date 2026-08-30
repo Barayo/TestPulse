@@ -492,6 +492,78 @@ type Suite struct {
 	LastRunAt *time.Time `json:"lastRunAt"`
 }
 
+// ReleaseStatus is a Release's lifecycle state (introduce-release-test-plan
+// design.md D3), validated as a flat enum like Priority — no requirement
+// yet needs status transition history, only current state.
+type ReleaseStatus string
+
+const (
+	ReleaseStatusActive     ReleaseStatus = "active"
+	ReleaseStatusMaintained ReleaseStatus = "maintained"
+	ReleaseStatusEOL        ReleaseStatus = "eol"
+)
+
+var validReleaseStatuses = map[ReleaseStatus]bool{
+	ReleaseStatusActive: true, ReleaseStatusMaintained: true, ReleaseStatusEOL: true,
+}
+
+// Release is a project-scoped, long-lived entity tracking one supported
+// release's lifecycle (introduce-release-test-plan) — a real identity with
+// status, not a text label on a run. Optional: a project with no Releases
+// is unaffected (design.md D1).
+type Release struct {
+	ID          string        `json:"id"`
+	Key         string        `json:"key"`
+	ProjectID   string        `json:"projectId"`
+	Name        string        `json:"name"`
+	Description string        `json:"description"`
+	Status      ReleaseStatus `json:"status"`
+	CreatedAt   time.Time     `json:"createdAt"`
+}
+
+func (r Release) Validate() error {
+	if r.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if r.Status != "" && !validReleaseStatuses[r.Status] {
+		return fmt.Errorf("invalid status %q: must be one of active, maintained, eol", r.Status)
+	}
+	return nil
+}
+
+// TestPlan is the execution-scope grouping of Runs belonging to one Release
+// (introduce-release-test-plan) — e.g. one Test Plan per platform being
+// tested against a release. Named after the TestRail/Xray/Zephyr tool
+// convention, not ISTQB's "Test Plan" (a planning document) — a deliberate
+// naming call, see design.md D2. A Test Plan's Release never changes after
+// creation.
+type TestPlan struct {
+	ID          string    `json:"id"`
+	Key         string    `json:"key"`
+	ProjectID   string    `json:"projectId"`
+	ReleaseID   string    `json:"releaseId"`
+	ReleaseKey  string    `json:"releaseKey"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+func (p TestPlan) Validate() error {
+	if p.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	return nil
+}
+
+// Rollup is a server-side aggregated pass rate + run count across a Test
+// Plan's or Release's runs (introduce-release-test-plan design.md D5) —
+// always computed via a single batched aggregate query, never a
+// client-side fetch-and-count loop. PassRate is nil when RunCount is 0.
+type Rollup struct {
+	RunCount int  `json:"runCount"`
+	PassRate *int `json:"passRate,omitempty"`
+}
+
 type Run struct {
 	ID        string `json:"id"`
 	Key       string `json:"key"`
@@ -507,6 +579,13 @@ type Run struct {
 	// (link-runs-to-suite). Nil for a run created from an explicit case
 	// list, or via execution import.
 	SuiteKey *string `json:"suiteKey,omitempty"`
+	// TestPlanID/TestPlanKey optionally scope this run to a Test Plan
+	// (introduce-release-test-plan design.md D1) — additive: a run created
+	// with no Test Plan behaves exactly as before this capability existed.
+	// Deleting the Test Plan later clears these (ON DELETE SET NULL)
+	// without affecting the run or its items.
+	TestPlanID  *string `json:"-"`
+	TestPlanKey *string `json:"testPlanKey,omitempty"`
 	// PassRate is this run's own items' pass rate (0-100), or nil if the
 	// run has no items yet (group-runs-by-status) — computed alongside the
 	// list query, not a per-run round trip.

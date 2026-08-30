@@ -19,6 +19,9 @@ import RunItemDetailPage from '@/pages/RunItemDetailPage'
 import RunComparePage from '@/pages/RunComparePage'
 import RunComparePickerPage from '@/pages/RunComparePickerPage'
 import ProjectReportsPage from '@/pages/ProjectReportsPage'
+import ReleasesPage from '@/pages/ReleasesPage'
+import ReleaseDetailPage from '@/pages/ReleaseDetailPage'
+import TestPlanDetailPage from '@/pages/TestPlanDetailPage'
 import LoginPage from '@/pages/LoginPage'
 import SetupPage from '@/pages/SetupPage'
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
@@ -129,6 +132,9 @@ const PROJECT_CONTENT_ROUTES: RouteEntry[] = [
 const ACCOUNT_ONLY_ROUTES: RouteEntry[] = [
   { path: '/projects/:projectKey/runs/new', element: <NewRunPage /> },
   { path: '/projects/:projectKey/cases/new', element: <CreateCasePage /> },
+  { path: '/projects/:projectKey/releases', element: <ReleasesPage /> },
+  { path: '/projects/:projectKey/releases/:releaseKey', element: <ReleaseDetailPage /> },
+  { path: '/projects/:projectKey/releases/:releaseKey/plans/:planKey', element: <TestPlanDetailPage /> },
   { path: '/projects/:projectKey/members', element: <ProjectMembersPage /> },
   { path: '/projects/:projectKey/settings', element: <ProjectSettingsPage /> },
   { path: '/settings/people', element: <PeoplePage /> },

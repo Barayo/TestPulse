@@ -50,6 +50,8 @@ function mockNewRunAPI(
   suites: unknown[] = [],
   createdItems: unknown[] = [],
   permissions: unknown = fullPermissions,
+  plans: unknown[] = [],
+  releases: unknown[] = [{ id: 'r1', key: 'p1-REL1', projectId: 'p1', name: '2026.1', description: '', status: 'active', createdAt: '' }],
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/projects/{projectKey}')
@@ -60,6 +62,8 @@ function mockNewRunAPI(
     if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/folders') return Promise.resolve({ data: folders, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/plans') return Promise.resolve({ data: plans, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/releases') return Promise.resolve({ data: releases, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: createdItems, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/members')
       return Promise.resolve({ data: { users: [{ userId: 'u-ana', roleId: 'role-tester' }], teams: [] }, response: { ok: true } })
@@ -235,6 +239,67 @@ describe('NewRunPage', () => {
     expect(nameInput).toHaveFocus()
     expect(nameInput.selectionStart).toBe(0)
     expect(nameInput.selectionEnd).toBe('Smoke run'.length)
+  })
+
+  it('shows no Test Plan field when the project has no test plans anywhere', async () => {
+    mockNewRunAPI([caseA], [], [], fullPermissions, [])
+    renderNewRun()
+    await screen.findByLabelText(/^name$/i)
+    expect(screen.queryByLabelText(/test plan/i)).not.toBeInTheDocument()
+  })
+
+  it('shows a Test Plan picker grouped by release when the project has test plans', async () => {
+    mockNewRunAPI(
+      [caseA],
+      [],
+      [],
+      fullPermissions,
+      [
+        { id: 'pl1', key: 'p1-PLAN1', projectId: 'p1', releaseId: 'r1', releaseKey: 'p1-REL1', name: 'iOS', description: '', createdAt: '' },
+      ],
+    )
+    renderNewRun()
+    const select = (await screen.findByLabelText(/test plan/i)) as HTMLSelectElement
+    expect(select).toHaveValue('')
+    expect(screen.getByRole('option', { name: 'iOS' })).toBeInTheDocument()
+  })
+
+  it('a run created with a test plan selected sends testPlanKey', async () => {
+    mockNewRunAPI(
+      [caseA],
+      [],
+      [],
+      fullPermissions,
+      [{ id: 'pl1', key: 'p1-PLAN1', projectId: 'p1', releaseId: 'r1', releaseKey: 'p1-REL1', name: 'iOS', description: '', createdAt: '' }],
+    )
+    mockPOST.mockResolvedValue({ data: { key: 'p1-R1', id: 'run1' }, response: { ok: true } })
+    renderNewRun()
+    await userEvent.type(await screen.findByLabelText(/^name$/i), 'Sprint 1')
+    await userEvent.click(screen.getByRole('checkbox', { name: /login works/i }))
+    await userEvent.selectOptions(screen.getByLabelText(/test plan/i), 'p1-PLAN1')
+    await userEvent.click(screen.getByRole('button', { name: /create run/i }))
+
+    await waitFor(() =>
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/runs',
+        expect.objectContaining({ body: expect.objectContaining({ testPlanKey: 'p1-PLAN1' }) }),
+      ),
+    )
+  })
+
+  it('deep-link route state from a Test Plan\'s "+ New run" action seeds the Test Plan and name', async () => {
+    mockNewRunAPI(
+      [caseA],
+      [],
+      [],
+      fullPermissions,
+      [{ id: 'pl1', key: 'p1-PLAN1', projectId: 'p1', releaseId: 'r1', releaseKey: 'p1-REL1', name: 'iOS', description: '', createdAt: '' }],
+    )
+    renderNewRun([{ pathname: '/projects/p1/runs/new', state: { seedFromTestPlanKey: 'p1-PLAN1', seedName: 'iOS run' } }])
+
+    const select = (await screen.findByLabelText(/test plan/i)) as HTMLSelectElement
+    await waitFor(() => expect(select).toHaveValue('p1-PLAN1'))
+    expect(screen.getByLabelText(/^name$/i)).toHaveValue('iOS run')
   })
 
   it('shows a not-found message instead of an empty, interactive project when the project does not exist', async () => {

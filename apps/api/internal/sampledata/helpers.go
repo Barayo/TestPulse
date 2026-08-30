@@ -73,6 +73,16 @@ func Suite(ctx context.Context, svc *service.Service, projectID, name string, ca
 	return s, nil
 }
 
+// Release creates a release with the given status (introduce-release-test-plan).
+func Release(ctx context.Context, svc *service.Service, projectID, name, description string, status domain.ReleaseStatus) (domain.Release, error) {
+	return svc.CreateRelease(ctx, projectID, name, description, status)
+}
+
+// TestPlan creates a test plan scoped to a release.
+func TestPlan(ctx context.Context, svc *service.Service, projectID, releaseID, name, description string) (domain.TestPlan, error) {
+	return svc.CreateTestPlan(ctx, projectID, releaseID, name, description)
+}
+
 // Actors is a small pool of example authors — human and agent — cycled by
 // RunWithVerdicts so recorded results attribute to varied, realistic names.
 // An empty entry means "no override": RecordResult defaults the result's
@@ -98,6 +108,17 @@ func RunWithVerdicts(ctx context.Context, svc *service.Service, projectID, name 
 // index and detail page read.
 func RunFromSuiteWithVerdicts(ctx context.Context, svc *service.Service, projectID, suiteID, name string, caseIDs []string, verdicts []domain.Verdict) error {
 	r, err := svc.CreateRun(ctx, projectID, service.RunInput{Name: name, SuiteID: suiteID, CaseIDs: caseIDs})
+	if err != nil {
+		return err
+	}
+	return recordVerdicts(ctx, svc, r.ID, caseIDs, verdicts)
+}
+
+// RunFromTestPlanWithVerdicts is RunWithVerdicts, but the run is scoped to
+// a Test Plan (RunInput.TestPlanID) — so the Test Plan's rollup and Runs
+// list have a real run to show (introduce-release-test-plan).
+func RunFromTestPlanWithVerdicts(ctx context.Context, svc *service.Service, projectID, testPlanID, name string, caseIDs []string, verdicts []domain.Verdict) error {
+	r, err := svc.CreateRun(ctx, projectID, service.RunInput{Name: name, TestPlanID: testPlanID, CaseIDs: caseIDs})
 	if err != nil {
 		return err
 	}

@@ -682,13 +682,126 @@ func (s *Service) RemoveCaseFromSuite(ctx context.Context, suiteID, caseID strin
 	return nil
 }
 
+// --- Releases & Test Plans ---
+//
+// Release/Test Plan CRUD carries no actor/permission parameter, matching
+// CreateSuite/CreateRun's shape: like every other project-scoped resource,
+// authorization (manageProject) is enforced by requirePermission at the
+// routing layer, not here (see CloseRun's comment for the established
+// precedent this follows).
+
+func (s *Service) CreateRelease(ctx context.Context, projectID, name, description string, status domain.ReleaseStatus) (domain.Release, error) {
+	if err := (domain.Release{Name: name, Status: status}).Validate(); err != nil {
+		return domain.Release{}, invalid("%s", err)
+	}
+	release, err := s.store.Releases.Create(ctx, projectID, name, description, status)
+	if err != nil {
+		return domain.Release{}, err
+	}
+	s.audit(ctx, "create", "release", release.ID)
+	return release, nil
+}
+
+func (s *Service) ListReleases(ctx context.Context, projectID string, status domain.ReleaseStatus) ([]domain.Release, error) {
+	return s.store.Releases.List(ctx, projectID, status)
+}
+
+func (s *Service) GetRelease(ctx context.Context, releaseID string) (domain.Release, error) {
+	return s.store.Releases.Get(ctx, releaseID)
+}
+
+func (s *Service) UpdateRelease(ctx context.Context, releaseID, name, description string, status domain.ReleaseStatus) (domain.Release, error) {
+	rel := domain.Release{ID: releaseID, Name: name, Description: description, Status: status}
+	if err := rel.Validate(); err != nil {
+		return domain.Release{}, invalid("%s", err)
+	}
+	updated, err := s.store.Releases.Update(ctx, rel)
+	if err != nil {
+		return domain.Release{}, err
+	}
+	s.audit(ctx, "update", "release", releaseID)
+	return updated, nil
+}
+
+func (s *Service) DeleteRelease(ctx context.Context, releaseID string) error {
+	if err := s.store.Releases.Delete(ctx, releaseID); err != nil {
+		return err
+	}
+	s.audit(ctx, "delete", "release", releaseID)
+	return nil
+}
+
+// ReleaseRollup returns a Release's aggregated pass rate/run count across
+// every Run belonging to any of its Test Plans (introduce-release-test-plan
+// design.md D5) — a single store-level aggregate query, never a
+// client-side per-Test-Plan fetch loop.
+func (s *Service) ReleaseRollup(ctx context.Context, releaseID string) (domain.Rollup, error) {
+	return s.store.Releases.Rollup(ctx, releaseID)
+}
+
+func (s *Service) CreateTestPlan(ctx context.Context, projectID, releaseID, name, description string) (domain.TestPlan, error) {
+	if err := (domain.TestPlan{Name: name, ReleaseID: releaseID}).Validate(); err != nil {
+		return domain.TestPlan{}, invalid("%s", err)
+	}
+	plan, err := s.store.TestPlans.Create(ctx, projectID, releaseID, name, description)
+	if err != nil {
+		return domain.TestPlan{}, err
+	}
+	s.audit(ctx, "create", "test_plan", plan.ID)
+	return plan, nil
+}
+
+func (s *Service) ListTestPlans(ctx context.Context, releaseID string) ([]domain.TestPlan, error) {
+	return s.store.TestPlans.ListByRelease(ctx, releaseID)
+}
+
+// ListTestPlansByProject returns every test plan across all of a project's
+// releases — populates the run-creation Test Plan picker in one request,
+// not an N+1 releases-then-plans client-side fetch loop.
+func (s *Service) ListTestPlansByProject(ctx context.Context, projectID string) ([]domain.TestPlan, error) {
+	return s.store.TestPlans.ListByProject(ctx, projectID)
+}
+
+func (s *Service) GetTestPlan(ctx context.Context, testPlanID string) (domain.TestPlan, error) {
+	return s.store.TestPlans.Get(ctx, testPlanID)
+}
+
+func (s *Service) UpdateTestPlan(ctx context.Context, testPlanID, name, description string) (domain.TestPlan, error) {
+	plan := domain.TestPlan{ID: testPlanID, Name: name, Description: description}
+	if err := plan.Validate(); err != nil {
+		return domain.TestPlan{}, invalid("%s", err)
+	}
+	updated, err := s.store.TestPlans.Update(ctx, plan)
+	if err != nil {
+		return domain.TestPlan{}, err
+	}
+	s.audit(ctx, "update", "test_plan", testPlanID)
+	return updated, nil
+}
+
+func (s *Service) DeleteTestPlan(ctx context.Context, testPlanID string) error {
+	if err := s.store.TestPlans.Delete(ctx, testPlanID); err != nil {
+		return err
+	}
+	s.audit(ctx, "delete", "test_plan", testPlanID)
+	return nil
+}
+
+// TestPlanRollup returns a Test Plan's aggregated pass rate/run count
+// across its Runs (design.md D5) — a single store-level aggregate query.
+func (s *Service) TestPlanRollup(ctx context.Context, testPlanID string) (domain.Rollup, error) {
+	return s.store.TestPlans.Rollup(ctx, testPlanID)
+}
+
 // --- Runs ---
 
-// RunInput creates a run from a suite's cases and/or an explicit list.
+// RunInput creates a run from a suite's cases and/or an explicit list,
+// optionally scoped to a Test Plan (introduce-release-test-plan).
 type RunInput struct {
-	Name    string
-	SuiteID string
-	CaseIDs []string
+	Name       string
+	SuiteID    string
+	TestPlanID string
+	CaseIDs    []string
 }
 
 func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) (domain.Run, error) {
@@ -703,6 +816,15 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 		}
 		caseIDs = append(caseIDs, suite.CaseIDs...)
 	}
+	if in.TestPlanID != "" {
+		plan, err := s.store.TestPlans.Get(ctx, in.TestPlanID)
+		if err != nil {
+			return domain.Run{}, err
+		}
+		if plan.ProjectID != projectID {
+			return domain.Run{}, invalid("test plan belongs to a different project")
+		}
+	}
 	// Dedupe while preserving order.
 	seen := map[string]bool{}
 	unique := make([]string, 0, len(caseIDs))
@@ -714,8 +836,8 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 	}
 	var run domain.Run
 	var err error
-	if in.SuiteID != "" {
-		run, err = s.store.Runs.CreateWithSuite(ctx, projectID, in.Name, in.SuiteID, unique)
+	if in.SuiteID != "" || in.TestPlanID != "" {
+		run, err = s.store.Runs.CreateWithOptions(ctx, projectID, in.Name, in.SuiteID, in.TestPlanID, unique)
 	} else {
 		run, err = s.store.Runs.Create(ctx, projectID, in.Name, unique)
 	}
@@ -732,6 +854,13 @@ func (s *Service) GetRun(ctx context.Context, runID string) (domain.Run, error) 
 
 func (s *Service) ListRuns(ctx context.Context, projectID string) ([]domain.Run, error) {
 	return s.store.Runs.List(ctx, projectID)
+}
+
+// ListRunsByTestPlan returns the runs scoped to a single Test Plan
+// (introduce-release-test-plan spec: "Runs may be listed filtered to a
+// single Test Plan").
+func (s *Service) ListRunsByTestPlan(ctx context.Context, testPlanID string) ([]domain.Run, error) {
+	return s.store.Runs.ListByTestPlan(ctx, testPlanID)
 }
 
 // CloseRun seals a run: subsequent run-item mutations are rejected until

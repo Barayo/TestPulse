@@ -19,6 +19,10 @@ erDiagram
     PROJECTS ||--o{ TEST_CASES : owns
     PROJECTS ||--o{ TEST_SUITES : owns
     PROJECTS ||--o{ TEST_RUNS : owns
+    PROJECTS ||--o{ RELEASES : "owns (optional)"
+
+    RELEASES ||--o{ TEST_PLANS : has
+    TEST_PLANS ||--o{ TEST_RUNS : "scopes (optional)"
 
     TEST_CASE_FOLDERS ||--o{ TEST_CASE_FOLDERS : "parent of (nested)"
     TEST_CASE_FOLDERS ||--o{ TEST_CASES : contains
@@ -76,6 +80,19 @@ erDiagram
     TEST_RUNS {
         uuid id PK
         uuid project_id FK
+        uuid test_plan_id FK "nullable, optional scope"
+        text name
+    }
+    RELEASES {
+        uuid id PK
+        uuid project_id FK
+        text name
+        text status "active|maintained|eol, default active"
+    }
+    TEST_PLANS {
+        uuid id PK
+        uuid project_id FK
+        uuid release_id FK
         text name
     }
     TEST_RUN_ITEMS {
@@ -123,8 +140,11 @@ This split exists so a run can reference `(case_id, version)` directly (via FK) 
 ### `test_suites` + `suite_cases`
 `test_suites` is a named grouping per project. `suite_cases` is the n:m join table (`suite_id`, `case_id`); removing a row here never touches `test_cases`.
 
+### `releases` + `test_plans`
+Optional entities sitting between `projects` and `test_runs` (`introduce-release-test-plan`) — a project that never creates one is entirely unaffected. `releases` is a project-scoped, long-lived entity with a `status` (`active`/`maintained`/`eol`, default `active`, `CHECK`-constrained like `test_case_versions.priority`). `test_plans` is scoped to exactly one release (`release_id`, immutable after creation) and groups the runs that exercise it — typically one per platform. Both mint human-readable keys the same way as every other entity (`project_key_counters`, backfilled for existing projects by the same migration that added these tables). Deleting a release or test plan is rejected at the store layer while it still has test plans/runs respectively (`store.ErrHasChildren`) — application-enforced, not a DB constraint, since the desired behavior is "reject," not "cascade."
+
 ### `test_runs`
-A named execution container per project. `status` (`add-run-lifecycle-status`) is `open` or `closed` — a closed run's items become read-only (no new results, status/assignee updates, or added items) until an actor with `manageProject` reopens it. A run may be permanently deleted — manually (`DELETE /api/v1/runs/{key}`, `runDelete` permission) or automatically once closed and older than `instance_settings.run_retention_days` (`add-data-retention` D1/D8) — cascading to its `test_run_items`/`test_run_results` via `ON DELETE CASCADE`; no archived precondition, unlike project deletion.
+A named execution container per project. `status` (`add-run-lifecycle-status`) is `open` or `closed` — a closed run's items become read-only (no new results, status/assignee updates, or added items) until an actor with `manageProject` reopens it. A run may be permanently deleted — manually (`DELETE /api/v1/runs/{key}`, `runDelete` permission) or automatically once closed and older than `instance_settings.run_retention_days` (`add-data-retention` D1/D8) — cascading to its `test_run_items`/`test_run_results` via `ON DELETE CASCADE`; no archived precondition, unlike project deletion. `test_plan_id` (nullable FK to `test_plans`, `ON DELETE SET NULL`, `introduce-release-test-plan`) optionally scopes the run to a Test Plan — a run created with no Test Plan behaves exactly as before this column existed, and deleting the Test Plan later clears the reference without affecting the run.
 
 ### `test_run_items`
 One row per case included in a run, **pinned to an exact `(case_id, case_version)` at insert time** — either when the run is created or when a case is later added to an open run. The pin never changes even if the case is edited afterward or soft-deleted; the API surfaces a `newerVersion` flag by comparing against the case's current version. `current_status` is one of `pending / pass / failed / skipped / blocked / retest` and is the fast-read cache of "what does the log currently imply" — it's written in the same transaction as a new result, or directly via the status endpoint (assign, retest). Unique on `(run_id, case_id)`: a case appears at most once per run. `test_name` (`add-execution-import`) is the literal name an external runner reported for this item, empty for items added manually. `assignee_user_id`/`assignee_team_id` (`link-run-item-assignee-to-identity`) are nullable FKs to `users`/`teams`, `CHECK`-constrained to be mutually exclusive, both `ON DELETE SET NULL` — an item's assignment is a real reference, not free text, and reverts to unassigned rather than surviving as a dangling name if the assigned user or team is later deleted. This was a breaking migration (the earlier free-text `assignee` column was dropped, not preserved alongside), acceptable pre-1.0 since no version had shipped yet.
@@ -155,7 +175,7 @@ A singleton row (`id boolean PRIMARY KEY CHECK (id)` — always `true`, so there
 
 - `test_run_items.current_status` and `test_run_results.verdict` are both `CHECK`-constrained at the database level, not just validated in Go — the domain package (`internal/domain`) and the schema agree on the same enum.
 - `test_run_items` has a composite FK to `test_case_versions(case_id, version)`, which is what makes "run items always point at real, immutable content" a database guarantee rather than an application convention.
-- Every FK that references `projects` or `test_cases` is `ON DELETE CASCADE` (`add-data-retention` D2 — seven FKs total, confirmed by direct inspection when permanent deletion was added: `test_case_folders`, `test_cases`, `test_case_versions`, `test_suites`, `suite_cases`, `test_runs`, and `project_key_counters`, all keyed off `project_id`/`case_id`) — deleting a project or a run is a single `DELETE` statement; the database does the cascading, not application code walking each child table.
+- Every FK that references `projects` or `test_cases` is `ON DELETE CASCADE` (`add-data-retention` D2 — seven FKs confirmed by direct inspection when permanent deletion was added: `test_case_folders`, `test_cases`, `test_case_versions`, `test_suites`, `suite_cases`, `test_runs`, and `project_key_counters`, all keyed off `project_id`/`case_id`; `releases` and `test_plans` added the same way by `introduce-release-test-plan`) — deleting a project or a run is a single `DELETE` statement; the database does the cascading, not application code walking each child table.
 
 ## Local access
 

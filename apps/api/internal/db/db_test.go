@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/pressly/goose/v3"
 )
 
 // Integration tests: require a disposable PostgreSQL database.
@@ -131,6 +133,67 @@ func TestMigrateWithOptionsAllowMissingMatchesNormalMigrateWhenNoGapExists(t *te
 	}
 	if !current {
 		t.Error("schema not current after MigrateWithOptions(allowMissing=true)")
+	}
+}
+
+// TestReleaseTestPlanMigrationBackfillsExistingProjects reproduces a
+// pre-existing production database (project + run created before this
+// migration existed) and verifies 00011_release_test_plan.sql applies
+// cleanly on top of it: the existing run's test_plan_id stays nil, and the
+// project's release/plan key counters — normally seeded only at project
+// creation by the create_project_defaults trigger — are backfilled so
+// claimEntityKey works for a Release/Test Plan created afterward
+// (introduce-release-test-plan design.md, migration plan step 1).
+func TestReleaseTestPlanMigrationBackfillsExistingProjects(t *testing.T) {
+	pool := testPool(t)
+	resetSchema(t, pool)
+	ctx := context.Background()
+
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		t.Fatalf("SetDialect: %v", err)
+	}
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = sqlDB.Close() }()
+
+	if err := goose.UpToContext(ctx, sqlDB, "migrations", 10); err != nil {
+		t.Fatalf("UpTo(10): %v", err)
+	}
+
+	var projectID, runID string
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO projects (key, name) VALUES ('PRE', 'Pre-existing project') RETURNING id`,
+	).Scan(&projectID); err != nil {
+		t.Fatalf("seeding pre-existing project: %v", err)
+	}
+	if err := pool.QueryRow(ctx,
+		`INSERT INTO test_runs (key, project_id, name) VALUES ('PRE-R1', $1, 'Existing run') RETURNING id`,
+		projectID,
+	).Scan(&runID); err != nil {
+		t.Fatalf("seeding pre-existing run: %v", err)
+	}
+
+	if err := goose.UpContext(ctx, sqlDB, "migrations"); err != nil {
+		t.Fatalf("migrating the rest of the way: %v", err)
+	}
+
+	var testPlanID *string
+	if err := pool.QueryRow(ctx, `SELECT test_plan_id FROM test_runs WHERE id = $1`, runID).Scan(&testPlanID); err != nil {
+		t.Fatalf("querying pre-existing run: %v", err)
+	}
+	if testPlanID != nil {
+		t.Errorf("pre-existing run's test_plan_id = %v, want nil", *testPlanID)
+	}
+
+	for _, entityType := range []string{"release", "plan"} {
+		var counter int
+		err := pool.QueryRow(ctx,
+			`SELECT next_value FROM project_key_counters WHERE project_id = $1 AND entity_type = $2`,
+			projectID, entityType,
+		).Scan(&counter)
+		if err != nil {
+			t.Errorf("%s counter not backfilled for pre-existing project: %v", entityType, err)
+		}
 	}
 }
 

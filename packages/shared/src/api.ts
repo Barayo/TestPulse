@@ -499,6 +499,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/releases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a project's releases, newest first, optionally filtered by status */
+        get: operations["listReleases"];
+        put?: never;
+        /** Create a release */
+        post: operations["createRelease"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{releaseKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a release */
+        get: operations["getRelease"];
+        /** Update a release's name, description, and status */
+        put: operations["updateRelease"];
+        post?: never;
+        /** Delete a release (rejected while it still has Test Plans) */
+        delete: operations["deleteRelease"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{releaseKey}/rollup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        /** Aggregated pass rate/run count across the release's Test Plans' runs */
+        get: operations["getReleaseRollup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * List every test plan across all of a project's releases, in one batched request
+         * @description Populates a Test Plan picker (e.g. the run-creation flow) without an N+1 releases-then-plans client-side fetch loop.
+         */
+        get: operations["listTestPlansByProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/releases/{releaseKey}/plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a release's test plans, newest first */
+        get: operations["listTestPlans"];
+        put?: never;
+        /** Create a test plan scoped to a release */
+        post: operations["createTestPlan"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans/{planKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a test plan */
+        get: operations["getTestPlan"];
+        /** Update a test plan's name and description */
+        put: operations["updateTestPlan"];
+        post?: never;
+        /** Delete a test plan (rejected while it still has runs) */
+        delete: operations["deleteTestPlan"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans/{planKey}/rollup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        /** Aggregated pass rate/run count across the test plan's runs */
+        get: operations["getTestPlanRollup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/plans/{planKey}/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        /** List the runs scoped to a single test plan, newest first */
+        get: operations["listRunsByTestPlan"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/runs/status-summary": {
         parameters: {
             query?: never;
@@ -2179,13 +2340,59 @@ export interface components {
             createdAt: string;
             /** @description This run's own items' pass rate; null if it has no items yet. Computed alongside the list query — cheap, not a per-run round trip. */
             passRate?: number | null;
+            /** @description The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself. */
+            testPlanKey?: string | null;
         };
         RunInput: {
             name: string;
             /** @description Include all cases of this suite */
             suiteKey?: string;
+            /** @description Optionally scope this run to a Test Plan (introduce-release-test-plan). Must belong to the same project. */
+            testPlanKey?: string;
             /** @description Explicit cases to include */
             caseKeys?: string[];
+        };
+        /** @enum {string} */
+        ReleaseStatus: "active" | "maintained" | "eol";
+        /** @description A project-scoped, long-lived entity tracking one supported release's lifecycle (introduce-release-test-plan) — optional: a project with no Releases is unaffected. */
+        Release: {
+            id: string;
+            /** @description Human-readable identifier, scoped to the project: {projectKey}-REL{n}. Immutable. */
+            key: string;
+            projectId: string;
+            name: string;
+            description: string;
+            status: components["schemas"]["ReleaseStatus"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ReleaseInput: {
+            name: string;
+            description?: string;
+            status?: components["schemas"]["ReleaseStatus"];
+        };
+        /** @description The execution-scope grouping of Runs belonging to one Release (introduce-release-test-plan) — e.g. one Test Plan per platform being tested against a release. A Test Plan's Release never changes after creation. */
+        TestPlan: {
+            id: string;
+            /** @description Human-readable identifier, scoped to the project: {projectKey}-PLAN{n}. Immutable. */
+            key: string;
+            projectId: string;
+            releaseId: string;
+            releaseKey: string;
+            name: string;
+            description: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        TestPlanInput: {
+            name: string;
+            description?: string;
+        };
+        /** @description A server-side aggregated pass rate + run count across a Test Plan's or Release's runs (introduce-release-test-plan design.md D5) — always a single aggregate query, never a client-side per-entity fetch loop. */
+        Rollup: {
+            runCount: number;
+            /** @description Null when runCount is 0 (or every run has no items yet). */
+            passRate?: number | null;
         };
         /** @description A run item's real assignee (link-run-item-assignee-to-identity) — always a real user or team, resolved at read time so the name is always current. */
         RunItemAssignee: {
@@ -3770,6 +3977,352 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listReleases: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["ReleaseStatus"];
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Releases */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"][];
+                };
+            };
+        };
+    };
+    createRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseInput"];
+            };
+        };
+        responses: {
+            /** @description Created release */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    getRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Release */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReleaseInput"];
+            };
+        };
+        responses: {
+            /** @description Updated release */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Release"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteRelease: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Release still has Test Plans */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getReleaseRollup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rollup */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rollup"];
+                };
+            };
+        };
+    };
+    listTestPlansByProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlan"][];
+                };
+            };
+        };
+    };
+    listTestPlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test plans */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlan"][];
+                };
+            };
+        };
+    };
+    createTestPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Created test plan */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlan"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    getTestPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Test plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlan"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateTestPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TestPlanInput"];
+            };
+        };
+        responses: {
+            /** @description Updated test plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TestPlan"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteTestPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Test plan still has runs */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    getTestPlanRollup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Rollup */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Rollup"];
+                };
+            };
+        };
+    };
+    listRunsByTestPlan: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Runs */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Run"][];
+                };
+            };
         };
     };
     getProjectStatusSummary: {
