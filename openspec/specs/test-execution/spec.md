@@ -8,7 +8,7 @@ log per item, assignment/filtering, run summaries, and the run execution
 board that ties it all together for a human tester.
 ## Requirements
 ### Requirement: Run creation pins case versions
-The system SHALL let a user with `runCreate` permission on a project create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A run item MAY carry an optional `testName` — the literal name reported by an external test runner, independent of the pinned case's own title. Adding an item to an existing run SHALL also require `runCreate` permission. A run created from a suite SHALL record that suite's key; a run created without a suite (an explicit case list, or an imported run) SHALL have no suite reference. A run's recorded suite SHALL NOT change after creation, and deleting the suite later SHALL NOT affect the run or its items — only the suite reference itself is cleared.
+The system SHALL let a user with `runCreate` permission on a project create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A run item MAY carry an optional `testName` — the literal name reported by an external test runner, independent of the pinned case's own title. Adding an item to an existing run SHALL also require `runCreate` permission. A run created from a suite SHALL record that suite's key; a run created without a suite (an explicit case list, or an imported run) SHALL have no suite reference. A run's recorded suite SHALL NOT change after creation, and deleting the suite later SHALL NOT affect the run or its items — only the suite reference itself is cleared. A run MAY optionally be scoped to a Test Plan at creation time; a run's Test Plan scope SHALL NOT change after creation, and deleting the Test Plan later SHALL NOT affect the run or its items — only the Test Plan reference itself is cleared. A run created with no Test Plan behaves exactly as before this capability existed.
 
 #### Scenario: Run pins versions at creation
 - **WHEN** a run is created containing a case whose current version is 2, and the case is later edited to version 3
@@ -45,6 +45,22 @@ The system SHALL let a user with `runCreate` permission on a project create a te
 #### Scenario: Deleting a suite does not affect runs created from it
 - **WHEN** a suite that was used to create a run is later deleted
 - **THEN** the run and its items are unaffected, and the run's `suiteKey` becomes `null`
+
+#### Scenario: A run may be scoped to a Test Plan at creation
+- **WHEN** a user with `runCreate` permission creates a run and specifies a Test Plan belonging to the same project
+- **THEN** the run's `testPlanKey` reflects that Test Plan's key
+
+#### Scenario: A run created with no Test Plan has no Test Plan reference
+- **WHEN** a run is created without specifying a Test Plan
+- **THEN** the run's `testPlanKey` is absent (`null`), and the run behaves exactly as a run created before Test Plans existed
+
+#### Scenario: Deleting a Test Plan does not affect runs scoped to it
+- **WHEN** a Test Plan that was used to scope a run is later deleted
+- **THEN** the run and its items are unaffected, and the run's `testPlanKey` becomes `null`
+
+#### Scenario: Runs may be listed filtered to a single Test Plan
+- **WHEN** a user with `read` permission lists a project's runs filtered to a specific Test Plan
+- **THEN** only runs scoped to that Test Plan are returned
 
 ### Requirement: Run open/closed lifecycle
 Every run SHALL have a status, `open` or `closed`. Runs created via
