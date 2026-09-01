@@ -30,23 +30,23 @@
 
 ## 5. Dry-run (test-first)
 
-- [ ] 5.1 Write a failing test: with `--testpulse-dry-run`, mock `GET /api/v1/projects/{projectKey}/cases` returning the project's cases as a flat JSON array (per `listCases` in openapi.yaml — this endpoint is not paginated) and assert no request is made to the imports endpoint, stdout reports the projected match, and exit status is unaffected
-- [ ] 5.2 Write a failing test: same as 5.1 but with some annotated case keys absent from the fetched cases, assert stdout lists the projected-unmatched keys with exit status still unaffected
-- [ ] 5.3 Write a failing test: mock the cases fetch failing outright (network error, and separately a `401`/`5xx`), assert no success-shaped projection is printed and the session exits with a failing status
-- [ ] 5.4 Implement the dry-run path (cases fetch, client-side diff, projection output, fetch-failure handling) until 5.1–5.3 pass
+- [x] 5.1 Write a failing test: with `--testpulse-dry-run`, mock `GET /api/v1/projects/{projectKey}/cases` returning the project's cases as a flat JSON array (per `listCases` in openapi.yaml — this endpoint is not paginated) and assert no request is made to the imports endpoint, stdout reports the projected match, and exit status is unaffected
+- [x] 5.2 Write a failing test: same as 5.1 but with some annotated case keys absent from the fetched cases, assert stdout lists the projected-unmatched keys with exit status still unaffected
+- [x] 5.3 Write a failing test: mock the cases fetch failing outright (network error, and separately a `401`/`5xx`), assert no success-shaped projection is printed and the session exits with a failing status
+- [x] 5.4 Implement the dry-run path (cases fetch, client-side diff, projection output, fetch-failure handling) until 5.1–5.3 pass
 
 ## 6. Attachment fixture (test-first)
 
-- [ ] 6.1 Write a failing test: a marked test calls `testpulse_attach("failure.png")`, assert the submitted `attachments` array contains an entry keyed by that test's case key
-- [ ] 6.2 Write a failing test: an unmarked test calls `testpulse_attach(...)`, assert no attachment is submitted and a warning naming the test is printed
-- [ ] 6.3 Implement the `testpulse_attach` fixture and attachment-collection wiring into the submission payload until 6.1–6.2 pass
-- [ ] 6.4 Write a failing test: a marked test with an attachment has its case key come back in a `207` response's unmatched list, assert the stderr summary names that case's attachment as not saved, distinct from the plain unmatched-case listing; implement the cross-reference until green
+- [x] 6.1 Write a failing test: a marked test calls `testpulse_attach("failure.png")`, assert the submitted `attachments` array contains an entry keyed by that test's case key
+- [x] 6.2 Write a failing test: an unmarked test calls `testpulse_attach(...)`, assert no attachment is submitted and a warning naming the test is printed
+- [x] 6.3 Implement the `testpulse_attach` fixture and attachment-collection wiring into the submission payload until 6.1–6.2 pass
+- [x] 6.4 Write a failing test: a marked test with an attachment has its case key come back in a `207` response's unmatched list, assert the stderr summary names that case's attachment as not saved, distinct from the plain unmatched-case listing; implement the cross-reference until green
 
 ## 7. Release automation
 
-- [ ] 7.1 Configure `python-semantic-release` and a PyPI trusted-publishing (OIDC) release workflow triggered on merge to `main`
-- [ ] 7.2 Write README (install, marker API, config-precedence table, dry-run, exit-code table) and CONTRIBUTING (pytester-based test setup)
+- [x] 7.1 Configure `python-semantic-release` and a PyPI trusted-publishing (OIDC) release workflow triggered on merge to `main`
+- [x] 7.2 Write README (install, marker API, config-precedence table, dry-run, exit-code table) and CONTRIBUTING (pytester-based test setup)
 
 ## 8. TestPulse monorepo docs update
 
-- [ ] 8.1 Add a "pytest-testpulse plugin" section to `docs/importing-results.md` pointing pytest users at the new package, keeping the existing `conftest.py` snippet documented as the no-install fallback
+- [x] 8.1 Add a "pytest-testpulse plugin" section to `docs/importing-results.md` pointing pytest users at the new package, keeping the existing `conftest.py` snippet documented as the no-install fallback

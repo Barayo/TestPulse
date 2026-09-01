@@ -99,11 +99,43 @@ for how attachments render once imported.
 | `<error>` | `blocked` |
 | `<skipped>` | `skipped` |
 
-## pytest: `conftest.py`
+## pytest: `pytest-testpulse` plugin
 
-pytest has no built-in way to tag a test with an arbitrary case key, but its
-`record_property()` + `--junitxml` combination is enough to carry one
-through without a custom plugin. Add a marker and a fixture:
+The recommended way to report pytest results is the installable
+[`pytest-testpulse`](https://github.com/Barayo/pytest-testpulse) plugin —
+it wraps the same marker/`record_property()` mechanism documented below,
+and also submits the report itself, so no separate `curl` step is needed:
+
+```bash
+pip install pytest-testpulse
+```
+
+```python
+@pytest.mark.testpulse("LOGIN-42", platform="linux", tags=["smoke"])
+def test_login_succeeds():
+    ...
+```
+
+```bash
+pytest --junitxml=report.xml \
+  --testpulse-url=http://localhost:8080 \
+  --testpulse-project=LOGIN
+# or via TESTPULSE_URL / TESTPULSE_TOKEN / TESTPULSE_PROJECT env vars
+```
+
+By default, some tests having no matching case (`207`) is a warning, not a
+build failure — matching this API's own contract that an unmatched test
+never fails the import. Pass `--testpulse-fail-on-unmatched` once a suite
+is fully annotated to make that a hard failure instead. A
+`--testpulse-dry-run` flag previews matches via a read-only cases fetch,
+without submitting anything. See the plugin's own README for the full
+config-precedence and exit-code reference.
+
+## pytest: `conftest.py` (no-install fallback)
+
+Without installing anything, pytest's built-in `record_property()` +
+`--junitxml` combination is enough to carry a case key through — this is
+also the mechanism the plugin above wraps. Add a marker and a fixture:
 
 ```python
 # conftest.py
@@ -147,9 +179,9 @@ curl -s -X POST http://localhost:8080/api/v1/projects/LOGIN/imports \
   -d "$(jq -n --rawfile report report.xml '{format: "junit-xml", report: $report}')"
 ```
 
-A real pytest plugin (a thin convenience wrapper over the same mechanism) is
-follow-on work — this snippet ships everything needed today with no new
-package to install.
+Prefer the `pytest-testpulse` plugin above for anything beyond a quick,
+no-install test — this snippet is best suited to environments that can't
+add a dependency.
 
 ## Maven, Gradle, Jest
 
