@@ -106,15 +106,17 @@ precedence tier than the ini-option that set it true.
 `--testpulse-dry-run` (no env/ini equivalent — a local, one-off override,
 not a durable CI setting) builds the request it would have submitted, then
 projects a match preview via a **read-only** `GET
-/api/v1/projects/{projectKey}/cases` (paginated as needed) to fetch
-existing case keys and diff them against the annotated ones client-side —
-it never calls the (mutating) import endpoint, so no run is ever created.
-Still needs `url`/`token`/`project` to authenticate that read. A
-successful projection never affects exit code — but if the cases fetch
-itself fails outright (network error, `401`, `5xx`, or a paginated fetch
-that dies partway through), the plugin follows the same unconditional-fail
-rule as a real submission error (below): a dry-run whose own preview
-couldn't be computed must not report success by omission.
+/api/v1/projects/{projectKey}/cases` to fetch existing case keys and diff
+them against the annotated ones client-side — it never calls the
+(mutating) import endpoint, so no run is ever created. Still needs
+`url`/`token`/`project` to authenticate that read. (This endpoint returns
+a flat JSON array of every case in the project, not a paginated response
+— confirmed against `packages/shared/openapi.yaml`'s `listCases` — so no
+pagination handling is needed here.) A successful projection never
+affects exit code — but if the cases fetch itself fails outright (network
+error, `401`, `5xx`), the plugin follows the same unconditional-fail rule
+as a real submission error (below): a dry-run whose own preview couldn't
+be computed must not report success by omission.
 
 **Submission outcome → pytest exit code.**
 

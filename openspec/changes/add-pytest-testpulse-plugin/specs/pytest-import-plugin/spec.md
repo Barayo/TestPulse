@@ -161,15 +161,15 @@ setting.
 ### Requirement: Dry-run previews matches without submitting
 When invoked with `--testpulse-dry-run`, the plugin SHALL NOT call the
 import endpoint. Instead it SHALL fetch existing case keys for the target
-project via `GET /api/v1/projects/{projectKey}/cases` (paginating through
-all pages), compute which annotated case keys would match or go
+project via `GET /api/v1/projects/{projectKey}/cases` (a single request —
+this endpoint returns every case in the project as one JSON array, not a
+paginated response), compute which annotated case keys would match or go
 unmatched, and print that projection to stdout. Dry-run SHALL NOT create a
 run and SHALL NOT affect the session's exit status regardless of the
 projected outcome. If the cases fetch itself fails outright (network
-error, authentication error, or a `4xx`/`5xx` response, including a
-paginated fetch that fails partway through), the plugin SHALL fail the
-session — a dry-run that could not compute its own preview SHALL NOT
-report success by omission.
+error, authentication error, or a `4xx`/`5xx` response), the plugin SHALL
+fail the session — a dry-run that could not compute its own preview SHALL
+NOT report success by omission.
 
 #### Scenario: Dry-run reports a projected match
 - **WHEN** the suite runs with `--testpulse-dry-run` and every annotated
@@ -188,8 +188,7 @@ report success by omission.
 #### Scenario: Dry-run's cases fetch fails
 - **WHEN** the suite runs with `--testpulse-dry-run` and the `GET
   /api/v1/projects/{projectKey}/cases` request fails (network error, an
-  expired token, or a `5xx` response), including on a page after the
-  first
+  expired token, or a `5xx` response)
 - **THEN** no projection is printed as if it succeeded, and the session
   exits with a failing status
 
