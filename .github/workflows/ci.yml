@@ -18,17 +18,13 @@ permissions:
   # actions/checkout@v4 default depth=1) — needs read access to see them.
   pull-requests: read
 
-# DOCKER_HOST/DOCKER_CONFIG for this machine's Docker setup are supplied by
-# each self-hosted runner's own local .env file, not committed here —
-# they're machine-specific paths under the runner operator's home directory.
-
 jobs:
   # Feeds helm/migrations below, the two jobs cheap enough to skip outright
   # when their own files didn't change (reduce-ci-actions-usage) — api/web/e2e
   # stay unconditional on path, since app code can affect either indirectly.
   changes:
     name: Detect changed paths
-    runs-on: [self-hosted, testpulse]
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     outputs:
       helm: ${{ steps.filter.outputs.helm }}
@@ -46,7 +42,7 @@ jobs:
 
   api:
     name: API (Go)
-    runs-on: [self-hosted, testpulse]
+    runs-on: ubuntu-latest
     # A push to main was already validated by the PR that merged it —
     # re-running here would just spend minutes confirming the same commit
     # again (reduce-ci-actions-usage). e2e is the one exception: it also
@@ -60,10 +56,6 @@ jobs:
       TESTPULSE_TEST_DATABASE_URL: postgres://test:test@localhost:5434/test
     steps:
       - uses: actions/checkout@v4
-      # `services:` (GitHub-managed sidecar containers) only works on
-      # Linux-hosted runners — this self-hosted runner is macOS, so the
-      # Postgres dependency is started/stopped by hand instead
-      # (reduce-ci-actions-usage / self-host-ci-runner).
       - name: Start postgres
         run: |
           docker rm -f testpulse-ci-postgres >/dev/null 2>&1 || true
@@ -99,7 +91,7 @@ jobs:
 
   web:
     name: Web (TypeScript)
-    runs-on: [self-hosted, testpulse]
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -124,7 +116,7 @@ jobs:
 
   e2e:
     name: E2E (Playwright vs compose stack)
-    runs-on: [self-hosted, testpulse]
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -177,15 +169,14 @@ jobs:
             -d "$(jq -n --rawfile report apps/web/e2e-results.xml --arg name "$name" '{format: "junit-xml", report: $report, name: $name}')"
       - name: Stop compose stack
         # Hosted runners are ephemeral VMs that discard this on their own;
-        # this self-hosted runner persists between jobs (self-host-ci-runner),
-        # so a stack left running here keeps consuming CPU/RAM into whatever
-        # job the runner picks up next.
+        # stopped explicitly anyway so a failed run's logs/state don't leak
+        # into a retry of the same job.
         if: always()
         run: docker compose -f deploy/compose/docker-compose.yml down -v
 
   helm:
     name: Helm chart
-    runs-on: [self-hosted, testpulse]
+    runs-on: ubuntu-latest
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.helm == 'true'
     steps:
@@ -204,7 +195,7 @@ jobs:
 
   dco:
     name: DCO
-    runs-on: [self-hosted, testpulse]
+    runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
@@ -224,7 +215,7 @@ jobs:
 
   migrations:
     name: Migrations
-    runs-on: [self-hosted, testpulse]
+    runs-on: ubuntu-latest
     needs: changes
     if: github.event_name == 'pull_request' && needs.changes.outputs.migrations == 'true'
     steps:

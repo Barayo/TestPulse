@@ -12,19 +12,14 @@ permissions:
 jobs:
   image:
     name: Build and push multi-arch image
-    runs-on: [self-hosted, testpulse]
-    # DOCKER_HOST/DOCKER_CONFIG for this machine's Docker setup are supplied
-    # by the runner's own local .env file, not committed here — they're
-    # machine-specific paths under the runner operator's home directory.
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
       - name: Log in to GHCR
-        # Plain bash + retry instead of docker/login-action: this runner's
-        # Colima VM sees an occasional TLS handshake timeout talking to
-        # ghcr.io (observed ~1 in 3 attempts, switch-runner-docker-to-colima)
-        # — transient network flakiness, not an auth problem, so a short
+        # Plain bash + retry instead of docker/login-action: ghcr.io logins
+        # have occasionally seen a transient TLS handshake timeout — a short
         # retry loop clears it without masking a real credential failure.
         run: |
           for i in 1 2 3 4 5; do
