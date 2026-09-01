@@ -22,7 +22,7 @@ func ssoSettingsServer(t *testing.T) (h http.Handler, admin string, manager *ser
 	manager = server.NewOIDCManager()
 	handler := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{
 		Manager: manager, PublicURL: "https://testpulse.example.com", EncryptionKey: "a-real-encryption-key",
-	})
+	}, true)
 	if err := svc.BootstrapAdmin(context.Background(), "sso-settings-admin@example.com", "correcthorse"); err != nil {
 		t.Fatalf("BootstrapAdmin: %v", err)
 	}

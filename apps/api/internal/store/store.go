@@ -35,6 +35,7 @@ type Store struct {
 	Tags                *TagRepo
 	Releases            *ReleaseRepo
 	TestPlans           *TestPlanRepo
+	Search              *SearchRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -60,6 +61,7 @@ func New(pool *pgxpool.Pool) *Store {
 		Tags:                &TagRepo{pool: pool},
 		Releases:            &ReleaseRepo{pool: pool},
 		TestPlans:           &TestPlanRepo{pool: pool},
+		Search:              &SearchRepo{pool: pool},
 	}
 }
 

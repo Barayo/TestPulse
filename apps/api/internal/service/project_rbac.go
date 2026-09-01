@@ -18,6 +18,73 @@ func (s *Service) EffectivePermissions(ctx context.Context, actor domain.Actor, 
 	return s.store.ProjectMembers.EffectivePermissions(ctx, actor.EffectiveUserID, projectID)
 }
 
+// Authorize enforces perm on projectID for ctx's Actor, mirroring
+// requirePermission's REST enforcement (server/middleware.go) exactly —
+// Tenant Admin bypass, then a scoped agent token's own
+// ScopedProjectID/ScopedPermissions, then EffectivePermissions for
+// everyone else. Used by callers that sit outside chi's per-route
+// middleware: the MCP tool layer (add-mcp-server) handles every operation
+// through one JSON-RPC endpoint instead of per-resource routes, so each
+// tool calls this itself before delegating to a service method — the same
+// way every REST route calls requirePermission before its handler.
+func (s *Service) Authorize(ctx context.Context, perm domain.Permission, projectID string) error {
+	actor, ok := domain.ActorFromContext(ctx)
+	if !ok {
+		return unauthorized("authentication required")
+	}
+	if actor.IsTenantAdmin {
+		return nil
+	}
+	if actor.ScopedProjectID != nil {
+		if *actor.ScopedProjectID != projectID || !actor.ScopedPermissions.Has(perm) {
+			return forbidden("insufficient permissions")
+		}
+		return nil
+	}
+	perms, err := s.EffectivePermissions(ctx, actor, projectID)
+	if err != nil || !perms.Has(perm) {
+		return forbidden("insufficient permissions")
+	}
+	return nil
+}
+
+// AccessibleProjects returns every project ctx's Actor may read: a Tenant
+// Admin sees all, a project-scoped agent token sees only its one scoped
+// project (never the creator's broader access), everyone else sees their
+// membership set via ListProjects. Backs the MCP list_projects and search
+// tools (add-mcp-server) — REST's own GET /projects has no equivalent
+// scoped-token narrowing today (it predates scoped tokens' project-only
+// intent), so this is deliberately new, MCP-specific logic rather than a
+// change to ListProjects' existing REST-facing behavior.
+func (s *Service) AccessibleProjects(ctx context.Context) ([]domain.Project, error) {
+	actor, ok := domain.ActorFromContext(ctx)
+	if !ok {
+		return nil, unauthorized("authentication required")
+	}
+	if actor.ScopedProjectID != nil {
+		p, err := s.GetProject(ctx, *actor.ScopedProjectID)
+		if err != nil {
+			return nil, err
+		}
+		return []domain.Project{p}, nil
+	}
+	return s.ListProjects(ctx)
+}
+
+// AccessibleProjectIDs is AccessibleProjects, mapped to ids — the form
+// Search needs.
+func (s *Service) AccessibleProjectIDs(ctx context.Context) ([]string, error) {
+	projects, err := s.AccessibleProjects(ctx)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(projects))
+	for i, p := range projects {
+		ids[i] = p.ID
+	}
+	return ids, nil
+}
+
 // MyPermissions is EffectivePermissions with the Tenant Admin bypass
 // applied and "no membership" turned into an ordinary all-false result
 // instead of an error — built for the frontend to ask "what can I do here"

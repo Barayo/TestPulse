@@ -788,6 +788,19 @@ type RunComparison struct {
 // failedOrBlockedCount) — "how much of a coin flip is this," not simply the
 // failure fraction, so a case that's failed 9 times and passed once doesn't
 // read as "10% flaky."
+// SearchResult is one match from the MCP `search` tool's cross-entity
+// full-text search (add-mcp-server) — EntityType is one of "case", "suite",
+// "run", "project", "release", "testPlan", matching get_details's
+// entity_type param so a result can be fetched in full with one follow-up
+// call.
+type SearchResult struct {
+	EntityType string  `json:"entityType"`
+	Key        string  `json:"key"`
+	Name       string  `json:"name"`
+	ProjectID  string  `json:"projectId"`
+	Rank       float64 `json:"rank"`
+}
+
 type FlakyCase struct {
 	CaseKey        string `json:"caseKey"`
 	CaseTitle      string `json:"caseTitle"`

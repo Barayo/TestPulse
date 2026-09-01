@@ -14,6 +14,7 @@ updated in the same change that alters the behavior it describes.
 | [Deployment](deployment.md) | Configuration reference, Helm values, production notes |
 | [Integrations](integrations.md) | The Jira connector: what it does, deploying it, and its config reference |
 | [API](api.md) | The REST API, OpenAPI contract, and health endpoints |
+| [MCP server](mcp-server.md) | Connecting an AI agent over the Model Context Protocol: tokens, the `/mcp` endpoint, the tool reference |
 | [Database](database.md) | Schema reference and entity relationships |
 
 ## For contributors

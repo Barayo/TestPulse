@@ -22,6 +22,37 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.LogLevel != "info" {
 		t.Errorf("LogLevel = %q, want info", cfg.LogLevel)
 	}
+	if !cfg.MCPEnabled {
+		t.Error("MCPEnabled = false, want true by default (add-mcp-server)")
+	}
+}
+
+// TESTPULSE_MCP_ENABLED gates the MCP server mount (add-mcp-server
+// design.md) — on by default so the Sample Project's MCP demo works out of
+// the box; an operator who wants it off sets it explicitly to "false".
+func TestLoadMCPEnabledDefaultsTrue(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.MCPEnabled {
+		t.Error("MCPEnabled = false, want true when TESTPULSE_MCP_ENABLED is unset")
+	}
+}
+
+func TestLoadMCPEnabledCanBeDisabled(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+		"TESTPULSE_MCP_ENABLED":  "false",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.MCPEnabled {
+		t.Error("MCPEnabled = true, want false when TESTPULSE_MCP_ENABLED=false")
+	}
 }
 
 func TestLoadOverrides(t *testing.T) {

@@ -29,7 +29,7 @@ The differentiator ships first: the MCP server is *in* the MVP, because a generi
 
 - `add-core-domain` — projects, test cases, test suites (n:m), test runs, per-case results (pass/fail/skip); REST API + a thin but complete UI (plain forms for writes, clean read views).
 - `add-identity-basics` — local users (bcrypt), sessions, two roles (admin/member), **scoped API tokens for agents**, audit log recording actor identity (human or agent).
-- `add-mcp-server` — MCP server in the API binary over the same service layer: create/query cases and suites, start runs, record results.
+- `add-mcp-server` — **shipped**, though later than originally planned: it was listed as v0.1-scoped here but not actually implemented until `add-mcp-server` (2026-09-01, tracked as backlog #8/#109 in the interim). MCP server in the API binary over the same service layer: create/query cases and suites, start runs, record results — see [docs/mcp-server.md](docs/mcp-server.md).
 
 **Deliberately out**: SSO, 4-role RBAC, reporting beyond run summaries, connectors, server-side AI features.
 
@@ -56,7 +56,7 @@ The differentiator ships first: the MCP server is *in* the MVP, because a generi
 
 ## v0.4 — Connected: "it meets your tools where they are"
 
-- `add-jira-connector` — **shipped**. A test case or run item can link to a Jira issue key, with a working link the instant it's set (built from a Tenant-Admin-configured Jira site URL, not a connector-cached one) plus a cached summary/status kept fresh by a standalone connector (`tools/jira-connector`) — an *external* API client, not an in-process plugin, per the design decision in `openspec/changes/archive/2026-07-12-establish-architecture/design.md`. `add-mcp-server` (v0.1) turned out not to actually be implemented despite being listed above as in-scope — this connector talks to TestPulse over REST only, and that gap is tracked separately (backlog #8, #109).
+- `add-jira-connector` — **shipped**. A test case or run item can link to a Jira issue key, with a working link the instant it's set (built from a Tenant-Admin-configured Jira site URL, not a connector-cached one) plus a cached summary/status kept fresh by a standalone connector (`tools/jira-connector`) — an *external* API client, not an in-process plugin, per the design decision in `openspec/changes/archive/2026-07-12-establish-architecture/design.md`. This connector talks to TestPulse over REST only (it predates `add-mcp-server` shipping); it has no need to switch, since a connector process isn't the "agent" MCP's tool surface targets.
 
 ## v0.5+ — Enterprise-curious
 

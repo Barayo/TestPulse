@@ -40,6 +40,10 @@
 //	                        one via the Instance Settings "Single sign-on"
 //	                        card; OIDC configuration itself is DB-backed
 //	                        (instance_settings), not an env var.
+//	TESTPULSE_MCP_ENABLED
+//	                        (default "true") mounts the MCP server at /mcp
+//	                        (add-mcp-server) when true. Set to "false" to
+//	                        disable it entirely for a deployment.
 package config
 
 import (
@@ -63,6 +67,7 @@ type Config struct {
 	LoginRateLimitBurst     int
 	AllowMissingMigrations  bool
 	EncryptionKey           string
+	MCPEnabled              bool
 }
 
 // PasswordResetEnabled reports whether enough is configured to send a
@@ -94,6 +99,11 @@ func Load(getenv func(string) string) (Config, error) {
 		PublicURL:              getenv("TESTPULSE_PUBLIC_URL"),
 		AllowMissingMigrations: getenv("TESTPULSE_ALLOW_MISSING_MIGRATIONS") == "true",
 		EncryptionKey:          getenv("TESTPULSE_ENCRYPTION_KEY"),
+		// Default true (unlike AllowMissingMigrations' default false above):
+		// MCP is the stated core differentiator and should work out of the
+		// box, including against the Sample Project — an operator who wants
+		// it off sets TESTPULSE_MCP_ENABLED=false explicitly.
+		MCPEnabled: getenv("TESTPULSE_MCP_ENABLED") != "false",
 	}
 
 	if cfg.DatabaseURL == "" {

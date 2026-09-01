@@ -34,7 +34,7 @@ func apiServerWithAdminAndLoginRateLimit(t *testing.T, email, password string, p
 	if err := svc.BootstrapAdmin(context.Background(), email, password); err != nil {
 		t.Fatalf("BootstrapAdmin: %v", err)
 	}
-	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, perMinute, burst, nil), svc
+	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, perMinute, burst, nil, true), svc
 }
 
 // fakeMailer records every send in-memory — no network I/O (add-forgot-password).
@@ -61,7 +61,7 @@ func apiServerWithAdminAndMailer(t *testing.T, email, password string, enabled b
 	if err := svc.BootstrapAdmin(context.Background(), email, password); err != nil {
 		t.Fatalf("BootstrapAdmin: %v", err)
 	}
-	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, perMinute, burst, nil), fm
+	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, perMinute, burst, nil, true), fm
 }
 
 // extractToken pulls the raw token out of a reset link a fakeMailer captured.

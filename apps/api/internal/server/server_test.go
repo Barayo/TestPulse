@@ -22,7 +22,40 @@ func (s stubReadiness) Ready(context.Context) error { return s.err }
 
 func newTestServer(readyErr error) http.Handler {
 	logger := slog.New(slog.DiscardHandler)
-	return New(logger, stubReadiness{err: readyErr}, nil, 5, 5, nil)
+	return New(logger, stubReadiness{err: readyErr}, nil, 5, 5, nil, true)
+}
+
+// /mcp is gated by the mcpEnabled param (add-mcp-server design.md:
+// TESTPULSE_MCP_ENABLED, default true). An unauthenticated POST to a
+// mounted /mcp is rejected by the same authenticate middleware REST uses
+// (401 JSON body, never the SPA's index.html); when disabled, /mcp isn't a
+// route at all and falls through to the embedded web handler's SPA
+// fallback, same as any other unmounted path.
+func TestMCPMountedWhenEnabled(t *testing.T) {
+	svc := service.New(store.New(testutil.Pool(t, "server_mcp_enabled")))
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil, true)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("POST /mcp with mcpEnabled=true, no auth = %d, want 401 (mounted behind authenticate)", rec.Code)
+	}
+	if ct := rec.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want application/json (the SPA fallback would send text/html)", ct)
+	}
+}
+
+func TestMCPNotMountedWhenDisabled(t *testing.T) {
+	svc := service.New(store.New(testutil.Pool(t, "server_mcp_disabled")))
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil, false)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodPost, "/mcp", strings.NewReader("{}"))
+	req.Header.Set("Content-Type", "application/json")
+	h.ServeHTTP(rec, req)
+	if ct := rec.Header().Get("Content-Type"); ct == "application/json" {
+		t.Errorf("Content-Type = %q with mcpEnabled=false, want the SPA fallback (not the MCP handler)", ct)
+	}
 }
 
 func TestLivenessAlwaysOK(t *testing.T) {
@@ -115,7 +148,7 @@ func TestMetaEndpoint(t *testing.T) {
 	// so this needs a real service backed by the test database, unlike the
 	// liveness/readiness tests above.
 	svc := service.New(store.New(testutil.Pool(t, "server_meta")))
-	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil)
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil, true)
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
 	if rec.Code != http.StatusOK {
@@ -129,7 +162,7 @@ func TestMetaEndpoint(t *testing.T) {
 func TestMetaSetupRequiredReflectsInstanceState(t *testing.T) {
 	pool := testutil.Pool(t, "server_meta")
 	svc := service.New(store.New(pool))
-	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil)
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil, true)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
@@ -163,7 +196,7 @@ func TestMetaSetupRequiredReflectsInstanceState(t *testing.T) {
 func TestMetaColorThemeDefaultsToTealAndCarriesCustomPaletteWhenActive(t *testing.T) {
 	pool := testutil.Pool(t, "server_meta")
 	svc := service.New(store.New(pool))
-	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil)
+	h := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil, true)
 
 	rec := httptest.NewRecorder()
 	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))

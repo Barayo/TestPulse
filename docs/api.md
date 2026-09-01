@@ -8,11 +8,13 @@ source of truth consumed by:
 
 - the web UI, via the generated TypeScript client (`openapi-typescript` +
   `openapi-fetch`),
-- external tooling and future connectors,
-- the MCP server (arriving in v0.1), which shares the same service layer.
+- external tooling and future connectors.
 
 All application endpoints are versioned under `/api/v1`. Health probes sit at
-the root because infrastructure expects them there.
+the root because infrastructure expects them there. The [MCP server](mcp-server.md)
+(`/mcp`) is a separate protocol, not part of this OpenAPI contract, but its
+tools are thin wrappers over the same service layer these REST handlers use
+— see that page for the tool reference.
 
 ## System endpoints
 

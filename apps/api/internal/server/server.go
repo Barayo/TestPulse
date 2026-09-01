@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Barayo/TestPulse/apps/api/internal/mcp"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
 	"github.com/Barayo/TestPulse/apps/api/internal/web"
 )
@@ -29,7 +30,7 @@ type SSOConfig struct {
 	EncryptionKey string
 }
 
-func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, loginRateLimitPerMinute float64, loginRateLimitBurst int, sso *SSOConfig) http.Handler {
+func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, loginRateLimitPerMinute float64, loginRateLimitBurst int, sso *SSOConfig, mcpEnabled bool) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
 	r.Use(middleware.Recoverer)
@@ -65,6 +66,19 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 			r.With(requireTenantAdmin).Patch("/instance-settings", h.updateInstanceSettings)
 		})
 	})
+
+	// /mcp sits outside /api/v1 (its own protocol, not a REST resource) but
+	// inside the same authenticated group below — reusing `authenticate`
+	// directly rather than a second auth implementation (add-mcp-server
+	// design.md). TESTPULSE_MCP_ENABLED gates the mount itself: disabled
+	// means /mcp isn't a route at all, not a 403 on every request.
+	if mcpEnabled {
+		r.Group(func(r chi.Router) {
+			r.Use(authenticate(svc))
+			r.Use(requireNoPendingPasswordChange)
+			r.Mount("/mcp", mcp.NewHTTPHandler(svc))
+		})
+	}
 
 	// Everything else is the embedded web UI (SPA fallback included).
 	r.NotFound(web.Handler().ServeHTTP)

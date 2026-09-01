@@ -60,6 +60,74 @@ func (r *CaseRepo) IDByKeyInProject(ctx context.Context, projectID, key string) 
 // Create inserts a case and its version 1 in one transaction. An empty
 // folderID resolves to the project's root folder (design D8).
 func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, content domain.CaseContent, actorKind domain.ResultActorKind, actorRefID string) (domain.TestCase, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	folderID, err = resolveFolderID(ctx, tx, projectID, folderID)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	c, err := insertCase(ctx, tx, projectID, folderID, content, actorKind, actorRefID)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return domain.TestCase{}, err
+	}
+	return c, nil
+}
+
+// CreateBatch inserts every content in contents, all in one transaction: if
+// any insert fails (invalid data the caller's own validation missed, or a
+// DB-level constraint), none of the batch is created (add-mcp-server's
+// bulk_add_cases tool — atomic, all-or-nothing per design.md). All cases
+// share the same projectID/folderID, matching how a single agent tool call
+// populates one suite in one place.
+func (r *CaseRepo) CreateBatch(ctx context.Context, projectID, folderID string, contents []domain.CaseContent, actorKind domain.ResultActorKind, actorRefID string) ([]domain.TestCase, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	folderID, err = resolveFolderID(ctx, tx, projectID, folderID)
+	if err != nil {
+		return nil, err
+	}
+	cases := make([]domain.TestCase, 0, len(contents))
+	for _, content := range contents {
+		c, err := insertCase(ctx, tx, projectID, folderID, content, actorKind, actorRefID)
+		if err != nil {
+			return nil, err
+		}
+		cases = append(cases, c)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+	return cases, nil
+}
+
+// resolveFolderID returns folderID unchanged unless it's empty, in which
+// case it resolves to projectID's root folder (design D8).
+func resolveFolderID(ctx context.Context, tx pgx.Tx, projectID, folderID string) (string, error) {
+	if folderID != "" {
+		return folderID, nil
+	}
+	if err := tx.QueryRow(ctx,
+		`SELECT id FROM test_case_folders WHERE project_id = $1 AND parent_folder_id IS NULL`,
+		projectID).Scan(&folderID); err != nil {
+		return "", fmt.Errorf("resolving root folder: %w", err)
+	}
+	return folderID, nil
+}
+
+// insertCase inserts one case and its version 1 within tx, the shared logic
+// behind both Create and CreateBatch.
+func insertCase(ctx context.Context, tx pgx.Tx, projectID, folderID string, content domain.CaseContent, actorKind domain.ResultActorKind, actorRefID string) (domain.TestCase, error) {
 	steps, err := marshalSteps(content.Steps)
 	if err != nil {
 		return domain.TestCase{}, err
@@ -67,19 +135,6 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 	customFields, err := marshalCustomFields(content.CustomFields)
 	if err != nil {
 		return domain.TestCase{}, err
-	}
-	tx, err := r.pool.Begin(ctx)
-	if err != nil {
-		return domain.TestCase{}, err
-	}
-	defer func() { _ = tx.Rollback(ctx) }()
-
-	if folderID == "" {
-		if err := tx.QueryRow(ctx,
-			`SELECT id FROM test_case_folders WHERE project_id = $1 AND parent_folder_id IS NULL`,
-			projectID).Scan(&folderID); err != nil {
-			return domain.TestCase{}, fmt.Errorf("resolving root folder: %w", err)
-		}
 	}
 
 	key, err := claimEntityKey(ctx, tx, projectID, "case", "%s-%d")
@@ -110,9 +165,6 @@ func (r *CaseRepo) Create(ctx context.Context, projectID, folderID string, conte
 		defaultFormat(content.Format), content.GherkinSource, actorKind, refID,
 	).Scan(&c.UpdatedAt)
 	if err != nil {
-		return domain.TestCase{}, err
-	}
-	if err := tx.Commit(ctx); err != nil {
 		return domain.TestCase{}, err
 	}
 	c.Content = normalizeContent(content)

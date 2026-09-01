@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/attachmentimage"
@@ -196,6 +197,71 @@ func (s *Service) ProjectSummaries(ctx context.Context) ([]domain.ProjectSummary
 		}
 	}
 	return filtered, nil
+}
+
+// GetDetails fetches the full record for entityType/key (the MCP
+// get_details tool, add-mcp-server) — entityType is one of "case", "suite",
+// "run", "project", "release", "testPlan", matching Search's EntityType
+// values so a search result can be fetched in full with one follow-up call.
+// A key that exists under a different entity type is indistinguishable from
+// a nonexistent key (store.ErrNotFound) — each *ByKey lookup is inherently
+// scoped to its own table, so this never leaks cross-type existence.
+func (s *Service) GetDetails(ctx context.Context, entityType, key string) (any, error) {
+	switch entityType {
+	case "case":
+		id, err := s.CaseIDByKey(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		return s.GetCase(ctx, id)
+	case "suite":
+		id, err := s.SuiteIDByKey(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		return s.GetSuite(ctx, id)
+	case "run":
+		id, err := s.RunIDByKey(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		return s.GetRun(ctx, id)
+	case "project":
+		id, err := s.ProjectIDByKey(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		return s.GetProject(ctx, id)
+	case "release":
+		id, err := s.ReleaseIDByKey(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		return s.GetRelease(ctx, id)
+	case "testPlan":
+		id, err := s.TestPlanIDByKey(ctx, key)
+		if err != nil {
+			return nil, err
+		}
+		return s.GetTestPlan(ctx, id)
+	default:
+		return nil, invalid("unknown entity_type %q", entityType)
+	}
+}
+
+// Search performs cross-entity full-text search over cases, suites, runs,
+// projects, releases, and test plans (the MCP `search` tool, add-mcp-server).
+// projectIDs must already be resolved to the caller's accessible projects —
+// this method does no permission resolution of its own, matching every
+// other project-scoped service method's division of labor with its caller.
+func (s *Service) Search(ctx context.Context, query string, projectIDs []string) ([]domain.SearchResult, error) {
+	if strings.TrimSpace(query) == "" {
+		return nil, invalid("query is required")
+	}
+	if len(projectIDs) == 0 {
+		return []domain.SearchResult{}, nil
+	}
+	return s.store.Search.Search(ctx, query, projectIDs)
 }
 
 // ProjectUpdate carries optional changes; nil fields are left untouched.
@@ -397,6 +463,35 @@ func (s *Service) CreateCase(ctx context.Context, projectID, folderID string, co
 	}
 	s.audit(ctx, "create", "case", c.ID)
 	return c, nil
+}
+
+// BulkAddCases creates every content in contents as one atomic batch — the
+// MCP bulk_add_cases tool's flagship use case (add-mcp-server design.md:
+// "atomic, all-or-nothing"). An empty folderID defaults to the project's
+// root folder, same as CreateCase. If any case fails validation, none are
+// created; the error names the failing case's position so an agent can fix
+// and retry without re-diagnosing the whole batch.
+func (s *Service) BulkAddCases(ctx context.Context, projectID, folderID string, contents []domain.CaseContent) ([]domain.TestCase, error) {
+	if len(contents) == 0 {
+		return nil, invalid("cases is required")
+	}
+	for i, content := range contents {
+		if err := content.Validate(); err != nil {
+			return nil, invalid("case %d: %s", i, err)
+		}
+		if err := s.validateCustomFieldValues(ctx, projectID, content.CustomFields); err != nil {
+			return nil, err
+		}
+	}
+	actorKind, actorRefID := resolveActor(ctx)
+	cases, err := s.store.Cases.CreateBatch(ctx, projectID, folderID, contents, actorKind, actorRefID)
+	if err != nil {
+		return nil, err
+	}
+	for _, c := range cases {
+		s.audit(ctx, "create", "case", c.ID)
+	}
+	return cases, nil
 }
 
 func (s *Service) MoveCase(ctx context.Context, caseID, folderID string) error {

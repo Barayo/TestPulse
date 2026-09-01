@@ -39,7 +39,7 @@ func oidcServer(t *testing.T, idp *fakeIdP) (http.Handler, *service.Service) {
 		t.Fatalf("NewOIDCAuthenticator: %v", err)
 	}
 	manager.Set(auth)
-	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager}), svc
+	return server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager}, true), svc
 }
 
 // oidcStateCookie extracts the state-binding cookie (design.md D2 revision
@@ -85,7 +85,7 @@ func TestScenario_PasswordLoginRejectedOverHTTPWhenSSOOnlyEnabled(t *testing.T) 
 		t.Fatalf("NewOIDCAuthenticator: %v", err)
 	}
 	manager.Set(auth)
-	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager})
+	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager}, true)
 
 	var errBody struct{ Error string }
 	call(t, h, "POST", "/api/v1/auth/login", jmap{
@@ -96,7 +96,7 @@ func TestScenario_PasswordLoginRejectedOverHTTPWhenSSOOnlyEnabled(t *testing.T) 
 func TestScenario_OIDCNotConfiguredReturns404(t *testing.T) {
 	pool := testutil.Pool(t, "server")
 	svc := service.New(store.New(pool))
-	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, nil)
+	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, nil, true)
 
 	call(t, h, "GET", "/api/v1/auth/oidc/login", nil, 404, nil)
 	call(t, h, "GET", "/api/v1/auth/oidc/callback", nil, 404, nil)
@@ -133,7 +133,7 @@ func TestScenario_OIDCMetaReportsEnabledAndOnly(t *testing.T) {
 		t.Fatalf("NewOIDCAuthenticator: %v", err)
 	}
 	manager.Set(auth)
-	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager})
+	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager}, true)
 
 	var meta map[string]any
 	call(t, h, "GET", "/api/v1/meta", nil, 200, &meta)
@@ -349,7 +349,7 @@ func TestScenario_OIDCCallbackAppliesAdminClaimMapping(t *testing.T) {
 		t.Fatalf("NewOIDCAuthenticator: %v", err)
 	}
 	manager.Set(auth)
-	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager})
+	h := server.New(slog.New(slog.DiscardHandler), ok{}, svc, 5, 5, &server.SSOConfig{Manager: manager}, true)
 
 	loginReq := httptest.NewRequest("GET", "/api/v1/auth/oidc/login", nil)
 	loginRec := httptest.NewRecorder()
