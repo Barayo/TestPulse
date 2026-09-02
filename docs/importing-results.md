@@ -183,9 +183,75 @@ Prefer the `pytest-testpulse` plugin above for anything beyond a quick,
 no-install test — this snippet is best suited to environments that can't
 add a dependency.
 
-## Maven, Gradle, Jest
+## Maven: `testpulse-maven-plugin`
 
-The importer accepts any JUnit XML, but `record_property()` is pytest-
-specific — Surefire and Gradle don't have an equivalent for writing custom
-`<properties>` out of the box. Wiring up the case key for those runners is
-tracked as follow-on work per runner, not solved by this importer alone.
+Surefire (Maven's test runner) has no equivalent to pytest's
+`record_property()` — no built-in way to write custom per-test properties
+into its JUnit XML report at all. The
+[`testpulse-maven-plugin`](https://github.com/Barayo/testpulse-maven-plugin)
+plugin works around this with a reflection-based post-processor: after
+Surefire runs, it loads your compiled test classes, matches each
+`<testcase>` to its
+[`@TestPulse`](https://github.com/Barayo/testpulse-annotations)-annotated
+method, and rewrites the report — then submits it, the same way
+`pytest-testpulse` does.
+
+```xml
+<dependency>
+  <groupId>io.github.barayo</groupId>
+  <artifactId>testpulse-annotations</artifactId>
+  <version>0.1.0</version>
+  <scope>test</scope>
+</dependency>
+```
+
+```xml
+<build>
+  <plugins>
+    <plugin>
+      <groupId>io.github.barayo</groupId>
+      <artifactId>testpulse-maven-plugin</artifactId>
+      <version>0.1.0</version>
+      <configuration>
+        <url>http://localhost:8080</url>
+        <projectKey>LOGIN</projectKey>
+      </configuration>
+      <executions>
+        <execution>
+          <goals>
+            <goal>annotate</goal>
+            <goal>submit</goal>
+          </goals>
+        </execution>
+      </executions>
+    </plugin>
+  </plugins>
+</build>
+```
+
+```java
+@TestPulse(caseKey = "LOGIN-42", platform = "linux", tags = {"smoke"})
+@Test
+void testLoginSucceeds() {
+    ...
+}
+```
+
+Both goals are bound to the `test` phase, right after Surefire itself, so
+a plain `mvn test` both annotates the report and submits it — no separate
+`curl` step needed. Works for both JUnit 4 and JUnit 5 (the mechanism
+never hooks into either framework's execution model). By default, some
+tests having no matching case (`207`) is a warning, not a build failure —
+set `<failOnUnmatched>true</failOnUnmatched>` once a suite is fully
+annotated to make that a hard failure instead. See the plugin's own
+README for the full config-precedence reference, and its known v1
+limitations (parameterized tests and overloaded methods aren't annotated;
+no attachments yet; JUnit only, no TestNG).
+
+## Gradle, Jest
+
+The importer accepts any JUnit XML, but neither Gradle nor Jest has a
+built-in way to write custom `<properties>` into its report either.
+Wiring up the case key for those runners is tracked as follow-on work per
+runner (`#155` for Jest, `#157` for Gradle), not solved by this importer
+alone.
