@@ -248,10 +248,73 @@ README for the full config-precedence reference, and its known v1
 limitations (parameterized tests and overloaded methods aren't annotated;
 no attachments yet; JUnit only, no TestNG).
 
-## Gradle, Jest
+## Jest: `testpulse-jest`
 
-The importer accepts any JUnit XML, but neither Gradle nor Jest has a
-built-in way to write custom `<properties>` into its report either.
-Wiring up the case key for those runners is tracked as follow-on work per
-runner (`#155` for Jest, `#157` for Gradle), not solved by this importer
-alone.
+Jest has no equivalent to pytest's `record_property()` — no built-in way
+for a running test to attach custom metadata to its own result. The
+[`testpulse-jest`](https://github.com/Barayo/testpulse-jest) package
+works around this by tagging tests through a small wrapper, injecting the
+case key into [`jest-junit`](https://github.com/jest-community/jest-junit)'s
+own JUnit XML output via its property hook, then submitting that report —
+the same "reuse the runner's own writer" approach `pytest-testpulse` and
+`testpulse-maven-plugin` take for their own ecosystems.
+
+```bash
+npm install --save-dev testpulse-jest jest-junit
+```
+
+```js
+// jest.config.js
+const path = require('path');
+const propsPath = require.resolve('testpulse-jest/junitTestCaseProperties');
+
+module.exports = {
+  reporters: [
+    'default',
+    ['jest-junit', {
+      outputName: 'junit.xml',
+      testCasePropertiesDirectory: path.dirname(propsPath),
+      testCasePropertiesFile: path.basename(propsPath),
+    }],
+    ['testpulse-jest', { url: 'http://localhost:8080', project: 'LOGIN' }],
+  ],
+};
+```
+
+```js
+const { testpulse } = require('testpulse-jest');
+
+testpulse('LOGIN-42', { platform: 'linux', tags: ['smoke'] })(
+  'logs in successfully',
+  async () => {
+    // ...
+  }
+);
+```
+
+The `jest-junit` config needs a `path.dirname()`/`path.basename()` split,
+not a single combined path — `jest-junit` joins its two
+`testCaseProperties*` options with `path.join()`, which doesn't
+special-case an already-absolute path the way `path.resolve()` does. The
+`testpulse-jest` reporter must be listed **after** `jest-junit` in the
+`reporters` array, since it reads the file `jest-junit` just wrote.
+
+By default, some tests having no matching case (`207`) is a warning, not a
+build failure — set `failOnUnmatched: true` (or `TESTPULSE_FAIL_ON_UNMATCHED=1`)
+once a suite is fully annotated to make that a hard failure instead:
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | build succeeds; summary logged |
+| `207` some unmatched | build succeeds by default; fails when `failOnUnmatched` is set |
+| network/auth/4xx/5xx error | always fails the build, unconditionally |
+
+See the package's own README for the full config reference, the
+`testpulseAttach()` screenshot-attachment API, and `dryRun`.
+
+## Gradle
+
+The importer accepts any JUnit XML, but Gradle has no built-in way to
+write custom `<properties>` into its report either. Wiring up the case
+key for Gradle is tracked as follow-on work (`#157`), not solved by this
+importer alone.
