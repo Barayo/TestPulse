@@ -10,7 +10,7 @@ updated in the same change that alters the behavior it describes.
 |---|---|
 | [Getting started](getting-started.md) | Running TestPulse with Docker Compose or Helm |
 | [Test management](test-management.md) | Using TestPulse: projects, versioned test cases, suites, runs, the execution board |
-| [Importing results](importing-results.md) | Bulk-importing JUnit XML reports from CI, the match-only contract, the `pytest-testpulse`/`testpulse-maven-plugin`/`testpulse-jest` plugins, and the no-install `conftest.py` fallback |
+| [Importing results](importing-results.md) | Bulk-importing JUnit XML reports from CI, the match-only contract, the `pytest-testpulse`/`testpulse-maven-plugin`/`testpulse-jest`/`testpulse-gradle-plugin` plugins, and the no-install `conftest.py` fallback |
 | [Deployment](deployment.md) | Configuration reference, Helm values, production notes |
 | [Integrations](integrations.md) | The Jira connector: what it does, deploying it, and its config reference |
 | [API](api.md) | The REST API, OpenAPI contract, and health endpoints |

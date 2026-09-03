@@ -273,6 +273,10 @@ module.exports = {
     'default',
     ['jest-junit', {
       outputName: 'junit.xml',
+      // jest-junit's default suiteNameTemplate ("{title}") resolves to the
+      // literal string "undefined" for a flat test() with no enclosing
+      // describe() -- {filepath} always names the run meaningfully.
+      suiteNameTemplate: '{filepath}',
       testCasePropertiesDirectory: path.dirname(propsPath),
       testCasePropertiesFile: path.basename(propsPath),
     }],
@@ -312,9 +316,66 @@ once a suite is fully annotated to make that a hard failure instead:
 See the package's own README for the full config reference, the
 `testpulseAttach()` screenshot-attachment API, and `dryRun`.
 
-## Gradle
+## Gradle: `testpulse-gradle-plugin`
 
-The importer accepts any JUnit XML, but Gradle has no built-in way to
-write custom `<properties>` into its report either. Wiring up the case
-key for Gradle is tracked as follow-on work (`#157`), not solved by this
-importer alone.
+Gradle's own `Test` task, like Surefire, has no built-in way to write
+custom `<properties>` into its JUnit XML report — a still-open Gradle
+issue ([gradle/gradle#36762](https://github.com/gradle/gradle/issues/36762))
+requests exactly this. The
+[`testpulse-gradle-plugin`](https://github.com/Barayo/testpulse-gradle-plugin)
+plugin works around it the same way `testpulse-maven-plugin` does for
+Surefire — reflection-based post-processing — and reuses the same
+[`@TestPulse`](https://github.com/Barayo/testpulse-annotations) annotation:
+a Java/Kotlin codebase using both Maven and Gradle in different modules
+shares the exact same annotated test source.
+
+```kotlin
+// build.gradle.kts
+plugins {
+    id("io.github.barayo.testpulse") version "0.1.0"
+}
+
+testpulse {
+    url = "http://localhost:8080"
+    project = "LOGIN"
+}
+```
+
+```java
+import io.github.barayo.testpulse.TestPulse;
+import org.junit.jupiter.api.Test;
+
+public class LoginTest {
+    @TestPulse(caseKey = "LOGIN-42", platform = "linux", tags = {"smoke"})
+    @Test
+    void loginSucceeds() {
+        // ...
+    }
+}
+```
+
+The plugin automatically adds `testpulse-annotations` (for `@TestPulse`)
+and its own classes (for screenshot attachments, below) as
+`testImplementation` dependencies — no separate dependency block needed. A
+plain `./gradlew test` both annotates the report and submits it.
+
+Screenshot/file attachments (`TestPulseAttachments.attach(caseKey, bytes,
+filename, contentType)`) are supported — unlike `testpulse-maven-plugin`,
+which deferred them. The case key is passed explicitly and checked against
+the calling class's own `@TestPulse`-declared case keys, so a test can't
+attach evidence under a case key that isn't its own.
+
+By default, some tests having no matching case (`207`) is a warning, not a
+build failure — set `failOnUnmatched = true` (or `-Ptestpulse.failOnUnmatched=true`)
+once a suite is fully annotated to make that a hard failure instead:
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | build succeeds; summary logged |
+| `207` some unmatched | build succeeds by default; fails when `failOnUnmatched` is set |
+| network/auth/4xx/5xx error | always fails the build, unconditionally |
+
+See the plugin's own README for the full config-precedence reference, the
+`TestPulseAttachments` API, `dryRun`, and its known v1 limitations
+(parameterized tests and overloaded methods aren't annotated; JUnit only,
+no TestNG).
