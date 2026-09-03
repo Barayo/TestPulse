@@ -379,3 +379,56 @@ See the plugin's own README for the full config-precedence reference, the
 `TestPulseAttachments` API, `dryRun`, and its known v1 limitations
 (parameterized tests and overloaded methods aren't annotated; JUnit only,
 no TestNG).
+
+## Go: `testpulse-go`
+
+**Requires Go 1.25+.** Unlike Maven/Gradle/Jest, Go's `testing` package
+has no built-in JUnit XML output at all, and until Go 1.25 (Aug 2025) had
+no `record_property()`-equivalent mechanism either.
+[`testpulse-go`](https://github.com/Barayo/testpulse-go) is built directly
+on Go 1.25's new, stable `t.Attr(key, value string)` method, which
+[`gotestsum`](https://github.com/gotestyourself/gotestsum) (>= v1.13.0,
+the de facto standard `go test -json`-to-JUnit-XML tool) natively converts
+into `<properties>` — this plugin doesn't generate or rewrite any XML
+itself, unlike every other plugin on this page.
+
+```go
+import (
+    "testing"
+
+    testpulse "github.com/Barayo/testpulse-go"
+)
+
+func TestLoginSucceeds(t *testing.T) {
+    testpulse.Case(t, "LOGIN-42", testpulse.WithPlatform("linux"), testpulse.WithTags("smoke"))
+    // ...
+}
+```
+
+Run the suite through `gotestsum` instead of plain `go test`, then submit
+the report with the `testpulse-go` CLI:
+
+```sh
+gotestsum --junitfile=report.xml -- ./...
+testpulse-go submit --file report.xml --url http://localhost:8080 --project LOGIN --token "$TESTPULSE_TOKEN"
+```
+
+Screenshot/file attachments (`testpulse.Attach(t, caseKey, data, filename,
+contentType)`) require an explicit `caseKey`, checked against that exact
+test's own `Case`-declared case keys — a subtest (`t.Run`) has its own
+distinct name and does **not** inherit a parent test's declared case key,
+so a subtest that wants to attach must call `Case` again itself.
+
+By default, some tests having no matching case (`207`) is a warning, not a
+hard failure — pass `--fail-on-unmatched` once a suite is fully tagged to
+make that exit non-zero instead:
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | exit `0`; summary printed |
+| `207` some unmatched | exit `0` by default; exits non-zero when `--fail-on-unmatched` is set |
+| network/auth/4xx/5xx error | always exits non-zero, unconditionally |
+
+See the plugin's own README for the full config-precedence reference, the
+`--dry-run` flag, and its known v1 limitations (regular `*testing.T` tests
+only, no benchmarks or fuzz targets; no Go versions before 1.25).
