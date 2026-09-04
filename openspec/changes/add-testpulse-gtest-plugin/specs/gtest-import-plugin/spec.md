@@ -91,6 +91,24 @@ case key) in the submitted `attachments` array.
   afterward, and both are included in the `submit` request's
   `attachments` array
 
+### Requirement: Submitted attachments are scoped to the report being submitted
+Since `--dir`'s attachment search is directory-wide and not aware of
+which report is currently being submitted, a stale
+`.testpulse/attachments` entry left over from an unrelated earlier test
+binary or run (a real occurrence in a shared CI workspace) SHALL NOT be
+included in a submission for a report that never declared its case key.
+`submit` SHALL only include, in the submitted `attachments` array, stored
+attachments whose case key appears among the case keys the *current*
+report itself declares (via its own `testpulse_case_key` properties).
+
+#### Scenario: A stale attachment from an unrelated run is excluded
+- **WHEN** `--dir` contains a stored attachment under case key `OTHER-99`
+  left over from an earlier, unrelated test run, and the report currently
+  being submitted contains no `testpulse_case_key` property with that
+  value
+- **THEN** the submitted `attachments` array does not include that stored
+  attachment
+
 ### Requirement: Submission outcome maps to CLI exit behavior
 `testpulse-gtest submit --file <path>` SHALL read the JUnit XML report
 `--gtest_output=xml` produced, plus any registered attachments, `POST`

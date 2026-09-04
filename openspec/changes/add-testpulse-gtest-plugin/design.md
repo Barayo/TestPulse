@@ -287,6 +287,32 @@ HTTP server, proving the full pipeline (build → XML → submit) end to end.
 
 ## Risks / Trade-offs
 
+- **`ReadAttachments` scans all of `--dir` with no awareness of which
+  report is currently being submitted, so a stale
+  `.testpulse/attachments` left over from an unrelated earlier test
+  binary/run in a shared CI workspace silently rode along into an
+  unrelated submission** — found post-implementation by Paco's real QA
+  pass (a live submission was genuinely rejected by the server:
+  `"attachment is not a supported image format"`, for a report that
+  never called `Attach()` at all). Fixed by filtering the attachments
+  actually placed into the submit request body to only those whose case
+  key the *current* report's own `ExtractDeclaredCaseKeys` result
+  contains — `ReadAttachments`' directory-wide scan stays simple,
+  `RunRealSubmit` is what makes using it safe. Covered by
+  `SubmitTest.OnlyAttachmentsForCaseKeysInThisReportAreSubmitted`
+  (`cli/tests/submit_test.cc`).
+- **A malformed or partially-written attachment sidecar JSON crashed the
+  whole `submit` CLI with `SIGABRT`** (an uncaught
+  `nlohmann::json::parse_error`/`out_of_range`) — found post-implementation
+  by Luis's security review, reproduced against the real built binary.
+  Not just an adversarial-input concern: a test binary killed mid-write
+  (CI timeout, OOM-kill, disk full) is a real, ordinary way to leave a
+  genuinely truncated `.json` sidecar on disk. Fixed by wrapping the
+  parse/`.at()` calls in `ReadAttachments` in a try/catch that skips the
+  malformed entry (with a stderr warning) rather than crashing, the same
+  "don't let one bad input break the pipeline" discipline `RunDryRun`/
+  `RunRealSubmit` already apply to malformed server responses elsewhere
+  in this codebase.
 - **gtest's own documentation is wrong about `RecordProperty()`'s XML
   output shape** — mitigated by not trusting it: this design instead
   verified the real behavior against gtest's own unittest fixture source
