@@ -353,3 +353,32 @@ snippet in `docs/importing-results.md`.
   "prunes .testpulse/attachments after a successful (201/207)
   submission" and "leaves .testpulse/attachments in place after a
   failed submission, for a retry".
+- **`check`'s "no marker found" message misdiagnosed the cause when
+  required config (`TESTPULSE_URL`/`TOKEN`/`PROJECT`) was missing** —
+  found post-implementation by Paco's real QA pass against a live
+  TestPulse instance: with a reporter genuinely registered but no env
+  vars set, the reporter correctly logged the real cause and skipped
+  submission, but wrote no marker at all, so `check` reported its
+  generic "the `reporters` array entry is missing... or the config file
+  was not actually loaded" message — actively wrong, since the reporter
+  had run. Fixed by giving `ResultMarker` an optional `reason` field,
+  writing `{ failed: true, reason: '...' }` in the missing-config branch
+  instead of returning silently, and having `check` print the marker's
+  own `reason` when present. Covered by `reporter.test.ts`'s "writes a
+  failed marker with a specific reason when required config is missing"
+  and `check.test.ts`'s reason-reporting tests.
+- **The README's own documented `jasmine && testpulse-jasmine check`
+  invocation silently drops `check`'s diagnostics whenever a spec also
+  fails** — found post-implementation by Paco, reproduced with a spec
+  that both fails an expectation and hits a genuine submission error
+  (bad token): `jasmine`'s own non-zero exit short-circuits `&&`, so
+  `check` never runs and its specific diagnostic never prints, even
+  though the combined exit code happens to still be non-zero from the
+  spec failure alone. Not a gating bug (the build still correctly
+  fails) but a real observability gap — a developer debugging a red run
+  with both a failing spec and a broken import (a plausible real
+  combination, e.g. a bad CI secret revealing pre-existing failures)
+  never sees the import failure at all. Fixed by correcting the
+  README's documented invocation to run `check` unconditionally and
+  combine both exit codes explicitly, with an explicit warning against
+  the `&&` form.

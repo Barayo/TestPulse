@@ -592,8 +592,15 @@ reporter to influence it, so `testpulse-jasmine check` is the only thing
 that can fail the build for a submission error or an unmatched case:
 
 ```sh
-jasmine && testpulse-jasmine check
+jasmine; jasmine_status=$?
+testpulse-jasmine check; check_status=$?
+[ "$jasmine_status" -eq 0 ] && [ "$check_status" -eq 0 ]
 ```
+
+Don't chain these with `&&` (`jasmine && testpulse-jasmine check`) — a
+failing spec short-circuits it, so `check` never runs and its own
+diagnostic never prints; see the plugin's own README for the full
+explanation.
 
 Screenshot/file attachments (`Attach(caseKey, data, filename,
 contentType)`) are verified via Jasmine's own `getSpecProperty()`
