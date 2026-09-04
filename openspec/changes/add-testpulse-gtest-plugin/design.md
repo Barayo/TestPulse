@@ -200,6 +200,24 @@ concurrency) or an explicit threaded-test scenario, that would need its
 own revisit.
 
 ### Submission, config, and exit-code behavior — matching `testpulse-go`'s CLI exactly
+Unlike every prior plugin's language, C++ has no standard-library HTTP
+client or JSON library, so the CLI (not the header-only tagging library,
+which needs neither) genuinely requires two real dependencies, decided
+during implementation: **`nlohmann/json`** (single-header, MIT-licensed,
+`FetchContent`-fetched and pinned to a released tag like gtest itself)
+for building the request body and parsing responses, and **`libcurl`**
+(a system dependency resolved via `find_package(CURL REQUIRED)`, present
+by default on Linux and macOS and installed explicitly in CI on Windows)
+for HTTP — prebuilt release binaries bundle it, so an end user installing
+a release needs nothing extra. This does not reopen the "no vcpkg/Conan"
+decision above: that was about how *this plugin itself* is distributed,
+not about whether its own CLI may depend on anything at all (gtest is
+already a real, accepted dependency for the tagging library's own test
+suite). Reading the JUnit XML report for `--dry-run`'s case-key
+extraction uses a small, dependency-free scanner targeting the same
+narrow, long-stable `<property name="testpulse_case_key" value="...">`
+shape (not a general XML parser) — the same "target the long-stable
+subset" reasoning already applied throughout this design.
 ```sh
 testpulse-gtest submit --file report.xml --url https://testpulse.example --project LOGIN --token "$TESTPULSE_TOKEN"
 ```
