@@ -549,3 +549,62 @@ See the plugin's own README for the full config-precedence reference, the
 `--dry-run` flag, and its known v1 limitations (Google Test only, no
 Catch2; `TEST`/`TEST_F` only, no `BENCHMARK` integration; no
 `vcpkg`/Conan distribution, `FetchContent` only).
+
+## Jasmine: `testpulse-jasmine`
+
+**Requires `jasmine`/`jasmine-core` 5.0+.** Jasmine has a real,
+first-party API for exactly this —
+[`jasmine.getEnv().setSpecProperty(key, value)`](https://jasmine.github.io/api/edge/Env.html)
+(since v3.6.0) — so
+[`testpulse-jasmine`](https://github.com/Barayo/testpulse-jasmine)
+doesn't generate or rewrite any XML using a third-party writer; it
+builds JUnit XML directly from each spec's own properties.
+(`jasmine-reporters`' `JUnitXmlReporter`, the ecosystem's de facto JUnit
+XML tool, has no property-injection support at all.) `--parallel` mode
+is fully supported.
+
+```js
+// spec/support/jasmine.js -- must be a .js config, not .json, since
+// reporters with methods can only be registered from a JS config file
+const { TestPulseReporter } = require('testpulse-jasmine');
+
+module.exports = {
+  spec_dir: 'spec',
+  spec_files: ['**/*[sS]pec.js'],
+  reporters: [new TestPulseReporter({ url: 'http://localhost:8080', project: 'LOGIN' })],
+};
+```
+
+```js
+const { Case } = require('testpulse-jasmine');
+
+describe('login', () => {
+  it('succeeds', () => {
+    Case('LOGIN-42', { platform: 'linux', tags: ['smoke'] });
+    // ...
+  });
+});
+```
+
+Run the suite as normal, then check the result — Jasmine's own CLI
+determines its exit code purely from spec pass/fail and has no way for a
+reporter to influence it, so `testpulse-jasmine check` is the only thing
+that can fail the build for a submission error or an unmatched case:
+
+```sh
+jasmine && testpulse-jasmine check
+```
+
+Screenshot/file attachments (`Attach(caseKey, data, filename,
+contentType)`) are verified via Jasmine's own `getSpecProperty()`
+readback of what `Case` set for the currently-executing spec — a genuine
+built-in capability, no custom allowlist tracking needed.
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | `check` exits `0`; summary logged |
+| `207` some unmatched | `check` exits `0` by default; exits non-zero when `failOnUnmatched` is set |
+| network/auth/4xx/5xx error | `check` always exits non-zero, unconditionally |
+
+See the plugin's own README for the full config-precedence reference and
+the dry-run option.
