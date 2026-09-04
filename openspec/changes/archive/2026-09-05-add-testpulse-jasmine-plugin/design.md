@@ -319,3 +319,37 @@ snippet in `docs/importing-results.md`.
   name>`, `<properties><property name value>`). Building the report
   directly (rather than depending on a third-party tool's output) means
   this is the only external schema dependency this plugin carries.
+- **`readAttachments` recursively matched any directory named
+  `attachments` anywhere under the search root, and never re-validated a
+  sidecar's `contentType` against the allowlist on read** — found
+  post-implementation by Luis's security review, reproduced with a real
+  PoC (an unrelated `attachments/` directory elsewhere in the project
+  tree, containing a sidecar with `contentType: "text/plain"`, was
+  genuinely picked up and would have ridden into a real submission). The
+  content-type allowlist `Attach()` enforces on write is a real security
+  boundary, not just a write-time nicety — it has to hold on the
+  read/submit path too, or it doesn't hold at all. Fixed by scoping
+  `readAttachments` to read exactly `<root>/.testpulse/attachments`
+  non-recursively (matching where `writeAttachment` actually writes, and
+  never creating subdirectories there in the first place) and
+  re-validating each sidecar's `contentType` against
+  `SUPPORTED_CONTENT_TYPES` on read, discarding (with a stderr warning)
+  anything that doesn't pass. Covered by
+  `attachmentStore.test.ts`'s "ignores an attachments-named directory
+  that is not .testpulse/attachments" and "discards a sidecar whose
+  contentType is not in the supported allowlist".
+- **Same-case-key stale attachments were never pruned after a successful
+  submission** — a narrower variant of the cross-run/cross-case-key
+  contamination risk already designed against (see Decisions), but not
+  itself covered: on a persistent (non-ephemeral) workspace, an
+  attachment written under a given case key on one run would still be
+  picked up and resubmitted alongside a fresh attachment under the same
+  case key on a later run, since `readAttachments` has no way to
+  distinguish "written this run" from "written last week." Found
+  post-implementation by Luis. Fixed by pruning
+  `.testpulse/attachments` after a successful (`201`/`207`) submission
+  only — never on a failed submission, so a retry still has the
+  attachments to resubmit. Covered by `reporter.test.ts`'s
+  "prunes .testpulse/attachments after a successful (201/207)
+  submission" and "leaves .testpulse/attachments in place after a
+  failed submission, for a retry".
