@@ -432,3 +432,60 @@ make that exit non-zero instead:
 See the plugin's own README for the full config-precedence reference, the
 `--dry-run` flag, and its known v1 limitations (regular `*testing.T` tests
 only, no benchmarks or fuzz targets; no Go versions before 1.25).
+
+## .NET: `testpulse-dotnet`
+
+**Requires `xunit.v3`** (not `xunit` v2). `dotnet test` has no built-in
+JUnit XML output, and the de facto standard tool for producing one
+(`JunitXml.TestLogger`) doesn't support writing `<properties>` into the
+report at all.
+[`testpulse-dotnet`](https://github.com/Barayo/testpulse-dotnet) (NuGet
+package `TestPulse.MSBuild`) works around this by auto-registering its
+own custom VSTest logger, which builds a JUnit XML report directly from
+the test run rather than depending on a second logger's output.
+
+```csharp
+using TestPulse;
+using Xunit;
+
+public class LoginTests
+{
+    [TestPulseCase(caseKey: "LOGIN-42", platform: "linux", tags: new[] { "smoke" })]
+    [Fact]
+    public void LoginSucceeds()
+    {
+        // ...
+    }
+}
+```
+
+Run the suite exactly as normal — no extra flags:
+
+```sh
+dotnet add package TestPulse.MSBuild
+dotnet test /p:TestPulseUrl=http://localhost:8080 /p:TestPulseProject=LOGIN
+```
+
+(`TESTPULSE_TOKEN` should be set directly as an environment variable, not
+via an MSBuild property — see the plugin's README.) `TestPulseLogger` is
+auto-wired via default `<VSTestLogger>`/`<VSTestTestAdapterPath>`
+properties the package's own `.props` file sets, and — unlike an
+`AfterTargets="VSTest"` MSBuild target, which this plugin deliberately
+does not use — reliably runs whether the underlying tests passed or
+failed.
+
+Screenshot/file attachments
+(`TestPulseAttachments.Attach(caseKey, data, filename, contentType)`) are
+gated by xUnit v3's own `TestContext.Current` ambient test identity: an
+`Attach` call only succeeds for the case key the currently-executing test
+method has itself declared via `[TestPulseCase]`.
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | build succeeds; summary logged |
+| `207` some unmatched | build succeeds by default; fails the build when `TestPulseFailOnUnmatched` is set |
+| network/auth/4xx/5xx error | always fails the build, unconditionally |
+
+See the plugin's own README for the full config-precedence reference, the
+dry-run flag, and its known v1 limitations (xUnit only, no NUnit/MSTest;
+`[Theory]` methods are unsupported for tagging).
