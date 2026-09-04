@@ -1,6 +1,6 @@
 ## 1. Repo scaffolding and the critical RecordProperty repro
 
-- [ ] 1.1 Create the public repo `Barayo/testpulse-gtest` (MIT license, `CMakeLists.txt` declaring `cmake_minimum_required(VERSION 3.16)` and C++17, `FetchContent`-fetching gtest itself for the plugin's own test suite)
+- [ ] 1.1 Create the public repo `Barayo/testpulse-gtest` (MIT license, `CMakeLists.txt` declaring `cmake_minimum_required(VERSION 3.16)` and C++17, `FetchContent`-fetching gtest itself for the plugin's own test suite — pinned to a specific released gtest tag via `GIT_TAG`, never `main`, per design.md's Repo & packaging decision)
 - [ ] 1.2 **Before any other implementation work**: build a minimal isolated repro proving gtest's real `RecordProperty()` output shape. A tiny fixture binary with one `TEST` calling `RecordProperty("probe_key", "probe_value")`, run with `--gtest_output=xml:probe.xml`, and inspect the raw XML file directly — confirm it contains `<properties><property name="probe_key" value="probe_value"/></properties>` nested under the corresponding `<testcase>` (the shape design.md's Context documents from gtest's own fixture source and the upstream docs-bug issue, NOT the stale attribute-based example gtest's own advanced.md shows) rather than assuming research alone is sufficient
 - [ ] 1.3 Add GitHub Actions workflow: `cmake --build` + `ctest` on both Linux and macOS, on every PR
 
@@ -42,7 +42,7 @@
 ## 6. Release automation
 
 - [ ] 6.1 Configure GitHub Actions release workflow: versioning/tagging/changelog/GitHub-release via semantic-release (Angular commit convention, `.releaserc.json` excluding `@semantic-release/npm` — this is not an npm package, matching the fix already needed for testpulse-go/testpulse-dotnet), building and attaching prebuilt `testpulse-gtest` CLI binaries (Linux/macOS/Windows) as release assets, gated `on: push (main) / workflow_dispatch` only, `if: github.repository == 'Barayo/testpulse-gtest'`
-- [ ] 6.2 Write README (install via `FetchContent_Declare` pointing at a tagged release, the C++17/CMake 3.16 floor stated prominently near the top, the `Case`/`Attach` API reference, the required `--gtest_output=xml` + `testpulse-gtest submit` workflow steps, config-precedence table, exit-code table, dry-run, an explicit recommendation to use `TESTPULSE_TOKEN` over `--token` in CI) and CONTRIBUTING (unit + real end-to-end test setup, how to test the `FetchContent` consumption path for real rather than an `add_subdirectory` shortcut that wouldn't catch packaging issues)
+- [ ] 6.2 Write README (install via `FetchContent_Declare` pointing at a tagged release — the example snippet MUST use a pinned `GIT_TAG v<version>`, never `GIT_TAG main`, per design.md's Repo & packaging decision — the C++17/CMake 3.16 floor stated prominently near the top, the `Case`/`Attach` API reference, the required `--gtest_output=xml` + `testpulse-gtest submit` workflow steps, config-precedence table, exit-code table, dry-run, an explicit recommendation to use `TESTPULSE_TOKEN` over `--token` in CI) and CONTRIBUTING (unit + real end-to-end test setup, how to test the `FetchContent` consumption path for real rather than an `add_subdirectory` shortcut that wouldn't catch packaging issues)
 
 ## 7. TestPulse monorepo docs update
 

@@ -107,6 +107,26 @@ floor: **C++17 / CMake 3.16 minimum**, matching gtest 1.18.x's own current
 floor exactly (confirmed via research), so this plugin never needs to
 support a wider compatibility range than gtest itself does.
 
+**`FetchContent_Declare`'s `GIT_TAG` MUST always be pinned to a specific
+released tag, never a branch name.** Unlike every prior plugin in this
+family, which distributes through a registry with immutable,
+content-addressed version resolution (PyPI/npm/Maven Central/Gradle
+Plugin Portal/Go modules/NuGet), `FetchContent_Declare(...  GIT_TAG
+main)` is a legitimate, commonly-copy-pasted CMake pattern that silently
+resolves to whatever the default branch currently points to at build
+time — a real supply-chain regression class (the same shape GitHub
+Actions' own unpinned-Action-ref guidance warns against), not a
+theoretical concern, since a consumer who copies an unpinned example is
+trusting whatever lands on `main` between their builds with zero
+version pinning or verification. This is a stated commitment, not left
+implicit in a README-writing task: the README's own example snippet
+MUST demonstrate the pinned form (`GIT_TAG v1.2.0`, not `GIT_TAG main`),
+and the plugin's own CI/test-suite `FetchContent`-fetch of gtest itself
+MUST likewise pin to a specific gtest release tag, not track gtest's own
+default branch — caught during this design's own gating review before
+implementation began, the same "verify/state explicitly, don't leave to
+chance" discipline already applied throughout this plugin family.
+
 ### Tagging via a plain free function — no test handle needed
 ```cpp
 #include <testpulse/testpulse.hpp>
@@ -258,6 +278,13 @@ HTTP server, proving the full pipeline (build → XML → submit) end to end.
   (unlikely, since the fixture-verified shape long predates this design
   and the docs bug has stood since 2020), the isolated repro test would
   catch the regression immediately.
+- **`FetchContent`'s `GIT_TAG` accepting a mutable branch name is a real
+  supply-chain footgun for consumers who copy an unpinned example** — see
+  the Repo & packaging decision above; mitigated by making tag-pinning an
+  explicit, stated requirement on the README's own example snippet and
+  the plugin's own CI, not something left to whoever writes the README
+  to remember unprompted. Caught during this design's own pre-implementation
+  gating review, not discovered later.
 - **No `vcpkg`/Conan distribution** — a real, deliberate v1 scoping
   decision grounded in research showing no single de facto C++
   package-manager standard exists, not an oversight. A user already using
