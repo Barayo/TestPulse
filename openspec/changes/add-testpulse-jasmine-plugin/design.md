@@ -134,17 +134,38 @@ never from the caller-supplied `filename` directly — no path-traversal
 surface, matching every other plugin.
 
 ### The reporter: builds JUnit XML directly, no jasmine-reporters dependency
-Registered via a `helpers` file entry (Jasmine's real mechanism for
-custom reporter registration — confirmed via research that Jasmine's
-config has no declarative `reporters` array the way Jest does; a
-`helpers` array of files run once before all specs is the sanctioned
-place to call `jasmine.getEnv().addReporter(...)`):
-```json
-{
-  "spec_dir": "spec",
-  "helpers": ["node_modules/testpulse-jasmine/dist/helper.js"]
-}
+Registered via the **declarative `reporters` array**, in a JavaScript
+config file (`spec/support/jasmine.js`, not `.json` — Jasmine's own docs
+state this option only works from a JS config, "because reporters are
+objects with methods"), not a `helpers` file calling
+`jasmine.getEnv().addReporter(...)` imperatively. This corrects the
+original plan (an earlier draft of this design specified the `helpers`
+approach) after a real, empirical discovery during implementation: a
+`helpers`-file `addReporter()` call throws outright under
+`jasmine --parallel=N` ("Reporters cannot be added via Env in parallel
+mode"), a hard, fatal error, not a data-survival risk — see Risks below
+for the full story, including how the corrected mechanism was found to
+genuinely support `--parallel` mode too, once a reporter opts in.
+```js
+// spec/support/jasmine.js
+const { TestPulseReporter } = require('testpulse-jasmine');
+
+module.exports = {
+  spec_dir: 'spec',
+  spec_files: ['**/*[sS]pec.js'],
+  reporters: [new TestPulseReporter({ url: 'http://localhost:8080', project: 'LOGIN' })],
+};
 ```
+The reporter class sets `this.reporterCapabilities = { parallel: true }`
+in its constructor — confirmed via a real repro that this is the actual,
+documented opt-in mechanism (`reporterCapabilities: {parallel: true}`)
+Jasmine's `ParallelRunner` requires before it will accept a
+`reporters`-array reporter at all, and that doing so makes
+`setSpecProperty`'s value genuinely survive into the reporter's
+`specDone` calls under real `--parallel=2` execution, not just in
+sequential mode — this single declaration is what makes `--parallel`
+mode fully supported rather than a documented limitation (see Risks).
+
 The reporter accumulates each spec's result (from `specDone`, including
 its `properties` field) as the run progresses, then in `jasmineDone`:
 1. Builds JUnit XML directly (`<testsuites><testsuite><testcase
@@ -181,8 +202,9 @@ jasmine && testpulse-jasmine check
 ```
 `testpulse-jasmine check` reads `.testpulse/result.json`; if it's absent
 (the reporter never ran — misconfiguration) it exits non-zero with a
-message naming the likely cause (the `helpers` entry missing, or
-`jasmine.json` pointing at the wrong file); if `failed: true`, exits
+message naming the likely cause (the `reporters` entry missing from the
+JS config file, or the config file not actually being loaded); if
+`failed: true`, exits
 non-zero; otherwise exits `0`. This mirrors the .NET plugin's
 `TestPulseLogger` (does the real work, can't affect exit code) plus its
 narrow `AfterTargets` check (reads a marker, can affect exit code) split
@@ -192,10 +214,10 @@ independently confirmed to be the same real constraint in Jasmine's
 runner via source inspection rather than assumed to transfer.
 
 ### Config: environment variable over reporter options
-Since the reporter is configured via the `helpers`-loaded
-`addReporter(new TestPulseReporter(options))` call, not a CLI this
-package owns for the annotate/submit step, there's no CLI-flag tier for
-that half — but the env-var-wins-for-secrets principle from every prior
+Since the reporter is configured via the `reporters`-array
+`new TestPulseReporter(options)` construction, not a CLI this package
+owns for the annotate/submit step, there's no CLI-flag tier for that
+half — but the env-var-wins-for-secrets principle from every prior
 plugin still applies:
 
 | Setting | Env var | Reporter option |
@@ -223,47 +245,57 @@ snippet in `docs/importing-results.md`.
 - **`check`**: unit tests against fixture `.testpulse/result.json`
   contents (present-and-failed, present-and-passed, absent).
 - **A small number of true end-to-end tests**: spawn a real nested
-  `jasmine` child process against a fixture project (helpers file →
-  `setSpecProperty` → the reporter → the submitted payload → the result
-  marker → `check`'s exit code), the same role
+  `jasmine` child process against a fixture project (a JS config file's
+  `reporters` array → `setSpecProperty` → the reporter → the submitted
+  payload → the result marker → `check`'s exit code), the same role
   `maven-invoker-plugin`/the Jest child-process tests played for their
   respective plugins — verifying the pieces actually integrate, not
-  re-testing every branch already covered above. This must include a
-  real repro confirming `setSpecProperty`'s value genuinely survives into
-  `specDone`'s `result.properties` (not just trusting the JSDoc), the
-  same "verify the real mechanism during implementation too" discipline
-  that caught real, non-obvious gaps in the .NET and gtest plugins
-  despite each looking correct from documentation/source alone.
+  re-testing every branch already covered above. This includes a real
+  repro confirming `setSpecProperty`'s value genuinely survives into
+  `specDone`'s `result.properties` under both plain sequential execution
+  and real `--parallel=2` execution (with `reporterCapabilities: {
+  parallel: true }` declared) — not just trusting the JSDoc, the same
+  "verify the real mechanism during implementation too" discipline that
+  caught real, non-obvious gaps in the .NET and gtest plugins despite
+  each looking correct from documentation/source alone, and that caught
+  the `helpers`-file registration mistake in this design's own first
+  draft.
 
 ### CI / publishing
 - GitHub Actions: build+test matrix (a couple of recent Node LTS
   versions × a couple of recent Jasmine majors) on every PR.
 - Release: `semantic-release` on merge to `main`, publishing to npm via
   Trusted Publishing (OIDC) — same as `testpulse-jest`.
-- README: install, the `Case`/`Attach` API, the required `helpers` entry
-  and `jasmine && testpulse-jasmine check` CI invocation, config-
-  precedence table, exit-code table, dry-run. CONTRIBUTING: the layered
-  testing approach above.
+- README: install, the `Case`/`Attach` API, the required `reporters`
+  array entry in a JS config file (not JSON) and `jasmine &&
+  testpulse-jasmine check` CI invocation, config-precedence table,
+  exit-code table, dry-run, and a note that `--parallel` mode is
+  supported. CONTRIBUTING: the layered testing approach above.
 
 ## Risks / Trade-offs
 
-- **`jasmine --parallel=N` runs specs across separate worker processes**
-  (confirmed via research: Jasmine 5.0+ added this, opt-in, and its own
-  `ParallelReportDispatcher` docstring explicitly warns "Do not use
-  ParallelReportDispatcher in the same process that Jasmine specs run
-  in" — meaning results ARE aggregated centrally across a process
-  boundary in that mode, the same architectural shape as Jest's
-  worker/main split) — `setSpecProperty`'s own JSDoc states its value is
-  "provided to reporters as part of the properties field of SpecResult,"
-  which is a strong signal it's designed to survive serialization across
-  that boundary (the feature would be far less useful otherwise), but
-  this must be verified with a real `--parallel=2` end-to-end repro
-  during implementation, not merely trusted from the docstring's wording
-  — the same "verify, don't assume" discipline that caught two separate,
-  non-obvious failures in the .NET plugin despite each looking correct
-  from research alone. If it does NOT survive, `--parallel` mode becomes
-  a documented v1 limitation (default, sequential mode is unaffected
-  either way, and is Jasmine's out-of-the-box default).
+- **The original plan to register the reporter via a `helpers` file
+  calling `jasmine.getEnv().addReporter()` was disproven during
+  implementation, not merely refined** — a real isolated repro under
+  `jasmine --parallel=2` produced a fatal, unrecoverable error:
+  "Reporters cannot be added via Env in parallel mode." This is not a
+  data-survival risk the way it was for Jest's worker/main boundary; it
+  is a hard incompatibility with the registration mechanism itself. The
+  corrected mechanism — the declarative `reporters` array in a
+  JavaScript config file, with the reporter declaring
+  `reporterCapabilities: { parallel: true }` in its constructor — was
+  found via Jasmine's own error message pointing at the exact opt-in
+  shape required, then verified with a second real repro: under this
+  mechanism, `setSpecProperty`'s value genuinely does survive into the
+  reporter's `specDone` calls under real `--parallel=2` execution
+  (confirmed by running two real specs, each setting a distinct
+  property, and observing both properties correctly attributed in the
+  reporter's output), and the identical mechanism also works unchanged
+  in plain sequential mode. This means `--parallel` mode ends up fully
+  **supported**, not a documented v1 limitation as originally
+  anticipated — a case where "verify, don't assume" corrected the design
+  in a more favorable direction than the original plan expected, not
+  just a defensive one.
 - **The reporter cannot affect Jasmine's own exit code, confirmed via
   source, not assumed** — mitigated by the same hybrid
   reporter-plus-narrow-check-command architecture already proven for the

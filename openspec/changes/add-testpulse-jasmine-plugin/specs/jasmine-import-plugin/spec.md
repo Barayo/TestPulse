@@ -83,12 +83,15 @@ SHALL include all of them (grouped under that case key) in the submitted
   array
 
 ### Requirement: The reporter auto-annotates and auto-submits, independent of Jasmine's own exit code
-The plugin SHALL provide a reporter (registered via a Jasmine `helpers`
-file entry — the plugin SHALL NOT depend on a declarative `reporters`
-config array, since Jasmine's config format has none) that builds a
-JUnit XML report directly from each spec's `properties` field, without
-depending on `jasmine-reporters` or any other third-party JUnit XML
-writer. In its `jasmineDone` handler, the reporter SHALL submit the
+The plugin SHALL provide a reporter (registered via the `reporters`
+array in a JavaScript Jasmine config file, since that config option
+requires a JS file rather than JSON), declaring
+`reporterCapabilities: { parallel: true }` so it also functions correctly
+under `jasmine --parallel=N`, not just Jasmine's default sequential
+execution. It SHALL build a JUnit XML report directly from each spec's
+`properties` field, without depending on `jasmine-reporters` or any
+other third-party JUnit XML writer. In its `jasmineDone` handler, the
+reporter SHALL submit the
 report (or preview it, in dry-run mode) and SHALL write a
 `.testpulse/result.json` marker recording whether the outcome should
 fail the build, since Jasmine's own CLI runner determines its process

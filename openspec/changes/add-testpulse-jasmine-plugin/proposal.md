@@ -31,10 +31,12 @@ source.
   `jasmine.getEnv().getSpecProperty()` (native readback, no custom
   allowlist map needed) against the case key the running spec itself
   declared.
-- A custom Jasmine reporter (registered via a `helpers` file entry —
-  Jasmine's real mechanism for this) that builds JUnit XML directly from
-  `specDone`'s `result.properties` (no dependency on `jasmine-reporters`)
-  and auto-submits in `jasmineDone`, writing a `.testpulse/result.json`
+- A custom Jasmine reporter (registered via the declarative `reporters`
+  array in a JavaScript config file, with `reporterCapabilities: {
+  parallel: true }` so it works under `--parallel` mode too) that builds
+  JUnit XML directly from `specDone`'s `result.properties` (no
+  dependency on `jasmine-reporters`) and auto-submits in `jasmineDone`,
+  writing a `.testpulse/result.json`
   marker.
 - A `testpulse-jasmine check` CLI that reads that marker and exits
   non-zero if needed — Jasmine's own CLI always calls
