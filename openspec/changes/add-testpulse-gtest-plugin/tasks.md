@@ -2,7 +2,7 @@
 
 - [x] 1.1 Create the public repo `Barayo/testpulse-gtest` (MIT license, `CMakeLists.txt` declaring `cmake_minimum_required(VERSION 3.16)` and C++17, `FetchContent`-fetching gtest itself for the plugin's own test suite — pinned to `v1.18.0` via `GIT_TAG`, never `main`, per design.md's Repo & packaging decision)
 - [x] 1.2 **Before any other implementation work**: build a minimal isolated repro proving gtest's real `RecordProperty()` output shape. Confirmed against real gtest v1.18.0: `RecordProperty("probe_key", "probe_value")` + `--gtest_output=xml` produces exactly `<properties><property name="probe_key" value="probe_value"/></properties>` nested under `<testcase>` — matches design.md's Context exactly, not the stale attribute-based example gtest's own advanced.md shows
-- [ ] 1.3 Add GitHub Actions workflow: `cmake --build` + `ctest` on both Linux and macOS, on every PR
+- [x] 1.3 Add GitHub Actions workflow: `cmake --build` + `ctest` on both Linux and macOS, on every PR
 
 ## 2. Case tagging via RecordProperty (test-first)
 
@@ -41,11 +41,11 @@
 
 ## 6. Release automation
 
-- [ ] 6.1 Configure GitHub Actions release workflow: versioning/tagging/changelog/GitHub-release via semantic-release (Angular commit convention, `.releaserc.json` excluding `@semantic-release/npm` — this is not an npm package, matching the fix already needed for testpulse-go/testpulse-dotnet), building and attaching prebuilt `testpulse-gtest` CLI binaries (Linux/macOS/Windows) as release assets, gated `on: push (main) / workflow_dispatch` only, `if: github.repository == 'Barayo/testpulse-gtest'`
-- [ ] 6.2 Write README (install via `FetchContent_Declare` pointing at a tagged release — the example snippet MUST use a pinned `GIT_TAG v<version>`, never `GIT_TAG main`, per design.md's Repo & packaging decision — the C++17/CMake 3.16 floor stated prominently near the top, the `Case`/`Attach` API reference, the required `--gtest_output=xml` + `testpulse-gtest submit` workflow steps, config-precedence table, exit-code table, dry-run, an explicit recommendation to use `TESTPULSE_TOKEN` over `--token` in CI) and CONTRIBUTING (unit + real end-to-end test setup, how to test the `FetchContent` consumption path for real rather than an `add_subdirectory` shortcut that wouldn't catch packaging issues)
+- [x] 6.1 Configure GitHub Actions release workflow: versioning/tagging/changelog/GitHub-release via semantic-release (Angular commit convention, `.releaserc.json` excluding `@semantic-release/npm` — this is not an npm package, matching the fix already needed for testpulse-go/testpulse-dotnet), building and attaching prebuilt `testpulse-gtest` CLI binaries (Linux/macOS/Windows, Windows built against `vcpkg`'s curl) as release assets via `@semantic-release/github`'s `assets` config, gated `on: push (main) / workflow_dispatch` only, `if: github.repository == 'Barayo/testpulse-gtest'`
+- [x] 6.2 Write README (install via `FetchContent_Declare` pointing at a tagged release — the example snippet uses a pinned `GIT_TAG v1.0.0`, never `GIT_TAG main`, with an explicit warning paragraph, per design.md's Repo & packaging decision — the C++17/CMake 3.16 floor stated prominently near the top, the `Case`/`Attach` API reference, the required `--gtest_output=xml` + `testpulse-gtest submit` workflow steps, config-precedence table, exit-code table, dry-run, an explicit recommendation to use `TESTPULSE_TOKEN` over `--token` in CI) and CONTRIBUTING (unit + real end-to-end test setup, how to test the `FetchContent` consumption path for real rather than an `add_subdirectory` shortcut)
 
 ## 7. TestPulse monorepo docs update
 
-- [ ] 7.1 Add a "Google Test (gtest): `testpulse-gtest`" section to `docs/importing-results.md` (install via `FetchContent`, the C++17/CMake floor, `Case`/`Attach` usage, the required `--gtest_output=xml` + `submit` steps, build-outcome table), following the same pattern already used there for the pytest/Maven/Jest/Gradle/Go/.NET plugin sections; update `docs/README.md`'s index line
+- [x] 7.1 Add a "Google Test (gtest): `testpulse-gtest`" section to `docs/importing-results.md` (install via `FetchContent`, the C++17/CMake floor, `Case`/`Attach` usage, the required `--gtest_output=xml` + `submit` steps, build-outcome table), following the same pattern already used there for the pytest/Maven/Jest/Gradle/Go/.NET plugin sections; updated `docs/README.md`'s index line
 
 <!-- No Sample-Project-showcase task: this is client-tooling published as its own repo, with no new API endpoint, UI, or seed-data surface inside TestPulse itself -- same as every prior plugin change. -->

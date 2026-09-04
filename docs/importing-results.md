@@ -489,3 +489,63 @@ method has itself declared via `[TestPulseCase]`.
 See the plugin's own README for the full config-precedence reference, the
 dry-run flag, and its known v1 limitations (xUnit only, no NUnit/MSTest;
 `[Theory]` methods are unsupported for tagging).
+
+## Google Test (gtest): `testpulse-gtest`
+
+**Requires C++17 and CMake 3.16+.** Unlike most languages, Google Test
+already has a built-in mechanism for writing custom key/value data into
+its own JUnit XML output —
+[`RecordProperty()`](https://google.github.io/googletest/advanced.html#logging-additional-information)
+— and it produces exactly the `<properties><property name="..."
+value="..."/></properties>` shape this contract expects (confirmed
+against gtest's own real unittest fixture source; gtest's own
+documentation page shows a stale, incorrect example for this).
+[`testpulse-gtest`](https://github.com/Barayo/testpulse-gtest) is a
+header-only library built directly on `RecordProperty()` — it doesn't
+generate or rewrite any XML itself, unlike the JVM/.NET plugins on this
+page.
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+    testpulse_gtest
+    GIT_REPOSITORY https://github.com/Barayo/testpulse-gtest.git
+    GIT_TAG v1.0.0  # always pin to a released tag, never `main`
+)
+FetchContent_MakeAvailable(testpulse_gtest)
+target_link_libraries(your_test_target PRIVATE testpulse::testpulse)
+```
+
+```cpp
+#include <testpulse/testpulse.hpp>
+
+TEST(LoginTest, Succeeds) {
+    testpulse::Case("LOGIN-42", testpulse::WithPlatform("linux"), testpulse::WithTags({"smoke"}));
+    // ...
+}
+```
+
+Run the suite requesting XML output, then submit with the
+`testpulse-gtest` CLI (prebuilt binaries attached to every release, no
+package registry needed):
+
+```sh
+your_test_binary --gtest_output=xml:report.xml
+testpulse-gtest submit --file report.xml --url http://localhost:8080 --project LOGIN --token "$TESTPULSE_TOKEN"
+```
+
+Screenshot/file attachments (`testpulse::Attach(caseKey, data, filename,
+contentType)`) are identified via gtest's own `current_test_info()` and
+only succeed for a case key the currently-executing test has itself
+declared via `Case`.
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | exit `0`; summary printed |
+| `207` some unmatched | exit `0` by default; exits non-zero when `--fail-on-unmatched` is set |
+| network/auth/4xx/5xx error | always exits non-zero, unconditionally |
+
+See the plugin's own README for the full config-precedence reference, the
+`--dry-run` flag, and its known v1 limitations (Google Test only, no
+Catch2; `TEST`/`TEST_F` only, no `BENCHMARK` integration; no
+`vcpkg`/Conan distribution, `FetchContent` only).
