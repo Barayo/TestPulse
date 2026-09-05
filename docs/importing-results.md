@@ -615,3 +615,73 @@ built-in capability, no custom allowlist tracking needed.
 
 See the plugin's own README for the full config-precedence reference and
 the dry-run option.
+
+## Mocha: `testpulse-mocha`
+
+**Requires `mocha` 9.0+.** Unlike Jest/Jasmine, Mocha has no implicit
+"current test" global accessible from arbitrary code — no equivalent to
+`expect.getState()` or `jasmine.getEnv()`. The only way to reach the
+running test is via `this` inside a non-arrow `it()`/hook function
+body, so [`testpulse-mocha`](https://github.com/Barayo/testpulse-mocha)'s
+`Case`/`Attach` take that Mocha `Context` as an explicit first argument.
+(`mocha-junit-reporter`'s own README states plainly that custom
+properties can only be added at the `<testsuite>` level, not per
+`<testcase>` — the same gap `jasmine-reporters` had — so this package
+also builds JUnit XML directly from `Runner` events rather than
+depending on it.) **`--parallel` mode is not supported**: Mocha
+transmits `Test` objects from worker processes to the main process via
+a hardcoded field list (`Test.prototype.serialize()`) that carries no
+custom properties; the reporter detects and warns about this at runtime
+rather than failing silently.
+
+```js
+// .mocharc.js
+module.exports = {
+  spec: 'test/**/*.spec.js',
+  reporter: 'testpulse-mocha',
+  reporterOptions: { url: 'http://localhost:8080', project: 'LOGIN' },
+};
+```
+
+```js
+const { Case } = require('testpulse-mocha');
+
+describe('login', function () {
+  it('succeeds', function () {
+    // `this` must come from a non-arrow function.
+    Case(this, 'LOGIN-42', { platform: 'linux', tags: ['smoke'] });
+    // ...
+  });
+});
+```
+
+Run the suite as normal, then check the result — Mocha's own CLI
+determines its exit code independent of anything a reporter sets, so
+`testpulse-mocha check` is the only thing that can fail the build for a
+submission error or an unmatched case:
+
+```sh
+mocha; mocha_status=$?
+testpulse-mocha check; check_status=$?
+[ "$mocha_status" -eq 0 ] && [ "$check_status" -eq 0 ]
+```
+
+Don't chain these with `&&` (`mocha && testpulse-mocha check`) — a
+failing test short-circuits it, so `check` never runs and its own
+diagnostic never prints; see the plugin's own README for the full
+explanation, plus a real risk worth knowing: don't pass `--exit` to
+`mocha` when using this reporter, since it can kill an in-flight
+submission before it completes.
+
+Screenshot/file attachments (`Attach(this, caseKey, data, filename,
+contentType)`) are verified against whatever `Case` already recorded on
+the current test.
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | `check` exits `0`; summary logged |
+| `207` some unmatched | `check` exits `0` by default; exits non-zero when `failOnUnmatched` is set |
+| network/auth/4xx/5xx error | `check` always exits non-zero, unconditionally |
+
+See the plugin's own README for the full config-precedence reference,
+the dry-run option, and the `--parallel` limitation's exact cause.

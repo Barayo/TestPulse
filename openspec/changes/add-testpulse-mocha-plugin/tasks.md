@@ -63,6 +63,6 @@
 
 ## 8. TestPulse monorepo docs update
 
-- [ ] 8.1 Add a "Mocha: `testpulse-mocha`" section to `docs/importing-results.md` (install, `Case`/`Attach` usage and its context-handle requirement, the `.mocharc.js` registration snippet, the `mocha; testpulse-mocha check` invocation, build-outcome table, the documented `--parallel` limitation), following the same pattern already used there for the pytest/Maven/Jest/Gradle/Go/.NET/gtest/Jasmine plugin sections; update `docs/README.md`'s index line
+- [x] 8.1 Add a "Mocha: `testpulse-mocha`" section to `docs/importing-results.md` (install, `Case`/`Attach` usage and its context-handle requirement, the `.mocharc.js` registration snippet, the `mocha; testpulse-mocha check` invocation, build-outcome table, the documented `--parallel` limitation), following the same pattern already used there for the pytest/Maven/Jest/Gradle/Go/.NET/gtest/Jasmine plugin sections; update `docs/README.md`'s index line
 
 <!-- No Sample-Project-showcase task: this is client-tooling published as its own repo, with no new API endpoint, UI, or seed-data surface inside TestPulse itself -- same as every prior plugin change. -->
