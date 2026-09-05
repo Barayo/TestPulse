@@ -273,3 +273,15 @@ carried-over precedent from Jest/Jasmine:
   "a 207 response with default config suggests enabling failOnUnmatched"
   and "...with failOnUnmatched already enabled does not suggest
   enabling it".
+- **The CI matrix's Node 18/mocha 9 cell failed with "Cannot find module
+  mocha/bin/mocha.js"** — caught by CI itself, not local development
+  (this machine's locally-installed mocha happened to be a newer
+  major that masked the bug). Root cause: mocha 9's own `package.json`
+  declares its CLI bin at `./bin/mocha` (no extension); mocha 10+
+  renamed it to `./bin/mocha.js`. The e2e test helper
+  (`test/e2e/helpers/runMocha.ts`) hardcoded the newer path. Fixed by
+  resolving the bin path from the installed `mocha` package's own
+  declared `bin` field in its `package.json`, verified directly against
+  both mocha 9 and mocha 10 locally (not just trusting the CI matrix to
+  eventually confirm it) before pushing. Test-infrastructure-only; no
+  production code was affected.
