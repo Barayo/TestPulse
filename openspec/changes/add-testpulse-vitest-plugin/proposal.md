@@ -40,13 +40,16 @@ and Mocha), and the fifth JS testing-framework plugin.
     proven for Jasmine/Mocha, rather than depending on that race.
   - **A separate `testpulse-vitest check` CLI is the only thing that
     can fail the build**, reading a `.testpulse/result.json` marker —
-    confirmed via a real, reproduced repro that a Vitest reporter
-    cannot reliably influence the final process exit code via
-    `process.exitCode` set in `onTestRunEnd` (this directly contradicts
-    generic web-search guidance suggesting it would work, and initial
-    source reading before the repro also pointed the wrong way — only
-    the empirical test settled it), the same hybrid architecture
-    already proven for Jasmine and Mocha.
+    the same hybrid architecture already proven for Jasmine and Mocha,
+    kept here for consistency with those plugins and because relying
+    on `process.exitCode` isn't part of Vitest's documented reporter
+    contract. (An earlier repro claimed a reporter's `process.exitCode`
+    assignment doesn't survive at all; that repro turned out to be
+    invalidated by a shell-scripting bug — piping through `tail` before
+    checking `$?` captures `tail`'s exit code, not the real one — and
+    was corrected during implementation: the assignment does in fact
+    survive on the versions tested. The architectural choice itself
+    still stands on its own merits regardless of that correction.)
   - **`Case(context, caseKey, opts)`/`Attach(context, caseKey, data,
     filename, contentType)` take an explicit test-context handle**,
     matching Mocha's `Case(this, ...)` shape, since `annotate()` is

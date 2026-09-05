@@ -89,8 +89,13 @@ own hooks and is not guaranteed complete when a subsequent reporter's
 hook runs. In `onTestRunEnd`, the reporter SHALL submit the assembled
 report (or preview it, in dry-run mode) and SHALL write a
 `.testpulse/result.json` marker recording whether the outcome should
-fail the build, since a Vitest reporter cannot reliably influence the
-final process exit code via `process.exitCode`.
+fail the build. (A reporter's `process.exitCode` assignment was found
+during implementation to actually survive on the Vitest versions
+tested, contrary to this project's own earlier, since-corrected repro —
+see design.md's Context #5 — but the marker-plus-`check`-CLI mechanism
+is still used regardless, for consistency with the Jasmine/Mocha
+plugins and because relying on `process.exitCode` isn't part of
+Vitest's documented reporter contract.)
 
 #### Scenario: A genuinely failing test still triggers annotate and submit
 - **WHEN** a test carrying `testpulse.Case(context, 'LOGIN-42')`

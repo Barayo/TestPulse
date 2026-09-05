@@ -59,20 +59,34 @@ sibling JS plugins:
    correct file, confirming this is a genuine async write race with no
    ordering guarantee from Vitest's reporter dispatch, not a one-off
    fluke.
-5. **A custom reporter cannot reliably influence Vitest's own final
-   process exit code**, confirmed via a real repro: a custom reporter's
-   `onTestRunEnd` synchronously set `process.exitCode = 1` against an
-   otherwise fully-passing test run; the final process exit code was
-   still `0`. This directly contradicts generic web-search guidance
-   (which claimed setting `process.exitCode` in `onTestRunEnd` is the
-   documented way to fail a Vitest build) and an initial, more
-   optimistic read of Vitest's own source (`if (state !== "passed")
-   process.exitCode = 1;` appearing to run *before* reporters are
-   awaited, suggesting a later reporter's own assignment should stick).
-   Only the empirical repro — run twice, once via `npx vitest` and once
-   invoking the installed binary directly — settled it. The same hybrid
-   architecture already proven necessary for Jasmine and Mocha applies
-   here too.
+5. **CORRECTED (found during implementation, re-verified independently
+   afterward): a custom reporter's `process.exitCode` set in
+   `onTestRunEnd` DOES survive to the final process exit code**, for a
+   run whose own tests all pass. The original repro that produced the
+   opposite conclusion was invalidated by a shell-scripting bug, not a
+   real Vitest behavior: the repro piped the command through `| tail
+   -N` and then checked `$?`, which reflects `tail`'s own exit status,
+   not the piped command's — `tail` almost always exits `0`, so the
+   repro was silently checking the wrong process's exit code the whole
+   time. Re-run without the pipe (`> file 2>&1; echo $?`), a genuinely
+   passing test with a probe reporter setting `process.exitCode = 1` in
+   `onTestRunEnd` produces exit code `1`, confirmed independently twice
+   (once during implementation, once in a follow-up verification pass)
+   against real nested `vitest run` processes. Reading Vitest's own
+   source explains why: `index.B89dZ0-N.js` only forces
+   `process.exitCode = 1` when the run's own `state !== "passed"` — for
+   a genuinely passing run, Vitest never touches `process.exitCode` at
+   all, so nothing overwrites whatever a reporter already set.
+   **This plugin still uses the same hybrid reporter-plus-check-CLI
+   architecture as Jasmine/Mocha regardless of this correction** — not
+   because a reporter *can't* influence the exit code (it can, on the
+   versions tested), but because relying on that isn't part of Vitest's
+   *documented* reporter contract, only an observed behavior on the
+   specific versions tested, and consistency with every sibling
+   plugin's proven, already-shipped pattern is worth more than a
+   marginally simpler mechanism resting on undocumented behavior. The
+   original justification for this choice was wrong; the choice itself
+   still stands on its own, independent merits.
 
 ## Goals / Non-Goals
 
