@@ -165,6 +165,42 @@ func projectIDFromTestPlan(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForTestPlan(r.Context(), resolvedID(r, "planKey"))
 }
 
+// projectIDFromAuditEntity resolves GET /audit's project the same way the
+// other projectIDFrom* resolvers do for their own routes, but from query
+// params (entityType/entityId) rather than a path param, since audit
+// entries can belong to any entity type (#160). Entity types with no
+// owning project (user, team, api_token, instance_settings) return
+// store.ErrNotFound -- requirePermission already lets a Tenant Admin
+// through before this resolver ever runs, so that's the only actor who can
+// view those entities' history, matching how tenant-level management is
+// gated everywhere else in this file.
+func projectIDFromAuditEntity(h *api, r *http.Request) (string, error) {
+	entityType := r.URL.Query().Get("entityType")
+	entityID := r.URL.Query().Get("entityId")
+	switch entityType {
+	case "project":
+		return entityID, nil
+	case "case":
+		return h.svc.ProjectIDForCase(r.Context(), entityID)
+	case "suite":
+		return h.svc.ProjectIDForSuite(r.Context(), entityID)
+	case "run":
+		return h.svc.ProjectIDForRun(r.Context(), entityID)
+	case "run_item":
+		return h.svc.ProjectIDForItem(r.Context(), entityID)
+	case "folder":
+		return h.svc.ProjectIDForFolder(r.Context(), entityID)
+	case "release":
+		return h.svc.ProjectIDForRelease(r.Context(), entityID)
+	case "test_plan":
+		return h.svc.ProjectIDForTestPlan(r.Context(), entityID)
+	case "attachment":
+		return h.svc.ProjectIDForAttachment(r.Context(), entityID)
+	default:
+		return "", store.ErrNotFound
+	}
+}
+
 // --- Human-readable key resolution (add-human-readable-keys D4) ---
 //
 // resolveKey returns middleware that resolves a key-shaped path param

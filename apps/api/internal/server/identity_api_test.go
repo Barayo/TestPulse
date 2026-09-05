@@ -720,6 +720,49 @@ func TestScenario_AuditHistoryQueryableForAnEntity(t *testing.T) {
 	}
 }
 
+// #160: GET /api/v1/audit had no permission check at all -- any
+// authenticated actor, including one with zero membership on the target
+// entity's project, could pull its full audit trail.
+func TestScenario_AuditHistoryRejectsActorWithoutProjectAccess(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var p jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	projectID, _ := p["id"].(string)
+
+	var outsider jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "outsider@example.com", "password": "correcthorse"}, 201, &outsider)
+	outsiderCookie := loginCookie(t, h, "outsider@example.com", "correcthorse")
+
+	var errBody jmap
+	callAs(t, h, outsiderCookie, "GET", "/api/v1/audit?entityType=project&entityId="+projectID, nil, 403, &errBody)
+}
+
+// A tenant-level entity (here: a user) has no owning project at all --
+// only a Tenant Admin can view its audit history, matching every other
+// user-management route in this file.
+func TestScenario_AuditHistoryForTenantLevelEntityRequiresTenantAdmin(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	adminCookie := loginCookie(t, h, "admin@example.com", "correcthorse")
+
+	var member jmap
+	callAs(t, h, adminCookie, "POST", "/api/v1/users",
+		jmap{"email": "member@example.com", "password": "correcthorse"}, 201, &member)
+	memberID, _ := member["id"].(string)
+	memberCookie := loginCookie(t, h, "member@example.com", "correcthorse")
+
+	// Tenant-level entity types have no projectIDFromAuditEntity mapping,
+	// so the resolver errors -- requirePermission maps any resolver error
+	// to 404, the same as an unresolvable case/suite/run id elsewhere.
+	var errBody jmap
+	callAs(t, h, memberCookie, "GET", "/api/v1/audit?entityType=user&entityId="+memberID, nil, 404, &errBody)
+
+	var history []jmap
+	callAs(t, h, adminCookie, "GET", "/api/v1/audit?entityType=user&entityId="+memberID, nil, 200, &history)
+}
+
 func TestScenario_CurrentUserReflectsSessionActor(t *testing.T) {
 	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	cookie := loginCookie(t, h, "admin@example.com", "correcthorse")

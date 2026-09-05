@@ -67,7 +67,7 @@ func mountIdentity(r chi.Router, h *api) {
 		r.Post("/", h.createToken)
 		r.Delete("/{tokenId}", h.revokeToken)
 	})
-	r.Get("/audit", h.listAuditEntries)
+	r.With(h.requirePermission(domain.PermRead, projectIDFromAuditEntity)).Get("/audit", h.listAuditEntries)
 }
 
 type loginInput struct {

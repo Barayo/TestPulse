@@ -47,12 +47,27 @@ append-only — no entry is ever edited or deleted.
 - **WHEN** a case's content is restored from an old version
 - **THEN** the resulting audit entry's detail records which version was restored from and which new version it produced
 
-### Requirement: Audit history is queryable per entity
-The system SHALL let an authenticated actor retrieve the audit history for
-a specific entity, ordered oldest first.
+### Requirement: Audit history is queryable per entity, scoped by permission on that entity's project
+The system SHALL let an actor retrieve the audit history for a specific
+entity, ordered oldest first, only if the actor holds read permission on
+the project that entity belongs to. For an entity type with no owning
+project (e.g. a user, team, or API token), only a Tenant Admin may
+retrieve its audit history.
 
 #### Scenario: List an entity's audit history
-- **WHEN** an authenticated actor requests the audit log for a specific
-  entity (e.g. a test case)
+- **WHEN** an actor with read permission on a project requests the audit
+  log for a project-scoped entity (e.g. a test case) belonging to that
+  project
 - **THEN** every recorded write to that entity is returned in chronological
   order
+
+#### Scenario: Actor without project access is denied
+- **WHEN** an actor with no permission on the project a requested entity
+  belongs to requests that entity's audit log
+- **THEN** the request is rejected, regardless of the actor otherwise being
+  authenticated
+
+#### Scenario: Tenant-level entity requires Tenant Admin
+- **WHEN** a non-Tenant-Admin actor requests the audit log for an entity
+  with no owning project (e.g. a user)
+- **THEN** the request is rejected
