@@ -258,3 +258,18 @@ carried-over precedent from Jest/Jasmine:
   real ergonomic constraint, though not a new one Mocha users haven't
   already encountered for `this.timeout()`/`this.retries()`. Mitigated
   by stating it plainly in the README's first example, not burying it.
+- **A `207` response's "enable failOnUnmatched" log line printed
+  unconditionally, even when `failOnUnmatched` was already enabled** —
+  found post-implementation by Paco's real QA pass against a live
+  TestPulse instance (a genuinely unmatched case key with
+  `TESTPULSE_FAIL_ON_UNMATCHED=true` set still logged "enable
+  failOnUnmatched to make this a hard failure," which reads as "your
+  setting didn't take effect" even though the exit code was already
+  correctly non-zero). Not a gating bug — every exit-code scenario in
+  the spec still held — but a real, misleading diagnostic for anyone
+  triaging a CI failure. Fixed by gating the message on `failOnUnmatched`
+  itself: the already-enabled case now logs "failing the build
+  (failOnUnmatched is enabled)" instead. Covered by `reporter.test.ts`'s
+  "a 207 response with default config suggests enabling failOnUnmatched"
+  and "...with failOnUnmatched already enabled does not suggest
+  enabling it".
