@@ -285,3 +285,21 @@ carried-over precedent from Jest/Jasmine:
   both mocha 9 and mocha 10 locally (not just trusting the CI matrix to
   eventually confirm it) before pushing. Test-infrastructure-only; no
   production code was affected.
+- **`check`'s output discarded the real failure reason for every
+  submission-error path except the missing-config skip** — found by
+  Paco's post-implementation QA pass on the sibling `testpulse-vitest`
+  plugin, then confirmed to exist verbatim here too: a bad token, an
+  unreachable URL during a live submit, and an unreachable URL during
+  dry-run all produced a specific, accurate `console.error`, but
+  `writeResultMarker({ failed: true })` never carried that message as
+  `reason` — only the missing-config path did. Since `check` is the
+  step actually inspected for "why did this fail" in the documented CI
+  pattern, it fell back to a generic, sometimes actively misleading
+  message ("...failOnUnmatched set") for every one of these cases.
+  Fixed by threading the same message already being logged through to
+  the marker's `reason` field in every failure path (dry-run fetch
+  failure, submission network error, non-2xx submission response, and
+  the 207-plus-failOnUnmatched case, which now names the actual
+  unmatched keys) — the identical fix already applied in
+  `testpulse-vitest`, ported back here as a same-day follow-up rather
+  than left as a known gap in an already-shipped plugin.
