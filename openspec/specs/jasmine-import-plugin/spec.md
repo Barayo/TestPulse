@@ -180,22 +180,22 @@ itself fails.
   wouldn't, makes no request to the import endpoint, and `check` exits
   `0`
 
-### Requirement: Configuration resolves reporter option, then environment variable
+### Requirement: Configuration resolves environment variable over reporter option
 For `url`, `token`, `project`, `failOnUnmatched`, and `dryRun`, the
 reporter SHALL resolve each value by checking, in order: the
-corresponding reporter option (passed to `addReporter(new
-TestPulseReporter(options))`), then the corresponding environment
-variable (`TESTPULSE_URL`, `TESTPULSE_TOKEN`, `TESTPULSE_PROJECT`,
-`TESTPULSE_FAIL_ON_UNMATCHED`, `TESTPULSE_DRY_RUN`), using the first one
-present. There is no third, config-file-backed resolution tier. The
-resolved token SHALL NOT be logged at any verbosity level.
+corresponding environment variable (`TESTPULSE_URL`, `TESTPULSE_TOKEN`,
+`TESTPULSE_PROJECT`, `TESTPULSE_FAIL_ON_UNMATCHED`, `TESTPULSE_DRY_RUN`),
+then the corresponding reporter option (passed to `addReporter(new
+TestPulseReporter(options))`), using the first one present. There is no
+third, config-file-backed resolution tier. The resolved token SHALL NOT
+be logged at any verbosity level.
 
-#### Scenario: Reporter option overrides environment variable
+#### Scenario: Environment variable overrides reporter option
 - **WHEN** `TESTPULSE_URL=https://a.example` is set in the environment
   and the reporter is constructed with `{ url: 'https://b.example' }`
-- **THEN** the plugin submits to `https://b.example`
+- **THEN** the plugin submits to `https://a.example`
 
-#### Scenario: Environment variable is used when no reporter option is set
-- **WHEN** `TESTPULSE_TOKEN=t0k3n` is set in the environment and the
-  reporter is constructed without a `token` option
+#### Scenario: Reporter option is used when no environment variable is set
+- **WHEN** no `TESTPULSE_TOKEN` environment variable is set and the
+  reporter is constructed with `{ token: 't0k3n' }`
 - **THEN** the plugin authenticates using `t0k3n`

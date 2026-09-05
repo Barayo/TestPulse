@@ -382,3 +382,19 @@ snippet in `docs/importing-results.md`.
   README's documented invocation to run `check` unconditionally and
   combine both exit codes explicitly, with an explicit warning against
   the `&&` form.
+- **A genuine cross-file test race, caught by CI (not local runs)**:
+  `test/e2e/case.e2e.test.ts` and `test/e2e/submission.e2e.test.ts` both
+  used the shared `test/fixtures/tagged` directory, each doing its own
+  destructive `.testpulse` cleanup before and after its nested `jasmine`
+  run. Since Jest runs separate test *files* as separate parallel worker
+  processes by default, one file's cleanup could delete the other's
+  freshly-written result marker mid-run — reproduced by CI going red
+  with "no .testpulse/result.json found" on an assertion that had
+  nothing to do with the actual change being shipped, while three
+  consecutive local runs passed (the race window differed by machine).
+  This bug predates this review's fixes; it simply hadn't been triggered
+  until now. Fixed by giving the unmatched/`failOnUnmatched` scenario in
+  `submission.e2e.test.ts` its own dedicated fixture directory
+  (`test/fixtures/tagged-unmatched`) instead of sharing `tagged` with
+  `case.e2e.test.ts` — no e2e fixture directory is shared across test
+  files any more.
