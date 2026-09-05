@@ -48,7 +48,7 @@ func mountAuth(r chi.Router, h *api, perMinute float64, burst int) {
 // further restricts user management to Tenant Admins (authorization spec).
 func mountIdentity(r chi.Router, h *api) {
 	r.Route("/users", func(r chi.Router) {
-		r.Get("/", h.listUsers)
+		r.With(rejectScopedAgentTokens).Get("/", h.listUsers)
 		r.Get("/me", h.currentUser)
 		r.Patch("/me", h.updateCurrentUserProfile)
 		r.Post("/me/password", h.changeOwnPassword)

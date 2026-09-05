@@ -461,6 +461,40 @@ func TestScenario_ScopedTokenAuthorizedOnlyWithinItsProjectAndRole(t *testing.T)
 	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects/"+projectBKey, nil, 403, &errBody)
 }
 
+// #161: GET /api/v1/users had no permission check at all -- a token
+// scoped to a single project could enumerate every human user in the
+// tenant (email, display name, isTenantAdmin), breaking the "a scoped
+// token never reaches anything outside its own project" invariant. The
+// route can't be locked to Tenant-Admin-only, since ordinary project
+// members' assignee-picker/project-members UI depends on it -- so a
+// scoped agent token specifically is rejected instead.
+func TestScenario_ScopedTokenCannotListUsers(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+	viewerRoleID := roleIDByName(t, h, admin, "Viewer")
+
+	var project jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "Scoped"}, 201, &project)
+	projectID, _ := project["id"].(string)
+
+	var created jmap
+	callAs(t, h, admin, "POST", "/api/v1/tokens",
+		jmap{"name": "viewer-agent", "projectId": projectID, "roleId": viewerRoleID}, 201, &created)
+	full, _ := created["token"].(string)
+
+	var errBody jmap
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/users", nil, 403, &errBody)
+
+	// An ordinary (unscoped) human member still needs this for the
+	// assignee-picker/project-members UI -- confirm it's not broken.
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users",
+		jmap{"email": "member@example.com", "password": "correcthorse"}, 201, &member)
+	memberCookie := loginCookie(t, h, "member@example.com", "correcthorse")
+	var list []jmap
+	callAs(t, h, memberCookie, "GET", "/api/v1/users", nil, 200, &list)
+}
+
 // The single most important invariant this feature exists for: a scoped
 // token created by a Tenant Admin must not bypass scoping via the
 // existing IsTenantAdmin shortcut requirePermission checks first.

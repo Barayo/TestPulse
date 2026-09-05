@@ -79,6 +79,26 @@ func requireTenantAdmin(next http.Handler) http.Handler {
 	})
 }
 
+// rejectScopedAgentTokens blocks a project-scoped agent token from a route
+// that any ordinary human actor may otherwise reach unrestricted (#161:
+// GET /api/v1/users, needed by the assignee-picker/project-members UI for
+// every project member, not just Tenant Admins -- so the route can't be
+// locked down to requireTenantAdmin without breaking that). A scoped
+// token's entire purpose is confinement to its own project; browsing the
+// tenant-wide user directory has no legitimate use for one and directly
+// contradicts that confinement guarantee (middleware.go's requirePermission
+// enforces the same invariant for project-scoped resources).
+func rejectScopedAgentTokens(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		actor, ok := domain.ActorFromContext(r.Context())
+		if ok && actor.ScopedProjectID != nil {
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 // requireNoPendingPasswordChange rejects every authenticated route with 403
 // for an actor whose underlying user has a pending required password
 // change (add-change-own-password), except a small allowlist: reading own
