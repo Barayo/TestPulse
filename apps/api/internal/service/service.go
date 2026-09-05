@@ -905,6 +905,13 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 	}
 	caseIDs := in.CaseIDs
 	if in.SuiteID != "" {
+		suiteProjectID, err := s.store.Suites.ProjectID(ctx, in.SuiteID)
+		if err != nil {
+			return domain.Run{}, err
+		}
+		if suiteProjectID != projectID {
+			return domain.Run{}, invalid("suite belongs to a different project")
+		}
 		suite, err := s.store.Suites.Get(ctx, in.SuiteID)
 		if err != nil {
 			return domain.Run{}, err
@@ -927,6 +934,19 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 		if !seen[id] {
 			seen[id] = true
 			unique = append(unique, id)
+		}
+	}
+	// Every case ID -- whether supplied directly or pulled in via the
+	// suite -- must belong to this project. Checked here rather than
+	// trusted from the suite, since suite membership itself doesn't
+	// enforce single-project cases (AddCaseToSuite has no such check).
+	for _, id := range unique {
+		caseProjectID, err := s.store.Cases.ProjectID(ctx, id)
+		if err != nil {
+			return domain.Run{}, err
+		}
+		if caseProjectID != projectID {
+			return domain.Run{}, invalid("case belongs to a different project")
 		}
 	}
 	var run domain.Run
@@ -1004,6 +1024,17 @@ func runClosedAsConflict(err error) error {
 func (s *Service) AddRunItem(ctx context.Context, runID, caseID string) (string, error) {
 	if caseID == "" {
 		return "", invalid("caseId is required")
+	}
+	runProjectID, err := s.store.Runs.ProjectID(ctx, runID)
+	if err != nil {
+		return "", err
+	}
+	caseProjectID, err := s.store.Cases.ProjectID(ctx, caseID)
+	if err != nil {
+		return "", err
+	}
+	if caseProjectID != runProjectID {
+		return "", invalid("case belongs to a different project")
 	}
 	itemID, err := s.store.Runs.AddItem(ctx, runID, caseID, "")
 	if err != nil {

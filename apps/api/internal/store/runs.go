@@ -483,7 +483,8 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source,
 		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
 		 FROM test_run_items i
-		 JOIN test_cases c ON c.id = i.case_id
+		 JOIN test_runs r2 ON r2.id = i.run_id
+		 JOIN test_cases c ON c.id = i.case_id AND c.project_id = r2.project_id
 		 JOIN test_case_versions v ON v.case_id = i.case_id AND v.version = i.case_version
 		 LEFT JOIN users u ON u.id = i.assignee_user_id
 		 LEFT JOIN teams t ON t.id = i.assignee_team_id
