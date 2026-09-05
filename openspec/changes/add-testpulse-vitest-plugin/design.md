@@ -296,3 +296,13 @@ sibling JS plugins:
   explicit, prominent README warning (not buried), naming `html`
   specifically and explaining why, rather than a vague "be careful"
   note.
+- **The html-reporter warning understated exposure, and the peer-dep
+  version claim was untested** — two low-risk findings from
+  post-implementation review (Luis): the warning said attachment bytes
+  were found "intact inside `html.meta.json.gz`," but a real repro
+  showed they're also written out as an individually-fetchable
+  standalone static file (`html/data/<hash>.png`, raw and unencoded)
+  alongside the report's other assets — worse than "buried in a gzip
+  blob" implies. Separately, `peerDependencies`/the README both claimed
+  `vitest >=1.0.0` support while the CI matrix only ever exercises
+  3.x/4.x/5.x. Both fixed to state only what's actually verified.
