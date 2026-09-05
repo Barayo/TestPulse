@@ -685,3 +685,73 @@ the current test.
 
 See the plugin's own README for the full config-precedence reference,
 the dry-run option, and the `--parallel` limitation's exact cause.
+
+## Vitest: `testpulse-vitest`
+
+**Requires `vitest` 1.0+.** Unlike every other JS plugin in this list,
+[`testpulse-vitest`](https://github.com/Barayo/testpulse-vitest) needs
+no scratch directory at all — Vitest has a genuine, native, built-in
+test-annotation API (`context.annotate(message, type, attachment?)`)
+whose data, including binary attachment payloads, is directly readable
+by a custom reporter via `TestCase.annotations()`. `Case`/`Attach` are
+thin wrappers over that native mechanism; attachments travel entirely
+through it too, never touching disk. The reporter still builds JUnit
+XML directly rather than depending on the built-in `junit` reporter's
+file output, since that file's write was found to race unsafely against
+other configured reporters' own hooks.
+
+```ts
+// vitest.config.ts
+import { defineConfig } from 'vitest/config';
+
+export default defineConfig({
+  test: {
+    reporters: ['default', 'testpulse-vitest'],
+  },
+});
+```
+
+```ts
+import { test } from 'vitest';
+import { Case } from 'testpulse-vitest';
+
+test('login succeeds', async (context) => {
+  await Case(context, 'LOGIN-42', { platform: 'linux', tags: ['smoke'] });
+  // ...
+});
+```
+
+Run the suite as normal, then check the result — `testpulse-vitest
+check` is the only supported, version-independent way to fail the
+build for a submission error or an unmatched case:
+
+```sh
+vitest run; vitest_status=$?
+testpulse-vitest check; check_status=$?
+[ "$vitest_status" -eq 0 ] && [ "$check_status" -eq 0 ]
+```
+
+Don't chain these with `&&` for the same reason as the other plugins —
+see the plugin's own README's "Exit code" section for a genuinely
+nuanced finding: a reporter's `process.exitCode` assignment was found
+to actually survive on the Vitest versions tested, but since that isn't
+part of Vitest's *documented* reporter contract, `check` is still the
+supported mechanism regardless.
+
+Screenshot/file attachments (`Attach(context, caseKey, data, filename,
+contentType)`) are verified against whatever `Case` already recorded
+for the current test. **Combining `testpulse-vitest` with Vitest's
+built-in `html` reporter embeds attachment bytes into that reporter's
+own output bundle** — confirmed empirically, not hypothetical; avoid
+that combination if attachments may be published as a CI artifact or
+preview page.
+
+| API response | Behavior |
+|---|---|
+| `201` all matched | `check` exits `0`; summary logged |
+| `207` some unmatched | `check` exits `0` by default; exits non-zero when `failOnUnmatched` is set |
+| network/auth/4xx/5xx error | `check` always exits non-zero, unconditionally |
+
+See the plugin's own README for the full config-precedence reference,
+the dry-run option (including its fail-closed behavior on a preview
+fetch error), and the `html`-reporter warning's full explanation.

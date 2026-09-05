@@ -60,6 +60,6 @@
 
 ## 8. TestPulse monorepo docs update
 
-- [ ] 8.1 Add a "Vitest: `testpulse-vitest`" section to `docs/importing-results.md` (install, `Case`/`Attach` usage and its context-handle requirement, the `vitest.config.ts` registration snippet, the `vitest run; testpulse-vitest check` invocation, build-outcome table), following the same pattern already used there for the pytest/Maven/Jest/Gradle/Go/.NET/gtest/Jasmine/Mocha plugin sections; update `docs/README.md`'s index line
+- [x] 8.1 Add a "Vitest: `testpulse-vitest`" section to `docs/importing-results.md` (install, `Case`/`Attach` usage and its context-handle requirement, the `vitest.config.ts` registration snippet, the `vitest run; testpulse-vitest check` invocation, build-outcome table), following the same pattern already used there for the pytest/Maven/Jest/Gradle/Go/.NET/gtest/Jasmine/Mocha plugin sections; update `docs/README.md`'s index line
 
 <!-- No Sample-Project-showcase task: this is client-tooling published as its own repo, with no new API endpoint, UI, or seed-data surface inside TestPulse itself -- same as every prior plugin change. -->
