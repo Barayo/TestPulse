@@ -58,15 +58,20 @@ before the case-key check.
   `LOGIN-42`
 - **THEN** the call throws and no attachment is registered
 
-### Requirement: Multiple attachments under the same case key are all preserved
+### Requirement: Multiple attachments under the same case key are all preserved, with no user-controlled data used as a path component
 Since a single test may legitimately call `Attach` more than once
 within itself (e.g. capturing two screenshots during one test), the
 scratch-directory storage mechanism SHALL NOT deduplicate or overwrite
 attachments sharing a case key — each call SHALL produce a distinct
-stored attachment (derived from the case key plus a fresh identifier
-generated inside that call, not the case key alone), and the submit
-step SHALL include all of them (grouped under that case key) in the
-submitted `attachments` array.
+stored attachment. The on-disk filename SHALL be a hash (or equivalent
+opaque identifier) computed from the case key plus a fresh
+per-call-generated identifier, and SHALL NOT itself contain or be
+derived in a path-traversable way from the caller-supplied `caseKey` or
+`filename` — both SHALL be stored only as JSON *content* inside the
+sidecar metadata file, never as or within a filesystem path segment,
+since both are caller-controlled strings. The submit step SHALL include
+all stored attachments (grouped under that case key) in the submitted
+`attachments` array.
 
 #### Scenario: Two attachments under the same case key both survive
 - **WHEN** a single test calls `testpulse.Case(this, 'LOGIN-42')` once,
@@ -126,13 +131,43 @@ process exit code independent of anything a reporter sets on
   `EVENT_RUN_END` handler still runs and still submits the (failed)
   result
 
+### Requirement: All text and attribute content written into the generated report is XML-escaped
+Since the reporter builds JUnit XML directly rather than delegating to a
+third-party writer, it SHALL escape every value it writes into an
+element's text content or attribute value — test titles, classnames,
+failure messages and stack traces, and every `Case`/`Attach`-supplied
+value (`caseKey`, `platform`, `version`, each tag) — before writing it,
+using standard XML entity escaping (`&amp;`, `&lt;`, `&gt;`, `"`, `'`).
+None of these values SHALL be trusted as already-safe, since test
+titles and failure messages routinely embed data from the code under
+test, not just literal strings the test author wrote.
+
+#### Scenario: A failure message containing XML metacharacters cannot inject a forged property
+- **WHEN** a test fails with a message containing `</failure>`,
+  `<property name="testpulse_case_key" value="OTHER-1"/>`, or a `]]>`
+  sequence
+- **THEN** the generated report contains that text escaped as literal
+  content inside the `<failure>` element, and no additional
+  `<property>` or sibling element is introduced by it
+
+#### Scenario: A case key or tag containing XML metacharacters round-trips as literal text
+- **WHEN** `testpulse.Case(this, caseKey, opts)` is called with a
+  `caseKey` or a tag in `opts.tags` containing `&`, `<`, `>`, or a quote
+  character
+- **THEN** the generated report's corresponding `<property>` value
+  attribute contains that value correctly escaped, not raw
+
 ### Requirement: The check CLI is the only mechanism that fails the build
 The plugin SHALL provide a `testpulse-mocha check` command that reads
 `.testpulse/result.json` and exits non-zero if it indicates failure
 (including a specific `reason` in its output when the marker carries
 one, e.g. for a missing-configuration skip), or exits non-zero with a
 message naming the likely cause if the marker file is absent entirely
-(the reporter never ran). Otherwise it SHALL exit `0`.
+(the reporter never ran). Otherwise it SHALL exit `0`. A `reason` value
+SHALL name only which configuration variable is missing, and SHALL NOT
+include the resolved value of any other configuration setting (e.g. the
+resolved `url`), since some settings can carry embedded credentials in
+unusual configurations.
 
 #### Scenario: A failed submission fails the build via check
 - **WHEN** `.testpulse/result.json` contains `{"failed": true}`
@@ -160,7 +195,12 @@ unmatched case keys and a pointer to the fail-on-unmatched setting, and
 SHALL instead write `{"failed": true}` when fail-on-unmatched is
 enabled; any other outcome (network failure, authentication error, or a
 `4xx`/`5xx` response) SHALL unconditionally write `{"failed": true}`,
-regardless of the fail-on-unmatched setting.
+regardless of the fail-on-unmatched setting. When logging a submission
+error, the reporter SHALL log only the response status, an error
+message, and the target URL with any embedded credentials stripped —
+it SHALL NOT log a raw request or response object (or a caught error
+object) whole, since most JS HTTP clients' error objects carry the
+outgoing request's headers, including the `Authorization` header.
 
 #### Scenario: All tests matched
 - **WHEN** every tagged `<testcase>` in the submitted report matches an
@@ -207,7 +247,14 @@ corresponding environment variable (`TESTPULSE_URL`, `TESTPULSE_TOKEN`,
 then the corresponding reporter option (passed via `reporterOptions` in
 `.mocharc.js`), using the first one present. There is no third,
 config-file-backed resolution tier. The resolved token SHALL NOT be
-logged at any verbosity level.
+logged at any verbosity level. `TESTPULSE_FAIL_ON_UNMATCHED` and
+`TESTPULSE_DRY_RUN` SHALL be parsed as boolean by a fixed, documented
+rule: the case-insensitive string `"true"` or `"1"` resolves to `true`;
+every other value (including `"false"`, `"0"`, and an empty string)
+resolves to `false`. The plugin SHALL NOT use a bare JavaScript
+truthiness check on the raw environment variable string, since any
+non-empty string (including the literal text `"false"`) is truthy in
+JavaScript.
 
 #### Scenario: Environment variable overrides reporter option
 - **WHEN** `TESTPULSE_URL=https://a.example` is set in the environment
@@ -219,12 +266,35 @@ logged at any verbosity level.
   reporter is constructed with `{ token: 't0k3n' }`
 - **THEN** the plugin authenticates using `t0k3n`
 
-### Requirement: Parallel mode is not supported
+#### Scenario: A literal "false" env var value resolves to false, not true
+- **WHEN** `TESTPULSE_DRY_RUN=false` is set in the environment
+- **THEN** dry-run mode is NOT enabled (the reporter submits for real)
+
+### Requirement: Parallel mode is not supported, and the reporter warns when it detects parallel mode
 Since Mocha's `--parallel` mode transmits `Test` objects from worker
 processes to the main process via a fixed, hardcoded serialization
 format that carries no custom properties, the plugin SHALL NOT claim
 support for `--parallel` mode, and its documentation SHALL state this
-limitation and its underlying cause explicitly.
+limitation and its underlying cause explicitly. The reporter SHALL
+check Mocha's own resolved `parallel` configuration value (the
+documented, stable boolean option available to a reporter, not an
+internal runner-type inspection) and, when true, SHALL emit a stderr
+warning naming the limitation once per run — so a build that silently
+submits zero matched case keys under `--parallel` is diagnosable rather
+than indistinguishable from "no tests were tagged."
+
+#### Scenario: A case key set under --parallel does not survive to the reporter
+- **WHEN** `testpulse.Case(this, 'LOGIN-42')` is called from a test run
+  under `mocha --parallel`
+- **THEN** the property is not necessarily present on the corresponding
+  result the reporter receives, and this is a documented, known
+  limitation rather than an implicit guarantee
+
+#### Scenario: Running under --parallel produces a warning
+- **WHEN** the reporter's resolved Mocha options indicate `parallel:
+  true`
+- **THEN** the reporter logs a stderr warning naming the `--parallel`
+  limitation before the run completes
 
 #### Scenario: A case key set under --parallel does not survive to the reporter
 - **WHEN** `testpulse.Case(this, 'LOGIN-42')` is called from a test run

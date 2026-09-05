@@ -128,6 +128,27 @@ carried-over precedent from Jest/Jasmine:
   `EVENT_RUN_END`, matching exactly what
   `apps/api/internal/junitxml/parser.go` already parses — the same
   "build it directly" resolution already proven for Jasmine.
+  **Every value written into the XML — test title, classname, failure
+  message/stack, and every `Case`/`Attach`-supplied value — is escaped**
+  (`escapeXml()`, ported near-verbatim from `testpulse-jasmine`'s
+  `xmlBuilder.ts`), the exact protection Maven's design documented
+  relying on Surefire's own writer for, which this plugin has to
+  provide itself since it *is* the writer — found during gating review
+  (Luis) as a real gap in this design's original wording (the language
+  said "builds JUnit XML directly" without ever stating an escaping
+  requirement, which would let a crafted failure message forge a
+  sibling `<property>`/`<testcase>` element and bypass `Attach()`'s own
+  case-key verification entirely).
+- **Attachment on-disk filenames are a hash of the case key plus a
+  fresh per-call identifier, never the raw case key or filename** —
+  ported directly from `testpulse-jasmine`'s
+  `crypto.createHash('sha256').update(\`${caseKey}:${id}\`)` pattern
+  (itself inherited from a fix `testpulse-jest`'s own gating review
+  required, since a data-driven test's case key is caller-controlled
+  text, not a trusted constant). Tightened explicitly during this
+  change's own gating review (Luis) after the original design's wording
+  ("derived from the case key plus a fresh identifier") was ambiguous
+  about whether the case key itself could land in a path segment.
 - **Hybrid reporter-plus-check-CLI architecture** (Context #3, #4).
   `EVENT_RUN_END`'s handler is `async`: builds the report, resolves
   config (env var wins over reporter option, no third tier), submits
@@ -157,6 +178,25 @@ carried-over precedent from Jest/Jasmine:
   same "verified via readback" pattern Jasmine used, adapted from
   `getSpecProperty()` to a plain property read since Mocha has no
   built-in equivalent).
+- **Boolean env vars (`TESTPULSE_FAIL_ON_UNMATCHED`,
+  `TESTPULSE_DRY_RUN`) are parsed by a fixed rule: case-insensitive
+  `"true"`/`"1"` is true, everything else (including the literal string
+  `"false"`) is false** — never a bare JS truthiness check on the raw
+  string, which would treat `"false"` as truthy. Found during gating
+  review (Luis) as an unpinned decision with real behavioral stakes in
+  either direction (a `TESTPULSE_DRY_RUN=false` meant to enable real
+  submission getting stuck in dry-run, or the reverse).
+- **Submission-error logging is restricted to status/message/URL
+  (credentials stripped), never a raw caught error or request/response
+  object** — found during gating review (Luis): most JS HTTP clients'
+  error objects carry the outgoing request's headers, including
+  `Authorization`, so a naive `console.error(err)` on a network/4xx/5xx
+  failure would satisfy "never call `console.log(token)`" while still
+  leaking it through the back door of whole-object logging. The
+  marker's `reason` field is similarly restricted to naming which
+  config variable is missing, never echoing another setting's resolved
+  value (a resolved `url` could itself carry embedded credentials in an
+  unusual configuration).
 - **Registration via `.mocharc.js`/`.yml`'s `reporter` +
   `reporterOptions` fields** (not a `--reporter` CLI flag as the primary
   documented path, though both work identically — Mocha resolves
@@ -173,15 +213,25 @@ carried-over precedent from Jest/Jasmine:
   default export resolves to the class), consistent with how Mocha
   resolves reporter names to either built-ins or `require()`-able
   modules.
-- **`--parallel` unsupported in v1, documented only, no runtime
-  detection** (Context #5, per user discussion). Detecting
-  `--parallel` at runtime would require inspecting Mocha's internal
-  runner-type (`ParallelBufferedRunner` vs. plain `Runner`), which isn't
-  a documented public API — fragile coupling for a documentation-level
-  concern. The README states the limitation and its exact cause
-  (`Test.prototype.serialize()`'s hardcoded field list) plainly, so a
-  user hits a genuine, explained non-match rather than a mysterious one
-  if they try it anyway.
+- **`--parallel` unsupported in v1; documented in the README, AND the
+  reporter emits a runtime stderr warning when it detects parallel
+  mode** (Context #5, per user discussion, corrected during gating
+  review). The original design rejected ALL runtime detection because
+  inspecting Mocha's internal runner-type (`ParallelBufferedRunner` vs.
+  plain `Runner`) isn't a documented public API — that reasoning still
+  holds for THAT specific mechanism, but gating review (Luis) pointed
+  out a different, genuinely stable one exists: Mocha's own resolved
+  `parallel` boolean option, part of the standard config surface passed
+  into a reporter's constructor (`new Reporter(runner, options)`),
+  requires no internal-class inspection at all. Without this warning,
+  the failure mode is a fully silent green build: every `Case()`-tagged
+  property is simply absent from the reporter's view, the submitted
+  report has zero case keys, the API returns `207` with everything
+  unmatched, `fail-on-unmatched` is off by default, so `check` exits
+  `0` — nothing distinguishes "no one called `Case()`" from "`Case()`
+  was called but didn't survive," and a user could go a long time
+  before noticing TestPulse never received their results. The warning
+  makes this diagnosable at the moment it happens instead.
 
 ## Risks / Trade-offs
 
