@@ -306,3 +306,26 @@ sibling JS plugins:
   blob" implies. Separately, `peerDependencies`/the README both claimed
   `vitest >=1.0.0` support while the CI matrix only ever exercises
   3.x/4.x/5.x. Both fixed to state only what's actually verified.
+- **`check`'s output discarded the real failure reason for every
+  submission-error path except the missing-config skip** — found
+  post-implementation by Paco's real QA pass against a live TestPulse
+  instance: a bad token, an unreachable URL during a live submit, and
+  an unreachable URL during dry-run all produced a specific, accurate
+  `console.error` in the reporter's own output, but
+  `writeResultMarker({ failed: true })` never carried that message as
+  `reason` — only the missing-config path did. Since `check` is the
+  step actually inspected for "why did this fail" in the documented CI
+  pattern (`vitest run; testpulse-vitest check`, run as separate steps
+  specifically so `check`'s diagnostic survives), it fell back to a
+  generic, actively misleading message ("...failOnUnmatched set") for
+  every one of these cases, including ones where `failOnUnmatched`
+  wasn't even set. Fixed by threading the same message already being
+  logged through to the marker's `reason` field in every failure path
+  (dry-run fetch failure, submission network error, non-2xx submission
+  response, and the 207-plus-failOnUnmatched case, which now names the
+  actual unmatched keys). Paco confirmed the identical bug (same
+  `writeResultMarker({ failed: true })`-with-no-reason pattern) exists
+  verbatim in the sibling `testpulse-mocha` plugin — worth porting
+  there too as a follow-up, since it's the same systemic gap in the
+  shared reporter/check-CLI pattern this plugin family inherited, not
+  something Vitest-specific.
