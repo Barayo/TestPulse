@@ -244,3 +244,41 @@ sibling JS plugins:
   stating it plainly in the README's first example, matching how Mocha's
   README already handles the same constraint honestly rather than
   hiding it.
+- **A dry-run preview-fetch failure was underspecified in the original
+  design** — found during gating review (Luis): the marker's failure
+  handling was only ever stated for the real-submission path; the
+  dry-run path's own wording ("regardless of the preview's result")
+  could be read as "even on fetch failure," which would let a broken
+  `TESTPULSE_TOKEN`/`TESTPULSE_URL` silently report a green build in
+  exactly the mode someone reaches for to smoke-test that config/auth
+  is correct. Fixed by requiring the same fail-closed, credential-safe
+  logging behavior on this path as the real-submission path.
+- **The fixed boolean-parsing rule only covered the environment
+  variable's string form, not the reporter option's** — found during
+  gating review (Luis): a config author writing `{ dryRun: 'false' }`
+  (a string) in `vitest.config.ts` could hit the exact bare-truthiness
+  bug the env-var-side fix was designed to prevent, since nothing in
+  the original spec said the same rule applied to that source too.
+  Fixed by stating the rule applies uniformly regardless of source, and
+  by typing the reporter options as `boolean` only (not `boolean |
+  string`) so a config author's own type-checker catches this at the
+  call site.
+- **Combining `testpulse-vitest` with Vitest's built-in `html` reporter
+  leaks attachment bytes into that reporter's own output — confirmed
+  empirically, not hypothetical.** Found during gating review (Luis),
+  then verified with a real repro this session: a `testpulse_attachment`
+  annotation's base64 `body` was found intact inside
+  `.vitest/ui/html.meta.json.gz`, the metadata bundle behind the `html`
+  reporter's own report — the exact file Vitest's own CLI output
+  suggests running `npx vite preview` on, a command shape teams
+  commonly wire into CI artifact publishing or GitHub Pages previews.
+  A screenshot attached via `Attach()` for TestPulse's own private
+  import would ride along into that much more widely-visible artifact.
+  (Separately confirmed the `json` reporter's output does NOT include
+  annotation data at all, so this risk is specific to `html`, not every
+  built-in reporter.) `testpulse-vitest` itself has no code-level
+  mitigation available — this is a property of the shared mechanism it
+  depends on, not a bug in its own logic — so this is addressed as an
+  explicit, prominent README warning (not buried), naming `html`
+  specifically and explaining why, rather than a vague "be careful"
+  note.

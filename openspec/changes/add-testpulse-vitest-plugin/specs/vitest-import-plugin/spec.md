@@ -204,13 +204,20 @@ response object (or a caught error object) whole.
   `401`, `400`, or `5xx`), regardless of the fail-on-unmatched setting
 - **THEN** `check` exits non-zero
 
-### Requirement: Dry run never submits and never affects the result marker's failed field
+### Requirement: Dry run never submits, and a failed preview fetch fails closed
 When dry-run is enabled, the reporter SHALL fetch existing case keys
 via a read-only `GET /api/v1/projects/{projectKey}/cases` request, log
 a match preview against the case keys discovered in the run, and SHALL
 NOT call the import endpoint. The result marker SHALL record
-`{"failed": false}` regardless of the preview's result, unless the
-preview fetch itself fails.
+`{"failed": false}` only when the preview fetch itself succeeds; if the
+preview fetch fails (network error, authentication error, or a
+non-2xx response), the marker SHALL record `{"failed": true}`, and the
+same credential-safe error-logging rule (status/message/
+credential-stripped URL, never a raw error/response object) SHALL
+apply to this path exactly as it does to the real-submission path. Dry
+run is often used specifically to smoke-test that configuration/auth
+is correct in CI; a preview-fetch failure silently reported as success
+would defeat that purpose.
 
 #### Scenario: Dry run previews matches without submitting
 - **WHEN** dry-run is enabled and the current run has both tagged case
@@ -218,6 +225,13 @@ preview fetch itself fails.
 - **THEN** the reporter logs which case keys would match and which
   wouldn't, makes no request to the import endpoint, and `check` exits
   `0`
+
+#### Scenario: A dry-run preview-fetch failure fails the build
+- **WHEN** dry-run is enabled and the `GET /cases` preview request
+  fails (network error, `401`, or `5xx`)
+- **THEN** the marker records `{"failed": true}`, the logged error
+  contains only status/message/credential-stripped URL, and `check`
+  exits non-zero
 
 ### Requirement: Configuration resolves environment variable over reporter option
 For `url`, `token`, `project`, `failOnUnmatched`, and `dryRun`, the
@@ -229,10 +243,17 @@ via the reporter's constructor options in `vitest.config.ts`), using
 the first one present. There is no third, config-file-backed
 resolution tier. The resolved token SHALL NOT be logged at any
 verbosity level. `TESTPULSE_FAIL_ON_UNMATCHED` and `TESTPULSE_DRY_RUN`
-SHALL be parsed as boolean by a fixed, documented rule: the
-case-insensitive string `"true"` or `"1"` resolves to `true`; every
-other value (including `"false"`, `"0"`, and an empty string) resolves
-to `false`. The plugin SHALL NOT use a bare JavaScript truthiness check
+SHALL be parsed as boolean by a fixed, documented rule, applied
+uniformly regardless of which of the two sources (environment variable
+or reporter option) supplied the raw value: the case-insensitive
+string `"true"` or `"1"` resolves to `true`; every other string value
+(including `"false"`, `"0"`, and an empty string) resolves to `false`;
+a genuine boolean reporter-option value (`true`/`false`) is used
+as-is. The plugin's TypeScript types SHALL declare these reporter
+options as `boolean` only (not `boolean | string`), so a config
+author's IDE/type-checker catches an accidental string value at the
+call site rather than relying on runtime parsing alone. The plugin
+SHALL NOT use a bare JavaScript truthiness check
 on the raw environment variable string.
 
 #### Scenario: Environment variable overrides reporter option
@@ -248,3 +269,10 @@ on the raw environment variable string.
 #### Scenario: A literal "false" env var value resolves to false, not true
 - **WHEN** `TESTPULSE_DRY_RUN=false` is set in the environment
 - **THEN** dry-run mode is NOT enabled (the reporter submits for real)
+
+#### Scenario: A reporter-option boolean value is used as-is, and TypeScript rejects a string value
+- **WHEN** the reporter is constructed with `{ dryRun: true }` and no
+  `TESTPULSE_DRY_RUN` environment variable is set
+- **THEN** dry-run mode is enabled; a hypothetical `{ dryRun: 'false' }`
+  (a string, not a boolean) is a TypeScript type error at the call
+  site, not a value the runtime parsing logic ever needs to handle
