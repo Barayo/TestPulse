@@ -3,6 +3,7 @@ package service
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"context"
@@ -81,6 +82,9 @@ func (s *Service) Import(ctx context.Context, projectID string, in ImportInput) 
 
 	var items []store.ImportItem
 	var unmatched []UnmatchedTest
+	seenKeys := map[string]bool{}
+	duplicateSeen := map[string]bool{}
+	var duplicateKeys []string
 	for _, tc := range parsed.Cases {
 		// An untagged testcase carries no testpulse_case_key at all
 		// (CaseKey defaults to "") -- it's out of scope for the import
@@ -97,6 +101,19 @@ func (s *Service) Import(ctx context.Context, projectID string, in ImportInput) 
 			}
 			return ImportResult{}, err
 		}
+		if seenKeys[tc.CaseKey] {
+			// Two testcases sharing a case key would otherwise reach
+			// store.Runs.Import and hit test_run_items' (run_id, case_id)
+			// unique constraint, surfacing as an unhandled 500 (#173).
+			// Collected (not returned immediately) so every offending key
+			// in the report is named at once, not just the first.
+			if !duplicateSeen[tc.CaseKey] {
+				duplicateSeen[tc.CaseKey] = true
+				duplicateKeys = append(duplicateKeys, tc.CaseKey)
+			}
+			continue
+		}
+		seenKeys[tc.CaseKey] = true
 		items = append(items, store.ImportItem{
 			CaseID:   caseID,
 			TestName: tc.Name,
@@ -111,6 +128,9 @@ func (s *Service) Import(ctx context.Context, projectID string, in ImportInput) 
 				Attachments: attachmentsByCaseKey[tc.CaseKey],
 			},
 		})
+	}
+	if len(duplicateKeys) > 0 {
+		return ImportResult{}, invalid("duplicate case key(s) in report: %s", strings.Join(duplicateKeys, ", "))
 	}
 
 	run, err := s.store.Runs.Import(ctx, projectID, name, items)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -243,6 +244,34 @@ func TestImportIgnoresUntaggedTestcases(t *testing.T) {
 	}
 	if len(result.Unmatched) != 0 {
 		t.Errorf("Unmatched = %+v, want none -- untagged testcases are out of scope, not unmatched", result.Unmatched)
+	}
+}
+
+// #173: two testcases sharing a case key must not reach the database's
+// (run_id, case_id) unique constraint as an unhandled 500 -- a clean
+// ValidationError naming the offending key, no run created.
+func TestImportRejectsDuplicateCaseKeyWithoutCrashing(t *testing.T) {
+	s := importTestService(t)
+	p := mustImportProject(t, s, "Duplicate Key Suite")
+	c := mustImportCase(t, s, p.ID, "shared case")
+
+	report := fmt.Sprintf(`<testsuites><testsuite name="pytest">
+		<testcase name="test_main"><properties><property name="testpulse_case_key" value="%s"/></properties></testcase>
+		<testcase name="test_helper"><properties><property name="testpulse_case_key" value="%s"/></properties></testcase>
+	</testsuite></testsuites>`, c.Key, c.Key)
+
+	_, err := s.Import(importCtx(), p.ID, service.ImportInput{Format: "junit-xml", Report: report})
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("Import(duplicate case key) error = %v, want a ValidationError", err)
+	}
+	if !strings.Contains(verr.Error(), c.Key) {
+		t.Errorf("error message = %q, want it to name the offending key %q", verr.Error(), c.Key)
+	}
+
+	runs, err := s.ListRuns(context.Background(), p.ID)
+	if err != nil || len(runs) != 0 {
+		t.Fatalf("ListRuns = %d, %v; want no run created", len(runs), err)
 	}
 }
 

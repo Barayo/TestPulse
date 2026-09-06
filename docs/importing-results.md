@@ -37,7 +37,11 @@ lists every case key that didn't, so nothing is silently dropped.
 A `<testcase>` with **no** case key at all (never tagged) is simply out of
 scope for the import — it's excluded entirely, not counted in `matched` or
 listed in `unmatched`, since a real suite is expected to be a mix of tagged
-and untagged tests, especially mid-rollout.
+and untagged tests, especially mid-rollout. Two `<testcase>` entries
+sharing the **same** case key, on the other hand, is rejected as a `400`
+naming the duplicated key(s) — an import either succeeds with one result
+per matched case, or fails cleanly with no run created; it never creates
+two items for the same case in one run.
 
 The run's name defaults to the report's own `<testsuite name="...">` if
 present, otherwise a generated `Imported run — <timestamp>`. This fallback

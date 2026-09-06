@@ -26,6 +26,10 @@ The system SHALL let an authenticated actor (human or agent) submit a JUnit XML 
 - **WHEN** a JUnit XML report is imported and one or more `<testcase>` entries carry no `testpulse_case_key` property at all
 - **THEN** those testcases are excluded from the import entirely — never counted in `Matched`, never appearing in the unmatched list
 
+#### Scenario: Two testcases sharing a case key are rejected cleanly
+- **WHEN** a JUnit XML report is imported and two or more `<testcase>` entries carry the same case key
+- **THEN** the import is rejected with a `400` validation error naming the duplicated case key(s), and no run is created
+
 #### Scenario: Verdicts map from JUnit XML outcomes
 - **WHEN** a `<testcase>` in the report has no failure/error/skipped child element, a `<failure>` element, an `<error>` element, or a `<skipped>` element
 - **THEN** the recorded result verdict is `pass`, `failed`, `blocked`, or `skipped` respectively
