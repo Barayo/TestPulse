@@ -193,6 +193,22 @@ jobs:
           --set externalDatabase.password=ci
           > /dev/null
 
+  secrets:
+    name: Secret scanning (gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan full git history for secrets
+        # GitHub's native secret scanning needs Advanced Security, which
+        # requires a paid license on a private repo (free only on public
+        # ones) -- this runs the open-source gitleaks CLI directly via its
+        # official image rather than the gitleaks-action wrapper, which
+        # gates organization-owned private repos behind its own separate
+        # license. Exits non-zero on any finding (gitleaks' own default).
+        run: docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest git /repo -v
+
   dco:
     name: DCO
     runs-on: ubuntu-latest

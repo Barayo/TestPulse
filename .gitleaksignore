@@ -1,0 +1,11 @@
+# Verified false positives from the gitleaks CI job (.github/workflows/ci.yml).
+# Each entry is a fingerprint (commit:file:rule-id:line), not a rule or path
+# suppression, so a genuinely new secret anywhere else -- including in these
+# same files -- still gets caught.
+
+# A literal character-set string used to generate temporary passwords, not a
+# secret itself.
+dc8acc5ff96fb5c17ed8741a49c0a66016446ef4:apps/api/internal/service/identity.go:generic-api-key:316
+
+# A hardcoded fixture value in a unit test, not a real credential.
+dc8acc5ff96fb5c17ed8741a49c0a66016446ef4:apps/web/src/pages/PeoplePage.test.tsx:generic-api-key:468
