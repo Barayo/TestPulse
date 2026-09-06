@@ -161,6 +161,17 @@ func (s *Service) ListProjects(ctx context.Context) ([]domain.Project, error) {
 	if !ok {
 		return nil, unauthorized("authentication required")
 	}
+	// A scoped agent token is confined to its own project, never the
+	// token creator's broader membership (#163) -- checked first, the
+	// same as requirePermission and Service.Authorize already do for
+	// project-scoped resources (middleware.go, project_rbac.go).
+	if actor.ScopedProjectID != nil {
+		p, err := s.GetProject(ctx, *actor.ScopedProjectID)
+		if err != nil {
+			return nil, err
+		}
+		return []domain.Project{p}, nil
+	}
 	if actor.IsTenantAdmin {
 		return s.store.Projects.List(ctx)
 	}
@@ -182,13 +193,25 @@ func (s *Service) ProjectSummaries(ctx context.Context) ([]domain.ProjectSummary
 	if actor.IsTenantAdmin {
 		return summaries, nil
 	}
-	member, err := s.store.Projects.ListForMember(ctx, actor.EffectiveUserID)
-	if err != nil {
-		return nil, err
+	// Same scoped-token narrowing as ListProjects (#163): a scoped
+	// token's membership set must never fall back to the token
+	// creator's own, or it leaks every project the creator belongs to.
+	var allowedIDs []string
+	if actor.ScopedProjectID != nil {
+		allowedIDs = []string{*actor.ScopedProjectID}
+	} else {
+		member, err := s.store.Projects.ListForMember(ctx, actor.EffectiveUserID)
+		if err != nil {
+			return nil, err
+		}
+		allowedIDs = make([]string, len(member))
+		for i, p := range member {
+			allowedIDs[i] = p.ID
+		}
 	}
-	allowed := make(map[string]bool, len(member))
-	for _, p := range member {
-		allowed[p.ID] = true
+	allowed := make(map[string]bool, len(allowedIDs))
+	for _, id := range allowedIDs {
+		allowed[id] = true
 	}
 	filtered := make([]domain.ProjectSummary, 0, len(summaries))
 	for _, sum := range summaries {

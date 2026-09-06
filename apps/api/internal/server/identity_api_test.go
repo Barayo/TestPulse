@@ -495,6 +495,39 @@ func TestScenario_ScopedTokenCannotListUsers(t *testing.T) {
 	callAs(t, h, memberCookie, "GET", "/api/v1/users", nil, 200, &list)
 }
 
+// #163: ListProjects/ProjectSummaries fell back to the token creator's
+// full membership set for any non-Tenant-Admin actor, never checking
+// ScopedProjectID -- so a token scoped to one project leaked the
+// names/descriptions/summary stats of every other project its human
+// creator belongs to.
+func TestScenario_ScopedTokenListsOnlyItsOwnProject(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, h, "admin@example.com", "correcthorse")
+	viewerRoleID := roleIDByName(t, h, admin, "Viewer")
+
+	var projectA, projectB jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "Scoped A"}, 201, &projectA)
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "Other B"}, 201, &projectB)
+	projectAID, _ := projectA["id"].(string)
+
+	var created jmap
+	callAs(t, h, admin, "POST", "/api/v1/tokens",
+		jmap{"name": "viewer-agent", "projectId": projectAID, "roleId": viewerRoleID}, 201, &created)
+	full, _ := created["token"].(string)
+
+	var projects []jmap
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects", nil, 200, &projects)
+	if len(projects) != 1 || projects[0]["id"] != projectAID {
+		t.Fatalf("GET /api/v1/projects with scoped token = %+v, want only project A", projects)
+	}
+
+	var summaries []jmap
+	callAs(t, h, "Bearer "+full, "GET", "/api/v1/projects/summaries", nil, 200, &summaries)
+	if len(summaries) != 1 || summaries[0]["projectId"] != projectAID {
+		t.Fatalf("GET /api/v1/projects/summaries with scoped token = %+v, want only project A", summaries)
+	}
+}
+
 // The single most important invariant this feature exists for: a scoped
 // token created by a Tenant Admin must not bypass scoping via the
 // existing IsTenantAdmin shortcut requirePermission checks first.
