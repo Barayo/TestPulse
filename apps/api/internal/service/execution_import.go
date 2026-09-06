@@ -82,6 +82,13 @@ func (s *Service) Import(ctx context.Context, projectID string, in ImportInput) 
 	var items []store.ImportItem
 	var unmatched []UnmatchedTest
 	for _, tc := range parsed.Cases {
+		// An untagged testcase carries no testpulse_case_key at all
+		// (CaseKey defaults to "") -- it's out of scope for the import
+		// entirely, not a failed match, so it must never appear in
+		// unmatched (#168).
+		if tc.CaseKey == "" {
+			continue
+		}
 		caseID, err := s.store.Cases.IDByKeyInProject(ctx, projectID, tc.CaseKey)
 		if err != nil {
 			if errors.Is(err, store.ErrNotFound) {

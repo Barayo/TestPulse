@@ -221,6 +221,31 @@ func TestImportAttachesScreenshotsKeyedByCaseKey(t *testing.T) {
 	}
 }
 
+// #168: an untagged testcase (no testpulse_case_key property at all) must
+// be silently out of scope for the import, never counted as unmatched.
+func TestImportIgnoresUntaggedTestcases(t *testing.T) {
+	s := importTestService(t)
+	p := mustImportProject(t, s, "Mixed Suite")
+	c := mustImportCase(t, s, p.ID, "tagged case")
+
+	report := fmt.Sprintf(`<testsuites><testsuite name="pytest">
+		<testcase name="test_untagged_one"></testcase>
+		<testcase name="test_tagged"><properties><property name="testpulse_case_key" value="%s"/></properties></testcase>
+		<testcase name="test_untagged_two"></testcase>
+	</testsuite></testsuites>`, c.Key)
+
+	result, err := s.Import(importCtx(), p.ID, service.ImportInput{Format: "junit-xml", Report: report})
+	if err != nil {
+		t.Fatalf("Import: %v", err)
+	}
+	if result.Matched != 1 {
+		t.Errorf("Matched = %d, want 1 (only the tagged testcase)", result.Matched)
+	}
+	if len(result.Unmatched) != 0 {
+		t.Errorf("Unmatched = %+v, want none -- untagged testcases are out of scope, not unmatched", result.Unmatched)
+	}
+}
+
 func TestImportDropsAttachmentsForUnmatchedCaseKeys(t *testing.T) {
 	s := importTestService(t)
 	p := mustImportProject(t, s, "Unmatched Screenshots")

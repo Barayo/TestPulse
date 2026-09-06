@@ -22,6 +22,10 @@ The system SHALL let an authenticated actor (human or agent) submit a JUnit XML 
 - **WHEN** an import contains an unmatched case key
 - **THEN** no new test case is created for it — the case library is unaffected by the import
 
+#### Scenario: A testcase with no case key is out of scope, not unmatched
+- **WHEN** a JUnit XML report is imported and one or more `<testcase>` entries carry no `testpulse_case_key` property at all
+- **THEN** those testcases are excluded from the import entirely — never counted in `Matched`, never appearing in the unmatched list
+
 #### Scenario: Verdicts map from JUnit XML outcomes
 - **WHEN** a `<testcase>` in the report has no failure/error/skipped child element, a `<failure>` element, an `<error>` element, or a `<skipped>` element
 - **THEN** the recorded result verdict is `pass`, `failed`, `blocked`, or `skipped` respectively

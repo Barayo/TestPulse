@@ -34,6 +34,11 @@ A `207` is still a success from the point of view of any tool that checks
 `response.ok` — the run was created with whatever did match. `unmatched`
 lists every case key that didn't, so nothing is silently dropped.
 
+A `<testcase>` with **no** case key at all (never tagged) is simply out of
+scope for the import — it's excluded entirely, not counted in `matched` or
+listed in `unmatched`, since a real suite is expected to be a mix of tagged
+and untagged tests, especially mid-rollout.
+
 The run's name defaults to the report's own `<testsuite name="...">` if
 present, otherwise a generated `Imported run — <timestamp>`. This fallback
 is meant for a genuinely single-suite report — a caller that merges
