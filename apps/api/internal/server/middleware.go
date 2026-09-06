@@ -36,6 +36,37 @@ func securityHeaders(next http.Handler) http.Handler {
 	})
 }
 
+// defaultMaxBodyBytes bounds every /api/v1 request body not already
+// covered by a tighter, purpose-specific limit (attachment/avatar uploads
+// use their own MaxUploadBytes+multipartOverhead). Generous enough for a
+// large JUnit XML report plus several inline base64-encoded screenshots
+// (execution-import), but finite -- unlike decode[T]'s prior unbounded
+// json.Decoder read (#164), which let an unauthenticated client (login,
+// forgot-password, reset-password, setup all share decode[T]) send
+// several very large bodies per minute per IP indefinitely, even under the
+// existing login rate limiter, threatening memory exhaustion on what's
+// documented as a single-machine, single-process deployment.
+const defaultMaxBodyBytes = 32 * 1024 * 1024
+
+// unauthenticatedMaxBodyBytes is the tight ceiling for the specific
+// pre-authentication routes (#164's named attack surface): login,
+// forgot-password, reset-password, and first-run setup each only ever
+// carry an email/password pair, so there's no legitimate reason for any
+// of them to need anywhere near defaultMaxBodyBytes.
+const unauthenticatedMaxBodyBytes = 64 * 1024
+
+// maxBodyBytes returns middleware that rejects a request body larger than
+// limit, matching the http.MaxBytesReader pattern already used for
+// attachment/avatar uploads (attachment_handlers.go, user_avatar_handlers.go).
+func maxBodyBytes(limit int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			r.Body = http.MaxBytesReader(w, r.Body, limit)
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // authenticate resolves the request's Actor from a Bearer token or a session
 // cookie, in that order (design D6), and rejects the request with 401 if
 // neither resolves to a valid, non-revoked, non-expired actor.

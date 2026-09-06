@@ -166,6 +166,20 @@ func TestScenario_LoginRateLimitIsConfigurable(t *testing.T) {
 	}
 }
 
+// #164: decode[T] read the request body with no size bound at all, and
+// login/forgot-password/reset-password/setup -- all pre-authentication --
+// share decode[T]. A body comfortably past unauthenticatedMaxBodyBytes
+// (64KB) must be rejected before it's fully buffered, rather than accepted
+// only to fail credential validation afterward.
+func TestScenario_LoginRejectsOversizedBody(t *testing.T) {
+	h, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+
+	oversized := strings.Repeat("a", 100*1024)
+	var errBody jmap
+	callAs(t, h, "", "POST", "/api/v1/auth/login",
+		jmap{"email": oversized, "password": "correcthorse"}, 400, &errBody)
+}
+
 // --- Forgot / reset password (add-forgot-password) ---
 
 func TestScenario_ForgotPasswordAlwaysReturns200(t *testing.T) {

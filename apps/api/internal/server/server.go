@@ -48,8 +48,10 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 	h := &api{logger: logger, svc: svc, oidcManager: sso.Manager, publicURL: sso.PublicURL, encryptionKey: sso.EncryptionKey}
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(maxBodyBytes(defaultMaxBodyBytes))
+
 		r.Get("/meta", handleMeta(svc, sso.Manager))
-		r.Post("/setup", h.setupFirstAdmin)
+		r.With(maxBodyBytes(unauthenticatedMaxBodyBytes)).Post("/setup", h.setupFirstAdmin)
 		mountAuth(r, h, loginRateLimitPerMinute, loginRateLimitBurst)
 		mountPublicAPI(r, h)
 

@@ -16,6 +16,19 @@ the root because infrastructure expects them there. The [MCP server](mcp-server.
 tools are thin wrappers over the same service layer these REST handlers use
 — see that page for the tool reference.
 
+## Request body limits
+
+Every `/api/v1` request body is capped at 32MB by default — generous
+enough for a large JUnit XML report plus several inline base64-encoded
+screenshots (`POST /projects/{projectKey}/imports`), but finite. The
+pre-authentication routes (`/auth/login`, `/auth/forgot-password`,
+`/auth/reset-password`, `/setup`) get a much tighter 64KB ceiling instead,
+since none of them ever legitimately carries more than an email/password
+pair. A body over its route's limit is rejected before being fully read
+into memory. Attachment and avatar uploads (`multipart/form-data`) have
+their own separate, smaller limit — see the 5MB note on their routes
+below.
+
 ## System endpoints
 
 | Method | Path | Description |

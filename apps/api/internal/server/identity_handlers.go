@@ -25,8 +25,17 @@ import (
 // set via TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE/_BURST in CI rather than
 // weakening the production default.
 func mountAuth(r chi.Router, h *api, perMinute float64, burst int) {
+	// login/forgot-password/reset-password each only ever carry an
+	// email/password pair, so they get the tight unauthenticatedMaxBodyBytes
+	// ceiling (#164) rather than the generous default applied to the rest
+	// of /api/v1 -- this is the concrete pre-auth memory-exhaustion surface
+	// the existing login rate limiter alone doesn't close (several very
+	// large bodies per minute per IP is still well within the limiter's
+	// allowance).
+	tinyBody := maxBodyBytes(unauthenticatedMaxBodyBytes)
+
 	loginLimiter := newLoginRateLimiter(rate.Limit(perMinute/60), burst)
-	r.With(loginLimiter.middleware).Post("/auth/login", h.login)
+	r.With(tinyBody, loginLimiter.middleware).Post("/auth/login", h.login)
 	r.Post("/auth/logout", h.logout)
 
 	// forgot-password is the same abuse surface as login — unauthenticated,
@@ -34,8 +43,8 @@ func mountAuth(r chi.Router, h *api, perMinute float64, burst int) {
 	// limiter at the same shape rather than sharing login's bucket
 	// (add-forgot-password design.md).
 	forgotPasswordLimiter := newLoginRateLimiter(rate.Limit(perMinute/60), burst)
-	r.With(forgotPasswordLimiter.middleware).Post("/auth/forgot-password", h.forgotPassword)
-	r.Post("/auth/reset-password", h.resetPassword)
+	r.With(tinyBody, forgotPasswordLimiter.middleware).Post("/auth/forgot-password", h.forgotPassword)
+	r.With(tinyBody).Post("/auth/reset-password", h.resetPassword)
 
 	// OIDC/SSO (add-sso-oidc) — h.oidcAuth is nil whenever OIDC isn't
 	// configured, in which case both handlers 404.
