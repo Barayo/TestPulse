@@ -103,7 +103,7 @@ func (h *api) addCustomFieldOption(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *api) removeCustomFieldOption(w http.ResponseWriter, r *http.Request) {
-	err := h.svc.RemoveCustomFieldOption(r.Context(), chi.URLParam(r, "optionID"))
+	err := h.svc.RemoveCustomFieldOption(r.Context(), chi.URLParam(r, "fieldID"), chi.URLParam(r, "optionID"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 

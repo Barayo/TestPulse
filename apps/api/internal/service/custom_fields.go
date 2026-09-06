@@ -54,8 +54,8 @@ func (s *Service) AddCustomFieldOption(ctx context.Context, fieldID, value strin
 	return s.store.CustomFields.AddOption(ctx, fieldID, value)
 }
 
-func (s *Service) RemoveCustomFieldOption(ctx context.Context, optionID string) error {
-	return s.store.CustomFields.RemoveOption(ctx, optionID)
+func (s *Service) RemoveCustomFieldOption(ctx context.Context, fieldID, optionID string) error {
+	return s.store.CustomFields.RemoveOption(ctx, fieldID, optionID)
 }
 
 func (s *Service) ReorderCustomFieldOptions(ctx context.Context, fieldID string, optionIDs []string) error {

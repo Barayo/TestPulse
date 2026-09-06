@@ -119,7 +119,7 @@ func TestCustomFieldOptionAddRemoveReorder(t *testing.T) {
 	if err := s.CustomFields.ReorderOptions(ctx, f.ID, []string{mobile.ID, api.ID, web.ID}); err != nil {
 		t.Fatalf("ReorderOptions: %v", err)
 	}
-	if err := s.CustomFields.RemoveOption(ctx, api.ID); err != nil {
+	if err := s.CustomFields.RemoveOption(ctx, f.ID, api.ID); err != nil {
 		t.Fatalf("RemoveOption: %v", err)
 	}
 
@@ -132,6 +132,37 @@ func TestCustomFieldOptionAddRemoveReorder(t *testing.T) {
 	}
 	if fields[0].Options[0].ID != mobile.ID || fields[0].Options[1].ID != web.ID {
 		t.Errorf("options = %+v, want [Mobile, Web]", fields[0].Options)
+	}
+}
+
+// #162: RemoveOption took a bare optionID with no field_id predicate on
+// the DELETE, so any caller who could satisfy the field-level permission
+// check on *some* field could delete an option belonging to a completely
+// different field (in a different project) by supplying its id directly.
+func TestCustomFieldRemoveOptionRejectsMismatchedField(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	fieldA, _ := s.CustomFields.Create(ctx, p.ID, "Component", domain.CustomFieldTypeSelect)
+	fieldB, _ := s.CustomFields.Create(ctx, p.ID, "Team", domain.CustomFieldTypeSelect)
+	optionB, err := s.CustomFields.AddOption(ctx, fieldB.ID, "Platform")
+	if err != nil {
+		t.Fatalf("AddOption: %v", err)
+	}
+
+	if err := s.CustomFields.RemoveOption(ctx, fieldA.ID, optionB.ID); err == nil {
+		t.Fatal("RemoveOption with mismatched field id = nil error, want ErrNotFound")
+	}
+
+	fields, err := s.CustomFields.List(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	for _, f := range fields {
+		if f.ID == fieldB.ID && len(f.Options) != 1 {
+			t.Errorf("fieldB options = %+v, want the option to survive the mismatched-field delete attempt", f.Options)
+		}
 	}
 }
 

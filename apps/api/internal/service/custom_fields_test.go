@@ -93,7 +93,7 @@ func TestCustomFieldOptionCRUDIsAThinPassthrough(t *testing.T) {
 	if err := s.ReorderCustomFieldOptions(ctx, f.ID, []string{web.ID, api.ID}); err != nil {
 		t.Fatalf("ReorderCustomFieldOptions: %v", err)
 	}
-	if err := s.RemoveCustomFieldOption(ctx, api.ID); err != nil {
+	if err := s.RemoveCustomFieldOption(ctx, f.ID, api.ID); err != nil {
 		t.Fatalf("RemoveCustomFieldOption: %v", err)
 	}
 

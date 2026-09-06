@@ -155,8 +155,9 @@ func (r *CustomFieldRepo) AddOption(ctx context.Context, fieldID, value string) 
 	return o, err
 }
 
-func (r *CustomFieldRepo) RemoveOption(ctx context.Context, optionID string) error {
-	tag, err := r.pool.Exec(ctx, `DELETE FROM case_custom_field_options WHERE id = $1`, optionID)
+func (r *CustomFieldRepo) RemoveOption(ctx context.Context, fieldID, optionID string) error {
+	tag, err := r.pool.Exec(ctx,
+		`DELETE FROM case_custom_field_options WHERE id = $1 AND field_id = $2`, optionID, fieldID)
 	if err != nil {
 		return err
 	}
