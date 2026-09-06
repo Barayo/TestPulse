@@ -785,6 +785,17 @@ func (s *Service) ProjectStatusSummary(ctx context.Context, projectID string) (d
 }
 
 func (s *Service) AddCaseToSuite(ctx context.Context, suiteID, caseID string) error {
+	suiteProjectID, err := s.store.Suites.ProjectID(ctx, suiteID)
+	if err != nil {
+		return err
+	}
+	caseProjectID, err := s.store.Cases.ProjectID(ctx, caseID)
+	if err != nil {
+		return err
+	}
+	if caseProjectID != suiteProjectID {
+		return invalid("case belongs to a different project")
+	}
 	if err := s.store.Suites.AddCase(ctx, suiteID, caseID); err != nil {
 		return err
 	}

@@ -162,3 +162,50 @@ func TestRunItemsExcludesCrossProjectCaseContent(t *testing.T) {
 		}
 	}
 }
+
+// #174: AddCaseToSuite had no check that the case belongs to the same
+// project as the suite -- found while fixing #159, since CreateRun's own
+// suite-derived case IDs couldn't be trusted without it.
+func TestAddCaseToSuiteRejectsCaseFromDifferentProject(t *testing.T) {
+	s, st := testServiceAndStore(t)
+	ctx := context.Background()
+
+	projectA, err := st.Projects.Create(ctx, "Project A", "")
+	if err != nil {
+		t.Fatalf("create project A: %v", err)
+	}
+	projectB, err := st.Projects.Create(ctx, "Project B", "")
+	if err != nil {
+		t.Fatalf("create project B: %v", err)
+	}
+	suiteA, err := s.CreateSuite(ctx, projectA.ID, "iOS suite")
+	if err != nil {
+		t.Fatalf("create suite under project A: %v", err)
+	}
+	caseB := mustLifecycleCase(t, s, projectB.ID)
+
+	err = s.AddCaseToSuite(ctx, suiteA.ID, caseB.ID)
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("AddCaseToSuite with cross-project case = %v, want ValidationError", err)
+	}
+}
+
+func TestAddCaseToSuiteAcceptsCaseFromSameProject(t *testing.T) {
+	s, st := testServiceAndStore(t)
+	ctx := context.Background()
+
+	p, err := st.Projects.Create(ctx, "Project A", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	suite, err := s.CreateSuite(ctx, p.ID, "iOS suite")
+	if err != nil {
+		t.Fatalf("create suite: %v", err)
+	}
+	c := mustLifecycleCase(t, s, p.ID)
+
+	if err := s.AddCaseToSuite(ctx, suite.ID, c.ID); err != nil {
+		t.Fatalf("AddCaseToSuite with same-project case = %v, want nil error", err)
+	}
+}
