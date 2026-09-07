@@ -473,3 +473,70 @@ func TestMyPermissionsExposesEffectivePermissionsForTheFrontend(t *testing.T) {
 		t.Fatalf("member MyPermissions = %+v, %v; want sectionDelete true, caseDelete false", perms, err)
 	}
 }
+
+// #177: MyPermissions must report a scoped agent token's own
+// ScopedPermissions, never the creator's broader EffectivePermissions —
+// otherwise a CI token intentionally scoped to a narrow role would see
+// (and a caller might trust) its creator's full access in the "what can I
+// do here" response.
+func TestMyPermissionsForScopedTokenReportsItsOwnScopeNotCreator(t *testing.T) {
+	s := testService(t)
+	admin := actorFor(mustCreateUser(t, s, "admin-scoped-mypermissions@example.com", "correcthorse", true))
+	creator := mustCreateUser(t, s, "creator-scoped-mypermissions@example.com", "correcthorse", false)
+	ctx := context.Background()
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Scoped MyPermissions Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherProject, err := s.CreateProject(ctx, service.ProjectInput{Name: "Other Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Creator holds broad access (read+caseEdit+caseDelete+manageProject);
+	// the token's own role only grants read.
+	broadRole, err := s.CreateRole(ctx, admin, domain.Role{
+		Name: "Broad (scoped my-permissions test)", CanRead: true, CanCaseEdit: true, CanCaseDelete: true, CanManageProject: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	if err := s.SetProjectMember(ctx, admin, project.ID, creator.ID, broadRole.ID); err != nil {
+		t.Fatalf("SetProjectMember: %v", err)
+	}
+	readOnlyRole, err := s.CreateRole(ctx, admin, domain.Role{Name: "Read Only (scoped my-permissions test)", CanRead: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	creatorCtx := domain.WithActor(context.Background(), actorFor(creator))
+	full, _, err := s.CreateToken(creatorCtx, actorFor(creator), "ci-agent", &project.ID, &readOnlyRole.ID)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	tokenActor, err := s.AuthenticateToken(ctx, full)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+
+	perms, err := s.MyPermissions(ctx, tokenActor, project.ID)
+	if err != nil {
+		t.Fatalf("MyPermissions: %v", err)
+	}
+	if !perms.Has(domain.PermRead) {
+		t.Errorf("scoped token MyPermissions = %+v, want read true (its own role)", perms)
+	}
+	if perms.Has(domain.PermManageProject) || perms.Has(domain.PermCaseDelete) {
+		t.Errorf("scoped token MyPermissions = %+v, want manageProject/caseDelete false — those are the creator's access, not the token's own scope", perms)
+	}
+
+	// A scoped token queried against a project it isn't scoped to must get
+	// all-false, never fall through to the creator's access there either.
+	perms, err = s.MyPermissions(ctx, tokenActor, otherProject.ID)
+	if err != nil {
+		t.Fatalf("MyPermissions (other project): %v", err)
+	}
+	if perms != (domain.Permissions{}) {
+		t.Errorf("scoped token MyPermissions on unscoped project = %+v, want all false", perms)
+	}
+}

@@ -60,6 +60,12 @@ func (s *Service) checkAssigneeRestriction(ctx context.Context, itemID string) e
 		}
 	}
 
+	if perms, ok := scopedProjectPermissions(actor, projectID); ok {
+		if perms.ManageProject {
+			return nil
+		}
+		return forbidden("only the assigned user or team can act on this item")
+	}
 	perms, err := s.EffectivePermissions(ctx, actor, projectID)
 	if err != nil && !errors.Is(err, store.ErrNotFound) {
 		return err

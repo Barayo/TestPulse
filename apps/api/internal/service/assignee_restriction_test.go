@@ -199,6 +199,46 @@ func TestAssigneeRestrictedRecordingAllowsTeamMember(t *testing.T) {
 	}
 }
 
+// #177: a scoped agent token must be evaluated on its own
+// ScopedPermissions, never the creator's broader access — the same
+// scoped-token-first order every other enforcement path in this codebase
+// uses (Authorize, requirePermission). Before the fix, checkAssigneeRestriction
+// called EffectivePermissions directly, which resolves via the token
+// creator's own user id, so a CI token scoped to runRecordResult-only could
+// still bypass AssigneeRestrictedRecording on items assigned to someone
+// else just because its creator happened to hold manageProject.
+func TestAssigneeRestrictedRecordingRejectsScopedTokenWithoutManageProject(t *testing.T) {
+	f := newAssigneeRestrictionFixture(t)
+	ana := f.addProjectMember(t, "ana@example.com", false)
+	f.assignItemTo(t, ana.ID)
+
+	// pm holds manageProject directly (not via Tenant Admin) and creates a
+	// CI token scoped to a role granting only runRecordResult.
+	pm := f.addProjectMember(t, "pm@example.com", true)
+	pmCtx := domain.WithActor(context.Background(), pm)
+	recorderOnly, err := f.s.CreateRole(f.ctx, f.admin, domain.Role{
+		Name: "CI Recorder (scoped assignee-restriction test)", CanRead: true, CanRunRecordResult: true,
+	})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	full, _, err := f.s.CreateToken(pmCtx, pm, "ci-agent", &f.project.ID, &recorderOnly.ID)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	tokenActor, err := f.s.AuthenticateToken(context.Background(), full)
+	if err != nil {
+		t.Fatalf("AuthenticateToken: %v", err)
+	}
+	ctx := domain.WithActor(context.Background(), tokenActor)
+
+	_, err = f.s.RecordResult(ctx, f.item.ID, domain.NewResult{Verdict: domain.VerdictPass})
+	var ferr *service.ForbiddenError
+	if err == nil || !asForbidden(err, &ferr) {
+		t.Fatalf("RecordResult by scoped token whose creator holds manageProject but whose own role doesn't = %v, want ForbiddenError", err)
+	}
+}
+
 func TestAssigneeRestrictedRecordingOffPreservesCurrentBehavior(t *testing.T) {
 	f := newAssigneeRestrictionFixture(t)
 	ana := f.addProjectMember(t, "ana@example.com", false)

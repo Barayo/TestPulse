@@ -142,6 +142,25 @@ access.
 - **THEN** the token is deleted along with the role and stops
   authenticating entirely — it does not fall back to unscoped/full access
 
+#### Scenario: Scoped token's own scope, not its creator's access, gates assignee-restricted recording
+- **WHEN** a project has assignee-restricted recording enabled, and a
+  scoped token — created by a user who separately holds `manageProject` on
+  that project — is used to record a result on an item assigned to
+  someone else, and the token's own role does not grant `manageProject`
+- **THEN** the request is rejected with `403`, exactly as it would be for
+  a human actor lacking `manageProject`, regardless of what the token's
+  creator personally holds
+
+#### Scenario: A scoped token queries its own effective permissions, not its creator's
+- **WHEN** a scoped token queries its effective permissions on the project
+  it is scoped to
+- **THEN** the response reflects the token's own scoped role, never the
+  broader access its creator may separately hold
+- **WHEN** the same token queries its effective permissions on any other
+  project
+- **THEN** the response is all permissions false, never the creator's
+  access to that other project
+
 ### Requirement: Deactivating a user revokes every token they created
 The system SHALL reject authentication via any API token — unscoped or
 project-scoped — created by a user whose account is currently deactivated,

@@ -18,6 +18,28 @@ func (s *Service) EffectivePermissions(ctx context.Context, actor domain.Actor, 
 	return s.store.ProjectMembers.EffectivePermissions(ctx, actor.EffectiveUserID, projectID)
 }
 
+// scopedProjectPermissions returns actor's permissions restricted to a
+// single project, honoring a scoped agent token's own
+// ScopedProjectID/ScopedPermissions before ever falling back to
+// EffectivePermissions — which resolves via actor.EffectiveUserID, the
+// token *creator's* own id, not the token's own scope. isScoped is true
+// whenever actor is a scoped agent token at all, whether or not projectID
+// matches its scope, so callers never fall through to EffectivePermissions
+// (the creator's broader access) for a scoped token by mistake. This is
+// the exact check every enforcement path in this codebase must run first
+// (see requirePermission, server/middleware.go) — a shared helper closes
+// the recurring bug shape where a new call site (checkAssigneeRestriction,
+// MyPermissions) called EffectivePermissions directly and skipped it (#177).
+func scopedProjectPermissions(actor domain.Actor, projectID string) (perms domain.Permissions, isScoped bool) {
+	if actor.ScopedProjectID == nil {
+		return domain.Permissions{}, false
+	}
+	if *actor.ScopedProjectID != projectID {
+		return domain.Permissions{}, true
+	}
+	return *actor.ScopedPermissions, true
+}
+
 // Authorize enforces perm on projectID for ctx's Actor, mirroring
 // requirePermission's REST enforcement (server/middleware.go) exactly —
 // Tenant Admin bypass, then a scoped agent token's own
@@ -35,8 +57,8 @@ func (s *Service) Authorize(ctx context.Context, perm domain.Permission, project
 	if actor.IsTenantAdmin {
 		return nil
 	}
-	if actor.ScopedProjectID != nil {
-		if *actor.ScopedProjectID != projectID || !actor.ScopedPermissions.Has(perm) {
+	if perms, ok := scopedProjectPermissions(actor, projectID); ok {
+		if !perms.Has(perm) {
 			return forbidden("insufficient permissions")
 		}
 		return nil
@@ -98,6 +120,9 @@ func (s *Service) MyPermissions(ctx context.Context, actor domain.Actor, project
 			RunCreate: true, RunRecordResult: true, ManageProject: true,
 			RunDelete: true, ProjectDelete: true,
 		}, nil
+	}
+	if perms, ok := scopedProjectPermissions(actor, projectID); ok {
+		return perms, nil
 	}
 	perms, err := s.EffectivePermissions(ctx, actor, projectID)
 	if errors.Is(err, store.ErrNotFound) {
