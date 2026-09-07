@@ -498,11 +498,18 @@ func (s *Service) BulkAddCases(ctx context.Context, projectID, folderID string, 
 	if len(contents) == 0 {
 		return nil, invalid("cases is required")
 	}
+	// Custom fields fetched once for the whole batch rather than once per
+	// case (#180's lower-impact companion N+1) -- every case validates
+	// against the same project's field list.
+	fields, err := s.store.CustomFields.List(ctx, projectID)
+	if err != nil {
+		return nil, err
+	}
 	for i, content := range contents {
 		if err := content.Validate(); err != nil {
 			return nil, invalid("case %d: %s", i, err)
 		}
-		if err := s.validateCustomFieldValues(ctx, projectID, content.CustomFields); err != nil {
+		if err := validateCustomFieldValuesAgainst(fields, content.CustomFields); err != nil {
 			return nil, err
 		}
 	}
@@ -995,17 +1002,24 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 	// suite -- must belong to this project. Checked here rather than
 	// trusted from the suite, since suite membership itself doesn't
 	// enforce single-project cases (AddCaseToSuite has no such check).
+	// Resolved in one batched query rather than one round trip per id
+	// (#180) -- CaseKeys/CaseIDs had no length cap, so an ordinary
+	// runCreate-holding actor could otherwise trigger thousands of
+	// sequential DB round trips in a single request.
+	caseProjectIDs, err := s.store.Cases.ProjectIDs(ctx, unique)
+	if err != nil {
+		return domain.Run{}, err
+	}
 	for _, id := range unique {
-		caseProjectID, err := s.store.Cases.ProjectID(ctx, id)
-		if err != nil {
-			return domain.Run{}, err
+		caseProjectID, ok := caseProjectIDs[id]
+		if !ok {
+			return domain.Run{}, store.ErrNotFound
 		}
 		if caseProjectID != projectID {
 			return domain.Run{}, invalid("case belongs to a different project")
 		}
 	}
 	var run domain.Run
-	var err error
 	if in.SuiteID != "" || in.TestPlanID != "" {
 		run, err = s.store.Runs.CreateWithOptions(ctx, projectID, in.Name, in.SuiteID, in.TestPlanID, unique)
 	} else {

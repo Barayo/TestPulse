@@ -72,3 +72,51 @@ func TestScenario_UnknownKeyIsNotFound(t *testing.T) {
 	call(t, h, "GET", "/api/v1/runs/NOPE-R1", nil, 404, nil)
 	call(t, h, "PUT", "/api/v1/suites/NOPE-S1/cases/NOPE-1", nil, 404, nil)
 }
+
+// #180: createRun's caseKeys resolution moved from a per-key store call to
+// one batched CaseIDsByKeys call. Covers both directions: every real key
+// resolves correctly in a batch of several, and a single unknown key among
+// several real ones still 404s the whole request, same as the old per-key
+// loop's fail-fast behavior.
+func TestScenario_CreateRunResolvesMultipleCaseKeysInOneBatch(t *testing.T) {
+	h := apiServer(t)
+
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "Batch Keys"}, 201, &p)
+	var c1, c2, c3 struct{ ID, Key string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c1)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "two"}, 201, &c2)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "three"}, 201, &c3)
+
+	var run struct{ Key string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
+		jmap{"name": "batch run", "caseKeys": []string{c1.Key, c2.Key, c3.Key}}, 201, &run)
+
+	var items []struct{ CaseKey string }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
+	if len(items) != 3 {
+		t.Fatalf("run has %d items, want 3", len(items))
+	}
+	gotKeys := map[string]bool{}
+	for _, it := range items {
+		gotKeys[it.CaseKey] = true
+	}
+	for _, want := range []string{c1.Key, c2.Key, c3.Key} {
+		if !gotKeys[want] {
+			t.Errorf("run items = %+v, missing case %q", items, want)
+		}
+	}
+}
+
+func TestScenario_CreateRunRejectsUnknownCaseKeyAmongMany(t *testing.T) {
+	h := apiServer(t)
+
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "Batch Keys Unknown"}, 201, &p)
+	var c1, c2 struct{ Key string }
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c1)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "two"}, 201, &c2)
+
+	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
+		jmap{"name": "batch run", "caseKeys": []string{c1.Key, "NOPE-999", c2.Key}}, 404, nil)
+}

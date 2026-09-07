@@ -57,6 +57,52 @@ func TestCreateRunRejectsCaseIDFromDifferentProject(t *testing.T) {
 	}
 }
 
+// #180: the cross-project check was rewritten from a per-id loop to one
+// batched query (store.Cases.ProjectIDs). This proves the batched query
+// still catches a cross-project id even when it's not the first one in a
+// larger set — a naive "just check the first id" mistake wouldn't.
+func TestCreateRunRejectsCaseIDFromDifferentProjectAmongMany(t *testing.T) {
+	s, st := testServiceAndStore(t)
+	ctx := context.Background()
+
+	projectA, err := st.Projects.Create(ctx, "Project A", "")
+	if err != nil {
+		t.Fatalf("create project A: %v", err)
+	}
+	projectB, err := st.Projects.Create(ctx, "Project B", "")
+	if err != nil {
+		t.Fatalf("create project B: %v", err)
+	}
+	c1 := mustLifecycleCase(t, s, projectA.ID)
+	c2 := mustLifecycleCase(t, s, projectA.ID)
+	caseB := mustLifecycleCase(t, s, projectB.ID)
+	c3 := mustLifecycleCase(t, s, projectA.ID)
+
+	_, err = s.CreateRun(ctx, projectA.ID, service.RunInput{Name: "smoke", CaseIDs: []string{c1.ID, c2.ID, caseB.ID, c3.ID}})
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("CreateRun with a cross-project case id in the middle of a larger set = %v, want ValidationError", err)
+	}
+}
+
+// A case id that doesn't exist at all (never resolved through a key,
+// reachable only by calling the service directly) must still error, same
+// as the old per-id ProjectID loop did on a missing row.
+func TestCreateRunRejectsNonexistentCaseID(t *testing.T) {
+	s, st := testServiceAndStore(t)
+	ctx := context.Background()
+
+	p, err := st.Projects.Create(ctx, "Project", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+
+	_, err = s.CreateRun(ctx, p.ID, service.RunInput{Name: "smoke", CaseIDs: []string{"00000000-0000-0000-0000-000000000000"}})
+	if err == nil {
+		t.Fatal("CreateRun with a nonexistent case id = nil error, want an error")
+	}
+}
+
 func TestCreateRunAcceptsSuiteAndCasesFromSameProject(t *testing.T) {
 	s, st := testServiceAndStore(t)
 	ctx := context.Background()

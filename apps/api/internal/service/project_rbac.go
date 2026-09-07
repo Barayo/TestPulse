@@ -303,6 +303,29 @@ func (s *Service) CaseIDByKey(ctx context.Context, key string) (string, error) {
 	return s.store.Cases.IDByKey(ctx, key)
 }
 
+// CaseIDsByKeys resolves every one of keys to its internal id in one
+// batched store call rather than one round trip per key (#180). Order and
+// length match keys exactly; a key with no matching case returns
+// ErrNotFound, the same as a single CaseIDByKey miss would.
+func (s *Service) CaseIDsByKeys(ctx context.Context, keys []string) ([]string, error) {
+	if len(keys) == 0 {
+		return nil, nil
+	}
+	byKey, err := s.store.Cases.IDsByKeys(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(keys))
+	for i, key := range keys {
+		id, ok := byKey[key]
+		if !ok {
+			return nil, store.ErrNotFound
+		}
+		ids[i] = id
+	}
+	return ids, nil
+}
+
 func (s *Service) RunIDByKey(ctx context.Context, key string) (string, error) {
 	return s.store.Runs.IDByKey(ctx, key)
 }

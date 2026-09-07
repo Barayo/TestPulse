@@ -164,6 +164,79 @@ func TestIDByKeyResolvesOrNotFound(t *testing.T) {
 	}
 }
 
+// #180: CreateRun's case-key/case-id resolution looped a query per key/id
+// (CaseIDByKey then ProjectID), an unbounded N+1 reachable by any actor
+// holding runCreate. IDsByKeys and ProjectIDs resolve the whole batch in
+// one round trip via WHERE ... = ANY($1).
+func TestIDsByKeysResolvesBatchAndOmitsUnknownKeys(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p, err := s.Projects.Create(ctx, "Batch Resolve", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	c1 := mustCase(t, s, p.ID, "case one")
+	c2 := mustCase(t, s, p.ID, "case two")
+
+	byKey, err := s.Cases.IDsByKeys(ctx, []string{c1.Key, c2.Key, "NOPE-1"})
+	if err != nil {
+		t.Fatalf("IDsByKeys: %v", err)
+	}
+	if len(byKey) != 2 {
+		t.Fatalf("IDsByKeys returned %d entries, want 2 (unknown key omitted, not erroring)", len(byKey))
+	}
+	if byKey[c1.Key] != c1.ID || byKey[c2.Key] != c2.ID {
+		t.Errorf("IDsByKeys = %+v, want {%q: %q, %q: %q}", byKey, c1.Key, c1.ID, c2.Key, c2.ID)
+	}
+}
+
+func TestIDsByKeysExcludesSoftDeletedCases(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p, err := s.Projects.Create(ctx, "Batch Resolve Deleted", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	c := mustCase(t, s, p.ID, "soon deleted")
+	if err := s.Cases.SoftDelete(ctx, c.ID); err != nil {
+		t.Fatalf("SoftDelete: %v", err)
+	}
+
+	byKey, err := s.Cases.IDsByKeys(ctx, []string{c.Key})
+	if err != nil {
+		t.Fatalf("IDsByKeys: %v", err)
+	}
+	if len(byKey) != 0 {
+		t.Errorf("IDsByKeys for a soft-deleted case = %+v, want empty", byKey)
+	}
+}
+
+func TestProjectIDsResolvesBatchAndOmitsUnknownIDs(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	pA, err := s.Projects.Create(ctx, "Batch ProjectIDs A", "")
+	if err != nil {
+		t.Fatalf("create project A: %v", err)
+	}
+	pB, err := s.Projects.Create(ctx, "Batch ProjectIDs B", "")
+	if err != nil {
+		t.Fatalf("create project B: %v", err)
+	}
+	cA := mustCase(t, s, pA.ID, "a")
+	cB := mustCase(t, s, pB.ID, "b")
+
+	byID, err := s.Cases.ProjectIDs(ctx, []string{cA.ID, cB.ID, "00000000-0000-0000-0000-000000000000"})
+	if err != nil {
+		t.Fatalf("ProjectIDs: %v", err)
+	}
+	if len(byID) != 2 {
+		t.Fatalf("ProjectIDs returned %d entries, want 2 (unknown id omitted, not erroring)", len(byID))
+	}
+	if byID[cA.ID] != pA.ID || byID[cB.ID] != pB.ID {
+		t.Errorf("ProjectIDs = %+v, want {%q: %q, %q: %q}", byID, cA.ID, pA.ID, cB.ID, pB.ID)
+	}
+}
+
 func TestKeyCountersAreScopedPerProject(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

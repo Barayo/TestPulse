@@ -106,3 +106,50 @@ func TestBulkAddCasesRollsBackWholeBatchOnOneInvalidCase(t *testing.T) {
 		t.Fatalf("project has %d cases after a rejected batch, want 0 (no partial creation)", len(all))
 	}
 }
+
+// #180: custom-field validation moved from a per-case store fetch to one
+// fetch for the whole batch (validateCustomFieldValuesAgainst). Covers both
+// directions against the batch-level fetch: a valid value for a real field
+// round-trips onto the created case, and an unknown field id anywhere in
+// the batch still rejects the whole batch, same as the old per-case check.
+func TestBulkAddCasesValidatesCustomFieldsAgainstBatchFetchedList(t *testing.T) {
+	s := bulkAddCasesTestService(t)
+	ctx := context.Background()
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Custom Fields"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	field, err := s.CreateCustomField(ctx, project.ID, "Owner", domain.CustomFieldTypeText)
+	if err != nil {
+		t.Fatalf("CreateCustomField: %v", err)
+	}
+
+	contents := []domain.CaseContent{
+		{Title: "Case one", Priority: domain.PriorityHigh, CustomFields: map[string]string{field.ID: "ana"}},
+		{Title: "Case two", Priority: domain.PriorityHigh, CustomFields: map[string]string{field.ID: "beto"}},
+	}
+	created, err := s.BulkAddCases(ctx, project.ID, "", contents)
+	if err != nil {
+		t.Fatalf("BulkAddCases with valid custom field values: %v", err)
+	}
+	if created[0].Content.CustomFields[field.ID] != "ana" || created[1].Content.CustomFields[field.ID] != "beto" {
+		t.Fatalf("created custom field values = %+v, %+v; want ana, beto", created[0].Content.CustomFields, created[1].Content.CustomFields)
+	}
+
+	badContents := []domain.CaseContent{
+		{Title: "Case three", Priority: domain.PriorityHigh},
+		{Title: "Case four", Priority: domain.PriorityHigh, CustomFields: map[string]string{"not-a-real-field-id": "x"}},
+	}
+	_, err = s.BulkAddCases(ctx, project.ID, "", badContents)
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("BulkAddCases with an unknown custom field id = %v, want ValidationError", err)
+	}
+	all, listErr := s.ListCases(ctx, project.ID)
+	if listErr != nil {
+		t.Fatalf("ListCases: %v", listErr)
+	}
+	if len(all) != 2 {
+		t.Fatalf("project has %d cases after the rejected second batch, want 2 (only the first batch)", len(all))
+	}
+}

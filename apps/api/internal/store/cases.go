@@ -42,6 +42,55 @@ func (r *CaseRepo) IDByKey(ctx context.Context, key string) (string, error) {
 	return id, err
 }
 
+// IDsByKeys resolves every one of keys to its internal id in a single
+// batched query, rather than one round trip per key (#180: CreateRun's
+// case-key resolution looped a query per key, an unbounded N+1 reachable
+// by any actor holding runCreate). A key with no matching, non-deleted
+// case is simply absent from the returned map — callers detect a missing
+// key themselves by checking for it, the same way a single IDByKey miss
+// surfaces as ErrNotFound at the call site.
+func (r *CaseRepo) IDsByKeys(ctx context.Context, keys []string) (map[string]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT key, id FROM test_cases WHERE key = ANY($1) AND NOT deleted`, keys,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byKey := make(map[string]string, len(keys))
+	for rows.Next() {
+		var key, id string
+		if err := rows.Scan(&key, &id); err != nil {
+			return nil, err
+		}
+		byKey[key] = id
+	}
+	return byKey, rows.Err()
+}
+
+// ProjectIDs resolves every one of ids to its project id in a single
+// batched query, rather than one round trip per id (#180, same
+// N+1 as IDsByKeys). An id with no matching case row is simply absent
+// from the returned map.
+func (r *CaseRepo) ProjectIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, project_id FROM test_cases WHERE id = ANY($1)`, ids,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byID := make(map[string]string, len(ids))
+	for rows.Next() {
+		var id, projectID string
+		if err := rows.Scan(&id, &projectID); err != nil {
+			return nil, err
+		}
+		byID[id] = projectID
+	}
+	return byID, rows.Err()
+}
+
 // IDByKeyInProject resolves a case's key to its internal id, scoped to one
 // project — a key belonging to a different project is ErrNotFound, not a
 // match (add-execution-import: an import only ever matches within its own

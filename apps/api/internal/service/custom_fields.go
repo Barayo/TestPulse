@@ -75,6 +75,17 @@ func (s *Service) validateCustomFieldValues(ctx context.Context, projectID strin
 	if err != nil {
 		return err
 	}
+	return validateCustomFieldValuesAgainst(fields, values)
+}
+
+// validateCustomFieldValuesAgainst is validateCustomFieldValues' check
+// against an already-fetched field list, letting a caller validating many
+// cases in one project (BulkAddCases) fetch the field list once instead of
+// once per case (#180's lower-impact companion N+1).
+func validateCustomFieldValuesAgainst(fields []domain.CustomField, values map[string]string) error {
+	if len(values) == 0 {
+		return nil
+	}
 	byID := make(map[string]domain.CustomField, len(fields))
 	for _, f := range fields {
 		byID[f.ID] = f

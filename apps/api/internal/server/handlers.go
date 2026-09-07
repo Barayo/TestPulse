@@ -596,13 +596,10 @@ func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	caseIDs := make([]string, len(body.CaseKeys))
-	for i, key := range body.CaseKeys {
-		caseIDs[i], err = h.svc.CaseIDByKey(r.Context(), key)
-		if err != nil {
-			h.respond(w, 0, nil, err)
-			return
-		}
+	caseIDs, err := h.svc.CaseIDsByKeys(r.Context(), body.CaseKeys)
+	if err != nil {
+		h.respond(w, 0, nil, err)
+		return
 	}
 	run, err := h.svc.CreateRun(r.Context(), resolvedID(r, "projectKey"),
 		service.RunInput{Name: body.Name, SuiteID: suiteID, TestPlanID: testPlanID, CaseIDs: caseIDs})
