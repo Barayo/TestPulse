@@ -1570,6 +1570,95 @@ func TestMoveFolderRejectsEmptyTarget(t *testing.T) {
 	}
 }
 
+// #175: MoveCase must confine the destination folder to the case's own
+// project -- otherwise a folder in another project can graft the case into
+// a subtree that project's own routine folder-delete will later cascade
+// into, destroying it with no permission check on the case's real project
+// ever having run.
+func TestMoveCaseRejectsFolderFromDifferentProject(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "cross-project-mover@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	projectA, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectB, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.CreateCase(ctx, projectA.ID, "", domain.CaseContent{Title: "Login", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootB, err := rootFolder(t, s, ctx, projectB.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	folderB, err := s.CreateFolder(ctx, projectB.ID, domain.NewFolder{Name: "In B", ParentFolderID: rootB.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var verr *service.ValidationError
+	if err := s.MoveCase(ctx, c.ID, folderB.ID); !errors.As(err, &verr) {
+		t.Fatalf("MoveCase into a different project's folder = %v, want ValidationError", err)
+	}
+
+	after, err := s.GetCase(ctx, c.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if after.FolderID == folderB.ID {
+		t.Errorf("case was moved into project B's folder despite the rejection")
+	}
+}
+
+// #175: MoveFolder must confine the target parent to the same project as
+// the folder being moved -- same cross-project graft risk as MoveCase.
+func TestMoveFolderRejectsTargetFromDifferentProject(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "cross-project-folder-mover@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	projectA, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectB, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootA, err := rootFolder(t, s, ctx, projectA.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	folderA, err := s.CreateFolder(ctx, projectA.ID, domain.NewFolder{Name: "In A", ParentFolderID: rootA.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootB, err := rootFolder(t, s, ctx, projectB.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var verr *service.ValidationError
+	if _, err := s.MoveFolder(ctx, folderA.ID, rootB.ID); !errors.As(err, &verr) {
+		t.Fatalf("MoveFolder into a different project's tree = %v, want ValidationError", err)
+	}
+
+	afterFolders, err := s.ListFolders(ctx, projectA.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range afterFolders {
+		if f.ID == folderA.ID && f.ParentFolderID == rootB.ID {
+			t.Errorf("folder was grafted into project B's tree despite the rejection")
+		}
+	}
+}
+
 func TestRestoreVersionCreatesNewVersionWithOldContent(t *testing.T) {
 	s := testService(t)
 	admin := mustCreateUser(t, s, "restorer@example.com", "correcthorse", true)

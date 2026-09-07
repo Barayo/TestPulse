@@ -274,7 +274,11 @@ Deleting a test case SHALL be a soft delete: the case disappears from authoring 
 - **THEN** the request is rejected with `403`
 
 ### Requirement: Project-level case folders
-The system SHALL let a user with `sectionCreate` permission organize test cases into a nested folder tree, scoped per project and independent of suite membership. Every project SHALL have a root folder created automatically with the project. Every test case SHALL belong to exactly one folder at a time, defaulting to the project's root folder when not specified. Moving a case between folders SHALL require `caseEdit` permission.
+The system SHALL let a user with `sectionCreate` permission organize test cases into a nested folder tree, scoped per project and independent of suite membership. Every project SHALL have a root folder created automatically with the project. Every test case SHALL belong to exactly one folder at a time, defaulting to the project's root folder when not specified. Moving a case between folders SHALL require `caseEdit` permission, and the destination folder MUST belong to the same project as the case — the server is the authoritative guard against a cross-project destination, regardless of client-side filtering.
+
+#### Scenario: Moving a case into another project's folder is rejected
+- **WHEN** a user attempts to move a case into a folder that belongs to a different project than the case's own
+- **THEN** the request is rejected and the case's folder is unchanged
 
 #### Scenario: New project has a root folder
 - **WHEN** a project is created
@@ -349,6 +353,10 @@ same independence folders and suites already have for a single case.
 #### Scenario: The root folder cannot be moved
 - **WHEN** a user attempts to move a project's root folder
 - **THEN** the request is rejected
+
+#### Scenario: Moving a folder into a different project's tree is rejected
+- **WHEN** a user attempts to move a folder to a parent that belongs to a different project
+- **THEN** the request is rejected and the folder's parent is unchanged, even though the actor has `sectionEdit` on the folder's own project
 
 #### Scenario: A permission that doesn't include sectionEdit cannot move a folder
 - **WHEN** a user whose effective permissions on a project do not include `sectionEdit` attempts to move a folder

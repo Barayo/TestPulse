@@ -289,3 +289,54 @@ func TestRootFolderCannotBeMoved(t *testing.T) {
 		t.Errorf("Move(root) = %v, want ErrRootFolder", err)
 	}
 }
+
+// #175 defense in depth: FolderRepo.Move itself has no project check (the
+// service layer enforces it), so subtreeCTE is pinned to the root's own
+// project_id independently -- even a folder grafted across a project
+// boundary by some other bug must never be reachable by another project's
+// own delete. Simulated here by calling the store directly (bypassing the
+// service-layer check this same fix adds) to force exactly that graft.
+func TestSubtreeDeleteNeverCrossesIntoAnotherProject(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	projectA := mustProject(t, s)
+	projectB := mustProject(t, s)
+
+	rootA, _ := s.Folders.Root(ctx, projectA.ID)
+	folderA, err := s.Folders.Create(ctx, projectA.ID, rootA.ID, "In A")
+	if err != nil {
+		t.Fatalf("create folder in A: %v", err)
+	}
+	caseA := mustCase(t, s, projectA.ID, "case in A")
+	if err := s.Cases.Move(ctx, caseA.ID, folderA.ID); err != nil {
+		t.Fatalf("move case into folder A: %v", err)
+	}
+
+	rootB, _ := s.Folders.Root(ctx, projectB.ID)
+	folderB, err := s.Folders.Create(ctx, projectB.ID, rootB.ID, "In B")
+	if err != nil {
+		t.Fatalf("create folder in B: %v", err)
+	}
+
+	// Force the cross-project graft directly (this is exactly what the
+	// service-layer fix now prevents through the normal API).
+	if _, err := s.Folders.Move(ctx, folderA.ID, folderB.ID); err != nil {
+		t.Fatalf("forcing cross-project graft: %v", err)
+	}
+
+	// Project B's own admin deletes their own folder -- an entirely
+	// routine action for them.
+	if err := s.Folders.Delete(ctx, folderB.ID); err != nil {
+		t.Fatalf("Delete(folderB): %v", err)
+	}
+
+	// Project A's grafted folder and case must have survived -- both
+	// Get methods filter out soft-deleted rows, so a nil error alone
+	// confirms neither was touched by project B's delete.
+	if _, err := s.Folders.Get(ctx, folderA.ID); err != nil {
+		t.Fatalf("folder A = %v; want it to still exist, undeleted", err)
+	}
+	if _, err := s.Cases.Get(ctx, caseA.ID); err != nil {
+		t.Fatalf("case in folder A = %v; want it to still exist, undeleted", err)
+	}
+}

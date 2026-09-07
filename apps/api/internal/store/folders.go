@@ -105,14 +105,17 @@ func (r *FolderRepo) List(ctx context.Context, projectID string) ([]domain.Folde
 // subtreeCTE finds every folder in folderID's subtree, including folderID
 // itself, via a recursive walk of parent_folder_id — arbitrarily deep,
 // avoiding N+1 queries or loading the tree into Go to walk it (add-delete-
-// mode design.md).
+// mode design.md). The recursive step is also pinned to the root's own
+// project_id -- defense in depth (#175) so a future write bug that lets a
+// folder get reparented across a project boundary can't turn a routine
+// delete/move in one project into a cascade that reaches into another.
 const subtreeCTE = `
 	WITH RECURSIVE subtree AS (
-		SELECT id FROM test_case_folders WHERE id = $1
+		SELECT id, project_id FROM test_case_folders WHERE id = $1
 		UNION ALL
-		SELECT f.id FROM test_case_folders f
+		SELECT f.id, f.project_id FROM test_case_folders f
 		JOIN subtree s ON f.parent_folder_id = s.id
-		WHERE NOT f.deleted
+		WHERE NOT f.deleted AND f.project_id = s.project_id
 	)`
 
 // Delete soft-deletes a non-root folder and every folder and case anywhere

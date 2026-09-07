@@ -525,6 +525,18 @@ func (s *Service) MoveCase(ctx context.Context, caseID, folderID string) error {
 	if err != nil {
 		return err
 	}
+	// The destination folder must belong to the same project as the case
+	// (#175) -- otherwise a folder in another project can graft the case
+	// into a subtree that project's own routine folder-delete will later
+	// cascade into, destroying it with no permission check on this
+	// project ever having run.
+	destProjectID, err := s.store.Folders.ProjectID(ctx, folderID)
+	if err != nil {
+		return err
+	}
+	if destProjectID != before.ProjectID {
+		return invalid("target folder belongs to a different project")
+	}
 	if err := s.store.Cases.Move(ctx, caseID, folderID); err != nil {
 		return err
 	}
@@ -690,6 +702,15 @@ func (s *Service) MoveFolder(ctx context.Context, folderID, targetParentID strin
 	before, err := s.store.Folders.Get(ctx, folderID)
 	if err != nil {
 		return domain.Folder{}, err
+	}
+	// The target parent must belong to the same project as the folder
+	// being moved (#175) -- same cross-project graft risk as MoveCase.
+	destProjectID, err := s.store.Folders.ProjectID(ctx, targetParentID)
+	if err != nil {
+		return domain.Folder{}, err
+	}
+	if destProjectID != before.ProjectID {
+		return domain.Folder{}, invalid("target parent folder belongs to a different project")
 	}
 	f, err := s.store.Folders.Move(ctx, folderID, targetParentID)
 	if err != nil {
