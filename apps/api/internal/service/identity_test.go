@@ -853,6 +853,59 @@ func TestCreateAndAuthenticateToken(t *testing.T) {
 	}
 }
 
+// #176: deactivating a user must cut off the API tokens they created too,
+// not just their own browser session -- AuthenticateSession already
+// rejects a deactivated user; AuthenticateToken must do the same for
+// tokens whose creator is now deactivated, unscoped or project-scoped.
+func TestAuthenticateTokenRejectsTokenFromDeactivatedCreator(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "soon-deactivated@example.com", "correcthorse", false)
+	ownerActor := actorFor(u)
+
+	full, _, err := s.CreateToken(context.Background(), ownerActor, "ci-agent", nil, nil)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	if _, err := s.AuthenticateToken(context.Background(), full); err != nil {
+		t.Fatalf("AuthenticateToken (before deactivation): %v", err)
+	}
+
+	if err := s.DeactivateUser(context.Background(), u.ID); err != nil {
+		t.Fatalf("DeactivateUser: %v", err)
+	}
+
+	_, err = s.AuthenticateToken(context.Background(), full)
+	var uerr *service.UnauthorizedError
+	if !asUnauthorized(err, &uerr) {
+		t.Errorf("AuthenticateToken after creator deactivated = %v, want UnauthorizedError", err)
+	}
+}
+
+// #176: reactivating a user must restore authentication for the tokens
+// they created, matching TestReactivatedUserCanLoginAgain's guarantee for
+// sessions -- the check re-reads the creator's current state on every
+// call, so reactivation needs no separate token-side action.
+func TestReactivatedUserTokenAuthenticatesAgain(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "reactivated-owner@example.com", "correcthorse", false)
+	ownerActor := actorFor(u)
+
+	full, _, err := s.CreateToken(context.Background(), ownerActor, "ci-agent", nil, nil)
+	if err != nil {
+		t.Fatalf("CreateToken: %v", err)
+	}
+	if err := s.DeactivateUser(context.Background(), u.ID); err != nil {
+		t.Fatalf("DeactivateUser: %v", err)
+	}
+	if err := s.ReactivateUser(context.Background(), u.ID); err != nil {
+		t.Fatalf("ReactivateUser: %v", err)
+	}
+
+	if _, err := s.AuthenticateToken(context.Background(), full); err != nil {
+		t.Fatalf("AuthenticateToken after reactivation: %v", err)
+	}
+}
+
 // backlog #117 (design.md D3): AuthenticateToken resolves a scoped
 // token's ScopedPermissions as the intersection of its role's flags and
 // its creator's current access — computed fresh every call (this IS

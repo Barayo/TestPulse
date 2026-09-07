@@ -142,6 +142,24 @@ access.
 - **THEN** the token is deleted along with the role and stops
   authenticating entirely — it does not fall back to unscoped/full access
 
+### Requirement: Deactivating a user revokes every token they created
+The system SHALL reject authentication via any API token — unscoped or
+project-scoped — created by a user whose account is currently deactivated,
+the same as a deactivated user's own session stops authenticating. This
+holds regardless of when the token was created; there is no separate
+revocation step required.
+
+#### Scenario: A deactivated user's token stops authenticating
+- **WHEN** a user who created an API token (unscoped or project-scoped) is
+  deactivated
+- **THEN** that token no longer authenticates, even though it was never
+  individually revoked
+
+#### Scenario: Reactivating a user restores their tokens
+- **WHEN** a previously deactivated user, whose tokens stopped
+  authenticating, is reactivated
+- **THEN** their existing, non-revoked API tokens authenticate again
+
 ### Requirement: Token management scoped to creator, with Tenant Admin override
 The system SHALL let a user list and revoke only the API tokens they created; a Tenant Admin SHALL additionally be able to list and revoke any user's tokens, for offboarding.
 

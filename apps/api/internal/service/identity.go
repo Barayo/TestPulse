@@ -229,6 +229,15 @@ func (s *Service) AuthenticateToken(ctx context.Context, rawToken string) (domai
 	if err != nil {
 		return domain.Actor{}, err
 	}
+	if creator.DeactivatedAt != nil {
+		// Mirrors AuthenticateSession's check (#176) -- without this, a
+		// deactivated user's tokens (unscoped or project-scoped) keep
+		// working indefinitely, since only their browser session was
+		// ever locked out. Deactivating a departing or compromised
+		// account must cut off the CI/agent tokens they minted too, not
+		// just their own login.
+		return domain.Actor{}, unauthorized("token creator's account deactivated")
+	}
 	actor := domain.Actor{
 		ID: tok.ID, Kind: domain.ActorKindAgent, DisplayName: tok.Name,
 		EffectiveUserID: creator.ID, IsTenantAdmin: creator.IsTenantAdmin,

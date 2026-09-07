@@ -715,7 +715,11 @@ func TestScenario_DeleteUserRejectsSelfDelete(t *testing.T) {
 	token, _ := tokenResp["token"].(string)
 
 	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+adminID, jmap{"deactivate": true}, 204, nil)
-	callAs(t, h, "Bearer "+token, "DELETE", "/api/v1/users/"+adminID, nil, 403, nil)
+	// #176: since the admin deactivated themselves, their own token no
+	// longer authenticates at all (rejected before the self-delete-
+	// specific check this test originally exercised) -- 401, not the
+	// self-delete guard's 403.
+	callAs(t, h, "Bearer "+token, "DELETE", "/api/v1/users/"+adminID, nil, 401, nil)
 }
 
 func TestScenario_DeleteDeactivatedUserSucceeds(t *testing.T) {
