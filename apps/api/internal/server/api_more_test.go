@@ -43,19 +43,21 @@ func TestScenario_AddItemToOpenRunOverHTTP(t *testing.T) {
 	call(t, h, "PUT", "/api/v1/cases/"+c.Key, jmap{"title": "late joiner v2"}, 200, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), jmap{"caseKey": c.Key}, 201, nil)
 
-	var items []struct {
-		CaseVersion int `json:"caseVersion"`
+	var itemsPage struct {
+		Items []struct {
+			CaseVersion int `json:"caseVersion"`
+		}
 	}
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
-	if len(items) != 1 || items[0].CaseVersion != 2 {
-		t.Errorf("added item = %+v, want pinned v2", items)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &itemsPage)
+	if len(itemsPage.Items) != 1 || itemsPage.Items[0].CaseVersion != 2 {
+		t.Errorf("added item = %+v, want pinned v2", itemsPage.Items)
 	}
 
 	// Runs listing and get.
-	var runs []jmap
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), nil, 200, &runs)
-	if len(runs) != 1 {
-		t.Errorf("runs = %d, want 1", len(runs))
+	var runsPage struct{ Items []jmap }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), nil, 200, &runsPage)
+	if len(runsPage.Items) != 1 {
+		t.Errorf("runs = %d, want 1", len(runsPage.Items))
 	}
 	var got struct{ Name string }
 	call(t, h, "GET", "/api/v1/runs/"+run.Key, nil, 200, &got)
@@ -255,9 +257,9 @@ func TestScenario_ProjectStatusSummaryOverHTTP(t *testing.T) {
 
 	var run1, run2 struct{ Key string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 1", "caseKeys": []string{c.Key}}, 201, &run1)
-	var items1 []struct{ ID string }
+	var items1 struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run1.Key), nil, 200, &items1)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 2", "caseKeys": []string{c.Key}}, 201, &run2)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run2.Key), nil, 204, nil)

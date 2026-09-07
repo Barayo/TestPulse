@@ -239,6 +239,113 @@ func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite,
 	return suites, statsRows.Err()
 }
 
+// ListPage is List, cursor-paginated (add-cursor-pagination). Preserves
+// List's existing created_at ASC (insertion) order and its per-suite
+// CaseIDs/PassRate/LastRunAt enrichment, scoped to just the page's own
+// suites rather than the whole project, with id ASC as the deterministic
+// tiebreak.
+func (r *SuiteRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Suite, string, error) {
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, key, project_id, name, created_at FROM test_suites
+		 WHERE project_id = $1
+		   AND ($2::timestamptz IS NULL OR (created_at, id) > ($2, $3))
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $4`, projectID, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	suites := []domain.Suite{}
+	order := []string{}
+	byID := map[string]int{}
+	for rows.Next() {
+		var s domain.Suite
+		if err := rows.Scan(&s.ID, &s.Key, &s.ProjectID, &s.Name, &s.CreatedAt); err != nil {
+			rows.Close()
+			return nil, "", err
+		}
+		byID[s.ID] = len(suites)
+		order = append(order, s.ID)
+		suites = append(suites, s)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(suites) > limit {
+		last := suites[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		suites = suites[:limit]
+		order = order[:limit]
+		byID = make(map[string]int, len(suites))
+		for i, s := range suites {
+			byID[s.ID] = i
+		}
+	}
+	if len(suites) == 0 {
+		return suites, nextCursor, nil
+	}
+
+	for i := range suites {
+		full, err := r.Get(ctx, suites[i].ID)
+		if err != nil {
+			return nil, "", err
+		}
+		suites[i].CaseIDs = full.CaseIDs
+	}
+
+	statsRows, err := r.pool.Query(ctx,
+		`WITH latest_any AS (
+		     SELECT DISTINCT ON (suite_id) suite_id, created_at
+		     FROM test_runs
+		     WHERE suite_id = ANY($1)
+		     ORDER BY suite_id, created_at DESC
+		 ), latest_closed AS (
+		     SELECT DISTINCT ON (suite_id) suite_id, id
+		     FROM test_runs
+		     WHERE suite_id = ANY($1) AND status = 'closed'
+		     ORDER BY suite_id, created_at DESC
+		 )
+		 SELECT la.suite_id, la.created_at,
+		        count(i.id), count(i.id) FILTER (WHERE i.current_status = 'pass')
+		 FROM latest_any la
+		 LEFT JOIN latest_closed lc ON lc.suite_id = la.suite_id
+		 LEFT JOIN test_run_items i ON i.run_id = lc.id
+		 GROUP BY la.suite_id, la.created_at`, order)
+	if err != nil {
+		return nil, "", err
+	}
+	defer statsRows.Close()
+	for statsRows.Next() {
+		var suiteID string
+		var lastRunAt time.Time
+		var total, passCount int
+		if err := statsRows.Scan(&suiteID, &lastRunAt, &total, &passCount); err != nil {
+			return nil, "", err
+		}
+		i, ok := byID[suiteID]
+		if !ok {
+			continue
+		}
+		suites[i].LastRunAt = &lastRunAt
+		if total > 0 {
+			rate := int(float64(passCount) / float64(total) * 100)
+			suites[i].PassRate = &rate
+		}
+	}
+	return suites, nextCursor, statsRows.Err()
+}
+
 // Rename updates a suite's name and returns the suite as it now stands
 // (without its case IDs — callers needing those should follow with Get).
 func (r *SuiteRepo) Rename(ctx context.Context, suiteID, name string) (domain.Suite, error) {

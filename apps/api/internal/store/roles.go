@@ -85,6 +85,53 @@ func (r *RoleRepo) List(ctx context.Context) ([]domain.Role, error) {
 	return roles, rows.Err()
 }
 
+// ListPage is List, cursor-paginated (add-cursor-pagination). Preserves
+// List's existing "rank, created_at" order (the seeded Tester/Contributor/
+// Project Admin tiers stay grouped), with id as the final deterministic
+// tiebreak — the cursor carries rank too (encodeCursorWithRank), or
+// resuming right at a rank boundary would skip or duplicate a row.
+func (r *RoleRepo) ListPage(ctx context.Context, cursor string, limit int) ([]domain.Role, string, error) {
+	var cursorRank any
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		rank, createdAt, id, err := decodeCursorWithRank(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorRank, cursorCreatedAt, cursorID = rank, createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+roleColumns+` FROM roles
+		 WHERE $1::int IS NULL OR (rank, created_at, id) > ($1, $2, $3)
+		 ORDER BY rank ASC, created_at ASC, id ASC
+		 LIMIT $4`, cursorRank, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	roles := []domain.Role{}
+	for rows.Next() {
+		var role domain.Role
+		if err := rows.Scan(roleScanTargets(&role)...); err != nil {
+			return nil, "", err
+		}
+		roles = append(roles, role)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(roles) > limit {
+		last := roles[limit-1]
+		nextCursor = encodeCursorWithRank(last.Rank, last.CreatedAt, last.ID)
+		roles = roles[:limit]
+	}
+	return roles, nextCursor, nil
+}
+
 func (r *RoleRepo) Update(ctx context.Context, role domain.Role) (domain.Role, error) {
 	row := r.pool.QueryRow(ctx,
 		`UPDATE roles SET name = $2, rank = $3, can_read = $4, can_case_create = $5, can_case_edit = $6,

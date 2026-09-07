@@ -26,8 +26,9 @@ func mountTeams(r chi.Router, h *api) {
 }
 
 func (h *api) listTeams(w http.ResponseWriter, r *http.Request) {
-	teams, err := h.svc.ListTeams(r.Context())
-	h.respond(w, http.StatusOK, teams, err)
+	cursor, limit := parsePageParams(r)
+	teams, nextCursor, err := h.svc.ListTeamsPage(r.Context(), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(teams, nextCursor), err)
 }
 
 type teamInput struct {

@@ -208,7 +208,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List test cases in a project */
+        /** List test cases in a project, cursor-paginated in insertion order */
         get: operations["listCases"];
         put?: never;
         /** Create a test case (version 1). Defaults into the project's root folder. */
@@ -228,7 +228,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List all folders in a project (flat; reconstruct the tree from parentFolderId) */
+        /** List folders in a project (flat; reconstruct the tree from parentFolderId), cursor-paginated in insertion order */
         get: operations["listFolders"];
         put?: never;
         /** Create a subfolder (a parent folder is always required) */
@@ -447,7 +447,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List suites in a project */
+        /** List suites in a project, cursor-paginated in insertion order */
         get: operations["listSuites"];
         put?: never;
         /** Create a suite */
@@ -488,7 +488,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List runs in a project */
+        /** List runs in a project, cursor-paginated */
         get: operations["listRuns"];
         put?: never;
         /** Create a run, pinning each case's current version */
@@ -896,8 +896,12 @@ export interface paths {
         parameters: {
             query?: {
                 assignee?: string;
-                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. Not itself paginated (always the whole matching set, nextCursor always null) — a run's jira-linked items are inherently a small subset. */
                 jiraLinked?: boolean;
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
             };
             header?: never;
             path: {
@@ -905,7 +909,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List run items with pinned content, optionally by assignee */
+        /** List run items with pinned content, cursor-paginated in insertion order, optionally filtered by assignee or jiraLinked */
         get: operations["listRunItems"];
         put?: never;
         /** Add a case to an open run (pins its then-current version) */
@@ -1180,7 +1184,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List test cases in a public project */
+        /** List test cases in a public project, cursor-paginated in insertion order (shares listCases' handler) */
         get: operations["listPublicCases"];
         put?: never;
         post?: never;
@@ -1199,7 +1203,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List all folders in a public project */
+        /** List folders in a public project, cursor-paginated in insertion order (shares listFolders' handler) */
         get: operations["listPublicFolders"];
         put?: never;
         post?: never;
@@ -1237,7 +1241,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List suites in a public project */
+        /** List suites in a public project, cursor-paginated in insertion order (shares listSuites' handler) */
         get: operations["listPublicSuites"];
         put?: never;
         post?: never;
@@ -1256,7 +1260,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List runs in a public project */
+        /** List runs in a public project, cursor-paginated, newest first (shares listRuns' handler) */
         get: operations["listPublicRuns"];
         put?: never;
         post?: never;
@@ -1435,7 +1439,7 @@ export interface paths {
             };
             cookie?: never;
         };
-        /** List run items with pinned content, from a public project */
+        /** List run items with pinned content, cursor-paginated in insertion order, from a public project (shares listRunItems' handler) */
         get: operations["listPublicRunItems"];
         put?: never;
         post?: never;
@@ -1663,7 +1667,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all users */
+        /** List users, cursor-paginated in insertion order */
         get: operations["listUsers"];
         put?: never;
         /** Create a user (Tenant Admin only) */
@@ -1893,7 +1897,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List teams */
+        /** List teams, cursor-paginated in insertion order */
         get: operations["listTeams"];
         put?: never;
         /** Create a team (Tenant Admin only) */
@@ -2011,7 +2015,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List all roles (add-project-rbac design.md D10 — fully custom, instance-wide) */
+        /** List roles (add-project-rbac design.md D10 — fully custom, instance-wide), cursor-paginated by rank then insertion order */
         get: operations["listRoles"];
         put?: never;
         /** Create a role (Tenant Admin only) */
@@ -2215,6 +2219,11 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        FolderListPage: {
+            items: components["schemas"]["Folder"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
+        };
         FolderDeletePreview: {
             /** @description Cases anywhere in the folder's subtree that would be soft-deleted. */
             caseCount: number;
@@ -2283,6 +2292,11 @@ export interface components {
              */
             jiraLastSyncedAt?: string | null;
         };
+        CaseListPage: {
+            items: components["schemas"]["TestCase"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
+        };
         CaseVersion: {
             caseId: string;
             version: number;
@@ -2321,6 +2335,11 @@ export interface components {
              */
             lastRunAt: string | null;
         };
+        SuiteListPage: {
+            items: components["schemas"]["Suite"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
+        };
         SuiteInput: {
             name: string;
         };
@@ -2342,6 +2361,11 @@ export interface components {
             passRate?: number | null;
             /** @description The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself. */
             testPlanKey?: string | null;
+        };
+        RunListPage: {
+            items: components["schemas"]["Run"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
         };
         RunInput: {
             name: string;
@@ -2431,6 +2455,11 @@ export interface components {
              * @description When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
              */
             jiraLastSyncedAt?: string | null;
+        };
+        RunItemListPage: {
+            items: components["schemas"]["RunItem"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
         };
         AddItemInput: {
             caseKey: string;
@@ -2765,6 +2794,11 @@ export interface components {
             /** @description True when this account must set a new password before doing anything else (add-change-own-password) — set by a Tenant Admin directly, or as a side effect of a generated temporary password. On the response to POST /auth/login, signals the frontend to show the required-change gate before the app shell. */
             mustChangePassword: boolean;
         };
+        UserListPage: {
+            items: components["schemas"]["User"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
+        };
         /** @description Self-service profile fields — a user editing their own display name, avatar, or timezone. */
         UserProfileUpdate: {
             displayName?: string | null;
@@ -2861,6 +2895,11 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        RoleListPage: {
+            items: components["schemas"]["Role"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
+        };
         RoleInput: {
             name: string;
             rank?: number;
@@ -2885,6 +2924,11 @@ export interface components {
             memberIds: string[];
             /** Format: date-time */
             createdAt: string;
+        };
+        TeamListPage: {
+            items: components["schemas"]["Team"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
         };
         TeamInput: {
             name: string;
@@ -3021,7 +3065,12 @@ export interface components {
             };
         };
     };
-    parameters: never;
+    parameters: {
+        /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+        cursor: string;
+        /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+        limit: number;
+    };
     requestBodies: never;
     headers: never;
     pathItems: never;
@@ -3396,8 +3445,12 @@ export interface operations {
     listCases: {
         parameters: {
             query?: {
-                /** @description When true, return only cases with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                /** @description When true, return only cases with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. Not itself paginated (always the whole matching set, nextCursor always null) — a project's jira-linked cases are inherently a small subset. */
                 jiraLinked?: boolean;
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
             };
             header?: never;
             path: {
@@ -3407,13 +3460,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cases with their current version content */
+            /** @description A page of test cases with their current version content */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TestCase"][];
+                    "application/json": components["schemas"]["CaseListPage"];
                 };
             };
         };
@@ -3448,7 +3501,12 @@ export interface operations {
     };
     listFolders: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -3457,13 +3515,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Folders, including the project's root folder */
+            /** @description A page of folders, including the project's root folder */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Folder"][];
+                    "application/json": components["schemas"]["FolderListPage"];
                 };
             };
         };
@@ -3839,7 +3897,12 @@ export interface operations {
     };
     listSuites: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -3848,13 +3911,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Suites with case membership */
+            /** @description A page of suites with case membership */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Suite"][];
+                    "application/json": components["schemas"]["SuiteListPage"];
                 };
             };
         };
@@ -3931,7 +3994,12 @@ export interface operations {
     };
     listRuns: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -3940,13 +4008,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Runs, newest first */
+            /** @description A page of runs, newest first */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Run"][];
+                    "application/json": components["schemas"]["RunListPage"];
                 };
             };
         };
@@ -4689,8 +4757,12 @@ export interface operations {
         parameters: {
             query?: {
                 assignee?: string;
-                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. Not itself paginated (always the whole matching set, nextCursor always null) — a run's jira-linked items are inherently a small subset. */
                 jiraLinked?: boolean;
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
             };
             header?: never;
             path: {
@@ -4700,13 +4772,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Run items */
+            /** @description A page of run items, in insertion order (oldest first — matches the execution board's traversal order, not newest-first) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunItem"][];
+                    "application/json": components["schemas"]["RunItemListPage"];
                 };
             };
         };
@@ -4715,8 +4787,12 @@ export interface operations {
         parameters: {
             query?: {
                 assignee?: string;
-                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. */
+                /** @description When true, return only items with a non-null jiraIssueKey (add-jira-connector) — a DB-level filter, not client-side. Not itself paginated (always the whole matching set, nextCursor always null) — a run's jira-linked items are inherently a small subset. */
                 jiraLinked?: boolean;
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
             };
             header?: never;
             path: {
@@ -5237,7 +5313,12 @@ export interface operations {
     };
     listPublicCases: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -5246,13 +5327,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cases with their current version content */
+            /** @description A page of test cases with their current version content */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TestCase"][];
+                    "application/json": components["schemas"]["CaseListPage"];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -5260,7 +5341,12 @@ export interface operations {
     };
     listPublicFolders: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -5269,13 +5355,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Folders, including the project's root folder */
+            /** @description A page of folders, including the project's root folder */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Folder"][];
+                    "application/json": components["schemas"]["FolderListPage"];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -5306,7 +5392,12 @@ export interface operations {
     };
     listPublicSuites: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -5315,13 +5406,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Suites with case membership */
+            /** @description A page of suites with case membership */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Suite"][];
+                    "application/json": components["schemas"]["SuiteListPage"];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -5329,7 +5420,12 @@ export interface operations {
     };
     listPublicRuns: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 projectKey: string;
@@ -5338,13 +5434,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Runs, newest first */
+            /** @description A page of runs, newest first */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Run"][];
+                    "application/json": components["schemas"]["RunListPage"];
                 };
             };
             404: components["responses"]["NotFound"];
@@ -5545,7 +5641,12 @@ export interface operations {
     };
     listPublicRunItems: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path: {
                 runKey: string;
@@ -5554,13 +5655,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Run items */
+            /** @description A page of run items, in insertion order (oldest first) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RunItem"][];
+                    "application/json": components["schemas"]["RunItemListPage"];
                 };
             };
         };
@@ -5831,20 +5932,25 @@ export interface operations {
     };
     listUsers: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description All users */
+            /** @description A page of users */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["User"][];
+                    "application/json": components["schemas"]["UserListPage"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -6256,20 +6362,25 @@ export interface operations {
     };
     listTeams: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description All teams */
+            /** @description A page of teams */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Team"][];
+                    "application/json": components["schemas"]["TeamListPage"];
                 };
             };
             401: components["responses"]["Unauthorized"];
@@ -6506,20 +6617,25 @@ export interface operations {
     };
     listRoles: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
             header?: never;
             path?: never;
             cookie?: never;
         };
         requestBody?: never;
         responses: {
-            /** @description All roles */
+            /** @description A page of roles */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["Role"][];
+                    "application/json": components["schemas"]["RoleListPage"];
                 };
             };
             401: components["responses"]["Unauthorized"];

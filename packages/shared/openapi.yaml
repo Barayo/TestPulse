@@ -241,7 +241,7 @@ paths:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listCases
-      summary: List test cases in a project
+      summary: List test cases in a project, cursor-paginated in insertion order
       tags: [cases]
       parameters:
         - name: jiraLinked
@@ -250,15 +250,18 @@ paths:
           schema: { type: boolean }
           description: >-
             When true, return only cases with a non-null jiraIssueKey
-            (add-jira-connector) — a DB-level filter, not client-side.
+            (add-jira-connector) — a DB-level filter, not client-side. Not
+            itself paginated (always the whole matching set, nextCursor
+            always null) — a project's jira-linked cases are inherently a
+            small subset.
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Cases with their current version content
+          description: A page of test cases with their current version content
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TestCase" }
+              schema: { $ref: "#/components/schemas/CaseListPage" }
     post:
       operationId: createCase
       summary: Create a test case (version 1). Defaults into the project's root folder.
@@ -281,16 +284,17 @@ paths:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listFolders
-      summary: List all folders in a project (flat; reconstruct the tree from parentFolderId)
+      summary: List folders in a project (flat; reconstruct the tree from parentFolderId), cursor-paginated in insertion order
       tags: [folders]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Folders, including the project's root folder
+          description: A page of folders, including the project's root folder
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Folder" }
+              schema: { $ref: "#/components/schemas/FolderListPage" }
     post:
       operationId: createFolder
       summary: Create a subfolder (a parent folder is always required)
@@ -566,16 +570,17 @@ paths:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listSuites
-      summary: List suites in a project
+      summary: List suites in a project, cursor-paginated in insertion order
       tags: [suites]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Suites with case membership
+          description: A page of suites with case membership
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Suite" }
+              schema: { $ref: "#/components/schemas/SuiteListPage" }
     post:
       operationId: createSuite
       summary: Create a suite
@@ -614,16 +619,17 @@ paths:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listRuns
-      summary: List runs in a project
+      summary: List runs in a project, cursor-paginated
       tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Runs, newest first
+          description: A page of runs, newest first
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Run" }
+              schema: { $ref: "#/components/schemas/RunListPage" }
     post:
       operationId: createRun
       summary: Create a run, pinning each case's current version
@@ -1060,19 +1066,22 @@ paths:
         schema: { type: boolean }
         description: >-
           When true, return only items with a non-null jiraIssueKey
-          (add-jira-connector) — a DB-level filter, not client-side.
+          (add-jira-connector) — a DB-level filter, not client-side. Not
+          itself paginated (always the whole matching set, nextCursor
+          always null) — a run's jira-linked items are inherently a small
+          subset.
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
     get:
       operationId: listRunItems
-      summary: List run items with pinned content, optionally by assignee
+      summary: List run items with pinned content, cursor-paginated in insertion order, optionally filtered by assignee or jiraLinked
       tags: [runs]
       responses:
         "200":
-          description: Run items
+          description: A page of run items, in insertion order (oldest first — matches the execution board's traversal order, not newest-first)
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/RunItem" }
+              schema: { $ref: "#/components/schemas/RunItemListPage" }
     post:
       operationId: addRunItem
       summary: Add a case to an open run (pins its then-current version)
@@ -1427,32 +1436,34 @@ paths:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listPublicCases
-      summary: List test cases in a public project
+      summary: List test cases in a public project, cursor-paginated in insertion order (shares listCases' handler)
       tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Cases with their current version content
+          description: A page of test cases with their current version content
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/TestCase" }
+              schema: { $ref: "#/components/schemas/CaseListPage" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/projects/{projectKey}/folders:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listPublicFolders
-      summary: List all folders in a public project
+      summary: List folders in a public project, cursor-paginated in insertion order (shares listFolders' handler)
       tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Folders, including the project's root folder
+          description: A page of folders, including the project's root folder
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Folder" }
+              schema: { $ref: "#/components/schemas/FolderListPage" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/projects/{projectKey}/flaky-cases:
     parameters:
@@ -1475,32 +1486,34 @@ paths:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listPublicSuites
-      summary: List suites in a public project
+      summary: List suites in a public project, cursor-paginated in insertion order (shares listSuites' handler)
       tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Suites with case membership
+          description: A page of suites with case membership
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Suite" }
+              schema: { $ref: "#/components/schemas/SuiteListPage" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/projects/{projectKey}/runs:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listPublicRuns
-      summary: List runs in a public project
+      summary: List runs in a public project, cursor-paginated, newest first (shares listRuns' handler)
       tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Runs, newest first
+          description: A page of runs, newest first
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Run" }
+              schema: { $ref: "#/components/schemas/RunListPage" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/projects/{projectKey}/runs/status-summary:
     parameters:
@@ -1640,16 +1653,17 @@ paths:
       - { name: runKey, in: path, required: true, schema: { type: string } }
     get:
       operationId: listPublicRunItems
-      summary: List run items with pinned content, from a public project
+      summary: List run items with pinned content, cursor-paginated in insertion order, from a public project (shares listRunItems' handler)
       tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: Run items
+          description: A page of run items, in insertion order (oldest first)
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/RunItem" }
+              schema: { $ref: "#/components/schemas/RunItemListPage" }
   /api/v1/public/runs/{runKey}/compare/{otherRunKey}:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -1831,16 +1845,17 @@ paths:
   /api/v1/users:
     get:
       operationId: listUsers
-      summary: List all users
+      summary: List users, cursor-paginated in insertion order
       tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: All users
+          description: A page of users
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/User" }
+              schema: { $ref: "#/components/schemas/UserListPage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       operationId: createUser
@@ -2111,16 +2126,17 @@ paths:
   /api/v1/teams:
     get:
       operationId: listTeams
-      summary: List teams
+      summary: List teams, cursor-paginated in insertion order
       tags: [teams]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: All teams
+          description: A page of teams
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Team" }
+              schema: { $ref: "#/components/schemas/TeamListPage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
     post:
       operationId: createTeam
@@ -2270,16 +2286,17 @@ paths:
   /api/v1/roles:
     get:
       operationId: listRoles
-      summary: List all roles (add-project-rbac design.md D10 — fully custom, instance-wide)
+      summary: List roles (add-project-rbac design.md D10 — fully custom, instance-wide), cursor-paginated by rank then insertion order
       tags: [roles]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
       responses:
         "200":
-          description: All roles
+          description: A page of roles
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: "#/components/schemas/Role" }
+              schema: { $ref: "#/components/schemas/RoleListPage" }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
     post:
@@ -2491,6 +2508,19 @@ components:
       content:
         application/json:
           schema: { $ref: "#/components/schemas/Error" }
+  parameters:
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim.
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      required: false
+      description: Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected.
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
   schemas:
     Error:
       type: object
@@ -2577,6 +2607,17 @@ components:
           description: Absent for a project's root folder.
         name: { type: string }
         createdAt: { type: string, format: date-time }
+    FolderListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Folder" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     FolderDeletePreview:
       type: object
       required: [caseCount, folderCount]
@@ -2685,6 +2726,17 @@ components:
           format: date-time
           nullable: true
           description: When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
+    CaseListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TestCase" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     CaseVersion:
       type: object
       required: [caseId, version, content, actorKind, createdAt]
@@ -2733,6 +2785,17 @@ components:
           format: date-time
           nullable: true
           description: When the suite's most recently created run was started; null if it has no runs yet.
+    SuiteListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Suite" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     SuiteInput:
       type: object
       required: [name]
@@ -2767,6 +2830,17 @@ components:
           type: string
           nullable: true
           description: The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself.
+    RunListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Run" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     RunInput:
       type: object
       required: [name]
@@ -2908,6 +2982,17 @@ components:
           format: date-time
           nullable: true
           description: When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
+    RunItemListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RunItem" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     AddItemInput:
       type: object
       required: [caseKey]
@@ -3480,6 +3565,17 @@ components:
             password. On the response to POST /auth/login, signals the
             frontend to show the required-change gate before the app
             shell.
+    UserListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/User" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     UserProfileUpdate:
       type: object
       description: Self-service profile fields — a user editing their own display name, avatar, or timezone.
@@ -3640,6 +3736,17 @@ components:
         canRunDelete: { type: boolean }
         canProjectDelete: { type: boolean }
         createdAt: { type: string, format: date-time }
+    RoleListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Role" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     RoleInput:
       type: object
       required: [name]
@@ -3670,6 +3777,17 @@ components:
           type: array
           items: { type: string }
         createdAt: { type: string, format: date-time }
+    TeamListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Team" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     TeamInput:
       type: object
       required: [name]

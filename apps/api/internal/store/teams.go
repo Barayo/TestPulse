@@ -68,6 +68,57 @@ func (r *TeamRepo) List(ctx context.Context) ([]domain.Team, error) {
 	return teams, nil
 }
 
+// ListPage is List, cursor-paginated (add-cursor-pagination). Preserves
+// List's existing created_at ASC (insertion) order and per-team
+// MemberIDs enrichment, with id ASC as the deterministic tiebreak.
+func (r *TeamRepo) ListPage(ctx context.Context, cursor string, limit int) ([]domain.Team, string, error) {
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, name, created_at FROM teams
+		 WHERE $1::timestamptz IS NULL OR (created_at, id) > ($1, $2)
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $3`, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	teams := []domain.Team{}
+	for rows.Next() {
+		var t domain.Team
+		if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt); err != nil {
+			return nil, "", err
+		}
+		teams = append(teams, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(teams) > limit {
+		last := teams[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		teams = teams[:limit]
+	}
+	for i := range teams {
+		members, err := r.members(ctx, teams[i].ID)
+		if err != nil {
+			return nil, "", err
+		}
+		teams[i].MemberIDs = members
+	}
+	return teams, nextCursor, nil
+}
+
 func (r *TeamRepo) Rename(ctx context.Context, id, name string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE teams SET name = $2 WHERE id = $1`, id, name)
 	if err != nil {

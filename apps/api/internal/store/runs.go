@@ -435,6 +435,66 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	return runs, rows.Err()
 }
 
+// ListPage is List, cursor-paginated (add-cursor-pagination). Ordered
+// created_at DESC, id DESC (deterministic under a created_at tie) — one
+// extra row is fetched over limit to detect whether a next page exists
+// without a second round trip.
+func (r *RunRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Run, string, error) {
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at,
+		        count(i.id) AS total,
+		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
+		 FROM test_runs tr
+		 JOIN projects p ON p.id = tr.project_id
+		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
+		 LEFT JOIN test_plans tp ON tp.id = tr.test_plan_id
+		 LEFT JOIN test_run_items i ON i.run_id = tr.id
+		 WHERE tr.project_id = $1
+		   AND ($2::timestamptz IS NULL OR (tr.created_at, tr.id) < ($2, $3))
+		 GROUP BY tr.id, p.key, ts.key, tp.key
+		 ORDER BY tr.created_at DESC, tr.id DESC
+		 LIMIT $4`,
+		projectID, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	runs := []domain.Run{}
+	for rows.Next() {
+		var run domain.Run
+		var total, passCount int
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt, &total, &passCount); err != nil {
+			return nil, "", err
+		}
+		if total > 0 {
+			rate := int(float64(passCount) / float64(total) * 100)
+			run.PassRate = &rate
+		}
+		runs = append(runs, run)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(runs) > limit {
+		last := runs[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		runs = runs[:limit]
+	}
+	return runs, nextCursor, nil
+}
+
 // ListByTestPlan returns the runs scoped to a single Test Plan, newest-first
 // (introduce-release-test-plan spec: "Runs may be listed filtered to a
 // single Test Plan"), same pass-rate aggregation shape as List.
@@ -531,6 +591,92 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		items = append(items, it)
 	}
 	return items, rows.Err()
+}
+
+// ItemsPage is Items, cursor-paginated (add-cursor-pagination). Unlike
+// every other *Page method, this keeps Items' pre-existing created_at ASC
+// (insertion) order rather than the newest-first rule used elsewhere — the
+// execution board's j/k keyboard navigation depends on stable insertion
+// order, and paginating must not silently reverse it. One extra row is
+// fetched over limit to detect whether a next page exists.
+func (r *RunRepo) ItemsPage(ctx context.Context, runID, assigneeID, cursor string, limit int) ([]domain.RunItem, string, error) {
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT i.id, i.run_id, i.case_id, c.key, i.case_version,
+		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
+		        i.current_status, i.test_name, i.created_at,
+		        (c.current_version > i.case_version) AS newer,
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source,
+		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
+		 FROM test_run_items i
+		 JOIN test_runs r2 ON r2.id = i.run_id
+		 JOIN test_cases c ON c.id = i.case_id AND c.project_id = r2.project_id
+		 JOIN test_case_versions v ON v.case_id = i.case_id AND v.version = i.case_version
+		 LEFT JOIN users u ON u.id = i.assignee_user_id
+		 LEFT JOIN teams t ON t.id = i.assignee_team_id
+		 WHERE i.run_id = $1
+		   AND ($2 = '' OR i.assignee_user_id::text = $2 OR i.assignee_team_id::text = $2)
+		   AND ($3::timestamptz IS NULL OR (i.created_at, i.id) > ($3, $4))
+		 ORDER BY i.created_at ASC, i.id ASC
+		 LIMIT $5`, runID, assigneeID, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	items := []domain.RunItem{}
+	for rows.Next() {
+		var (
+			it                                                                                  domain.RunItem
+			assigneeUserID, assigneeTeamID, assigneeUserEmail, assigneeTeamName, assigneeAvatar *string
+			title, description, expected                                                        string
+			priority                                                                            string
+			stepsJSON                                                                           []byte
+			tags                                                                                []string
+			platform, testType                                                                  string
+			automated                                                                           bool
+			customFieldsJSON                                                                    []byte
+			format, gherkinSource                                                               string
+		)
+		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
+			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,
+			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource,
+			&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt); err != nil {
+			return nil, "", err
+		}
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource)()
+		if err != nil {
+			return nil, "", err
+		}
+		it.Content = content
+		switch {
+		case assigneeUserID != nil:
+			it.Assignee = &domain.Assignee{Kind: domain.AssigneeKindUser, ID: *assigneeUserID, Name: *assigneeUserEmail, AvatarKey: assigneeAvatar}
+		case assigneeTeamID != nil:
+			it.Assignee = &domain.Assignee{Kind: domain.AssigneeKindTeam, ID: *assigneeTeamID, Name: *assigneeTeamName}
+		}
+		items = append(items, it)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(items) > limit {
+		last := items[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		items = items[:limit]
+	}
+	return items, nextCursor, nil
 }
 
 // ItemAssignee returns itemID's current assignee, or nil if unassigned.

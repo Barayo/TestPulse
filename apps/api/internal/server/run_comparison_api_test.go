@@ -19,18 +19,18 @@ func TestScenario_CompareRunsOverHTTP(t *testing.T) {
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "older", "caseKeys": []string{c1.Key, c2.Key}}, 201, &run1)
-	var items1 []struct{ ID string }
+	var items1 struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run1.Key), nil, 200, &items1)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1[1].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1.Items[1].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run1.Key), nil, 204, nil)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "newer", "caseKeys": []string{c1.Key, c2.Key}}, 201, &run2)
-	var items2 []struct{ ID string }
+	var items2 struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run2.Key), nil, 200, &items2)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2[1].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2.Items[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2.Items[1].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run2.Key), nil, 204, nil)
 
 	var cmp struct {
@@ -75,15 +75,15 @@ func TestScenario_CompareRunsEmptyCategoriesAreArraysNotNull(t *testing.T) {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "older", "caseKeys": []string{c.Key}}, 201, &run1)
-	var items1 []struct{ ID string }
+	var items1 struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run1.Key), nil, 200, &items1)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run1.Key), nil, 204, nil)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "newer", "caseKeys": []string{c.Key}}, 201, &run2)
-	var items2 []struct{ ID string }
+	var items2 struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run2.Key), nil, 200, &items2)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2.Items[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run2.Key), nil, 204, nil)
 
 	var cmp struct {
@@ -118,18 +118,18 @@ func TestScenario_CompareRunsIncludesTotalDurationOverHTTP(t *testing.T) {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "timed", "caseKeys": []string{c.Key}}, 201, &timedRun)
-	var timedItems []struct{ ID string }
+	var timedItems struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", timedRun.Key), nil, 200, &timedItems)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", timedItems[0].ID), jmap{
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", timedItems.Items[0].ID), jmap{
 		"actor": "ci", "verdict": "pass",
 		"startTime": "2026-08-01T09:00:00Z", "endTime": "2026-08-01T09:00:04Z",
 	}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", timedRun.Key), nil, 204, nil)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "untimed", "caseKeys": []string{c.Key}}, 201, &untimedRun)
-	var untimedItems []struct{ ID string }
+	var untimedItems struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", untimedRun.Key), nil, 200, &untimedItems)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", untimedItems[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", untimedItems.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", untimedRun.Key), nil, 204, nil)
 
 	var cmp struct {
@@ -162,9 +162,9 @@ func TestScenario_CompareRunsRejectsOpenRunOverHTTP(t *testing.T) {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "one"}, 201, &c)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "closed", "caseKeys": []string{c.Key}}, 201, &closedRun)
-	var items []struct{ ID string }
+	var items struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", closedRun.Key), nil, 200, &items)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", closedRun.Key), nil, 204, nil)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "open", "caseKeys": []string{c.Key}}, 201, &openRun)
@@ -198,18 +198,18 @@ func TestPublicProject_CompareRunsSucceedsWhenPublic(t *testing.T) {
 	var run1 jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/runs", jmap{"name": "older", "caseKeys": []string{caseKey}}, 201, &run1)
 	run1Key, _ := run1["key"].(string)
-	var items1 []jmap
+	var items1 struct{ Items []jmap }
 	callAs(t, handler, admin, "GET", "/api/v1/runs/"+run1Key+"/items", nil, 200, &items1)
-	item1ID, _ := items1[0]["id"].(string)
+	item1ID, _ := items1.Items[0]["id"].(string)
 	callAs(t, handler, admin, "POST", "/api/v1/items/"+item1ID+"/results", jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	callAs(t, handler, admin, "POST", "/api/v1/runs/"+run1Key+"/close", nil, 204, nil)
 
 	var run2Res jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/runs", jmap{"name": "newer", "caseKeys": []string{caseKey}}, 201, &run2Res)
 	run2Key, _ := run2Res["key"].(string)
-	var items2 []jmap
+	var items2 struct{ Items []jmap }
 	callAs(t, handler, admin, "GET", "/api/v1/runs/"+run2Key+"/items", nil, 200, &items2)
-	item2ID, _ := items2[0]["id"].(string)
+	item2ID, _ := items2.Items[0]["id"].(string)
 	callAs(t, handler, admin, "POST", "/api/v1/items/"+item2ID+"/results", jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	callAs(t, handler, admin, "POST", "/api/v1/runs/"+run2Key+"/close", nil, 204, nil)
 

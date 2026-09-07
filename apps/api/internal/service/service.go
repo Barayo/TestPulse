@@ -642,6 +642,12 @@ func (s *Service) ListCases(ctx context.Context, projectID string) ([]domain.Tes
 	return s.store.Cases.List(ctx, projectID)
 }
 
+// ListCasesPage is ListCases, cursor-paginated (add-cursor-pagination) —
+// backs GET /projects/{projectKey}/cases. ListCases itself is untouched.
+func (s *Service) ListCasesPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.TestCase, string, error) {
+	return s.store.Cases.ListPage(ctx, projectID, cursor, limit)
+}
+
 // ListJiraLinkedCases returns a project's cases with a non-null
 // jiraIssueKey (add-jira-connector) — the "jiraLinked=true" filter on the
 // case-list endpoint, resolved as a DB-level query, not a client-side scan.
@@ -695,6 +701,13 @@ func (s *Service) CreateFolder(ctx context.Context, projectID string, in domain.
 
 func (s *Service) ListFolders(ctx context.Context, projectID string) ([]domain.Folder, error) {
 	return s.store.Folders.List(ctx, projectID)
+}
+
+// ListFoldersPage is ListFolders, cursor-paginated (add-cursor-pagination)
+// — backs GET /projects/{projectKey}/folders. ListFolders itself is
+// untouched.
+func (s *Service) ListFoldersPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Folder, string, error) {
+	return s.store.Folders.ListPage(ctx, projectID, cursor, limit)
 }
 
 // MoveFolder reparents folderID under targetParentID (add-library-folder-
@@ -767,6 +780,12 @@ func (s *Service) CreateSuite(ctx context.Context, projectID, name string) (doma
 
 func (s *Service) ListSuites(ctx context.Context, projectID string) ([]domain.Suite, error) {
 	return s.store.Suites.List(ctx, projectID)
+}
+
+// ListSuitesPage is ListSuites, cursor-paginated (add-cursor-pagination) —
+// backs GET /projects/{projectKey}/suites. ListSuites itself is untouched.
+func (s *Service) ListSuitesPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Suite, string, error) {
+	return s.store.Suites.ListPage(ctx, projectID, cursor, limit)
 }
 
 func (s *Service) GetSuite(ctx context.Context, suiteID string) (domain.Suite, error) {
@@ -1040,6 +1059,13 @@ func (s *Service) ListRuns(ctx context.Context, projectID string) ([]domain.Run,
 	return s.store.Runs.List(ctx, projectID)
 }
 
+// ListRunsPage is ListRuns, cursor-paginated (add-cursor-pagination) —
+// backs GET /projects/{projectKey}/runs. ListRuns itself is untouched and
+// keeps serving any caller that needs the complete, unbounded set.
+func (s *Service) ListRunsPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Run, string, error) {
+	return s.store.Runs.ListPage(ctx, projectID, cursor, limit)
+}
+
 // ListRunsByTestPlan returns the runs scoped to a single Test Plan
 // (introduce-release-test-plan spec: "Runs may be listed filtered to a
 // single Test Plan").
@@ -1115,6 +1141,13 @@ func (s *Service) AddRunItem(ctx context.Context, runID, caseID string) (string,
 
 func (s *Service) RunItems(ctx context.Context, runID, assignee string) ([]domain.RunItem, error) {
 	return s.store.Runs.Items(ctx, runID, assignee)
+}
+
+// RunItemsPage is RunItems, cursor-paginated (add-cursor-pagination) —
+// backs GET /runs/{runKey}/items. RunItems itself is untouched and keeps
+// serving run comparison, which needs both runs' complete item sets.
+func (s *Service) RunItemsPage(ctx context.Context, runID, assignee, cursor string, limit int) ([]domain.RunItem, string, error) {
+	return s.store.Runs.ItemsPage(ctx, runID, assignee, cursor, limit)
 }
 
 // RunItemsJiraLinked returns a run's items with a non-null jiraIssueKey

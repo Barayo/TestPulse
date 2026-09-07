@@ -61,10 +61,10 @@ func TestScenario_ListCasesFilteredByJiraLinkedOverHTTP(t *testing.T) {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "unlinked"}, 201, &c2)
 	call(t, h, "PUT", "/api/v1/cases/"+c1.Key+"/jira-link", jmap{"jiraIssueKey": "PROJ-1"}, 200, nil)
 
-	var cases []struct{ Key string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/cases?jiraLinked=true", p.Key), nil, 200, &cases)
-	if len(cases) != 1 || cases[0].Key != c1.Key {
-		t.Fatalf("jiraLinked=true cases = %+v, want only %v", cases, c1.Key)
+	var casesResp struct{ Items []struct{ Key string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/cases?jiraLinked=true", p.Key), nil, 200, &casesResp)
+	if len(casesResp.Items) != 1 || casesResp.Items[0].Key != c1.Key {
+		t.Fatalf("jiraLinked=true cases = %+v, want only %v", casesResp.Items, c1.Key)
 	}
 }
 
@@ -76,19 +76,19 @@ func TestScenario_SetRunItemJiraLinkOverHTTP(t *testing.T) {
 	var run struct{ Key string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "sprint 1", "caseKeys": []string{c.Key}}, 201, &run)
-	var items []struct{ ID string }
+	var items struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
 
 	var updated struct{ JiraIssueKey *string }
-	call(t, h, "PUT", "/api/v1/items/"+items[0].ID+"/jira-link", jmap{"jiraIssueKey": "PROJ-2"}, 200, &updated)
+	call(t, h, "PUT", "/api/v1/items/"+items.Items[0].ID+"/jira-link", jmap{"jiraIssueKey": "PROJ-2"}, 200, &updated)
 	if updated.JiraIssueKey == nil || *updated.JiraIssueKey != "PROJ-2" {
 		t.Fatalf("jiraIssueKey = %v, want PROJ-2", updated.JiraIssueKey)
 	}
 
-	var linkedItems []struct{ ID string }
+	var linkedItems struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items?jiraLinked=true", run.Key), nil, 200, &linkedItems)
-	if len(linkedItems) != 1 || linkedItems[0].ID != items[0].ID {
-		t.Fatalf("jiraLinked=true items = %+v, want only %v", linkedItems, items[0].ID)
+	if len(linkedItems.Items) != 1 || linkedItems.Items[0].ID != items.Items[0].ID {
+		t.Fatalf("jiraLinked=true items = %+v, want only %v", linkedItems.Items, items.Items[0].ID)
 	}
 }
 
@@ -100,9 +100,9 @@ func TestScenario_ClosedRunRejectsItemJiraLinkChangeOverHTTP(t *testing.T) {
 	var run struct{ Key string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "sprint 1", "caseKeys": []string{c.Key}}, 201, &run)
-	var items []struct{ ID string }
+	var items struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run.Key), nil, 204, nil)
-	call(t, h, "PUT", "/api/v1/items/"+items[0].ID+"/jira-link", jmap{"jiraIssueKey": "PROJ-3"}, 409, nil)
+	call(t, h, "PUT", "/api/v1/items/"+items.Items[0].ID+"/jira-link", jmap{"jiraIssueKey": "PROJ-3"}, 409, nil)
 }

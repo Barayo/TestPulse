@@ -350,6 +350,72 @@ func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCas
 	return cases, rows.Err()
 }
 
+// ListPage is List, cursor-paginated (add-cursor-pagination). Preserves
+// List's existing created_at ASC (insertion) order, with id ASC as the
+// deterministic tiebreak.
+func (r *CaseRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.TestCase, string, error) {
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT c.id, c.key, c.project_id, c.folder_id, c.current_version, c.created_at, v.created_at,
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source,
+		        c.jira_issue_key, c.jira_issue_summary, c.jira_issue_status, c.jira_last_synced_at
+		 FROM test_cases c
+		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = c.current_version
+		 WHERE c.project_id = $1 AND NOT c.deleted
+		   AND ($2::timestamptz IS NULL OR (c.created_at, c.id) > ($2, $3))
+		 ORDER BY c.created_at ASC, c.id ASC
+		 LIMIT $4`, projectID, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	cases := []domain.TestCase{}
+	for rows.Next() {
+		var (
+			c                            domain.TestCase
+			title, description, expected string
+			priority                     string
+			stepsJSON                    []byte
+			tags                         []string
+			platform, testType           string
+			automated                    bool
+			customFieldsJSON             []byte
+			format, gherkinSource        string
+		)
+		if err := rows.Scan(&c.ID, &c.Key, &c.ProjectID, &c.FolderID, &c.CurrentVersion, &c.CreatedAt, &c.UpdatedAt,
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource,
+			&c.JiraIssueKey, &c.JiraIssueSummary, &c.JiraIssueStatus, &c.JiraLastSyncedAt); err != nil {
+			return nil, "", err
+		}
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource)()
+		if err != nil {
+			return nil, "", err
+		}
+		c.Content = content
+		cases = append(cases, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(cases) > limit {
+		last := cases[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		cases = cases[:limit]
+	}
+	return cases, nextCursor, nil
+}
+
 func (r *CaseRepo) Versions(ctx context.Context, caseID string) ([]domain.CaseVersion, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT case_id, version, created_at, actor_kind, actor_ref_id, `+contentColumns+`

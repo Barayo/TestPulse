@@ -206,20 +206,22 @@ func TestScenario_SuiteMembershipOverHTTP(t *testing.T) {
 	call(t, h, "PUT", fmt.Sprintf("/api/v1/suites/%s/cases/%s", suite.Key, c1.Key), nil, 204, nil)
 	call(t, h, "PUT", fmt.Sprintf("/api/v1/suites/%s/cases/%s", suite.Key, c2.Key), nil, 204, nil)
 
-	var suites []struct {
-		CaseIDs []string `json:"caseIds"`
+	var suitesResp struct {
+		Items []struct {
+			CaseIDs []string `json:"caseIds"`
+		}
 	}
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key), nil, 200, &suites)
-	if len(suites) != 1 || len(suites[0].CaseIDs) != 2 {
-		t.Fatalf("suites = %+v", suites)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key), nil, 200, &suitesResp)
+	if len(suitesResp.Items) != 1 || len(suitesResp.Items[0].CaseIDs) != 2 {
+		t.Fatalf("suites = %+v", suitesResp.Items)
 	}
 
 	// "Removing a case from a suite does not delete the case" scenario.
 	call(t, h, "DELETE", fmt.Sprintf("/api/v1/suites/%s/cases/%s", suite.Key, c1.Key), nil, 204, nil)
-	var cases []jmap
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), nil, 200, &cases)
-	if len(cases) != 2 {
-		t.Errorf("cases after suite removal = %d, want 2", len(cases))
+	var casesResp struct{ Items []jmap }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), nil, 200, &casesResp)
+	if len(casesResp.Items) != 2 {
+		t.Errorf("cases after suite removal = %d, want 2", len(casesResp.Items))
 	}
 }
 
@@ -235,21 +237,25 @@ func TestScenario_RunLifecycleOverHTTP(t *testing.T) {
 		jmap{"name": "sprint 1", "caseKeys": []string{c1.Key, c2.Key}}, 201, &run)
 
 	// "Items start pending" scenario.
-	var items []struct {
-		ID            string
-		CaseVersion   int    `json:"caseVersion"`
-		CurrentStatus string `json:"currentStatus"`
-		NewerVersion  bool   `json:"newerVersion"`
-		Content       jmap
+	var itemsResp struct {
+		Items []struct {
+			ID            string
+			CaseVersion   int    `json:"caseVersion"`
+			CurrentStatus string `json:"currentStatus"`
+			NewerVersion  bool   `json:"newerVersion"`
+			Content       jmap
+		}
 	}
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &itemsResp)
+	items := itemsResp.Items
 	if len(items) != 2 || items[0].CurrentStatus != "pending" {
 		t.Fatalf("items = %+v", items)
 	}
 
 	// "Run pins versions at creation" scenario: edit case, pin must hold.
 	call(t, h, "PUT", "/api/v1/cases/"+c1.Key, jmap{"title": "one EDITED"}, 200, nil)
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &itemsResp)
+	items = itemsResp.Items
 	if items[0].CaseVersion != 1 || items[0].Content["title"] != "one" {
 		t.Errorf("pin broken: %+v", items[0])
 	}
@@ -290,13 +296,15 @@ func TestScenario_RunLifecycleOverHTTP(t *testing.T) {
 	// assignment only accepts a real project member.
 	var member struct{ ID string }
 	call(t, h, "POST", "/api/v1/users", jmap{"email": "ana-scenario@example.com", "password": "correcthorse1"}, 201, &member)
-	var roles []struct {
-		ID   string
-		Name string
+	var rolesResp struct {
+		Items []struct {
+			ID   string
+			Name string
+		}
 	}
-	call(t, h, "GET", "/api/v1/roles", nil, 200, &roles)
+	call(t, h, "GET", "/api/v1/roles", nil, 200, &rolesResp)
 	var testerRoleID string
-	for _, role := range roles {
+	for _, role := range rolesResp.Items {
 		if role.Name == "Tester" {
 			testerRoleID = role.ID
 		}
@@ -307,8 +315,9 @@ func TestScenario_RunLifecycleOverHTTP(t *testing.T) {
 	call(t, h, "PUT", fmt.Sprintf("/api/v1/projects/%s/members/%s", p.Key, member.ID), jmap{"roleId": testerRoleID}, 204, nil)
 
 	call(t, h, "PUT", fmt.Sprintf("/api/v1/items/%s/status", items[0].ID), jmap{"assigneeUserId": member.ID}, 204, nil)
-	var filtered []jmap
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items?assignee=%s", run.Key, member.ID), nil, 200, &filtered)
+	var filteredResp struct{ Items []jmap }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items?assignee=%s", run.Key, member.ID), nil, 200, &filteredResp)
+	filtered := filteredResp.Items
 	if len(filtered) != 1 {
 		t.Errorf("assignee filter = %d items, want 1", len(filtered))
 	}
@@ -345,10 +354,10 @@ func TestScenario_RunFromSuite(t *testing.T) {
 	// Suite + overlapping explicit case: must dedupe to 2 items.
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "from suite", "suiteKey": suite.Key, "caseKeys": []string{c1.Key}}, 201, &run)
-	var items []jmap
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
-	if len(items) != 2 {
-		t.Errorf("run from suite = %d items, want 2 (deduped)", len(items))
+	var itemsResp struct{ Items []jmap }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &itemsResp)
+	if len(itemsResp.Items) != 2 {
+		t.Errorf("run from suite = %d items, want 2 (deduped)", len(itemsResp.Items))
 	}
 }
 
@@ -361,9 +370,9 @@ func TestScenario_SuiteTrendOverHTTP(t *testing.T) {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "sprint 1", "suiteKey": suite.Key, "caseKeys": []string{c.Key}}, 201, &run)
 
-	var items []struct{ ID string }
+	var items struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run.Key), nil, 204, nil)
 
 	var trend struct {
@@ -398,16 +407,16 @@ func TestScenario_SuiteTrendIncludeOpenOverHTTP(t *testing.T) {
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "closed", "suiteKey": suite.Key, "caseKeys": []string{c.Key}}, 201, &closedRun)
-	var closedItems []struct{ ID string }
+	var closedItems struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", closedRun.Key), nil, 200, &closedItems)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", closedItems[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", closedItems.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", closedRun.Key), nil, 204, nil)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "open", "suiteKey": suite.Key, "caseKeys": []string{c.Key}}, 201, &openRun)
-	var openItems []struct{ ID string }
+	var openItems struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", openRun.Key), nil, 200, &openItems)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", openItems[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", openItems.Items[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
 
 	type point struct {
 		RunKey string         `json:"runKey"`
@@ -473,14 +482,14 @@ func TestScenario_FlakyCasesOverHTTP(t *testing.T) {
 
 	var run1, run2 struct{ Key string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 1", "caseKeys": []string{c.Key}}, 201, &run1)
-	var items1 []struct{ ID string }
+	var items1 struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run1.Key), nil, 200, &items1)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items1.Items[0].ID), jmap{"actor": "ana", "verdict": "pass"}, 201, nil)
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "run 2", "caseKeys": []string{c.Key}}, 201, &run2)
-	var items2 []struct{ ID string }
+	var items2 struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run2.Key), nil, 200, &items2)
-	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
+	call(t, h, "POST", fmt.Sprintf("/api/v1/items/%s/results", items2.Items[0].ID), jmap{"actor": "ana", "verdict": "failed"}, 201, nil)
 
 	var flaky []struct {
 		CaseKey        string `json:"caseKey"`
@@ -544,14 +553,14 @@ func TestScenario_DeletedCaseStillVisibleInRun(t *testing.T) {
 
 	call(t, h, "DELETE", "/api/v1/cases/"+c.Key, nil, 204, nil)
 
-	var cases []jmap
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), nil, 200, &cases)
-	if len(cases) != 0 {
+	var casesResp struct{ Items []jmap }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), nil, 200, &casesResp)
+	if len(casesResp.Items) != 0 {
 		t.Errorf("deleted case still listed")
 	}
-	var items []struct{ Content jmap }
+	var items struct{ Items []struct{ Content jmap } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
-	if len(items) != 1 || items[0].Content["title"] != "keep" {
-		t.Errorf("run lost pinned content after delete: %+v", items)
+	if len(items.Items) != 1 || items.Items[0].Content["title"] != "keep" {
+		t.Errorf("run lost pinned content after delete: %+v", items.Items)
 	}
 }

@@ -68,9 +68,9 @@ func setupAttachmentFixture(t *testing.T, h http.Handler) string {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "case one"}, 201, &c)
 	var run struct{ Key string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "sprint 1", "caseKeys": []string{c.Key}}, 201, &run)
-	var items []struct{ ID string }
+	var items struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
-	return items[0].ID
+	return items.Items[0].ID
 }
 
 func TestScenario_StageAttachmentBeforeVerdictExists(t *testing.T) {
@@ -137,11 +137,11 @@ func TestScenario_StageAttachmentRequiresAuthentication(t *testing.T) {
 	callAs(t, h, admin, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "case one"}, 201, &c)
 	var run struct{ Key string }
 	callAs(t, h, admin, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "sprint 1", "caseKeys": []string{c.Key}}, 201, &run)
-	var items []struct{ ID string }
+	var items struct{ Items []struct{ ID string } }
 	callAs(t, h, admin, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
 
 	var errBody jmap
-	uploadFileAs(t, h, "", fmt.Sprintf("/api/v1/items/%s/attachments", items[0].ID), "shot.png", attachmentFixture(t, "sample.png"), 401, &errBody)
+	uploadFileAs(t, h, "", fmt.Sprintf("/api/v1/items/%s/attachments", items.Items[0].ID), "shot.png", attachmentFixture(t, "sample.png"), 401, &errBody)
 }
 
 func TestScenario_RecordResultLinksStagedAttachments(t *testing.T) {
@@ -256,9 +256,9 @@ func TestScenario_DeleteAttachmentRequiresRunRecordResultPermission(t *testing.T
 	var run jmap
 	callAs(t, handler, admin, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", projectKey), jmap{"name": "sprint 1", "caseKeys": []string{caseKey}}, 201, &run)
 	runKey, _ := run["key"].(string)
-	var items []jmap
+	var items struct{ Items []jmap }
 	callAs(t, handler, admin, "GET", fmt.Sprintf("/api/v1/runs/%s/items", runKey), nil, 200, &items)
-	itemID, _ := items[0]["id"].(string)
+	itemID, _ := items.Items[0]["id"].(string)
 
 	var att jmap
 	uploadFileAs(t, handler, admin, fmt.Sprintf("/api/v1/items/%s/attachments", itemID), "shot.png", attachmentFixture(t, "sample.png"), 201, &att)
@@ -298,13 +298,15 @@ func TestScenario_ImportWithInlineAttachmentsKeyedByCaseKey(t *testing.T) {
 		"attachments": []jmap{{"caseKey": c1.Key, "filename": "failure.png", "contentType": "image/png", "data": data}},
 	}, 201, &run)
 
-	var items []struct {
-		ID      string `json:"id"`
-		CaseKey string `json:"caseKey"`
+	var itemsResp struct {
+		Items []struct {
+			ID      string `json:"id"`
+			CaseKey string `json:"caseKey"`
+		}
 	}
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &itemsResp)
 	var withShot, without string
-	for _, it := range items {
+	for _, it := range itemsResp.Items {
 		if it.CaseKey == c1.Key {
 			withShot = it.ID
 		} else {

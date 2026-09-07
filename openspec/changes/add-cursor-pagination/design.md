@@ -84,11 +84,26 @@ are no external API customers yet to protect with a transition period, and
 a permanent dual-shape (bare array vs. wrapped, depending on whether a
 client opted in) would be a standing footgun for every future consumer.
 
-### Sort order: `created_at DESC` (newest first), consistently
-Matches the natural reading order for every one of the eight lists (most
-recent run, most recently added case, etc.) and keeps the ordering rule
-uniform rather than special-casing e.g. alphabetical-by-name for
-users/teams/roles.
+### Sort order: preserve each entity's existing order, don't impose a new one
+The original plan was `created_at DESC` (newest first) uniformly. Checking
+every affected entity's current `List`/`Items` query before implementing
+(task 2.1's audit habit, applied to every entity in turn) found this
+assumption was backwards for all but one: only `RunRepo.List` actually
+orders `created_at DESC` today. `RunRepo.Items` (run items), `UserRepo.
+List`, `TeamRepo.List`, `RoleRepo.List` (`rank, created_at`), `CaseRepo.
+List`, `FolderRepo.List`, and `SuiteRepo.List` are all `created_at ASC` —
+insertion order.
+
+Rather than impose a new "newest first" order onto six different existing
+UI lists as an unannounced side effect of adding pagination, every `*Page`
+method preserves its sibling's existing order, with `id` (ASC or DESC to
+match) added purely as the tiebreak cursor pagination needs for
+determinism. Only `RunListPage` is `created_at DESC, id DESC`; every other
+`*Page` method is `created_at ASC, id ASC` (`RoleListPage`: `rank ASC,
+created_at ASC, id ASC`, preserving the tier ordering `List` already
+guarantees). Run items' insertion order remains additionally load-bearing
+for the execution board's j/k keyboard navigation, as originally noted —
+it's just no longer the only entity keeping ASC.
 
 ### Store layer: additive `ListPage`/`ItemsPage`, existing methods untouched
 Per the Context audit, four internal call sites need the complete,
@@ -111,6 +126,22 @@ matches how `defaultMaxBodyBytes` and other existing bounds in this
 codebase silently cap rather than error on an oversized request, and
 avoids a client integration bug turning into a hard failure instead of a
 degraded-but-working response.
+
+### Public (unauthenticated) routes inherit pagination for free — and for real
+`apps/api/internal/server/public_handlers.go` mounts the *same* handler
+functions (`listCases`, `listRuns`, `listRunItems`; not yet `listFolders`/
+`listSuites`, covered in their own task groups) under
+`/api/v1/public/projects/{projectKey}/...` as the authenticated routes use.
+This wasn't part of the original plan, but it's not optional either — the
+handler is genuinely shared code, so `GET /api/v1/public/projects/{key}/
+cases` started returning the new `{ items, nextCursor }` envelope the
+moment `listCases` was wired, whether or not anything documented it.
+`packages/shared/openapi.yaml`'s public path entries were updated to match
+actual behavior (new response schema + cursor/limit params, `operationId`
+summaries noting the shared handler) in the same tasks as their
+authenticated counterparts, and the one existing public-route test
+asserting the old bare-array shape (`TestPublicProject_
+UnauthenticatedReadsSucceedWhenPublic`) was fixed alongside it.
 
 ## Risks / Trade-offs
 

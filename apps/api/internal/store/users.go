@@ -221,6 +221,51 @@ func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {
 	return users, rows.Err()
 }
 
+// ListPage is List, cursor-paginated (add-cursor-pagination). Preserves
+// List's existing created_at ASC (insertion) order, with id ASC as the
+// deterministic tiebreak.
+func (r *UserRepo) ListPage(ctx context.Context, cursor string, limit int) ([]domain.User, string, error) {
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password
+		 FROM users
+		 WHERE $1::timestamptz IS NULL OR (created_at, id) > ($1, $2)
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $3`, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	users := []domain.User{}
+	for rows.Next() {
+		var u domain.User
+		if err := rows.Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword); err != nil {
+			return nil, "", err
+		}
+		users = append(users, u)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(users) > limit {
+		last := users[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		users = users[:limit]
+	}
+	return users, nextCursor, nil
+}
+
 // UpdateProfile applies the self-service profile fields (add-user-profile):
 // a nil field in update leaves that column unchanged, via COALESCE.
 func (r *UserRepo) UpdateProfile(ctx context.Context, id string, update domain.UserProfileUpdate) (domain.User, error) {

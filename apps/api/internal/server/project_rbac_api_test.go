@@ -15,15 +15,15 @@ import (
 
 func roleIDByName(t *testing.T, h http.Handler, adminCookie, name string) string {
 	t.Helper()
-	var roles []jmap
-	callAs(t, h, adminCookie, "GET", "/api/v1/roles", nil, 200, &roles)
-	for _, r := range roles {
+	var roles struct{ Items []jmap }
+	callAs(t, h, adminCookie, "GET", "/api/v1/roles?limit=200", nil, 200, &roles)
+	for _, r := range roles.Items {
 		if r["name"] == name {
 			id, _ := r["id"].(string)
 			return id
 		}
 	}
-	t.Fatalf("no seeded role named %q found in %+v", name, roles)
+	t.Fatalf("no seeded role named %q found in %+v", name, roles.Items)
 	return ""
 }
 
@@ -207,9 +207,9 @@ func TestScenario_TenantAdminManagesRolesOverHTTP(t *testing.T) {
 
 	callAs(t, handler, admin, "DELETE", "/api/v1/roles/"+roleID, nil, 204, nil)
 
-	var roles []jmap
+	var roles struct{ Items []jmap }
 	callAs(t, handler, admin, "GET", "/api/v1/roles", nil, 200, &roles)
-	for _, r := range roles {
+	for _, r := range roles.Items {
 		if r["id"] == roleID {
 			t.Errorf("role %v still present after DELETE", r)
 		}

@@ -344,16 +344,17 @@ func (h *api) removeProjectTeamRole(w http.ResponseWriter, r *http.Request) {
 // --- Cases ---
 
 func (h *api) listCases(w http.ResponseWriter, r *http.Request) {
-	var (
-		cases []domain.TestCase
-		err   error
-	)
+	// jiraLinked is never paginated (a project's jira-linked cases are
+	// inherently a small subset) — nextCursor is always null on this
+	// branch, but the envelope shape stays identical either way.
 	if r.URL.Query().Get("jiraLinked") == "true" {
-		cases, err = h.svc.ListJiraLinkedCases(r.Context(), resolvedID(r, "projectKey"))
-	} else {
-		cases, err = h.svc.ListCases(r.Context(), resolvedID(r, "projectKey"))
+		cases, err := h.svc.ListJiraLinkedCases(r.Context(), resolvedID(r, "projectKey"))
+		h.respond(w, http.StatusOK, newPagePayload(cases, ""), err)
+		return
 	}
-	h.respond(w, http.StatusOK, cases, err)
+	cursor, limit := parsePageParams(r)
+	cases, nextCursor, err := h.svc.ListCasesPage(r.Context(), resolvedID(r, "projectKey"), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(cases, nextCursor), err)
 }
 
 func (h *api) createCase(w http.ResponseWriter, r *http.Request) {
@@ -432,8 +433,9 @@ func (h *api) listCaseExecutions(w http.ResponseWriter, r *http.Request) {
 // --- Folders ---
 
 func (h *api) listFolders(w http.ResponseWriter, r *http.Request) {
-	folders, err := h.svc.ListFolders(r.Context(), resolvedID(r, "projectKey"))
-	h.respond(w, http.StatusOK, folders, err)
+	cursor, limit := parsePageParams(r)
+	folders, nextCursor, err := h.svc.ListFoldersPage(r.Context(), resolvedID(r, "projectKey"), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(folders, nextCursor), err)
 }
 
 func (h *api) createFolder(w http.ResponseWriter, r *http.Request) {
@@ -514,8 +516,9 @@ func (h *api) folderDeletePreview(w http.ResponseWriter, r *http.Request) {
 // --- Suites ---
 
 func (h *api) listSuites(w http.ResponseWriter, r *http.Request) {
-	suites, err := h.svc.ListSuites(r.Context(), resolvedID(r, "projectKey"))
-	h.respond(w, http.StatusOK, suites, err)
+	cursor, limit := parsePageParams(r)
+	suites, nextCursor, err := h.svc.ListSuitesPage(r.Context(), resolvedID(r, "projectKey"), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(suites, nextCursor), err)
 }
 
 func (h *api) createSuite(w http.ResponseWriter, r *http.Request) {
@@ -565,8 +568,9 @@ func (h *api) removeCaseFromSuite(w http.ResponseWriter, r *http.Request) {
 // --- Runs ---
 
 func (h *api) listRuns(w http.ResponseWriter, r *http.Request) {
-	runs, err := h.svc.ListRuns(r.Context(), resolvedID(r, "projectKey"))
-	h.respond(w, http.StatusOK, runs, err)
+	cursor, limit := parsePageParams(r)
+	runs, nextCursor, err := h.svc.ListRunsPage(r.Context(), resolvedID(r, "projectKey"), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(runs, nextCursor), err)
 }
 
 func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
@@ -790,16 +794,17 @@ func (h *api) deleteRun(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *api) listRunItems(w http.ResponseWriter, r *http.Request) {
-	var (
-		items []domain.RunItem
-		err   error
-	)
+	// jiraLinked is never paginated (a run's jira-linked items are
+	// inherently a small subset) — nextCursor is always null on this
+	// branch, but the envelope shape stays identical either way.
 	if r.URL.Query().Get("jiraLinked") == "true" {
-		items, err = h.svc.RunItemsJiraLinked(r.Context(), resolvedID(r, "runKey"))
-	} else {
-		items, err = h.svc.RunItems(r.Context(), resolvedID(r, "runKey"), r.URL.Query().Get("assignee"))
+		items, err := h.svc.RunItemsJiraLinked(r.Context(), resolvedID(r, "runKey"))
+		h.respond(w, http.StatusOK, newPagePayload(items, ""), err)
+		return
 	}
-	h.respond(w, http.StatusOK, items, err)
+	cursor, limit := parsePageParams(r)
+	items, nextCursor, err := h.svc.RunItemsPage(r.Context(), resolvedID(r, "runKey"), r.URL.Query().Get("assignee"), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(items, nextCursor), err)
 }
 
 func (h *api) addRunItem(w http.ResponseWriter, r *http.Request) {

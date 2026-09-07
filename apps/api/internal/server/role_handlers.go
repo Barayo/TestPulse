@@ -56,8 +56,9 @@ func roleFromInput(in roleInput) domain.Role {
 }
 
 func (h *api) listRoles(w http.ResponseWriter, r *http.Request) {
-	roles, err := h.svc.ListRoles(r.Context())
-	h.respond(w, http.StatusOK, roles, err)
+	cursor, limit := parsePageParams(r)
+	roles, nextCursor, err := h.svc.ListRolesPage(r.Context(), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(roles, nextCursor), err)
 }
 
 func (h *api) createRole(w http.ResponseWriter, r *http.Request) {

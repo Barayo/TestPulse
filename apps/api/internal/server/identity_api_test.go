@@ -505,7 +505,7 @@ func TestScenario_ScopedTokenCannotListUsers(t *testing.T) {
 	callAs(t, h, admin, "POST", "/api/v1/users",
 		jmap{"email": "member@example.com", "password": "correcthorse"}, 201, &member)
 	memberCookie := loginCookie(t, h, "member@example.com", "correcthorse")
-	var list []jmap
+	var list struct{ Items []jmap }
 	callAs(t, h, memberCookie, "GET", "/api/v1/users", nil, 200, &list)
 }
 
@@ -631,10 +631,10 @@ func TestScenario_TenantAdminUpdatesUserEmailOverHTTP(t *testing.T) {
 
 	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"email": "fixed@example.com"}, 204, nil)
 
-	var users []jmap
-	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &users)
+	var usersResp struct{ Items []jmap }
+	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &usersResp)
 	found := false
-	for _, u := range users {
+	for _, u := range usersResp.Items {
 		if u["id"] == memberID {
 			found = true
 			if u["email"] != "fixed@example.com" {
@@ -680,10 +680,10 @@ func TestScenario_DeleteUserRequiresDeactivationFirst(t *testing.T) {
 
 	callAs(t, h, adminCookie, "DELETE", "/api/v1/users/"+memberID, nil, 400, nil)
 
-	var users []jmap
-	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &users)
+	var usersResp struct{ Items []jmap }
+	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &usersResp)
 	found := false
-	for _, u := range users {
+	for _, u := range usersResp.Items {
 		if u["id"] == memberID {
 			found = true
 		}
@@ -734,9 +734,9 @@ func TestScenario_DeleteDeactivatedUserSucceeds(t *testing.T) {
 	callAs(t, h, adminCookie, "PATCH", "/api/v1/users/"+memberID, jmap{"deactivate": true}, 204, nil)
 	callAs(t, h, adminCookie, "DELETE", "/api/v1/users/"+memberID, nil, 204, nil)
 
-	var users []jmap
-	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &users)
-	for _, u := range users {
+	var usersResp struct{ Items []jmap }
+	callAs(t, h, adminCookie, "GET", "/api/v1/users", nil, 200, &usersResp)
+	for _, u := range usersResp.Items {
 		if u["id"] == memberID {
 			t.Error("user should no longer exist after delete")
 		}

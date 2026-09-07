@@ -75,17 +75,36 @@ SHALL be treated as if `limit` were omitted (the default applies).
 - **THEN** the response behaves as if `limit` were omitted (at most 50
   items)
 
-### Requirement: Consistent descending creation-time ordering
-Every affected endpoint SHALL order its items by `created_at` descending
-(newest first), with `id` as a deterministic tiebreaker, unless the
-endpoint's existing, unrelated filtering/sorting requirements (e.g. an
-existing status filter) apply on top of this base order.
+### Requirement: Each endpoint preserves its pre-existing ordering, now with a deterministic tiebreak
+Introducing pagination SHALL NOT change any affected endpoint's existing
+item order. `GET /projects/{projectKey}/runs` SHALL continue ordering
+`created_at` descending (newest first) — its order prior to this change.
+Every other affected endpoint (`GET /runs/{runKey}/items`, `GET /users`,
+`GET /teams`, `GET /roles`, `GET /projects/{projectKey}/cases`, `GET
+/projects/{projectKey}/folders`, `GET /projects/{projectKey}/suites`)
+SHALL continue ordering `created_at` ascending (insertion order) — their
+order prior to this change, with `GET /roles` additionally ordering by
+`rank` first, as it already did. Every endpoint SHALL add `id` as a
+deterministic tiebreaker (ascending or descending to match its base
+order), so pagination never gaps or duplicates a row when multiple rows
+share the same `created_at`.
 
-#### Scenario: Newest item appears first
-- **WHEN** a client requests the first page of any of the eight affected
-  endpoints with no cursor
+#### Scenario: Runs stay newest-first
+- **WHEN** a client requests the first page of `GET
+  /projects/{projectKey}/runs` with no cursor
 - **THEN** the first item in the response is the most recently created
-  row visible to the requesting actor
+  run visible to the requesting actor
+
+#### Scenario: Every other affected endpoint stays in insertion order
+- **WHEN** a client requests the first page of any affected endpoint other
+  than `GET /projects/{projectKey}/runs`, with no cursor
+- **THEN** the first item in the response is the earliest-created (first
+  added) row visible to the requesting actor, not the most recent
+
+#### Scenario: Roles preserve rank ordering ahead of creation time
+- **WHEN** a client requests `GET /roles`
+- **THEN** items are ordered by rank first, then by creation time within
+  the same rank, exactly as before pagination was introduced
 
 ### Requirement: Internal callers needing the complete result set are unaffected
 The introduction of cursor pagination on these eight HTTP-facing list

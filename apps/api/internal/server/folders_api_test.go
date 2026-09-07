@@ -13,12 +13,15 @@ func TestScenario_ProjectHasRootFolderOverHTTP(t *testing.T) {
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
 
-	var folders []struct {
-		ID             string
-		ParentFolderID string `json:"parentFolderId"`
-		Name           string
+	var foldersResp struct {
+		Items []struct {
+			ID             string
+			ParentFolderID string `json:"parentFolderId"`
+			Name           string
+		}
 	}
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
+	folders := foldersResp.Items
 	if len(folders) != 1 || folders[0].ParentFolderID != "" {
 		t.Fatalf("folders after project creation = %+v, want exactly 1 root folder", folders)
 	}
@@ -28,9 +31,9 @@ func TestScenario_CreateNestedFolderOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	var folders []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
-	root := folders[0].ID
+	var foldersResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
+	root := foldersResp.Items[0].ID
 
 	var auth struct {
 		ID             string
@@ -50,15 +53,15 @@ func TestScenario_CaseDefaultsToRootFolderOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	var folders []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
+	var foldersResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
 
 	var c struct {
 		FolderID string `json:"folderId"`
 	}
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "Login works"}, 201, &c)
-	if c.FolderID != folders[0].ID {
-		t.Errorf("case folderId = %q, want root %q", c.FolderID, folders[0].ID)
+	if c.FolderID != foldersResp.Items[0].ID {
+		t.Errorf("case folderId = %q, want root %q", c.FolderID, foldersResp.Items[0].ID)
 	}
 }
 
@@ -66,9 +69,9 @@ func TestScenario_MoveCaseOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	var folders []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
-	root := folders[0].ID
+	var foldersResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
+	root := foldersResp.Items[0].ID
 
 	var auth struct{ ID string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
@@ -91,12 +94,14 @@ func TestScenario_MoveCaseOverHTTP(t *testing.T) {
 	if got.FolderID != auth.ID {
 		t.Errorf("folderId after move = %q, want %q", got.FolderID, auth.ID)
 	}
-	var suites []struct {
-		CaseIDs []string `json:"caseIds"`
+	var suitesResp struct {
+		Items []struct {
+			CaseIDs []string `json:"caseIds"`
+		}
 	}
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key), nil, 200, &suites)
-	if len(suites) != 1 || len(suites[0].CaseIDs) != 1 {
-		t.Errorf("suite membership changed after folder move: %+v", suites)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key), nil, 200, &suitesResp)
+	if len(suitesResp.Items) != 1 || len(suitesResp.Items[0].CaseIDs) != 1 {
+		t.Errorf("suite membership changed after folder move: %+v", suitesResp.Items)
 	}
 }
 
@@ -107,9 +112,9 @@ func TestScenario_DeleteFolderCascadesOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	var folders []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
-	root := folders[0].ID
+	var foldersResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
+	root := foldersResp.Items[0].ID
 
 	var auth, login struct{ ID string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
@@ -133,9 +138,9 @@ func TestScenario_DeleteFolderCascadesOverHTTP(t *testing.T) {
 
 	call(t, h, "DELETE", "/api/v1/folders/"+auth.ID, nil, 204, nil)
 
-	var remaining []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &remaining)
-	for _, f := range remaining {
+	var remainingResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &remainingResp)
+	for _, f := range remainingResp.Items {
 		if f.ID == auth.ID || f.ID == login.ID {
 			t.Errorf("deleted folder %q still listed", f.ID)
 		}
@@ -148,10 +153,10 @@ func TestScenario_RootFolderNotDeletableOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	var folders []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
+	var foldersResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
 
-	call(t, h, "DELETE", "/api/v1/folders/"+folders[0].ID, nil, 400, nil)
+	call(t, h, "DELETE", "/api/v1/folders/"+foldersResp.Items[0].ID, nil, 400, nil)
 }
 
 // TestScenario_MoveFolderOverHTTP covers add-library-folder-selection task
@@ -160,9 +165,9 @@ func TestScenario_MoveFolderOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	var folders []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
-	root := folders[0].ID
+	var foldersResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
+	root := foldersResp.Items[0].ID
 
 	var auth, settings struct{ ID string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
@@ -186,9 +191,9 @@ func TestScenario_MoveFolderRejectsCyclesOverHTTP(t *testing.T) {
 	h := apiServer(t)
 	var p struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
-	var folders []struct{ ID string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &folders)
-	root := folders[0].ID
+	var foldersResp struct{ Items []struct{ ID string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key), nil, 200, &foldersResp)
+	root := foldersResp.Items[0].ID
 
 	var auth, login struct{ ID string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", p.Key),
@@ -212,9 +217,9 @@ func TestScenario_MoveFolderRequiresSectionEditOverHTTP(t *testing.T) {
 	var p jmap
 	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
 	projectKey, _ := p["key"].(string)
-	var folders []jmap
-	callAs(t, handler, admin, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", projectKey), nil, 200, &folders)
-	root, _ := folders[0]["id"].(string)
+	var foldersResp struct{ Items []jmap }
+	callAs(t, handler, admin, "GET", fmt.Sprintf("/api/v1/projects/%s/folders", projectKey), nil, 200, &foldersResp)
+	root, _ := foldersResp.Items[0]["id"].(string)
 	var auth jmap
 	callAs(t, handler, admin, "POST", fmt.Sprintf("/api/v1/projects/%s/folders", projectKey),
 		jmap{"name": "Auth", "parentFolderId": root}, 201, &auth)

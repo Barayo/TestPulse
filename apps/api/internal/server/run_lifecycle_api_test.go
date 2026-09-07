@@ -41,9 +41,9 @@ func TestScenario_ClosedRunRejectsMutationsWith409(t *testing.T) {
 
 	var run struct{ Key string }
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key), jmap{"name": "sprint 1", "caseKeys": []string{c.Key}}, 201, &run)
-	var items []struct{ ID string }
+	var items struct{ Items []struct{ ID string } }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
-	itemID := items[0].ID
+	itemID := items.Items[0].ID
 
 	call(t, h, "POST", fmt.Sprintf("/api/v1/runs/%s/close", run.Key), nil, 204, nil)
 

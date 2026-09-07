@@ -23,7 +23,7 @@ func TestPublicProject_UnauthenticatedReadsSucceedWhenPublic(t *testing.T) {
 		t.Errorf("public project GET = %+v, want key %q", got, projectKey)
 	}
 
-	var cases []jmap
+	var cases struct{ Items []jmap }
 	callAs(t, handler, "", "GET", "/api/v1/public/projects/"+projectKey+"/cases", nil, 200, &cases)
 
 	var sum jmap

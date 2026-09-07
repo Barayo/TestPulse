@@ -102,6 +102,52 @@ func (r *FolderRepo) List(ctx context.Context, projectID string) ([]domain.Folde
 	return folders, rows.Err()
 }
 
+// ListPage is List, cursor-paginated (add-cursor-pagination). Preserves
+// List's existing created_at ASC (insertion) order, with id ASC as the
+// deterministic tiebreak.
+func (r *FolderRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Folder, string, error) {
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+folderColumns+` FROM test_case_folders
+		 WHERE project_id = $1 AND NOT deleted
+		   AND ($2::timestamptz IS NULL OR (created_at, id) > ($2, $3))
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $4`,
+		projectID, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	folders := []domain.Folder{}
+	for rows.Next() {
+		f, err := scanFolder(rows)
+		if err != nil {
+			return nil, "", err
+		}
+		folders = append(folders, f)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(folders) > limit {
+		last := folders[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		folders = folders[:limit]
+	}
+	return folders, nextCursor, nil
+}
+
 // subtreeCTE finds every folder in folderID's subtree, including folderID
 // itself, via a recursive walk of parent_folder_id — arbitrarily deep,
 // avoiding N+1 queries or loading the tree into Go to walk it (add-delete-

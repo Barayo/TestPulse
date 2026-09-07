@@ -262,8 +262,9 @@ type userInput struct {
 }
 
 func (h *api) listUsers(w http.ResponseWriter, r *http.Request) {
-	users, err := h.svc.ListUsers(r.Context())
-	h.respond(w, http.StatusOK, users, err)
+	cursor, limit := parsePageParams(r)
+	users, nextCursor, err := h.svc.ListUsersPage(r.Context(), cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(users, nextCursor), err)
 }
 
 // currentUser backs the web UI's session check on load: is there a valid

@@ -152,6 +152,13 @@ func (s *Service) ListRoles(ctx context.Context) ([]domain.Role, error) {
 	return s.store.Roles.List(ctx)
 }
 
+// ListRolesPage is ListRoles, cursor-paginated (add-cursor-pagination) —
+// backs GET /roles. ListRoles itself is untouched and keeps serving
+// ResetRolesToDefaults, which needs the complete set.
+func (s *Service) ListRolesPage(ctx context.Context, cursor string, limit int) ([]domain.Role, string, error) {
+	return s.store.Roles.ListPage(ctx, cursor, limit)
+}
+
 func (s *Service) UpdateRole(ctx context.Context, actor domain.Actor, role domain.Role) (domain.Role, error) {
 	if !actor.IsTenantAdmin {
 		return domain.Role{}, forbidden("only a Tenant Admin can manage roles")
@@ -361,6 +368,12 @@ func (s *Service) CreateTeam(ctx context.Context, actor domain.Actor, name strin
 
 func (s *Service) ListTeams(ctx context.Context) ([]domain.Team, error) {
 	return s.store.Teams.List(ctx)
+}
+
+// ListTeamsPage is ListTeams, cursor-paginated (add-cursor-pagination) —
+// backs GET /teams. ListTeams itself is untouched.
+func (s *Service) ListTeamsPage(ctx context.Context, cursor string, limit int) ([]domain.Team, string, error) {
+	return s.store.Teams.ListPage(ctx, cursor, limit)
 }
 
 func (s *Service) RenameTeam(ctx context.Context, actor domain.Actor, teamID, name string) (domain.Team, error) {

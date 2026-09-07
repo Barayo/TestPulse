@@ -532,6 +532,13 @@ func (s *Service) ListUsers(ctx context.Context) ([]domain.User, error) {
 	return s.store.Users.List(ctx)
 }
 
+// ListUsersPage is ListUsers, cursor-paginated (add-cursor-pagination) —
+// backs GET /users. ListUsers itself is untouched and keeps serving
+// HasAnyUser/BootstrapAdmin, which need the complete set.
+func (s *Service) ListUsersPage(ctx context.Context, cursor string, limit int) ([]domain.User, string, error) {
+	return s.store.Users.ListPage(ctx, cursor, limit)
+}
+
 func (s *Service) GetUser(ctx context.Context, id string) (domain.User, error) {
 	return s.store.Users.Get(ctx, id)
 }

@@ -30,10 +30,10 @@ func TestScenario_ImportEveryTestMatches(t *testing.T) {
 		t.Errorf("imported run = %+v", run)
 	}
 
-	var items []jmap
+	var items struct{ Items []jmap }
 	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
-	if len(items) != 2 {
-		t.Errorf("run items = %d, want 2", len(items))
+	if len(items.Items) != 2 {
+		t.Errorf("run items = %d, want 2", len(items.Items))
 	}
 }
 

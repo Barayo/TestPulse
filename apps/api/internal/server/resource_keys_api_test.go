@@ -92,8 +92,9 @@ func TestScenario_CreateRunResolvesMultipleCaseKeysInOneBatch(t *testing.T) {
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key),
 		jmap{"name": "batch run", "caseKeys": []string{c1.Key, c2.Key, c3.Key}}, 201, &run)
 
-	var items []struct{ CaseKey string }
-	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &items)
+	var itemsResp struct{ Items []struct{ CaseKey string } }
+	call(t, h, "GET", fmt.Sprintf("/api/v1/runs/%s/items", run.Key), nil, 200, &itemsResp)
+	items := itemsResp.Items
 	if len(items) != 3 {
 		t.Fatalf("run has %d items, want 3", len(items))
 	}
