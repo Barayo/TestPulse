@@ -11,7 +11,6 @@ import (
 	"image/jpeg"
 	_ "image/png" // registers the "png" format with image.Decode
 
-	"github.com/rwcarlsen/goexif/exif"
 	xdraw "golang.org/x/image/draw"
 	_ "golang.org/x/image/webp" // registers the "webp" format with image.Decode
 )
@@ -86,16 +85,8 @@ func resizeSquare(src image.Image, size int) *image.RGBA {
 // pixels; without this, a center crop would be computed against the wrong
 // dimensions and the result would appear sideways.
 func applyEXIFOrientation(img image.Image, data []byte) image.Image {
-	x, err := exif.Decode(bytes.NewReader(data))
-	if err != nil {
-		return img
-	}
-	tag, err := x.Get(exif.Orientation)
-	if err != nil {
-		return img
-	}
-	orientation, err := tag.Int(0)
-	if err != nil {
+	orientation := exifOrientation(data)
+	if orientation == 0 {
 		return img
 	}
 	return orientImage(img, orientation)
