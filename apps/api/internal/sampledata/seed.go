@@ -724,19 +724,23 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
-	// 3.7. Nine additional closed runs of the Regression suite, quick and
-	// undecorated (no comparison narrative — Release 1.1 regression/1.1.1
-	// hotfix/1.1.2 patch above already carry that) — solely so the Suite
+	// 3.7. Forty-five additional closed runs of the Regression suite, quick
+	// and undecorated (no comparison narrative — Release 1.1 regression/
+	// 1.1.1 hotfix/1.1.2 patch above already carry that) — so the Suite
 	// Detail page's "Run history" list demonstrates its SECTION_CAP (10) /
 	// "Show N more" behavior (polish-library-and-suites-pages) against a
-	// suite that realistically accumulates more runs than fit on one screen.
-	// login's own verdict cycles through pass/failed/skipped/blocked rather
-	// than pinning to one value across all nine — otherwise, being both the
-	// suite's first case and the most recently touched, it would crowd out
-	// the multi-color execution history TestSeedFlagshipCaseShowcasesMultipleVerdictColors
+	// suite that realistically accumulates more runs than fit on one
+	// screen, AND (add-cursor-pagination) so the project's total run count
+	// clears the Runs list's default page size of 50, making its "Load
+	// more" control genuinely appear and function against this seeded
+	// showroom instead of only in tests. login's own verdict cycles through
+	// pass/failed/skipped/blocked rather than pinning to one value across
+	// all of them — otherwise, being both the suite's first case and the
+	// most recently touched, it would crowd out the multi-color execution
+	// history TestSeedFlagshipCaseShowcasesMultipleVerdictColors
 	// (add-case-result-history) showcases on the Library's most-clicked case.
 	loginCheckpointVerdicts := []domain.Verdict{domain.VerdictPass, domain.VerdictFailed, domain.VerdictSkipped, domain.VerdictBlocked}
-	for i := 1; i <= 9; i++ {
+	for i := 1; i <= 45; i++ {
 		checkpointName := fmt.Sprintf("Regression checkpoint %d", i)
 		if err := RunFromSuiteWithVerdicts(ctx, svc, p.ID, regressionSuite.ID, checkpointName, regressionCaseIDs,
 			[]domain.Verdict{

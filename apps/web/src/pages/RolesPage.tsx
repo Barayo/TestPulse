@@ -1,8 +1,9 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
 import { EyeIcon, FileTextIcon, FolderIcon, LayersIcon, CirclePlayIcon, SettingsIcon, Trash2Icon, Loader2Icon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -184,13 +185,18 @@ function PermissionSections({
 // the Tenant Admin creates/renames/deletes roles and toggles their ten
 // permission flags freely. A user's effective permissions on a project are
 // the union of every role granted to them — there is no fixed ranking to
-// enforce here. `rank` still exists on the API/domain model but isn't a
-// user-facing concept: the UI always displays roles alphabetically and
-// never asks the admin to set it, so newly created roles are sent without
-// one (the field is optional server-side).
+// enforce here. `rank` still exists on the API/domain model, and the admin
+// never sets it explicitly (newly created roles are sent without one, the
+// field is optional server-side) — but as of add-cursor-pagination, the UI
+// no longer resorts the list alphabetically client-side: `GET /roles` is
+// cursor-paginated by rank tier then insertion order, and an alphabetical
+// resort would fracture that grouping across pages. Roles are rendered in
+// server order.
 export default function RolesPage() {
   const { user: me } = useAuth()
   const [roles, setRoles] = useState<Role[]>([])
+  const [rolesCursor, setRolesCursor] = useState<string | null>(null)
+  const [loadingMoreRoles, setLoadingMoreRoles] = useState(false)
   const [name, setName] = useState('')
   const [flags, setFlags] = useState(emptyFlags)
   const [resetDialogOpen, setResetDialogOpen] = useState(false)
@@ -198,14 +204,32 @@ export default function RolesPage() {
   const [deleteTarget, setDeleteTarget] = useState<Role | null>(null)
   const [deletePreview, setDeletePreview] = useState<{ directUserCount: number; teamCount: number; projectCount: number }>()
 
-  async function load() {
-    const { data } = await api.GET('/api/v1/roles')
-    if (data) setRoles(data as Role[])
-  }
+  const fetchRolesPage = useCallback(
+    (cursor?: string) => api.GET('/api/v1/roles', { params: { query: { cursor } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    [],
+  )
+
+  const load = useCallback(async () => {
+    const page = await fetchRolesPage()
+    setRoles(page.items as Role[])
+    setRolesCursor(page.nextCursor)
+  }, [fetchRolesPage])
 
   useEffect(() => {
     if (me?.isTenantAdmin) void load()
-  }, [me])
+  }, [me, load])
+
+  async function loadMoreRoles() {
+    if (!rolesCursor) return
+    setLoadingMoreRoles(true)
+    try {
+      const page = await fetchRolesPage(rolesCursor)
+      setRoles((prev) => [...prev, ...(page.items as Role[])])
+      setRolesCursor(page.nextCursor)
+    } finally {
+      setLoadingMoreRoles(false)
+    }
+  }
 
   if (!me?.isTenantAdmin) {
     return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
@@ -220,8 +244,6 @@ export default function RolesPage() {
     setCreateFormOpen(false)
     await load()
   }
-
-  const sortedRoles = [...roles].sort((a, b) => a.name.localeCompare(b.name))
 
   async function toggleFlag(role: Role, key: PermissionKey) {
     const {
@@ -306,7 +328,7 @@ export default function RolesPage() {
         <p className="text-sm text-muted-foreground">No roles yet.</p>
       ) : (
         <ul className="space-y-3">
-          {sortedRoles.map((r) => (
+          {roles.map((r) => (
             <li key={r.id} className="overflow-hidden rounded-lg border">
               {/* The color lives on the name itself (a small pill), not
                   a full-width fill — a filled band per row reads fine
@@ -340,6 +362,7 @@ export default function RolesPage() {
           ))}
         </ul>
       )}
+      <LoadMoreButton hasMore={!!rolesCursor} loading={loadingMoreRoles} onClick={() => void loadMoreRoles()} />
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">

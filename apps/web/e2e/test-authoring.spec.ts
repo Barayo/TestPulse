@@ -202,9 +202,9 @@ test.describe('Requirement: Project-level case folders', () => {
     await expect(page.getByText('Login works')).toBeVisible()
 
     const folders = await (await request.get(`/api/v1/projects/${projectId}/folders`)).json()
-    const root = folders.find((f: { parentFolderId?: string }) => !f.parentFolderId)
+    const root = folders.items.find((f: { parentFolderId?: string }) => !f.parentFolderId)
     const cases = await (await request.get(`/api/v1/projects/${projectId}/cases`)).json()
-    expect(cases[0].folderId).toBe(root.id)
+    expect(cases.items[0].folderId).toBe(root.id)
   })
 
   test('Scenario: Create a nested folder and place a case in it', async ({ page, request }) => {
@@ -225,9 +225,9 @@ test.describe('Requirement: Project-level case folders', () => {
     await expect(page.getByText('Login works')).toBeVisible()
 
     const folders = await (await request.get(`/api/v1/projects/${projectId}/folders`)).json()
-    const auth = folders.find((f: { name: string }) => f.name === 'Auth')
+    const auth = folders.items.find((f: { name: string }) => f.name === 'Auth')
     const cases = await (await request.get(`/api/v1/projects/${projectId}/cases`)).json()
-    expect(cases[0].folderId).toBe(auth.id)
+    expect(cases.items[0].folderId).toBe(auth.id)
   })
 })
 

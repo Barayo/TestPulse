@@ -104,7 +104,7 @@ function mockDetailAPI(options?: {
     if (path === projectPath)
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
     if (path === foldersPath)
-      return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
+      return Promise.resolve({ data: { items: [root, transferencias], nextCursor: null }, response: { ok: true } })
     if (path === casePath && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: {
@@ -126,12 +126,13 @@ function mockDetailAPI(options?: {
       })
     if (path === suitesPath)
       return Promise.resolve({
-        data: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
+        data: { items: [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }], nextCursor: null },
         response: { ok: true },
       })
     if (path === executionsPath) return Promise.resolve({ data: options?.executions ?? [], response: { ok: true } })
     if (path === customFieldsPath) return Promise.resolve({ data: options?.customFields ?? [], response: { ok: true } })
-    if (path === '/api/v1/users' && !anon) return Promise.resolve({ data: options?.users ?? [], response: { ok: true } })
+    if (path === '/api/v1/users' && !anon)
+      return Promise.resolve({ data: { items: options?.users ?? [], nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anon) {
       const permissions = options && 'permissions' in options ? options.permissions : fullPermissions
       return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
@@ -176,6 +177,8 @@ describe('CaseDetailPage', () => {
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/cases/{caseKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      if (path === '/api/v1/projects/{projectKey}/folders' || path === '/api/v1/projects/{projectKey}/suites' || path === '/api/v1/users')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderDetail()
@@ -312,7 +315,7 @@ describe('CaseDetailPage', () => {
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/folders')
-        return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
+        return Promise.resolve({ data: { items: [root, transferencias], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/cases/{caseKey}')
         return Promise.resolve({
           data: { ...limitCase, content: { ...limitCase.content, steps: [] } },
@@ -323,6 +326,9 @@ describe('CaseDetailPage', () => {
           data: [{ caseId: 'c1', version: 1, content: limitCase.content, createdAt: '2026-01-01T00:00:00Z' }],
           response: { ok: true },
         })
+      if (path === '/api/v1/projects/{projectKey}/suites')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
+      if (path === '/api/v1/users') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/permissions')
         return Promise.resolve({ data: fullPermissions, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
@@ -910,7 +916,7 @@ describe('CaseDetailPage', () => {
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/folders')
-        return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
+        return Promise.resolve({ data: { items: [root, transferencias], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/cases/{caseKey}' && options?.params?.path?.caseKey === 'c1')
         return Promise.resolve({
           data: saved ? { ...limitCase, currentVersion: 3 } : limitCase,
@@ -928,7 +934,8 @@ describe('CaseDetailPage', () => {
           response: { ok: true },
         })
       if (path === '/api/v1/projects/{projectKey}/suites')
-        return Promise.resolve({ data: [], response: { ok: true } })
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
+      if (path === '/api/v1/users') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/permissions')
         return Promise.resolve({ data: fullPermissions, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
@@ -1121,7 +1128,7 @@ describe('CaseDetailPage', () => {
         if (path === '/api/v1/public/projects/{projectKey}')
           return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
         if (path === '/api/v1/public/projects/{projectKey}/folders')
-          return Promise.resolve({ data: [root, transferencias], response: { ok: true } })
+          return Promise.resolve({ data: { items: [root, transferencias], nextCursor: null }, response: { ok: true } })
         if (path === '/api/v1/public/cases/{caseKey}' && opts?.params?.path?.caseKey === 'c1')
           return Promise.resolve({ data: limitCase, response: { ok: true } })
         if (path === '/api/v1/public/cases/{caseKey}/versions' && opts?.params?.path?.caseKey === 'c1')
@@ -1129,7 +1136,8 @@ describe('CaseDetailPage', () => {
             data: [{ caseId: 'c1', version: 1, content: limitCase.content, actorKind: 'unknown', createdAt: '2026-01-01T00:00:00Z' }],
             response: { ok: true },
           })
-        if (path === '/api/v1/public/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/suites')
+          return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
         return Promise.resolve({ data: undefined, response: { ok: false } })
       })
       renderDetail()

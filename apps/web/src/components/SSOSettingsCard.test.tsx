@@ -28,7 +28,7 @@ const unconfiguredSettings = {
 beforeEach(() => {
   vi.resetAllMocks()
   mockGET.mockImplementation((path: string) => {
-    if (path === '/api/v1/teams') return Promise.resolve({ data: [{ id: 't1', name: 'Platform', memberIds: [], createdAt: '' }], response: { ok: true } })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [{ id: 't1', name: 'Platform', memberIds: [], createdAt: '' }], nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/sso/team-mappings') return Promise.resolve({ data: [], response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: false } })
   })
@@ -117,7 +117,7 @@ describe('SSOSettingsCard', () => {
 
   it('lists existing claim→Team mappings', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/teams') return Promise.resolve({ data: [{ id: 't1', name: 'Platform', memberIds: [], createdAt: '' }], response: { ok: true } })
+      if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [{ id: 't1', name: 'Platform', memberIds: [], createdAt: '' }], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/sso/team-mappings') return Promise.resolve({ data: [{ id: 'm1', claimValue: 'engineers', teamId: 't1' }], response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: false } })
     })
@@ -144,7 +144,7 @@ describe('SSOSettingsCard', () => {
 
   it('removes a claim→Team mapping', async () => {
     mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/teams') return Promise.resolve({ data: [{ id: 't1', name: 'Platform', memberIds: [], createdAt: '' }], response: { ok: true } })
+      if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [{ id: 't1', name: 'Platform', memberIds: [], createdAt: '' }], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/sso/team-mappings') return Promise.resolve({ data: [{ id: 'm1', claimValue: 'engineers', teamId: 't1' }], response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: false } })
     })

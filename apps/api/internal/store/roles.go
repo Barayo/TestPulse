@@ -91,6 +91,7 @@ func (r *RoleRepo) List(ctx context.Context) ([]domain.Role, error) {
 // tiebreak — the cursor carries rank too (encodeCursorWithRank), or
 // resuming right at a rank boundary would skip or duplicate a row.
 func (r *RoleRepo) ListPage(ctx context.Context, cursor string, limit int) ([]domain.Role, string, error) {
+	limit = clampLimit(limit)
 	var cursorRank any
 	var cursorCreatedAt any
 	var cursorID any

@@ -29,6 +29,48 @@ into memory. Attachment and avatar uploads (`multipart/form-data`) have
 their own separate, smaller limit — see the 5MB note on their routes
 below.
 
+## Cursor pagination
+
+Eight list endpoints — `GET /api/v1/projects/{projectKey}/runs`,
+`GET /api/v1/runs/{runKey}/items`, `GET /api/v1/users`, `GET /api/v1/teams`,
+`GET /api/v1/roles`, `GET /api/v1/projects/{projectKey}/cases`,
+`GET /api/v1/projects/{projectKey}/folders`, and
+`GET /api/v1/projects/{projectKey}/suites` — plus their public,
+unauthenticated `cases`/`folders`/`suites`/`runs`/`runs/{runKey}/items`
+siblings under `/api/v1/public/...` (same handlers, same shape) — always
+return a cursor-paginated envelope, never a bare array:
+
+```json
+{ "items": [ /* ... */ ], "nextCursor": "eyJjcmVhdGVkQXQiOi4uLn0=" }
+```
+
+- **`nextCursor`** is `null` on the last page, otherwise an opaque token.
+  Treat it as a black box: never construct or decode it — pass it back
+  verbatim as the next request's `cursor` query parameter to resume
+  immediately after the current page, with no gap or overlap even when
+  rows share an identical `created_at`. A `cursor` value that isn't one
+  this endpoint issued (malformed, or from a different endpoint) is
+  rejected with `400` rather than silently returning an arbitrary page.
+- **`limit`** is optional, defaults to 50, and is silently clamped to a
+  maximum of 200 — never rejected. `limit=0`, a negative value, or
+  omitting it entirely all fall back to the default.
+- **Ordering** is unchanged from before pagination was introduced:
+  `GET /projects/{projectKey}/runs` stays newest-first (`created_at
+  DESC`); every other affected endpoint stays insertion-order
+  (`created_at ASC`), with `GET /roles` ordering by `rank` first, as it
+  already did. Every endpoint adds `id` as a deterministic tiebreaker so
+  a `created_at` tie never skips or duplicates a row across pages.
+
+A handful of internal, non-HTTP code paths that genuinely need a complete
+result set (first-run setup's user-existence check, resetting roles to
+their factory defaults, run comparison) are unaffected — they call
+separate, still-unbounded store methods that this pagination layer
+doesn't sit in front of.
+
+This is the pattern for any future list endpoint, too: a new list
+endpoint should return this same `{ items, nextCursor }` shape rather than
+a bare array.
+
 ## System endpoints
 
 | Method | Path | Description |
@@ -89,7 +131,7 @@ internal `id` in paths — they aren't in scope for this scheme.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/projects/{projectKey}/cases` | List cases (current version content) |
+| GET | `/api/v1/projects/{projectKey}/cases` | List cases (current version content) — [cursor-paginated](#cursor-pagination) |
 | POST | `/api/v1/projects/{projectKey}/cases` | Create a case (version 1); optional `folderId` defaults to the project's root folder |
 | GET | `/api/v1/cases/{caseKey}` | Get a case at its current version |
 | PUT | `/api/v1/cases/{caseKey}` | Edit — creates a new version |
@@ -118,7 +160,7 @@ exactly one folder, defaulting to the project's root; see
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectKey}/folders` | List all folders (flat) / create a subfolder (`name`, `parentFolderId` — always required) |
+| GET / POST | `/api/v1/projects/{projectKey}/folders` | List all folders (flat, [cursor-paginated](#cursor-pagination)) / create a subfolder (`name`, `parentFolderId` — always required) |
 | GET | `/api/v1/folders/{folderId}/delete-preview` | Preview a delete's blast radius: `caseCount`/`folderCount` in the subtree, for the confirmation dialog to show before the user confirms (`add-delete-mode`) |
 | DELETE | `/api/v1/folders/{folderId}` | Cascading soft delete: the folder and every folder/case in its subtree (`add-delete-mode`, replacing the old reparent behavior); the root folder cannot be deleted (`400`) |
 | PUT | `/api/v1/folders/{folderId}` | Move (reparent) a folder to a different parent (`parentFolderId`), requires `sectionEdit` (`add-library-folder-selection`). Rejects a target that is the folder itself or anywhere in its own subtree, and rejects moving the root folder — both `400`, never a `500` or a silent no-op |
@@ -128,7 +170,7 @@ exactly one folder, defaulting to the project's root; see
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectKey}/suites` | List / create — list entries include a batched `passRate`/`lastRunAt` from each suite's most recently created run |
+| GET / POST | `/api/v1/projects/{projectKey}/suites` | List ([cursor-paginated](#cursor-pagination)) / create — list entries include a batched `passRate`/`lastRunAt` from each suite's most recently created run |
 | GET / PUT / DELETE | `/api/v1/suites/{suiteKey}` | Get / rename / delete a single suite |
 | PUT / DELETE | `/api/v1/suites/{suiteKey}/cases/{caseKey}` | Add / remove a case (n:m; removing does not delete the case) |
 | GET | `/api/v1/suites/{suiteKey}/trend?includeOpen=` | Status-breakdown trend across the suite's most recent 15 closed runs, oldest first; `includeOpen=true` adds the current open run as a trailing, marked point |
@@ -150,12 +192,12 @@ exactly one folder, defaulting to the project's root; see
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectKey}/runs` | List / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys`, plus an optional `testPlanKey` (`introduce-release-test-plan`) to scope the run to a Test Plan |
+| GET / POST | `/api/v1/projects/{projectKey}/runs` | List ([cursor-paginated](#cursor-pagination), newest first) / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys`, plus an optional `testPlanKey` (`introduce-release-test-plan`) to scope the run to a Test Plan |
 | GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's, and `status` (`open`/`closed`) |
 | POST | `/api/v1/runs/{runKey}/close` | Seal a run — requires `runRecordResult`, the same permission needed to record a verdict |
 | POST | `/api/v1/runs/{runKey}/reopen` | Reopen a closed run — requires `manageProject`, the project-admin-level permission |
 | DELETE | `/api/v1/runs/{runKey}` | Permanently delete a run, its items, and its results (`204`) — no archived precondition, unlike project deletion. Requires `runDelete` (`add-data-retention` D1). A closed run may also be deleted automatically by the run-retention worker once past the configured age threshold — see [Test management](test-management.md#run-retention) |
-| GET / POST | `/api/v1/runs/{runKey}/items` | List items (optionally `?assignee=<userId-or-teamId>`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
+| GET / POST | `/api/v1/runs/{runKey}/items` | List items ([cursor-paginated](#cursor-pagination), optionally `?assignee=<userId-or-teamId>`) / add a case to an open run (`caseKey` in the body; pins its then-current version) |
 | GET / POST | `/api/v1/items/{itemId}/results` | Append-only result log: list, or record a verdict (`verdict`, `comment`, optional `actor` override — see below) |
 | PUT | `/api/v1/items/{itemId}/status` | Set `status` (e.g. `retest`) and/or assign to a real project member: `assigneeUserId` or `assigneeTeamId` (mutually exclusive; the id must belong to the project's membership) |
 | GET | `/api/v1/runs/{runKey}/summary` | Item counts by current status |
@@ -176,10 +218,10 @@ public, doesn't exist, or the switch is off (see
 | Method | Path | Description |
 |---|---|---|
 | GET | `/api/v1/public/projects/{projectKey}` | Get a public project |
-| GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` \| `/runs/status-summary` \| `/custom-fields` | List, same shapes as the authenticated equivalents |
+| GET | `/api/v1/public/projects/{projectKey}/cases` \| `/folders` \| `/flaky-cases` \| `/suites` \| `/runs` \| `/runs/status-summary` \| `/custom-fields` | List, same shapes as the authenticated equivalents — `cases`, `folders`, `suites`, and `runs` are [cursor-paginated](#cursor-pagination), same handlers as their authenticated siblings |
 | GET | `/api/v1/public/cases/{caseKey}` \| `/versions` \| `/executions` | A case, its version history, its execution history — `/executions` supports the same `order=recent&limit=N` params as the authenticated route |
 | GET | `/api/v1/public/suites/{suiteKey}` \| `/trend?includeOpen=` | A suite, its status-breakdown trend — same `includeOpen` support as the authenticated route |
-| GET | `/api/v1/public/runs/{runKey}` \| `/items` \| `/summary` | A run, its items, its status counts |
+| GET | `/api/v1/public/runs/{runKey}` \| `/items` \| `/summary` | A run, its items ([cursor-paginated](#cursor-pagination)), its status counts |
 | GET | `/api/v1/public/items/{itemId}/results` | A run item's result log |
 | GET | `/api/v1/public/attachments/{attachmentId}` | The raw image bytes for an attachment |
 
@@ -234,7 +276,7 @@ field alongside the report text, not inside it.
 | POST | `/api/v1/users/me/avatar` | Upload a custom photo avatar (`multipart/form-data`, field `avatar`; JPEG/PNG/WebP, max 500KB) — server-side center-cropped and resized to 128×128, sets `avatarKey` to the reserved value `"custom"` |
 | DELETE | `/api/v1/users/me/avatar` | Remove the caller's custom photo avatar, reverting to the generated default |
 | GET | `/api/v1/users/{userId}/avatar` | The raw image bytes for a user's custom photo avatar (always JPEG), if they have one — cacheable via `ETag`/`Cache-Control` |
-| GET | `/api/v1/users` | List users |
+| GET | `/api/v1/users` | List users — [cursor-paginated](#cursor-pagination) |
 | POST | `/api/v1/users` | Create a user (`email`, `password`, `isTenantAdmin`) — Tenant Admin only; `displayName` defaults to a name derived from the email's local-part (`jane.doe@x.com` → "Jane Doe") rather than staying unset |
 | PATCH | `/api/v1/users/{userId}` | Change `isTenantAdmin`, `deactivate`/`reactivate`, the account's `email`, and/or `requirePasswordChange` — Tenant Admin only. A Tenant Admin can no longer set another account's password value directly (`add-change-own-password`); see the two endpoints below instead |
 | POST | `/api/v1/users/{userId}/password-reset-email` | Trigger a password-reset email for a specific account — Tenant Admin only, only available when the instance has SMTP configured (`add-change-own-password`) |
@@ -248,7 +290,7 @@ field alongside the report text, not inside it.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/teams` | List teams |
+| GET | `/api/v1/teams` | List teams — [cursor-paginated](#cursor-pagination) |
 | POST | `/api/v1/teams` | Create a team (`name`) |
 | PATCH | `/api/v1/teams/{teamId}` | Rename a team |
 | DELETE | `/api/v1/teams/{teamId}` | Delete a team — cascades its membership and project role assignments |
@@ -260,7 +302,7 @@ field alongside the report text, not inside it.
 
 | Method | Path | Description |
 |---|---|---|
-| GET | `/api/v1/roles` | List all roles |
+| GET | `/api/v1/roles` | List all roles — [cursor-paginated](#cursor-pagination), ordered by `rank` first |
 | POST | `/api/v1/roles` | Create a role (`name`, `rank`, and the ten `can*` permission flags below) |
 | PATCH | `/api/v1/roles/{roleId}` | Update a role's name, rank, or permission flags |
 | DELETE | `/api/v1/roles/{roleId}` | Delete a role — cascades any project membership/team role assignment referencing it |

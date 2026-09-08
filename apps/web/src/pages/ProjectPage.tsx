@@ -303,12 +303,14 @@ export default function ProjectPage() {
             <FoldersPanel
               folders={landing.folders}
               totalCount={landing.totalFolders}
+              truncated={landing.truncated}
               onSeeAll={() => navigate(`/projects/${projectKey}/library`)}
               onSelectFolder={(folderId) => navigate(`/projects/${projectKey}/library/${folderId}`)}
             />
             <SuitesPanel
               suites={landing.suites}
               totalCount={landing.totalSuites}
+              truncated={landing.truncated}
               onSeeAll={() => navigate(`/projects/${projectKey}/suites`)}
               onSelectSuite={(suiteId) => navigate(`/projects/${projectKey}/suites/${suiteId}`)}
             />

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation, useParams } from 'react-router'
 import RunPage from './RunPage'
@@ -94,7 +94,7 @@ function mockRunAPI(
     const suitePath = anonymous ? '/api/v1/public/suites/{suiteKey}' : '/api/v1/suites/{suiteKey}'
     const trendPath = anonymous ? '/api/v1/public/suites/{suiteKey}/trend' : '/api/v1/suites/{suiteKey}/trend'
     if (path === runPath) return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
-    if (path === itemsPath) return Promise.resolve({ data: items, response: { ok: true } })
+    if (path === itemsPath) return Promise.resolve({ data: { items, nextCursor: null }, response: { ok: true } })
     if (path === summaryPath)
       return Promise.resolve({
         data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
@@ -125,7 +125,7 @@ function mockAssignmentAPI(items: unknown[], summary?: unknown) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
-    if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: items, response: { ok: true } })
+    if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: { items, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/runs/{runKey}/summary')
       return Promise.resolve({
         data: summary ?? { runId: 'r1', total: items.length, counts: { pending: items.length } },
@@ -149,13 +149,16 @@ function mockAssignmentAPI(items: unknown[], summary?: unknown) {
       })
     if (path === '/api/v1/users')
       return Promise.resolve({
-        data: [
-          { id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
-          { id: 'u-luis', email: 'luis@example.com', isTenantAdmin: false, createdAt: '' },
-        ],
+        data: {
+          items: [
+            { id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
+            { id: 'u-luis', email: 'luis@example.com', isTenantAdmin: false, createdAt: '' },
+          ],
+          nextCursor: null,
+        },
         response: { ok: true },
       })
-    if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: fullPermissions, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -530,6 +533,63 @@ describe('Group by status (rework-run-detail-ux)', () => {
     expect(screen.getByText('Failed · 1')).toBeInTheDocument()
     expect(screen.queryByText(/pass · 1/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/pending · 1/i)).not.toBeInTheDocument()
+  })
+
+  // Regression (Paco's QA pass on add-cursor-pagination, 2026-09-07): the
+  // same unguarded-drain shape found in PeoplePage's search box exists
+  // here too — `itemsCursor` stays non-null until the whole drain
+  // finishes, so two filter-chip clicks landing before the first fetch
+  // resolves each started their own independent drain, duplicating
+  // whatever page(s) both calls fetched into the underlying `items` list
+  // (visible once the filter is cleared back to "All").
+  it('does not duplicate items when two filter chips are clicked before the drain completes', async () => {
+    const page1 = [pendingItem, passItem]
+    const page2 = [failedItem]
+    let resolvePage2!: (v: { data: { items: typeof page2; nextCursor: null }; response: { ok: true } }) => void
+    const page2Promise = new Promise<{ data: { items: typeof page2; nextCursor: null }; response: { ok: true } }>((resolve) => {
+      resolvePage2 = resolve
+    })
+    let page2FetchCount = 0
+    mockGET.mockImplementation((path: string, opts?: { params?: { query?: { cursor?: string } } }) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items') {
+        const cursor = opts?.params?.query?.cursor
+        if (!cursor) return Promise.resolve({ data: { items: page1, nextCursor: 'c1' }, response: { ok: true } })
+        page2FetchCount++
+        return page2Promise as Promise<never>
+      }
+      if (path === '/api/v1/runs/{runKey}/summary') return Promise.resolve({ data: summary, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}')
+        return Promise.resolve({ data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/permissions') return Promise.resolve({ data: fullPermissions, response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: true } })
+    })
+    renderRun()
+    await screen.findByText('Login works')
+
+    const group = screen.getByRole('group', { name: /filter items by status/i })
+    // Two different chips, each unconditionally re-triggering the drain
+    // regardless of the previous filter value — reproduces "two triggers
+    // land before the first fetch resolves" deterministically.
+    fireEvent.click(within(group).getByRole('button', { name: /^pending/i }))
+    fireEvent.click(within(group).getByRole('button', { name: /^failed/i }))
+
+    resolvePage2({ data: { items: page2, nextCursor: null }, response: { ok: true } })
+    await screen.findAllByText('Logout works')
+
+    // Clear the filter to reveal the full (previously-filtered-out) list —
+    // duplication corrupts the underlying `items` array regardless of
+    // which status is currently selected, so this is where it surfaces.
+    fireEvent.click(within(group).getByRole('button', { name: /^all/i }))
+
+    // The exact number of stray DOM nodes a duplicate-key React
+    // reconciliation leaves behind isn't itself the contract to pin down —
+    // what matters is that the drain is called exactly once per real
+    // remaining page, which is what prevents the duplicate-key state (and
+    // the resulting undefined rendering behavior) from happening at all.
+    expect(await screen.findAllByText('Logout works')).toHaveLength(1)
+    expect(page2FetchCount).toBe(1)
   })
 })
 
@@ -1536,7 +1596,8 @@ describe('signed-in non-member (design.md D11)', () => {
       if (path === '/api/v1/runs/{runKey}' || path === '/api/v1/runs/{runKey}/items' || path === '/api/v1/runs/{runKey}/summary')
         return Promise.resolve({ data: undefined, response: { ok: false } })
       if (path === '/api/v1/public/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
-      if (path === '/api/v1/public/runs/{runKey}/items') return Promise.resolve({ data: [pendingItem], response: { ok: true } })
+      if (path === '/api/v1/public/runs/{runKey}/items')
+        return Promise.resolve({ data: { items: [pendingItem], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/public/runs/{runKey}/summary')
         return Promise.resolve({ data: { runId: 'r1', total: 1, counts: { pending: 1 } }, response: { ok: true } })
       if (path === '/api/v1/public/projects/{projectKey}')

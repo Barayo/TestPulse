@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Button } from '@/components/ui/button'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { OpenRunsTriage, ClosedRunsLedger } from '@/components/RunsListTriage'
@@ -24,7 +26,18 @@ export default function RunsPage() {
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const [runs, setRuns] = useState<Run[]>([])
+  const [runsCursor, setRunsCursor] = useState<string | null>(null)
+  const [loadingMoreRuns, setLoadingMoreRuns] = useState(false)
   const [suites, setSuites] = useState<Suite[]>([])
+
+  const fetchRunsPage = useCallback(
+    (cursor?: string) =>
+      (access === 'member'
+        ? api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey: projectKey! }, query: { cursor } } })
+        : api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey: projectKey! }, query: { cursor } } })
+      ).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    [projectKey, access],
+  )
 
   const load = useCallback(async () => {
     // Waits for the session check and confirmed project read access before
@@ -34,38 +47,56 @@ export default function RunsPage() {
     if (!projectKey || access === 'loading') return
     setNotFound(false)
     try {
-      // Suites are fetched alongside runs to resolve each closed run's
-      // suiteKey to a real name/link for clustering
+      // Suites are fetched alongside runs (the complete set — a reference
+      // lookup, not its own paginated display) to resolve each closed
+      // run's suiteKey to a real name/link for clustering
       // (redesign-runs-list-triage-view design.md D3) — a run's suiteKey
       // survives its suite being deleted, so this list won't always cover
       // every key seen on a run; that's an expected, handled case, not an
       // error.
-      const [{ data: p }, { data: r }, { data: s }] = access === 'member'
+      const [{ data: p }, runsPage, s] = access === 'member'
         ? await Promise.all([
             api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-            api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
-            api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+            fetchRunsPage(),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
           ])
         : await Promise.all([
             api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
-            api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
-            api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+            fetchRunsPage(),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
           ])
       if (!p) {
         setNotFound(true)
         return
       }
       setProject(p)
-      setRuns(r ?? [])
-      setSuites(s ?? [])
+      setRuns(runsPage.items)
+      setRunsCursor(runsPage.nextCursor)
+      setSuites(s.items)
     } catch {
       setRuns([])
     }
-  }, [projectKey, access])
+  }, [projectKey, access, fetchRunsPage])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  async function loadMoreRuns() {
+    if (!runsCursor) return
+    setLoadingMoreRuns(true)
+    try {
+      const page = await fetchRunsPage(runsCursor)
+      setRuns((prev) => [...prev, ...page.items])
+      setRunsCursor(page.nextCursor)
+    } finally {
+      setLoadingMoreRuns(false)
+    }
+  }
 
   if (!projectKey) return null
   if (notFound) {
@@ -166,6 +197,12 @@ export default function RunsPage() {
                 ) : (
                   <ClosedRunsLedger runs={closed} suites={suites} projectKey={projectKey} />
                 )}
+              </div>
+              {/* One fetch from GET /runs (newest-first, mixed) can land in
+                  either bucket above, so the label stays generic rather
+                  than scoped to "open"/"closed". */}
+              <div className="border-t pt-4">
+                <LoadMoreButton hasMore={!!runsCursor} loading={loadingMoreRuns} onClick={() => void loadMoreRuns()} label="Load more runs" />
               </div>
             </div>
           )}

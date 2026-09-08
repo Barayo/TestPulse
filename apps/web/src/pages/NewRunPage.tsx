@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -67,11 +68,17 @@ export default function NewRunPage() {
     if (!projectKey) return
     setNotFound(false)
     try {
-      const [{ data: p }, { data: c }, { data: f }, { data: s }, { data: pl }, { data: rel }] = await Promise.all([
+      const [{ data: p }, c, f, s, { data: pl }, { data: rel }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
         api.GET('/api/v1/projects/{projectKey}/plans', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/releases', { params: { path: { projectKey } } }),
       ])
@@ -80,9 +87,9 @@ export default function NewRunPage() {
         return
       }
       setProject(p)
-      setCases(c ?? [])
-      setFolders(f ?? [])
-      setSuites(s ?? [])
+      setCases(c.items)
+      setFolders(f.items)
+      setSuites(s.items)
       setPlans(pl ?? [])
       setReleases(rel ?? [])
     } catch {
@@ -196,10 +203,10 @@ export default function NewRunPage() {
     bumpLanding()
     if (data) {
       if (defaultAssignee) {
-        const { data: createdItems } = await api.GET('/api/v1/runs/{runKey}/items', {
-          params: { path: { runKey: data.key } },
-        })
-        await assignRunItems((createdItems ?? []).map((item) => item.id), defaultAssignee)
+        const { items: createdItems } = await fetchAllPages((cursor) =>
+          api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: data.key }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        )
+        await assignRunItems(createdItems.map((item) => item.id), defaultAssignee)
       }
       navigate(`/runs/${data.key}`, { state: { justCreated: true } })
     }

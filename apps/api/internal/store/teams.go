@@ -72,6 +72,7 @@ func (r *TeamRepo) List(ctx context.Context) ([]domain.Team, error) {
 // List's existing created_at ASC (insertion) order and per-team
 // MemberIDs enrichment, with id ASC as the deterministic tiebreak.
 func (r *TeamRepo) ListPage(ctx context.Context, cursor string, limit int) ([]domain.Team, string, error) {
+	limit = clampLimit(limit)
 	var cursorCreatedAt any
 	var cursorID any
 	if cursor != "" {

@@ -225,6 +225,7 @@ func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {
 // List's existing created_at ASC (insertion) order, with id ASC as the
 // deterministic tiebreak.
 func (r *UserRepo) ListPage(ctx context.Context, cursor string, limit int) ([]domain.User, string, error) {
+	limit = clampLimit(limit)
 	var cursorCreatedAt any
 	var cursorID any
 	if cursor != "" {

@@ -1457,6 +1457,41 @@ func TestSeedContentShowcasesRunHistoryCap(t *testing.T) {
 	}
 }
 
+// TestSeedRunCountExceedsDefaultPageSize covers add-cursor-pagination task
+// 14: the Runs list's "Load more" control only has something real to
+// demonstrate against the seeded showroom if the Sample Project's run count
+// clears the endpoint's default page size (50) — otherwise the control
+// never appears outside of tests that seed extra rows themselves.
+func TestSeedRunCountExceedsDefaultPageSize(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) <= 50 {
+		t.Errorf("Sample Project has %d runs, want more than 50 (the Runs list's default page size) so Load more is demonstrable", len(runs))
+	}
+
+	page, nextCursor, err := svc.ListRunsPage(actorCtx, p.ID, "", 0)
+	if err != nil {
+		t.Fatalf("ListRunsPage: %v", err)
+	}
+	if len(page) != 50 {
+		t.Errorf("first page has %d items, want 50 (the default limit)", len(page))
+	}
+	if nextCursor == "" {
+		t.Error("first page's nextCursor is empty, want a non-empty cursor since more runs remain")
+	}
+}
+
 // TestSeedContentShowcasesRetestOnOpenRun covers add-run-row-status-actions:
 // the run board's new single-row "Retest" context-menu item only appears
 // for a failed item on an open run, so the Sample Project needs at least

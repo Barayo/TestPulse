@@ -35,7 +35,7 @@ function mockCreateAPI(options?: { customFields?: unknown[] }) {
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({ data: { id: 'p1', key: 'CHK', name: 'Checkout Suite', archived: false, createdAt: '' }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/folders')
-      return Promise.resolve({ data: [root, checkout], response: { ok: true } })
+      return Promise.resolve({ data: { items: [root, checkout], nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: fullPermissions, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/custom-fields')

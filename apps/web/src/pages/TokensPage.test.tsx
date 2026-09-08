@@ -43,7 +43,7 @@ beforeEach(() => {
       return Promise.resolve({ data: projects, response: { ok: true } })
     }
     if (path === '/api/v1/roles') {
-      return Promise.resolve({ data: roles, response: { ok: true } })
+      return Promise.resolve({ data: { items: roles, nextCursor: null }, response: { ok: true } })
     }
     return Promise.resolve({ data: [], response: { ok: true } })
   })
@@ -176,7 +176,7 @@ describe('TokensPage', () => {
         })
       }
       if (path === '/api/v1/projects') return Promise.resolve({ data: projects, response: { ok: true } })
-      if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+      if (path === '/api/v1/roles') return Promise.resolve({ data: { items: roles, nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderPage()
@@ -203,7 +203,7 @@ describe('TokensPage', () => {
         })
       }
       if (path === '/api/v1/projects') return Promise.resolve({ data: projects, response: { ok: true } })
-      if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+      if (path === '/api/v1/roles') return Promise.resolve({ data: { items: roles, nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderPage()

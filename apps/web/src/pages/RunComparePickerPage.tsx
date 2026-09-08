@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { useAuth } from '@/lib/useAuth'
 import { useProjectReadAccess } from '@/lib/useProjectPermissions'
 import { Button } from '@/components/ui/button'
@@ -33,11 +34,13 @@ export default function RunComparePickerPage() {
 
   const load = useCallback(async () => {
     if (!projectKey || access === 'loading') return
-    const request = access === 'member'
-      ? api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } })
-      : api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } } })
-    const { data } = await request
-    setRuns((data ?? []).filter((r) => r.status === 'closed'))
+    const { items: runs } = await fetchAllPages((cursor) =>
+      (access === 'member'
+        ? api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey }, query: { cursor, limit: 200 } } })
+        : api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey }, query: { cursor, limit: 200 } } })
+      ).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    )
+    setRuns(runs.filter((r) => r.status === 'closed'))
   }, [projectKey, access])
 
   useEffect(() => {

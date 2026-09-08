@@ -65,7 +65,7 @@ async function loginAsNewUser(adminPage: Page, browser: Browser, label: string):
 }
 
 async function assignRole(adminPage: Page, projectId: string, userId: string, roleName: string) {
-  const roles: { id: string; name: string }[] = await (await adminPage.request.get('/api/v1/roles')).json()
+  const { items: roles }: { items: { id: string; name: string }[] } = await (await adminPage.request.get('/api/v1/roles')).json()
   const roleId = roles.find((r) => r.name === roleName)?.id
   if (!roleId) throw new Error(`no seeded role named "${roleName}" found`)
   const res = await adminPage.request.put(`/api/v1/projects/${projectId}/members/${userId}`, { data: { roleId } })

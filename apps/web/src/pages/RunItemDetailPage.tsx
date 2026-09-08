@@ -11,6 +11,7 @@ import {
 import { Link, useNavigate, useParams } from 'react-router'
 import { ExternalLinkIcon, PaperclipIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
 import { AttachmentStrip } from '@/components/AttachmentStrip'
@@ -102,13 +103,15 @@ export default function RunItemDetailPage() {
     let r, runItems
     let resolvedAccess: 'member' | 'public' = 'public'
     if (user) {
-      const [runRes, itemsRes] = await Promise.all([
+      const [runRes, items] = await Promise.all([
         api.GET('/api/v1/runs/{runKey}', { params: { path: { runKey } } }),
-        api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey } } }),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
       ])
       if (runRes.data) {
         r = runRes.data
-        runItems = itemsRes.data
+        runItems = items.items
         resolvedAccess = 'member'
       } else {
         // Signed in but not a member (403) or the run doesn't exist (404)
@@ -120,18 +123,22 @@ export default function RunItemDetailPage() {
         // the way useProjectReadAccess does for project-keyed pages.
         const [pubRun, pubItems] = await Promise.all([
           api.GET('/api/v1/public/runs/{runKey}', { params: { path: { runKey } } }),
-          api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey } } }),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
         ])
         r = pubRun.data
-        runItems = pubItems.data
+        runItems = pubItems.items
       }
     } else {
       const [pubRun, pubItems] = await Promise.all([
         api.GET('/api/v1/public/runs/{runKey}', { params: { path: { runKey } } }),
-        api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey } } }),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
       ])
       r = pubRun.data
-      runItems = pubItems.data
+      runItems = pubItems.items
     }
     setAccess(resolvedAccess)
     const match = (runItems ?? []).find((it) => it.caseKey === caseKey)
@@ -143,15 +150,17 @@ export default function RunItemDetailPage() {
     setItem(match)
     setItems(runItems ?? [])
     if (resolvedAccess === 'member') {
-      const [{ data: res }, { data: allUsers }, { data: execs }] = await Promise.all([
+      const [{ data: res }, allUsers, { data: execs }] = await Promise.all([
         api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: match.id } } }),
-        api.GET('/api/v1/users'),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/users', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
         api.GET('/api/v1/cases/{caseKey}/executions', {
           params: { path: { caseKey: match.caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
         }),
       ])
       setResults(res ?? [])
-      setUserAvatars(Object.fromEntries((allUsers ?? []).map((u) => [u.id, u.avatarKey])))
+      setUserAvatars(Object.fromEntries(allUsers.items.map((u) => [u.id, u.avatarKey])))
       setResultsData(toResultsData(execs ?? []))
     } else {
       // Anonymous, or a signed-in non-member (D11): GET /api/v1/users has
@@ -323,11 +332,13 @@ export default function RunItemDetailPage() {
         return
       }
       setComment('')
-      const [{ data: refreshedItems }, { data: res }] = await Promise.all([
-        api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! } } }),
+      const [refreshedItems, { data: res }] = await Promise.all([
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
         api.GET('/api/v1/items/{itemId}/results', { params: { path: { itemId: item.id } } }),
       ])
-      setItem((refreshedItems ?? []).find((it) => it.id === item.id))
+      setItem(refreshedItems.items.find((it) => it.id === item.id))
       setResults(res ?? [])
     } finally {
       setIsRecording(false)
@@ -349,10 +360,10 @@ export default function RunItemDetailPage() {
       params: { path: { itemId: item.id } },
       body: { status: 'retest' },
     })
-    const { data: refreshedItems } = await api.GET('/api/v1/runs/{runKey}/items', {
-      params: { path: { runKey: runKey! } },
-    })
-    setItem((refreshedItems ?? []).find((it) => it.id === item.id))
+    const refreshedItems = await fetchAllPages((cursor) =>
+      api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    )
+    setItem(refreshedItems.items.find((it) => it.id === item.id))
   }
 
   async function handleAssign(assignee: AssigneePick) {

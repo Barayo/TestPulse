@@ -89,18 +89,25 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
         response: { ok: true },
       })
     if (path === foldersPath)
-      return Promise.resolve({ data: overrides.folders ?? [rootFolder, onboarding], response: { ok: true } })
-    if (path === casesPath) return Promise.resolve({ data: overrides.cases ?? [caseInOnboarding], response: { ok: true } })
+      return Promise.resolve({ data: { items: overrides.folders ?? [rootFolder, onboarding], nextCursor: null }, response: { ok: true } })
+    if (path === casesPath)
+      return Promise.resolve({ data: { items: overrides.cases ?? [caseInOnboarding], nextCursor: null }, response: { ok: true } })
     if (path === suitesPath)
       return Promise.resolve({
-        data: overrides.suites ?? [
-          { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null },
-        ],
+        data: {
+          items: overrides.suites ?? [
+            { id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '', passRate: null },
+          ],
+          nextCursor: null,
+        },
         response: { ok: true },
       })
     if (path === runsPath)
       return Promise.resolve({
-        data: overrides.runs ?? [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z' }],
+        data: {
+          items: overrides.runs ?? [{ id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Sprint 1', createdAt: '2026-01-01T00:00:00Z' }],
+          nextCursor: null,
+        },
         response: { ok: true },
       })
     if (path === runSummaryPath)
@@ -360,7 +367,7 @@ describe('ProjectPage landing', () => {
   })
 
   it('does not flash the get-started checklist before landing data has loaded, for a project that turns out to have real content', async () => {
-    let resolveFolders!: (v: { data: unknown[]; response: { ok: true } }) => void
+    let resolveFolders!: (v: { data: { items: unknown[]; nextCursor: null }; response: { ok: true } }) => void
     const foldersPromise = new Promise((resolve) => {
       resolveFolders = resolve
     })
@@ -371,9 +378,12 @@ describe('ProjectPage landing', () => {
         return Promise.resolve({ data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/projects/summaries') return Promise.resolve({ data: [], response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/folders') return foldersPromise
-      if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: [caseInOnboarding], response: { ok: true } })
-      if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
-      if (path === '/api/v1/projects/{projectKey}/runs') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/cases')
+        return Promise.resolve({ data: { items: [caseInOnboarding], nextCursor: null }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/suites')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/runs')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderProject()
@@ -387,7 +397,7 @@ describe('ProjectPage landing', () => {
     await screen.findByRole('heading', { name: 'QA Platform' })
     expect(screen.queryByText(/get started/i)).not.toBeInTheDocument()
 
-    resolveFolders({ data: [rootFolder, onboarding], response: { ok: true } })
+    resolveFolders({ data: { items: [rootFolder, onboarding], nextCursor: null }, response: { ok: true } })
     expect(await screen.findByText('Onboarding')).toBeInTheDocument()
     expect(screen.queryByText(/get started/i)).not.toBeInTheDocument()
   })
@@ -753,10 +763,14 @@ describe('signed-in non-member (design.md D11)', () => {
           data: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
           response: { ok: true },
         })
-      if (path === '/api/v1/public/projects/{projectKey}/folders') return Promise.resolve({ data: [rootFolder, onboarding], response: { ok: true } })
-      if (path === '/api/v1/public/projects/{projectKey}/cases') return Promise.resolve({ data: [caseInOnboarding], response: { ok: true } })
-      if (path === '/api/v1/public/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
-      if (path === '/api/v1/public/projects/{projectKey}/runs') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/folders')
+        return Promise.resolve({ data: { items: [rootFolder, onboarding], nextCursor: null }, response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/cases')
+        return Promise.resolve({ data: { items: [caseInOnboarding], nextCursor: null }, response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/suites')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
+      if (path === '/api/v1/public/projects/{projectKey}/runs')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: false } })
     })
     renderProject()

@@ -331,7 +331,9 @@ test.describe('Requirement: Permission-gating retrofit hides write controls from
     await page.getByRole('button', { name: /create test case/i }).click()
     await expect(page.getByText('Read-only retrofit case')).toBeVisible()
 
-    const cases: { key: string }[] = await (await page.request.get(`/api/v1/projects/${projectId}/cases`)).json()
+    const { items: cases }: { items: { key: string }[] } = await (
+      await page.request.get(`/api/v1/projects/${projectId}/cases`)
+    ).json()
     const suite = await (
       await page.request.post(`/api/v1/projects/${projectId}/suites`, { data: { name: unique('Retrofit Suite') } })
     ).json()

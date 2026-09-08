@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'react-router'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
@@ -37,18 +38,24 @@ export default function ProjectMembersPage() {
 
   async function load() {
     if (!projectKey) return
-    const [{ data: p }, { data: m }, { data: u }, { data: t }, { data: r }] = await Promise.all([
+    const [{ data: p }, { data: m }, u, t, r] = await Promise.all([
       api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
       api.GET('/api/v1/projects/{projectKey}/members', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/users'),
-      api.GET('/api/v1/teams'),
-      api.GET('/api/v1/roles'),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/users', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/teams', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/roles', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
     ])
     if (p) setProjectName(p.name)
     if (m) setMembership(m as Membership)
-    if (u) setUsers(u as UserOption[])
-    if (t) setTeams(t as Team[])
-    if (r) setRoles(r as Role[])
+    setUsers(u.items as UserOption[])
+    setTeams(t.items as Team[])
+    setRoles(r.items as Role[])
   }
 
   useEffect(() => {

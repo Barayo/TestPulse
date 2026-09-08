@@ -69,10 +69,10 @@ function mockRunsAPI(runs: RunFixture[] = [], permissions: unknown = fullPermiss
         data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
-    if (path === runsPath) return Promise.resolve({ data: runs, response: { ok: true } })
+    if (path === runsPath) return Promise.resolve({ data: { items: runs, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
       return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
-    return Promise.resolve({ data: [], response: { ok: true } })
+    return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
   })
 }
 
@@ -217,7 +217,7 @@ describe('RunsPage', () => {
       if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
-      return Promise.resolve({ data: [], response: { ok: true } })
+      return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
     })
     renderRuns()
     expect(await screen.findByText(/project not found/i)).toBeInTheDocument()
@@ -287,7 +287,7 @@ describe('signed-in non-member (design.md D11)', () => {
       if (path === '/api/v1/public/projects/{projectKey}')
         return Promise.resolve({ data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
       if (path === '/api/v1/public/projects/{projectKey}/runs')
-        return Promise.resolve({ data: [run({ name: 'Sprint 1', status: 'open' })], response: { ok: true } })
+        return Promise.resolve({ data: { items: [run({ name: 'Sprint 1', status: 'open' })], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: false } })
     })
     renderRuns()

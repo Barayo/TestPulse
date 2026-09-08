@@ -1,7 +1,8 @@
-import { useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Trash2Icon, Loader2Icon, PowerIcon, PencilIcon, TriangleAlertIcon, MailIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 import { isValidEmail } from '@/lib/email'
 import { generateSecurePassword } from '@/lib/generatePassword'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
@@ -26,15 +27,11 @@ type User = {
 type Team = { id: string; name: string; memberIds: string[]; createdAt: string }
 type UserOption = { id: string; email: string }
 
-// Client-side reveal batch for a team's member list — GET /api/v1/teams
-// returns every memberId up front (no server pagination yet), so this just
-// keeps an expanded team from dumping a huge list into the page at once.
+// Client-side reveal batch for a team's OWN member list (Team.memberIds is
+// a plain embedded array on the Team object, not a separate paginated
+// endpoint — unaffected by add-cursor-pagination) — keeps an expanded
+// team from dumping a huge list into the page at once.
 const MEMBER_BATCH_SIZE = 5
-
-// Same client-side-reveal reasoning for the top-level Users roster — GET
-// /api/v1/users returns everyone up front (no server pagination yet), so
-// this just keeps the page from rendering a huge list on first load.
-const USER_BATCH_SIZE = 10
 
 // Directory search (add member) results cap — filtering existing members
 // and searching the whole directory to add someone new are different tasks
@@ -44,15 +41,27 @@ const USER_BATCH_SIZE = 10
 // inline results list from ever dumping an unbounded list into the page.
 const ADD_RESULTS_CAP = 8
 
+// Bounds ensureAllUsersLoaded's background drain (security review,
+// add-cursor-pagination task 12.1d) — looping until `nextCursor` is null
+// with no ceiling reintroduces the unbounded-query problem pagination was
+// meant to fix, just moved client-side. At the default page size (50),
+// 25 pages caps a single drain at 1,250 users.
+const MAX_DRAIN_PAGES = 25
+
 export default function PeoplePage() {
   const { user: me } = useAuth()
 
   const [users, setUsers] = useState<User[]>([])
+  const [usersCursor, setUsersCursor] = useState<string | null>(null)
+  const [loadingMoreUsers, setLoadingMoreUsers] = useState(false)
+  const [drainingUsers, setDrainingUsers] = useState(false)
+  const [usersTruncated, setUsersTruncated] = useState(false)
   const [teams, setTeams] = useState<Team[]>([])
+  const [teamsCursor, setTeamsCursor] = useState<string | null>(null)
+  const [loadingMoreTeams, setLoadingMoreTeams] = useState(false)
 
   const [userFormOpen, setUserFormOpen] = useState(false)
   const [userSearch, setUserSearch] = useState('')
-  const [visibleUserCount, setVisibleUserCount] = useState(USER_BATCH_SIZE)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [revealedPassword, setRevealedPassword] = useState<string>()
@@ -80,14 +89,29 @@ export default function PeoplePage() {
   const [deleteTeamTarget, setDeleteTeamTarget] = useState<Team | null>(null)
   const [teamDeletePreview, setTeamDeletePreview] = useState<{ memberCount: number; projectCount: number }>()
 
+  const fetchUsersPage = useCallback(
+    (cursor?: string) => api.GET('/api/v1/users', { params: { query: { cursor } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    [],
+  )
+  const fetchTeamsPage = useCallback(
+    (cursor?: string) => api.GET('/api/v1/teams', { params: { query: { cursor } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    [],
+  )
+
   async function load() {
-    const [{ data: u }, { data: t }, { data: m }] = await Promise.all([
-      api.GET('/api/v1/users'),
-      api.GET('/api/v1/teams'),
+    const [usersPage, teamsPage, { data: m }] = await Promise.all([
+      fetchUsersPage(),
+      fetchTeamsPage(),
       api.GET('/api/v1/meta'),
     ])
-    if (u) setUsers(u as User[])
-    if (t) setTeams(t as Team[])
+    // Each fetched page is sorted independently before appending, not the
+    // whole accumulated list — resorting everything on every render would
+    // insert a new page's earlier-alphabet rows into the middle of rows
+    // already on screen, moving them on every "Load more" click.
+    setUsers((usersPage.items as User[]).slice().sort((a, b) => a.email.localeCompare(b.email)))
+    setUsersCursor(usersPage.nextCursor)
+    setTeams(teamsPage.items.slice().sort((a, b) => a.name.localeCompare(b.name)))
+    setTeamsCursor(teamsPage.nextCursor)
     if (m) setPasswordResetEnabled(m.passwordResetEnabled)
   }
 
@@ -95,17 +119,76 @@ export default function PeoplePage() {
     if (me?.isTenantAdmin) void load()
   }, [me])
 
+  async function loadMoreUsers() {
+    if (!usersCursor) return
+    setLoadingMoreUsers(true)
+    try {
+      const page = await fetchUsersPage(usersCursor)
+      setUsers((prev) => [...prev, ...(page.items as User[]).slice().sort((a, b) => a.email.localeCompare(b.email))])
+      setUsersCursor(page.nextCursor)
+    } finally {
+      setLoadingMoreUsers(false)
+    }
+  }
+
+  async function loadMoreTeams() {
+    if (!teamsCursor) return
+    setLoadingMoreTeams(true)
+    try {
+      const page = await fetchTeamsPage(teamsCursor)
+      setTeams((prev) => [...prev, ...page.items.slice().sort((a, b) => a.name.localeCompare(b.name))])
+      setTeamsCursor(page.nextCursor)
+    } finally {
+      setLoadingMoreTeams(false)
+    }
+  }
+
+  // Team-member email resolution and the "add member" directory search
+  // both need the complete user set to be correct — a member whose user
+  // record hasn't been paginated in yet would otherwise show as a raw id
+  // instead of an email. Same data-completeness class as the search-box
+  // finding below, same fix: drain remaining pages in the background
+  // before trusting a view that depends on "every user".
+  //
+  // usersDrainRef guards against overlapping calls (bug found in QA, 2026-09-07):
+  // every keystroke in the search box re-triggers this, and `usersCursor`
+  // stays non-null until the *whole* drain finishes — so without a guard,
+  // fast typing started a fresh, independent drain per keystroke, each one
+  // re-fetching and re-appending the same page, corrupting `users` with
+  // duplicates. A second call while one is in flight now just awaits the
+  // first call's own promise instead of starting a redundant one.
+  const usersDrainRef = useRef<Promise<void> | null>(null)
+  function ensureAllUsersLoaded(): Promise<void> {
+    if (usersDrainRef.current) return usersDrainRef.current
+    if (!usersCursor) return Promise.resolve()
+    const drain = (async () => {
+      setDrainingUsers(true)
+      try {
+        let cursor: string | undefined = usersCursor
+        for (let pageCount = 0; cursor && pageCount < MAX_DRAIN_PAGES; pageCount++) {
+          const page = await fetchUsersPage(cursor)
+          const sorted = (page.items as User[]).slice().sort((a, b) => a.email.localeCompare(b.email))
+          setUsers((prev) => [...prev, ...sorted])
+          cursor = page.nextCursor ?? undefined
+        }
+        setUsersCursor(cursor ?? null)
+        setUsersTruncated(Boolean(cursor))
+      } finally {
+        setDrainingUsers(false)
+        usersDrainRef.current = null
+      }
+    })()
+    usersDrainRef.current = drain
+    return drain
+  }
+
   if (!me?.isTenantAdmin) {
     return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
   }
 
-  const sortedUsers = [...users].sort((a, b) => a.email.localeCompare(b.email))
   const filteredUsers = userSearch
-    ? sortedUsers.filter((u) => u.email.toLowerCase().includes(userSearch.toLowerCase()))
-    : sortedUsers
-  const visibleUsers = filteredUsers.slice(0, visibleUserCount)
-  const remainingUserCount = filteredUsers.length - visibleUsers.length
-  const sortedTeams = [...teams].sort((a, b) => a.name.localeCompare(b.name))
+    ? users.filter((u) => u.email.toLowerCase().includes(userSearch.toLowerCase()))
+    : users
 
   async function handleCreateUser(e: FormEvent) {
     e.preventDefault()
@@ -253,6 +336,7 @@ export default function PeoplePage() {
     setVisibleCount(MEMBER_BATCH_SIZE)
     setAddMemberOpen(false)
     setAddSearch('')
+    void ensureAllUsersLoaded()
   }
 
   async function handleAddMember(teamId: string, userId: string) {
@@ -322,7 +406,7 @@ export default function PeoplePage() {
           <p className="text-sm text-muted-foreground">No teams yet.</p>
         ) : (
           <ul className="space-y-3">
-            {sortedTeams.map((t) => {
+            {teams.map((t) => {
               const expanded = expandedTeamId === t.id
               const memberUsers = t.memberIds.map(
                 (id) => users.find((u) => u.id === id) ?? { id, email: id, avatarKey: null },
@@ -476,7 +560,15 @@ export default function PeoplePage() {
                           )}
                         </div>
                       ) : (
-                        <Button type="button" variant="outline" size="sm" onClick={() => setAddMemberOpen(true)}>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setAddMemberOpen(true)
+                            void ensureAllUsersLoaded()
+                          }}
+                        >
                           + Add member
                         </Button>
                       )}
@@ -487,6 +579,7 @@ export default function PeoplePage() {
             })}
           </ul>
         )}
+        <LoadMoreButton hasMore={!!teamsCursor} loading={loadingMoreTeams} onClick={() => void loadMoreTeams()} />
       </section>
 
       {/* ===== Users ===== */}
@@ -556,10 +649,25 @@ export default function PeoplePage() {
           placeholder="Search by email…"
           value={userSearch}
           onChange={(e) => {
-            setUserSearch(e.target.value)
-            setVisibleUserCount(USER_BATCH_SIZE)
+            const value = e.target.value
+            setUserSearch(value)
+            // Filtering only what's loaded so far would silently hide real
+            // matches sitting on an unfetched page — drain the rest before
+            // the filtered view is trusted.
+            if (value) void ensureAllUsersLoaded()
           }}
         />
+        {drainingUsers && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2Icon className="size-3 animate-spin" aria-hidden="true" />
+            Loading remaining users to search accurately…
+          </p>
+        )}
+        {usersTruncated && !drainingUsers && (
+          <p className="text-xs text-muted-foreground">
+            This tenant has more users than can be searched at once — some matches may not be shown.
+          </p>
+        )}
 
         {/* Actions column is a fixed 200px on every breakpoint (mobile's
             2-col template included) — not the auto/content-sized width a
@@ -588,7 +696,7 @@ export default function PeoplePage() {
             <p className="p-4 text-sm text-muted-foreground">No users match "{userSearch}".</p>
           ) : (
           <ul aria-label="Users" className="text-sm">
-            {visibleUsers.map((u) => (
+            {filteredUsers.map((u) => (
               <li
                 key={u.id}
                 className="group grid grid-cols-[1fr_200px] items-center gap-3 border-b px-4 py-2 last:border-b-0 sm:grid-cols-[1fr_140px_120px_200px]"
@@ -685,15 +793,8 @@ export default function PeoplePage() {
           </ul>
           )}
         </div>
-        {remainingUserCount > 0 && (
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setVisibleUserCount((c) => c + USER_BATCH_SIZE)}
-          >
-            Show {Math.min(remainingUserCount, USER_BATCH_SIZE)} more
-          </Button>
+        {!userSearch && (
+          <LoadMoreButton hasMore={!!usersCursor} loading={loadingMoreUsers} onClick={() => void loadMoreUsers()} />
         )}
       </section>
 

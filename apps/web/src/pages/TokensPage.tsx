@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { CopyIcon, CheckIcon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -36,14 +37,16 @@ export default function TokensPage() {
   const [revokeTarget, setRevokeTarget] = useState<Token | null>(null)
 
   async function load() {
-    const [{ data: t }, { data: p }, { data: r }] = await Promise.all([
+    const [{ data: t }, { data: p }, r] = await Promise.all([
       api.GET('/api/v1/tokens'),
       api.GET('/api/v1/projects'),
-      api.GET('/api/v1/roles'),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/roles', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
     ])
     if (t) setTokens(t as Token[])
     if (p) setProjects(p as ProjectOption[])
-    if (r) setRoles(r as RoleOption[])
+    setRoles(r.items as RoleOption[])
   }
 
   useEffect(() => {

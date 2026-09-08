@@ -59,20 +59,24 @@ function mockNewRunAPI(
         data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' },
         response: { ok: true },
       })
-    if (path === '/api/v1/projects/{projectKey}/cases') return Promise.resolve({ data: cases, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/folders') return Promise.resolve({ data: folders, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/cases')
+      return Promise.resolve({ data: { items: cases, nextCursor: null }, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/folders')
+      return Promise.resolve({ data: { items: folders, nextCursor: null }, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/suites')
+      return Promise.resolve({ data: { items: suites, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/plans') return Promise.resolve({ data: plans, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/releases') return Promise.resolve({ data: releases, response: { ok: true } })
-    if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: createdItems, response: { ok: true } })
+    if (path === '/api/v1/runs/{runKey}/items')
+      return Promise.resolve({ data: { items: createdItems, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/members')
       return Promise.resolve({ data: { users: [{ userId: 'u-ana', roleId: 'role-tester' }], teams: [] }, response: { ok: true } })
     if (path === '/api/v1/users')
       return Promise.resolve({
-        data: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' }],
+        data: { items: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' }], nextCursor: null },
         response: { ok: true },
       })
-    if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
@@ -306,7 +310,7 @@ describe('NewRunPage', () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
-      return Promise.resolve({ data: [], response: { ok: true } })
+      return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
     })
     renderNewRun()
     expect(await screen.findByText(/project not found/i)).toBeInTheDocument()

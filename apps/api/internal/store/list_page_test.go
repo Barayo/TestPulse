@@ -93,6 +93,37 @@ func TestRunListPageFewerRowsThanLimitReturnsAllWithNoCursor(t *testing.T) {
 	}
 }
 
+// TestRunListPageClampsNonPositiveLimit is a regression test: every *Page
+// store method fetches limit+1 rows and indexes runs[limit-1] to compute
+// nextCursor, which panics on runs[-1] when a caller passes limit <= 0
+// directly (bypassing the HTTP-layer parsePageParams/ClampLimit call).
+// Found via a real call site — Service.ListRunsPage(ctx, projectID, "", 0)
+// from a sample-data seed test — not a contrived case. ListPage now clamps
+// internally, matching the spec's "non-positive limit behaves as if
+// omitted" rule regardless of caller layer.
+func TestRunListPageClampsNonPositiveLimit(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	c := mustCase(t, s, p.ID, "case")
+	if _, err := s.Runs.Create(ctx, p.ID, "only run", []string{c.ID}); err != nil {
+		t.Fatalf("create run: %v", err)
+	}
+
+	for _, limit := range []int{0, -1, -100} {
+		items, cursor, err := s.Runs.ListPage(ctx, p.ID, "", limit)
+		if err != nil {
+			t.Fatalf("ListPage(limit=%d): %v", limit, err)
+		}
+		if len(items) != 1 {
+			t.Errorf("ListPage(limit=%d) = %d items, want 1", limit, len(items))
+		}
+		if cursor != "" {
+			t.Errorf("ListPage(limit=%d) nextCursor = %q, want empty", limit, cursor)
+		}
+	}
+}
+
 func TestRunListPageOrdersDeterministicallyOnCreatedAtTie(t *testing.T) {
 	// testutil.Pool resets the schema on every call, so this test must
 	// reuse a single pool throughout rather than calling testStore(t) and

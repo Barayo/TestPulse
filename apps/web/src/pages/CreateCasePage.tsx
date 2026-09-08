@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Button } from '@/components/ui/button'
@@ -49,13 +50,15 @@ export default function CreateCasePage() {
   useEffect(() => {
     if (!projectKey) return
     void (async () => {
-      const [{ data: p }, { data: f }, { data: fields }] = await Promise.all([
+      const [{ data: p }, f, { data: fields }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
         api.GET('/api/v1/projects/{projectKey}/custom-fields', { params: { path: { projectKey } } }),
       ])
       setProject(p)
-      setFolders(f ?? [])
+      setFolders(f.items)
       setCustomFieldDefs(fields ?? [])
     })()
   }, [projectKey])

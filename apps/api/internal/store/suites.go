@@ -245,6 +245,7 @@ func (r *SuiteRepo) List(ctx context.Context, projectID string) ([]domain.Suite,
 // suites rather than the whole project, with id ASC as the deterministic
 // tiebreak.
 func (r *SuiteRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Suite, string, error) {
+	limit = clampLimit(limit)
 	var cursorCreatedAt any
 	var cursorID any
 	if cursor != "" {

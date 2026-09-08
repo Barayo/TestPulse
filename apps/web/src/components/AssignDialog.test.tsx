@@ -16,15 +16,18 @@ function mockMembersAPI() {
       })
     if (path === '/api/v1/users')
       return Promise.resolve({
-        data: [
-          { id: 'u1', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
-          { id: 'u2', email: 'outsider@example.com', isTenantAdmin: false, createdAt: '' },
-        ],
+        data: {
+          items: [
+            { id: 'u1', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' },
+            { id: 'u2', email: 'outsider@example.com', isTenantAdmin: false, createdAt: '' },
+          ],
+          nextCursor: null,
+        },
         response: { ok: true },
       })
     if (path === '/api/v1/teams')
       return Promise.resolve({
-        data: [{ id: 't1', name: 'QA Core', memberIds: [], createdAt: '' }],
+        data: { items: [{ id: 't1', name: 'QA Core', memberIds: [], createdAt: '' }], nextCursor: null },
         response: { ok: true },
       })
     return Promise.resolve({ data: undefined, response: { ok: true } })

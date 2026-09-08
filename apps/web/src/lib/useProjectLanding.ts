@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { useDataRevision } from '@/lib/DataRevision'
 
 export type LandingFolderChild = { id: string; name: string; caseCount: number }
@@ -33,6 +34,11 @@ export type ProjectLanding = {
   runs: LandingRun[]
   totalRuns: number
   loaded: boolean
+  // fetchAllPages caps its drain (add-cursor-pagination task 12.1d) — the
+  // computed totals below undercount past that cap. True if any of the
+  // four underlying fetches hit it, so the panels can show "N+" instead
+  // of a silently wrong exact count.
+  truncated: boolean
 }
 
 // Raised from 4 (enrich-project-landing design.md) now that the summary
@@ -48,6 +54,7 @@ const empty: ProjectLanding = {
   runs: [],
   totalRuns: 0,
   loaded: false,
+  truncated: false,
 }
 
 // Top-level folders (children of root) with a recursive case count, top
@@ -89,23 +96,40 @@ export function useProjectLanding(
     void Promise.all(
       isMember
         ? [
-            api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } }, signal }),
-            api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } }, signal }),
-            api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } }, signal }),
-            api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } }, signal }),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
           ]
         : [
-            api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } }, signal }),
-            api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey } }, signal }),
-            api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } }, signal }),
-            api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } }, signal }),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
+            fetchAllPages((cursor) =>
+              api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey }, query: { cursor, limit: 200 } }, signal }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+            ),
           ],
     )
-      .then(async ([foldersRes, casesRes, suitesRes, runsRes]) => {
-        const folders = foldersRes.data ?? []
-        const cases = casesRes.data ?? []
-        const suites = suitesRes.data ?? []
-        const runs = runsRes.data ?? []
+      .then(async ([foldersPage, casesPage, suitesPage, runsPage]) => {
+        const folders = foldersPage.items
+        const cases = casesPage.items
+        const suites = suitesPage.items
+        const runs = runsPage.items
+        const truncated = foldersPage.truncated || casesPage.truncated || suitesPage.truncated || runsPage.truncated
 
         const root = folders.find((f) => !f.parentFolderId)
         const topLevel = folders.filter((f) => f.parentFolderId === root?.id)
@@ -175,6 +199,7 @@ export function useProjectLanding(
             runs: landingRuns,
             totalRuns: runs.length,
             loaded: true,
+            truncated,
           })
         }
       })

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 
 export type AssigneePick = { kind: 'user' | 'team'; id: string; label: string }
 
@@ -24,6 +25,12 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<Option[]>([])
   const [teams, setTeams] = useState<Option[]>([])
+  // fetchAllPages caps its drain (security review, add-cursor-pagination
+  // task 12.1d) — a tenant with more members than that ceiling would
+  // otherwise silently miss assignees below the fold. `query` already lets
+  // a user narrow past a truncated set, so this only needs a visible hint,
+  // not a blocking error.
+  const [truncated, setTruncated] = useState(false)
 
   useEffect(() => {
     if (!open) {
@@ -33,22 +40,27 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
     let cancelled = false
     void Promise.all([
       api.GET('/api/v1/projects/{projectKey}/members', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/users'),
-      api.GET('/api/v1/teams'),
-    ]).then(([{ data: membership }, { data: allUsers }, { data: allTeams }]) => {
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/users', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/teams', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
+    ]).then(([{ data: membership }, allUsers, allTeams]) => {
       if (cancelled) return
       const memberUserIds = new Set((membership?.users ?? []).map((m) => m.userId))
       const memberTeamIds = new Set((membership?.teams ?? []).map((t) => t.teamId))
       setUsers(
-        (allUsers ?? [])
+        allUsers.items
           .filter((u) => memberUserIds.has(u.id))
           .map((u) => ({ id: u.id, label: u.email })),
       )
       setTeams(
-        (allTeams ?? [])
+        allTeams.items
           .filter((t) => memberTeamIds.has(t.id))
           .map((t) => ({ id: t.id, label: t.name })),
       )
+      setTruncated(allUsers.truncated || allTeams.truncated)
     })
     return () => {
       cancelled = true
@@ -79,6 +91,11 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
+        {truncated && !query && (
+          <p className="px-2 text-xs text-muted-foreground">
+            Showing a limited set of members — search by name to find someone not listed.
+          </p>
+        )}
         {filteredUsers.length === 0 && filteredTeams.length === 0 ? (
           <p className="p-2 text-sm text-muted-foreground">No matching project members.</p>
         ) : (

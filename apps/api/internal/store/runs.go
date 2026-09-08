@@ -440,6 +440,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 // extra row is fetched over limit to detect whether a next page exists
 // without a second round trip.
 func (r *RunRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Run, string, error) {
+	limit = clampLimit(limit)
 	var cursorCreatedAt any
 	var cursorID any
 	if cursor != "" {
@@ -600,6 +601,7 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 // order, and paginating must not silently reverse it. One extra row is
 // fetched over limit to detect whether a next page exists.
 func (r *RunRepo) ItemsPage(ctx context.Context, runID, assigneeID, cursor string, limit int) ([]domain.RunItem, string, error) {
+	limit = clampLimit(limit)
 	var cursorCreatedAt any
 	var cursorID any
 	if cursor != "" {

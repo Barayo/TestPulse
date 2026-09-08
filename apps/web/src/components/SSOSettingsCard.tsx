@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -185,12 +186,18 @@ export function SSOSettingsCard({
 // the value is added to that Team, additive only.
 function OIDCTeamMappings() {
   const [teams, setTeams] = useState<Team[]>([])
+  const [teamsTruncated, setTeamsTruncated] = useState(false)
   const [mappings, setMappings] = useState<OIDCTeamMapping[]>([])
   const [claimValue, setClaimValue] = useState('')
   const [teamId, setTeamId] = useState('')
 
   useEffect(() => {
-    void api.GET('/api/v1/teams').then(({ data }) => data && setTeams(data))
+    void fetchAllPages((cursor) =>
+      api.GET('/api/v1/teams', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    ).then(({ items, truncated }) => {
+      setTeams(items)
+      setTeamsTruncated(truncated)
+    })
     void api.GET('/api/v1/sso/team-mappings').then(({ data }) => data && setMappings(data))
   }, [])
 
@@ -256,6 +263,9 @@ function OIDCTeamMappings() {
               </option>
             ))}
           </select>
+          {teamsTruncated && (
+            <p className="text-xs text-muted-foreground">Showing a limited set of teams.</p>
+          )}
         </div>
         <Button variant="outline" onClick={() => void addMapping()} disabled={!claimValue || !teamId}>
           Add mapping

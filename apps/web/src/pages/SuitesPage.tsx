@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { StatusPill, ProgressBar, healthColor } from '@/components/HealthBar'
@@ -109,9 +110,20 @@ export default function SuitesPage() {
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
   const [suites, setSuites] = useState<Suite[]>([])
+  const [suitesCursor, setSuitesCursor] = useState<string | null>(null)
+  const [loadingMoreSuites, setLoadingMoreSuites] = useState(false)
   const [creating, setCreating] = useState(false)
   const [suiteName, setSuiteName] = useState('')
   const [createdRun, setCreatedRun] = useState<{ key: string; name: string }>()
+
+  const fetchSuitesPage = useCallback(
+    (cursor?: string) =>
+      (access === 'member'
+        ? api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey: projectKey! }, query: { cursor } } })
+        : api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey: projectKey! }, query: { cursor } } })
+      ).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    [projectKey, access],
+  )
 
   const load = useCallback(async () => {
     // Waits for the session check and confirmed project read access before
@@ -121,29 +133,42 @@ export default function SuitesPage() {
     if (!projectKey || access === 'loading') return
     setNotFound(false)
     try {
-      const [{ data: p }, { data: s }] = access === 'member'
+      const [{ data: p }, suitesPage] = access === 'member'
         ? await Promise.all([
             api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-            api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+            fetchSuitesPage(),
           ])
         : await Promise.all([
             api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
-            api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+            fetchSuitesPage(),
           ])
       if (!p) {
         setNotFound(true)
         return
       }
       setProject(p)
-      setSuites(s ?? [])
+      setSuites(suitesPage.items)
+      setSuitesCursor(suitesPage.nextCursor)
     } catch {
       setSuites([])
     }
-  }, [projectKey, access])
+  }, [projectKey, access, fetchSuitesPage])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  async function loadMoreSuites() {
+    if (!suitesCursor) return
+    setLoadingMoreSuites(true)
+    try {
+      const page = await fetchSuitesPage(suitesCursor)
+      setSuites((prev) => [...prev, ...page.items])
+      setSuitesCursor(page.nextCursor)
+    } finally {
+      setLoadingMoreSuites(false)
+    }
+  }
 
   async function handleCreateSuite() {
     if (!projectKey || !suiteName.trim()) return
@@ -232,6 +257,7 @@ export default function SuitesPage() {
           ))}
         </ul>
       )}
+      <LoadMoreButton hasMore={!!suitesCursor} loading={loadingMoreSuites} onClick={() => void loadMoreSuites()} />
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-md">

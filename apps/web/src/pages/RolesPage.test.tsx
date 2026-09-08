@@ -60,7 +60,7 @@ function mockAsTenantAdmin(isTenantAdmin: boolean) {
     if (path === '/api/v1/users/me') {
       return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin }, response: { ok: true } })
     }
-    if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+    if (path === '/api/v1/roles') return Promise.resolve({ data: { items: roles, nextCursor: null }, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -187,7 +187,7 @@ describe('RolesPage', () => {
     expect(screen.queryByLabelText(/role name/i)).not.toBeInTheDocument()
   })
 
-  it('does not show a Rank field — rank is not a user-facing concept, roles are ordered alphabetically instead', async () => {
+  it('does not show a Rank field — rank is not a user-facing concept', async () => {
     mockAsTenantAdmin(true)
     const user = userEvent.setup()
     renderPage()
@@ -197,13 +197,17 @@ describe('RolesPage', () => {
     expect(screen.queryByLabelText(/rank/i)).not.toBeInTheDocument()
   })
 
-  it('lists roles alphabetically by name rather than by rank', async () => {
+  // Trusts the server's own order (rank) rather than re-sorting client-side
+  // (add-cursor-pagination task 12.7) — a client resort would fight
+  // cursor-based "Load more" by reshuffling rows already on screen as later
+  // pages arrive.
+  it('lists roles in the order the server returns them, not re-sorted client-side', async () => {
     mockAsTenantAdmin(true)
     renderPage()
     await waitForLoaded()
 
     const deleteButtons = screen.getAllByRole('button', { name: /^delete /i })
-    expect(deleteButtons.map((b) => b.getAttribute('aria-label'))).toEqual(['Delete Contributor', 'Delete Tester'])
+    expect(deleteButtons.map((b) => b.getAttribute('aria-label'))).toEqual(['Delete Tester', 'Delete Contributor'])
   })
 
   it('toggles a permission flag on an existing role via PATCH', async () => {
@@ -302,7 +306,7 @@ describe('RolesPage', () => {
         if (path === '/api/v1/users/me') {
           return Promise.resolve({ data: { id: 'admin1', email: 'admin@example.com', isTenantAdmin: true }, response: { ok: true } })
         }
-        if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+        if (path === '/api/v1/roles') return Promise.resolve({ data: { items: roles, nextCursor: null }, response: { ok: true } })
         if (path === '/api/v1/roles/{roleId}/deletion-preview') return previewPromise as Promise<never>
         return Promise.resolve({ data: [], response: { ok: true } })
       })

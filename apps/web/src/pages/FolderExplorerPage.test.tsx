@@ -85,12 +85,18 @@ function mockExplorerAPI(overrides: Partial<Record<string, unknown>> = {}) {
     if (path === projectPath)
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
     if (path === foldersPath)
-      return Promise.resolve({ data: overrides.folders ?? [root, transferencias, nacionales], response: { ok: true } })
+      return Promise.resolve({
+        data: { items: overrides.folders ?? [root, transferencias, nacionales], nextCursor: null },
+        response: { ok: true },
+      })
     if (path === casesPath)
-      return Promise.resolve({ data: overrides.cases ?? [limitCase], response: { ok: true } })
+      return Promise.resolve({ data: { items: overrides.cases ?? [limitCase], nextCursor: null }, response: { ok: true } })
     if (path === suitesPath)
       return Promise.resolve({
-        data: overrides.suites ?? [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
+        data: {
+          items: overrides.suites ?? [{ id: 's1', projectId: 'p1', name: 'Smoke', caseIds: ['c1'], createdAt: '' }],
+          nextCursor: null,
+        },
         response: { ok: true },
       })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anon)
@@ -176,6 +182,12 @@ describe('FolderExplorerPage', () => {
       if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      if (
+        path === '/api/v1/projects/{projectKey}/folders' ||
+        path === '/api/v1/projects/{projectKey}/cases' ||
+        path === '/api/v1/projects/{projectKey}/suites'
+      )
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     render(
@@ -1137,10 +1149,11 @@ describe('FolderExplorerPage', () => {
         if (path === '/api/v1/public/projects/{projectKey}')
           return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
         if (path === '/api/v1/public/projects/{projectKey}/folders')
-          return Promise.resolve({ data: [root, transferencias, nacionales], response: { ok: true } })
+          return Promise.resolve({ data: { items: [root, transferencias, nacionales], nextCursor: null }, response: { ok: true } })
         if (path === '/api/v1/public/projects/{projectKey}/cases')
-          return Promise.resolve({ data: [limitCase], response: { ok: true } })
-        if (path === '/api/v1/public/projects/{projectKey}/suites') return Promise.resolve({ data: [], response: { ok: true } })
+          return Promise.resolve({ data: { items: [limitCase], nextCursor: null }, response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/suites')
+          return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
         if (path === '/api/v1/public/projects/{projectKey}/flaky-cases') return Promise.resolve({ data: [], response: { ok: true } })
         return Promise.resolve({ data: undefined, response: { ok: false } })
       })

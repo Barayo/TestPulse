@@ -28,7 +28,7 @@ async function createProjectWithCase(page: Page, label: string): Promise<{ proje
   await expect(page.getByText('Login works')).toBeVisible()
 
   const cases = await (await page.request.get(`/api/v1/projects/${projectId}/cases`)).json()
-  return { projectId, caseKey: cases[0].key }
+  return { projectId, caseKey: cases.items[0].key }
 }
 
 // Creates a fresh non-admin user (as the admin `page`) and returns a new
@@ -53,7 +53,7 @@ async function loginAsNewUser(adminPage: Page, browser: Browser, label: string):
 // by roleId, not a name string, so look the seeded default up by name first,
 // mirroring apps/api/internal/server/project_rbac_api_test.go's roleIDByName.
 async function assignRole(adminPage: Page, projectId: string, userId: string, roleName: string) {
-  const roles: { id: string; name: string }[] = await (await adminPage.request.get('/api/v1/roles')).json()
+  const { items: roles }: { items: { id: string; name: string }[] } = await (await adminPage.request.get('/api/v1/roles')).json()
   const roleId = roles.find((r) => r.name === roleName)?.id
   if (!roleId) throw new Error(`no seeded role named "${roleName}" found in ${JSON.stringify(roles)}`)
 

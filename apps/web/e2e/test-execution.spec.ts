@@ -65,7 +65,7 @@ async function createRun(page: Page, name: string, caseTitles: string[]) {
 async function addProjectMember(page: Page, projectId: string, label: string): Promise<{ userId: string; email: string }> {
   const email = `${unique(label).replace(/\s+/g, '-').toLowerCase()}@example.com`
   const created = await (await page.request.post('/api/v1/users', { data: { email, password: 'correcthorse' } })).json()
-  const roles: { id: string; name: string }[] = await (await page.request.get('/api/v1/roles')).json()
+  const { items: roles }: { items: { id: string; name: string }[] } = await (await page.request.get('/api/v1/roles')).json()
   const roleId = roles.find((r) => r.name === 'Tester')?.id
   if (!roleId) throw new Error(`no seeded role named "Tester" found in ${JSON.stringify(roles)}`)
   const res = await page.request.put(`/api/v1/projects/${projectId}/members/${created.id}`, { data: { roleId } })

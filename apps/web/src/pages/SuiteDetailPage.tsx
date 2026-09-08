@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Button } from '@/components/ui/button'
@@ -73,36 +74,48 @@ export default function SuiteDetailPage() {
     // instead of hitting 403s.
     if (!projectKey || !suiteKey || access === 'loading') return
     setNotFound(false)
-    const [{ data: p }, { data: c }, { data: f }, { data: s }, { data: t }, { data: to }, { data: r }] = access === 'member'
+    const [{ data: p }, c, f, { data: s }, { data: t }, { data: to }, r] = access === 'member'
       ? await Promise.all([
           api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
           api.GET('/api/v1/suites/{suiteKey}', { params: { path: { suiteKey } } }),
           api.GET('/api/v1/suites/{suiteKey}/trend', { params: { path: { suiteKey } } }),
           api.GET('/api/v1/suites/{suiteKey}/trend', { params: { path: { suiteKey }, query: { includeOpen: true } } }),
-          api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/projects/{projectKey}/runs', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
         ])
       : await Promise.all([
           api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
           api.GET('/api/v1/public/suites/{suiteKey}', { params: { path: { suiteKey } } }),
           api.GET('/api/v1/public/suites/{suiteKey}/trend', { params: { path: { suiteKey } } }),
           api.GET('/api/v1/public/suites/{suiteKey}/trend', { params: { path: { suiteKey }, query: { includeOpen: true } } }),
-          api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey } } }),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/public/projects/{projectKey}/runs', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
         ])
     if (!p || !s) {
       setNotFound(true)
       return
     }
     setProject(p)
-    setCases(c ?? [])
-    setFolders(f ?? [])
+    setCases(c.items)
+    setFolders(f.items)
     setSuite(s)
     setTrendPoints(t?.points ?? [])
     setOpenTrendPoints(to?.points ?? [])
-    setSuiteRuns((r ?? []).filter((run) => run.suiteKey === s.key))
+    setSuiteRuns(r.items.filter((run) => run.suiteKey === s.key))
   }, [projectKey, suiteKey, access])
 
   useEffect(() => {

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { FolderInputIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { Badge } from '@/components/ui/badge'
@@ -91,13 +92,19 @@ export default function CaseDetailPage() {
     if (!projectKey || !caseKey || access === 'loading') return
     setNotFound(false)
     if (access === 'member') {
-      const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: users }, { data: execs }, { data: fields }] = await Promise.all([
+      const [{ data: p }, f, { data: c }, { data: v }, s, users, { data: execs }, { data: fields }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
         api.GET('/api/v1/cases/{caseKey}', { params: { path: { caseKey } } }),
         api.GET('/api/v1/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
-        api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
-        api.GET('/api/v1/users'),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
+        fetchAllPages((cursor) =>
+          api.GET('/api/v1/users', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+        ),
         api.GET('/api/v1/cases/{caseKey}/executions', {
           params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
         }),
@@ -108,15 +115,15 @@ export default function CaseDetailPage() {
         return
       }
       setProject(p)
-      setFolders(f ?? [])
+      setFolders(f.items)
       setTestCase(c)
       setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
-      setSuites(s ?? [])
+      setSuites(s.items)
       setResultsData(toResultsData(execs ?? []))
       setCustomFieldDefs(fields ?? [])
       setUserIdentities(
         Object.fromEntries(
-          (users ?? []).map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
+          users.items.map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
         ),
       )
       return
@@ -124,12 +131,16 @@ export default function CaseDetailPage() {
     // Anonymous: GET /api/v1/users has no public equivalent and never
     // gets one (design.md D1/D10) — version-history rows simply show no
     // author name, since userIdentities stays empty here.
-    const [{ data: p }, { data: f }, { data: c }, { data: v }, { data: s }, { data: execs }, { data: fields }] = await Promise.all([
+    const [{ data: p }, f, { data: c }, { data: v }, s, { data: execs }, { data: fields }] = await Promise.all([
       api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
-      api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
       api.GET('/api/v1/public/cases/{caseKey}', { params: { path: { caseKey } } }),
       api.GET('/api/v1/public/cases/{caseKey}/versions', { params: { path: { caseKey } } }),
-      api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
       api.GET('/api/v1/public/cases/{caseKey}/executions', {
         params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
       }),
@@ -140,10 +151,10 @@ export default function CaseDetailPage() {
       return
     }
     setProject(p)
-    setFolders(f ?? [])
+    setFolders(f.items)
     setTestCase(c)
     setVersions((v ?? []).slice().sort((a, b) => b.version - a.version))
-    setSuites(s ?? [])
+    setSuites(s.items)
     setResultsData(toResultsData(execs ?? []))
     setCustomFieldDefs(fields ?? [])
     setUserIdentities({})

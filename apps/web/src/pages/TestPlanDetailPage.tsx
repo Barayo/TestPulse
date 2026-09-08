@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
@@ -45,14 +46,16 @@ export default function TestPlanDetailPage() {
 
   const load = useCallback(async () => {
     if (!projectKey || !planKey) return
-    const [{ data: p }, { data: pl }, { data: s }] = await Promise.all([
+    const [{ data: p }, { data: pl }, s] = await Promise.all([
       api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
       api.GET('/api/v1/plans/{planKey}', { params: { path: { planKey } } }),
-      api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+      fetchAllPages((cursor) =>
+        api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+      ),
     ])
     setProject(p)
     setPlan(pl)
-    setSuites(s ?? [])
+    setSuites(s.items)
     if (pl) {
       const { data: rel } = await api.GET('/api/v1/releases/{releaseKey}', { params: { path: { releaseKey: pl.releaseKey } } })
       setRelease(rel)

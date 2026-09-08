@@ -88,7 +88,11 @@ function mockItemAPI(
     const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
     const executionsPath = anonymous ? '/api/v1/public/cases/{caseKey}/executions' : '/api/v1/cases/{caseKey}/executions'
     if (path === runPath) return Promise.resolve({ data: runOverride ?? run, response: { ok: true } })
-    if (path === itemsPath) return Promise.resolve({ data: itemsOverride ?? [itemOverride ?? item], response: { ok: true } })
+    if (path === itemsPath)
+      return Promise.resolve({
+        data: { items: itemsOverride ?? [itemOverride ?? item], nextCursor: null },
+        response: { ok: true },
+      })
     if (path === resultsPath) return Promise.resolve({ data: results, response: { ok: true } })
     if (path === executionsPath) return Promise.resolve({ data: executions, response: { ok: true } })
     if (path === projectPath)
@@ -342,7 +346,8 @@ describe('RunItemDetailPage', () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
-      if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: [item], response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items')
+        return Promise.resolve({ data: { items: [item], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/items/{itemId}/results')
         return Promise.resolve({
           data: [
@@ -366,7 +371,10 @@ describe('RunItemDetailPage', () => {
         })
       if (path === '/api/v1/users')
         return Promise.resolve({
-          data: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, avatarKey: 'ada-lovelace', createdAt: '' }],
+          data: {
+            items: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, avatarKey: 'ada-lovelace', createdAt: '' }],
+            nextCursor: null,
+          },
           response: { ok: true },
         })
       return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -463,7 +471,8 @@ describe('RunItemDetailPage', () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
-      if (path === '/api/v1/runs/{runKey}/items') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/runs/{runKey}/items')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: true } })
     })
     renderPage()
@@ -678,7 +687,7 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
       if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
       if (path === '/api/v1/runs/{runKey}/items')
-        return Promise.resolve({ data: [itemOverride ?? item], response: { ok: true } })
+        return Promise.resolve({ data: { items: [itemOverride ?? item], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/items/{itemId}/results') return Promise.resolve({ data: [], response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}')
         return Promise.resolve({
@@ -689,10 +698,10 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
         return Promise.resolve({ data: { users: [{ userId: 'u-ana', roleId: 'role-tester' }], teams: [] }, response: { ok: true } })
       if (path === '/api/v1/users')
         return Promise.resolve({
-          data: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' }],
+          data: { items: [{ id: 'u-ana', email: 'ana@example.com', isTenantAdmin: false, createdAt: '' }], nextCursor: null },
           response: { ok: true },
         })
-      if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/projects/{projectKey}/permissions')
         return Promise.resolve({ data: fullPermissions, response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -1108,7 +1117,8 @@ describe('anonymous / dual-mode', () => {
   it('shows a "Log in" link alongside "Go to run" when an item is not found anonymously', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
-      if (path === '/api/v1/public/runs/{runKey}/items') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/public/runs/{runKey}/items')
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: true } })
     })
     renderPage()
@@ -1132,7 +1142,8 @@ describe('signed-in non-member (design.md D11)', () => {
       if (path === '/api/v1/runs/{runKey}' || path === '/api/v1/runs/{runKey}/items')
         return Promise.resolve({ data: undefined, response: { ok: false } })
       if (path === '/api/v1/public/runs/{runKey}') return Promise.resolve({ data: run, response: { ok: true } })
-      if (path === '/api/v1/public/runs/{runKey}/items') return Promise.resolve({ data: [item], response: { ok: true } })
+      if (path === '/api/v1/public/runs/{runKey}/items')
+        return Promise.resolve({ data: { items: [item], nextCursor: null }, response: { ok: true } })
       if (path === '/api/v1/public/items/{itemId}/results') return Promise.resolve({ data: [], response: { ok: true } })
       if (path === '/api/v1/public/projects/{projectKey}')
         return Promise.resolve({

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import PeoplePage from './PeoplePage'
@@ -35,8 +35,8 @@ function mockAsTenantAdmin(isTenantAdmin: boolean) {
     if (path === '/api/v1/users/me') {
       return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin }, response: { ok: true } })
     }
-    if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
-    if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
+    if (path === '/api/v1/users') return Promise.resolve({ data: { items: users, nextCursor: null }, response: { ok: true } })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: { items: teams, nextCursor: null }, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -49,8 +49,8 @@ function mockAsTenantAdminWithMeta(passwordResetEnabled: boolean) {
     if (path === '/api/v1/users/me') {
       return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
     }
-    if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
-    if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
+    if (path === '/api/v1/users') return Promise.resolve({ data: { items: users, nextCursor: null }, response: { ok: true } })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: { items: teams, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/meta') return Promise.resolve({ data: { passwordResetEnabled }, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
@@ -121,10 +121,14 @@ describe('PeoplePage', () => {
         }
         if (path === '/api/v1/users') {
           return Promise.resolve({
-            data: [{ id: 'u2', email: 'other@example.com', displayName: 'Other Person', isTenantAdmin: false, deactivatedAt: null, createdAt: '' }],
+            data: {
+              items: [{ id: 'u2', email: 'other@example.com', displayName: 'Other Person', isTenantAdmin: false, deactivatedAt: null, createdAt: '' }],
+              nextCursor: null,
+            },
             response: { ok: true },
           })
         }
+        if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
         return Promise.resolve({ data: [], response: { ok: true } })
       })
       renderPage()
@@ -159,71 +163,120 @@ describe('PeoplePage', () => {
       expect(screen.queryByText('member1@example.com')).not.toBeInTheDocument()
     })
 
-    it('shows only a first batch of users, with a button to reveal the rest', async () => {
-      const many = Array.from({ length: 13 }, (_, i) => ({
+    it('loads a first page of users from the server, with a button to load more', async () => {
+      const page1 = Array.from({ length: 3 }, (_, i) => ({
         id: `x${i}`,
         email: `x${String(i).padStart(2, '0')}@example.com`,
         isTenantAdmin: false,
         deactivatedAt: null,
         createdAt: '',
       }))
-      mockGET.mockImplementation((path: string) => {
+      const page2 = [
+        { id: 'x99', email: 'x99@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
+      ]
+      mockGET.mockImplementation((path: string, opts?: { params?: { query?: { cursor?: string } } }) => {
         if (path === '/api/v1/users/me') {
           return Promise.resolve({ data: { id: 'x00', email: 'x00@example.com', isTenantAdmin: true }, response: { ok: true } })
         }
-        if (path === '/api/v1/users') return Promise.resolve({ data: many, response: { ok: true } })
-        if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+        if (path === '/api/v1/users') {
+          const cursor = opts?.params?.query?.cursor
+          return Promise.resolve({
+            data: cursor ? { items: page2, nextCursor: null } : { items: page1, nextCursor: 'c1' },
+            response: { ok: true },
+          })
+        }
+        if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
         return Promise.resolve({ data: [], response: { ok: true } })
       })
       const user = userEvent.setup()
       renderPage()
       await screen.findByText('x00@example.com')
 
-      expect(screen.queryByText('x12@example.com')).not.toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: /show.*more/i }))
-      expect(screen.getByText('x12@example.com')).toBeInTheDocument()
+      expect(screen.queryByText('x99@example.com')).not.toBeInTheDocument()
+      await user.click(screen.getByRole('button', { name: /load more/i }))
+      expect(screen.getByText('x99@example.com')).toBeInTheDocument()
     })
 
-    it('resets to the first batch when the search query changes', async () => {
-      // 15 "aaa" matches + 10 "bbb" matches. After revealing a second batch
-      // (visible count 20), searching "aaa" narrows to 15 results — if the
-      // reveal count didn't reset, all 15 would already fit under 20 and no
-      // "show more" button would appear, silently passing either way. Only
-      // resetting back to a 10-item batch makes the button reappear.
-      const many = [
-        ...Array.from({ length: 15 }, (_, i) => ({
-          id: `a${i}`,
-          email: `aaa-${String(i).padStart(2, '0')}@example.com`,
-          isTenantAdmin: false,
-          deactivatedAt: null,
-          createdAt: '',
-        })),
-        ...Array.from({ length: 10 }, (_, i) => ({
-          id: `b${i}`,
-          email: `bbb-${String(i).padStart(2, '0')}@example.com`,
-          isTenantAdmin: false,
-          deactivatedAt: null,
-          createdAt: '',
-        })),
+    it('drains all remaining pages of users when a search query is typed, so search matches across pages', async () => {
+      const page1 = [
+        { id: 'a0', email: 'aaa-00@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
       ]
-      mockGET.mockImplementation((path: string) => {
+      const page2 = [
+        { id: 'b0', email: 'bbb-00@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
+      ]
+      mockGET.mockImplementation((path: string, opts?: { params?: { query?: { cursor?: string } } }) => {
         if (path === '/api/v1/users/me') {
           return Promise.resolve({ data: { id: 'a0', email: 'aaa-00@example.com', isTenantAdmin: true }, response: { ok: true } })
         }
-        if (path === '/api/v1/users') return Promise.resolve({ data: many, response: { ok: true } })
-        if (path === '/api/v1/teams') return Promise.resolve({ data: [], response: { ok: true } })
+        if (path === '/api/v1/users') {
+          const cursor = opts?.params?.query?.cursor
+          return Promise.resolve({
+            data: cursor ? { items: page2, nextCursor: null } : { items: page1, nextCursor: 'c1' },
+            response: { ok: true },
+          })
+        }
+        if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
         return Promise.resolve({ data: [], response: { ok: true } })
       })
       const user = userEvent.setup()
       renderPage()
       await screen.findByText('aaa-00@example.com')
+      expect(screen.queryByText('bbb-00@example.com')).not.toBeInTheDocument()
 
-      await user.click(screen.getByRole('button', { name: /show.*more/i }))
-      expect(screen.getByText('bbb-04@example.com')).toBeInTheDocument()
+      await user.type(screen.getByPlaceholderText(/search by email/i), 'bbb')
+      expect(await screen.findByText('bbb-00@example.com')).toBeInTheDocument()
+    })
 
-      await user.type(screen.getByPlaceholderText(/search by email/i), 'aaa')
-      expect(screen.queryByText('aaa-14@example.com')).not.toBeInTheDocument()
-      expect(screen.getByRole('button', { name: /show.*more/i })).toBeInTheDocument()
+    // Regression (Paco's QA pass on add-cursor-pagination, 2026-09-07): fast
+    // typing fires the search box's onChange — and therefore
+    // ensureAllUsersLoaded — once per keystroke. Each call independently
+    // re-checked `usersCursor` (still non-null until the drain fully
+    // finishes) and started its own fetch of the same page, so 3 keystrokes
+    // before the first fetch resolved produced 3x duplicate rows and an
+    // inflated user count. The fix must make a second call while one is
+    // already in flight a no-op that shares the first call's result,
+    // regardless of how many times it's re-triggered before that settles.
+    it('does not duplicate users when the search box triggers overlapping drain calls before the first completes', async () => {
+      const page1 = [
+        { id: 'a0', email: 'aaa-00@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
+      ]
+      const page2 = [
+        { id: 'b0', email: 'bbb-00@example.com', isTenantAdmin: false, deactivatedAt: null, createdAt: '' },
+      ]
+      let resolvePage2!: (v: { data: { items: typeof page2; nextCursor: null }; response: { ok: true } }) => void
+      const page2Promise = new Promise<{ data: { items: typeof page2; nextCursor: null }; response: { ok: true } }>((resolve) => {
+        resolvePage2 = resolve
+      })
+      let page2FetchCount = 0
+      mockGET.mockImplementation((path: string, opts?: { params?: { query?: { cursor?: string } } }) => {
+        if (path === '/api/v1/users/me') {
+          return Promise.resolve({ data: { id: 'a0', email: 'aaa-00@example.com', isTenantAdmin: true }, response: { ok: true } })
+        }
+        if (path === '/api/v1/users') {
+          const cursor = opts?.params?.query?.cursor
+          if (!cursor) return Promise.resolve({ data: { items: page1, nextCursor: 'c1' }, response: { ok: true } })
+          page2FetchCount++
+          return page2Promise as Promise<never>
+        }
+        if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
+        return Promise.resolve({ data: [], response: { ok: true } })
+      })
+      renderPage()
+      await screen.findByText('aaa-00@example.com')
+
+      const input = screen.getByPlaceholderText(/search by email/i)
+      // Synchronous fireEvent.change calls, not userEvent.type — this fires
+      // all three onChange handlers before any promise the first one
+      // started has a chance to resolve, deterministically reproducing
+      // "multiple keystrokes land while the drain is still in flight."
+      fireEvent.change(input, { target: { value: 'b' } })
+      fireEvent.change(input, { target: { value: 'bb' } })
+      fireEvent.change(input, { target: { value: 'bbb' } })
+
+      resolvePage2({ data: { items: page2, nextCursor: null }, response: { ok: true } })
+
+      expect(await screen.findAllByText('bbb-00@example.com')).toHaveLength(1)
+      expect(page2FetchCount).toBe(1)
     })
 
     it('lists users alphabetically for a Tenant Admin, with role and status', async () => {
@@ -302,13 +355,17 @@ describe('PeoplePage', () => {
           }
           if (path === '/api/v1/users') {
             return Promise.resolve({
-              data: [
-                { id: 'u1', email: 'me@example.com', isTenantAdmin: true, deactivatedAt: null, createdAt: '' },
-                { id: 'u2', email: 'other@example.com', isTenantAdmin: false, deactivatedAt: '2026-01-01T00:00:00Z', createdAt: '' },
-              ],
+              data: {
+                items: [
+                  { id: 'u1', email: 'me@example.com', isTenantAdmin: true, deactivatedAt: null, createdAt: '' },
+                  { id: 'u2', email: 'other@example.com', isTenantAdmin: false, deactivatedAt: '2026-01-01T00:00:00Z', createdAt: '' },
+                ],
+                nextCursor: null,
+              },
               response: { ok: true },
             })
           }
+          if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
           return Promise.resolve({ data: [], response: { ok: true } })
         })
         renderPage()
@@ -538,13 +595,17 @@ describe('PeoplePage', () => {
           }
           if (path === '/api/v1/users') {
             return Promise.resolve({
-              data: [
-                { id: 'u1', email: 'me@example.com', isTenantAdmin: true, deactivatedAt: null, createdAt: '' },
-                { id: 'u2', email: 'other@example.com', isTenantAdmin: false, deactivatedAt: '2026-01-01T00:00:00Z', createdAt: '' },
-              ],
+              data: {
+                items: [
+                  { id: 'u1', email: 'me@example.com', isTenantAdmin: true, deactivatedAt: null, createdAt: '' },
+                  { id: 'u2', email: 'other@example.com', isTenantAdmin: false, deactivatedAt: '2026-01-01T00:00:00Z', createdAt: '' },
+                ],
+                nextCursor: null,
+              },
               response: { ok: true },
             })
           }
+          if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
           return Promise.resolve({ data: [], response: { ok: true } })
         })
         mockPATCH.mockResolvedValue({ response: { ok: true } })
@@ -575,7 +636,8 @@ describe('PeoplePage', () => {
           if (path === '/api/v1/users/me') {
             return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
           }
-          if (path === '/api/v1/users') return Promise.resolve({ data: deactivatedUsers, response: { ok: true } })
+          if (path === '/api/v1/users') return Promise.resolve({ data: { items: deactivatedUsers, nextCursor: null }, response: { ok: true } })
+          if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
           if (path === '/api/v1/users/{userId}/deletion-preview') {
             return Promise.resolve({ data: { teamCount: 2, projectCount: 1, tokenCount: 3 }, response: { ok: true } })
           }
@@ -603,7 +665,8 @@ describe('PeoplePage', () => {
           if (path === '/api/v1/users/me') {
             return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
           }
-          if (path === '/api/v1/users') return Promise.resolve({ data: deactivatedUsers, response: { ok: true } })
+          if (path === '/api/v1/users') return Promise.resolve({ data: { items: deactivatedUsers, nextCursor: null }, response: { ok: true } })
+          if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
           if (path === '/api/v1/users/{userId}/deletion-preview') return previewPromise as Promise<never>
           return Promise.resolve({ data: [], response: { ok: true } })
         })
@@ -810,8 +873,8 @@ describe('PeoplePage', () => {
           if (path === '/api/v1/users/me') {
             return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
           }
-          if (path === '/api/v1/users') return Promise.resolve({ data: manyCandidates, response: { ok: true } })
-          if (path === '/api/v1/teams') return Promise.resolve({ data: [{ id: 't2', name: 'Mobile Squad', memberIds: [], createdAt: '' }], response: { ok: true } })
+          if (path === '/api/v1/users') return Promise.resolve({ data: { items: manyCandidates, nextCursor: null }, response: { ok: true } })
+          if (path === '/api/v1/teams') return Promise.resolve({ data: { items: [{ id: 't2', name: 'Mobile Squad', memberIds: [], createdAt: '' }], nextCursor: null }, response: { ok: true } })
           return Promise.resolve({ data: [], response: { ok: true } })
         })
         const user = userEvent.setup()
@@ -871,8 +934,8 @@ describe('PeoplePage', () => {
           if (path === '/api/v1/users/me') {
             return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
           }
-          if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
-          if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
+          if (path === '/api/v1/users') return Promise.resolve({ data: { items: users, nextCursor: null }, response: { ok: true } })
+          if (path === '/api/v1/teams') return Promise.resolve({ data: { items: teams, nextCursor: null }, response: { ok: true } })
           if (path === '/api/v1/teams/{teamId}/deletion-preview') {
             return Promise.resolve({ data: { memberCount: 7, projectCount: 2 }, response: { ok: true } })
           }
@@ -898,8 +961,8 @@ describe('PeoplePage', () => {
           if (path === '/api/v1/users/me') {
             return Promise.resolve({ data: { id: 'u1', email: 'me@example.com', isTenantAdmin: true }, response: { ok: true } })
           }
-          if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
-          if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
+          if (path === '/api/v1/users') return Promise.resolve({ data: { items: users, nextCursor: null }, response: { ok: true } })
+          if (path === '/api/v1/teams') return Promise.resolve({ data: { items: teams, nextCursor: null }, response: { ok: true } })
           if (path === '/api/v1/teams/{teamId}/deletion-preview') return previewPromise as Promise<never>
           return Promise.resolve({ data: [], response: { ok: true } })
         })

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
-import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, RotateCcwIcon, UserPlusIcon } from 'lucide-react'
+import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, Loader2Icon, RotateCcwIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
 import { Avatar } from '@/components/Avatar'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { LoadMoreButton } from '@/components/LoadMoreButton'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
@@ -38,6 +39,13 @@ type Project = components['schemas']['Project']
 type Suite = components['schemas']['Suite']
 type Status = components['schemas']['Status']
 type Verdict = components['schemas']['Verdict']
+
+// Bounds ensureAllItemsLoaded's background drain (security review,
+// add-cursor-pagination task 12.1d) — looping until `nextCursor` is null
+// with no ceiling reintroduces the unbounded-query problem pagination was
+// meant to fix, just moved client-side. At the default page size (50),
+// 25 pages caps a single drain at 1,250 items.
+const MAX_DRAIN_PAGES = 25
 
 // Shared by the bulk "Mark as" menu and a single row's own context menu
 // (add-run-row-status-actions) — same labels/dot icons either way, only
@@ -247,6 +255,10 @@ export default function RunPage() {
   const [suite, setSuite] = useState<Suite>()
   const [priorRunKey, setPriorRunKey] = useState<string>()
   const [items, setItems] = useState<RunItem[]>([])
+  const [itemsCursor, setItemsCursor] = useState<string | null>(null)
+  const [loadingMoreItems, setLoadingMoreItems] = useState(false)
+  const [drainingItems, setDrainingItems] = useState(false)
+  const [itemsTruncated, setItemsTruncated] = useState(false)
   const [summary, setSummary] = useState<RunSummary>()
   const [lifecycleError, setLifecycleError] = useState<string>()
   const [isClosing, setIsClosing] = useState(false)
@@ -324,12 +336,76 @@ export default function RunPage() {
         return
       }
       setRun(r)
-      setItems(i ?? [])
+      setItems(i?.items ?? [])
+      setItemsCursor(i?.nextCursor ?? null)
       setSummary(s)
     } catch {
       setItems([])
+      setItemsCursor(null)
     }
   }, [runKey, user, authLoading])
+
+  const fetchItemsPage = useCallback(
+    (cursor?: string) =>
+      (access === 'member'
+        ? api.GET('/api/v1/runs/{runKey}/items', { params: { path: { runKey: runKey! }, query: { cursor } } })
+        : api.GET('/api/v1/public/runs/{runKey}/items', { params: { path: { runKey: runKey! }, query: { cursor } } })
+      ).then(({ data }) => data ?? { items: [], nextCursor: null }),
+    [runKey, access],
+  )
+
+  async function loadMoreItems() {
+    if (!itemsCursor) return
+    setLoadingMoreItems(true)
+    try {
+      const page = await fetchItemsPage(itemsCursor)
+      setItems((prev) => [...prev, ...page.items])
+      setItemsCursor(page.nextCursor)
+    } finally {
+      setLoadingMoreItems(false)
+    }
+  }
+
+  // Filtering/grouping by status or assignee, and the "Group by status"
+  // toggle, all imply "show me the complete accounting" — a partially
+  // loaded page would silently undercount a status/assignee bucket, or
+  // hide an assignee's filter chip entirely, until the reader happened to
+  // click "Load more" first. Same data-completeness class as PeoplePage's
+  // search-triggered drain: engaging any of these controls drains the
+  // remaining pages in the background before trusting the narrowed view.
+  //
+  // itemsDrainRef guards against overlapping calls (bug found in QA,
+  // 2026-09-07, same shape as PeoplePage's ensureAllUsersLoaded): every
+  // filter/assignee chip click re-triggers this unconditionally, and
+  // `itemsCursor` stays non-null until the *whole* drain finishes — so two
+  // chips clicked before the first fetch resolves started two independent
+  // drains, each re-fetching and re-appending the same page(s), producing
+  // duplicate item ids (and the undefined React rendering that comes with
+  // duplicate list keys). A second call while one is in flight now just
+  // awaits the first call's own promise instead of starting a redundant one.
+  const itemsDrainRef = useRef<Promise<void> | null>(null)
+  function ensureAllItemsLoaded(): Promise<void> {
+    if (itemsDrainRef.current) return itemsDrainRef.current
+    if (!itemsCursor) return Promise.resolve()
+    const drain = (async () => {
+      setDrainingItems(true)
+      try {
+        let cursor: string | undefined = itemsCursor
+        for (let pageCount = 0; cursor && pageCount < MAX_DRAIN_PAGES; pageCount++) {
+          const page = await fetchItemsPage(cursor)
+          setItems((prev) => [...prev, ...page.items])
+          cursor = page.nextCursor ?? undefined
+        }
+        setItemsCursor(cursor ?? null)
+        setItemsTruncated(Boolean(cursor))
+      } finally {
+        setDrainingItems(false)
+        itemsDrainRef.current = null
+      }
+    })()
+    itemsDrainRef.current = drain
+    return drain
+  }
 
   const projectKey = run?.projectKey
   const permissions = useProjectPermissions(projectKey)
@@ -698,7 +774,10 @@ export default function RunPage() {
                     type="button"
                     aria-pressed={activeFilter === status}
                     className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium ${activeFilter === status ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
-                    onClick={() => setActiveFilter(status)}
+                    onClick={() => {
+                      setActiveFilter(status)
+                      void ensureAllItemsLoaded()
+                    }}
                   >
                     <span aria-hidden="true" className="size-2 rounded-sm" style={{ background: STATUS_COLOR[status] }} />
                     {STATUS_LABEL[status]} <span className="text-[0.7rem]">{summary.counts?.[status] ?? 0}</span>
@@ -711,7 +790,13 @@ export default function RunPage() {
                 aria-checked={groupEnabled}
                 aria-label="Group by status"
                 className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium ${groupEnabled ? 'border-primary text-primary' : 'border-input text-muted-foreground'}`}
-                onClick={() => setGroupEnabled((v) => !v)}
+                onClick={() => {
+                  setGroupEnabled((v) => {
+                    const next = !v
+                    if (next) void ensureAllItemsLoaded()
+                    return next
+                  })
+                }}
               >
                 Group by status
               </button>
@@ -733,7 +818,10 @@ export default function RunPage() {
                   type="button"
                   aria-pressed={assigneeFilter === assignee.id}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === assignee.id ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
-                  onClick={() => setAssigneeFilter(assignee.id)}
+                  onClick={() => {
+                    setAssigneeFilter(assignee.id)
+                    void ensureAllItemsLoaded()
+                  }}
                 >
                   {assignee.name}
                 </button>
@@ -742,7 +830,10 @@ export default function RunPage() {
                 type="button"
                 aria-pressed={assigneeFilter === ''}
                 className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === '' ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
-                onClick={() => setAssigneeFilter('')}
+                onClick={() => {
+                  setAssigneeFilter('')
+                  void ensureAllItemsLoaded()
+                }}
               >
                 Unassigned
               </button>
@@ -764,6 +855,17 @@ export default function RunPage() {
                 {activeFilter && ` — filtered to ${STATUS_LABEL[activeFilter].toLowerCase()}`}
               </p>
             </div>
+          )}
+          {drainingItems && (
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2Icon className="size-3 animate-spin" aria-hidden="true" />
+              Loading remaining items to filter accurately…
+            </p>
+          )}
+          {itemsTruncated && !drainingItems && (
+            <p className="text-xs text-muted-foreground">
+              This run has more items than can be filtered at once — some may be missing from the counts above.
+            </p>
           )}
           <RunBulkActionBar count={selectedIds.size} actions={bulkActions} onClear={() => setSelectedIds(new Set())} />
           {visibleItems.length === 0 && summary && summary.total > 0 ? (
@@ -833,6 +935,7 @@ export default function RunPage() {
               ))}
             </ul>
           )}
+          <LoadMoreButton hasMore={!!itemsCursor} loading={loadingMoreItems} onClick={() => void loadMoreItems()} label="Load more items" />
         </CardContent>
       </Card>
 

@@ -102,14 +102,14 @@ function mockDetailAPI(
     const trendPath = anonymous ? '/api/v1/public/suites/{suiteKey}/trend' : '/api/v1/suites/{suiteKey}/trend'
     const runsPath = anonymous ? '/api/v1/public/projects/{projectKey}/runs' : '/api/v1/projects/{projectKey}/runs'
     if (path === projectPath) return Promise.resolve({ data: projectQA, response: { ok: true } })
-    if (path === casesPath) return Promise.resolve({ data: cases, response: { ok: true } })
-    if (path === foldersPath) return Promise.resolve({ data: folders, response: { ok: true } })
+    if (path === casesPath) return Promise.resolve({ data: { items: cases, nextCursor: null }, response: { ok: true } })
+    if (path === foldersPath) return Promise.resolve({ data: { items: folders, nextCursor: null }, response: { ok: true } })
     if (path === suitePath) return Promise.resolve({ data: suite, response: { ok: true } })
     if (path === trendPath) {
       const points = options?.params?.query?.includeOpen ? openTrendPoints : trendPoints
       return Promise.resolve({ data: { suiteId: 's1', suiteKey: 'p1-S1', points }, response: { ok: true } })
     }
-    if (path === runsPath) return Promise.resolve({ data: runs, response: { ok: true } })
+    if (path === runsPath) return Promise.resolve({ data: { items: runs, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
@@ -512,6 +512,12 @@ describe('SuiteDetailPage', () => {
       if (path === '/api/v1/projects/{projectKey}') return Promise.resolve({ data: projectQA, response: { ok: true } })
       if (path === '/api/v1/suites/{suiteKey}')
         return Promise.resolve({ data: undefined, error: { error: 'not found' }, response: { ok: false } })
+      if (
+        path === '/api/v1/projects/{projectKey}/cases' ||
+        path === '/api/v1/projects/{projectKey}/folders' ||
+        path === '/api/v1/projects/{projectKey}/runs'
+      )
+        return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
       return Promise.resolve({ data: [], response: { ok: true } })
     })
     renderDetail()
@@ -572,13 +578,14 @@ describe('SuiteDetailPage', () => {
           return Promise.resolve({ data: undefined, response: { ok: false } })
         if (path === '/api/v1/public/projects/{projectKey}') return Promise.resolve({ data: projectQA, response: { ok: true } })
         if (path === '/api/v1/public/projects/{projectKey}/cases')
-          return Promise.resolve({ data: [case1, case2], response: { ok: true } })
+          return Promise.resolve({ data: { items: [case1, case2], nextCursor: null }, response: { ok: true } })
         if (path === '/api/v1/public/projects/{projectKey}/folders')
-          return Promise.resolve({ data: folders, response: { ok: true } })
+          return Promise.resolve({ data: { items: folders, nextCursor: null }, response: { ok: true } })
         if (path === '/api/v1/public/suites/{suiteKey}') return Promise.resolve({ data: smokeSuite, response: { ok: true } })
         if (path === '/api/v1/public/suites/{suiteKey}/trend')
           return Promise.resolve({ data: { suiteId: 's1', suiteKey: 'p1-S1', points: [] }, response: { ok: true } })
-        if (path === '/api/v1/public/projects/{projectKey}/runs') return Promise.resolve({ data: [], response: { ok: true } })
+        if (path === '/api/v1/public/projects/{projectKey}/runs')
+          return Promise.resolve({ data: { items: [], nextCursor: null }, response: { ok: true } })
         return Promise.resolve({ data: undefined, response: { ok: false } })
       })
       renderDetail()

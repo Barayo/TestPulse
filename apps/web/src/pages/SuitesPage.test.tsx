@@ -57,7 +57,7 @@ function mockSuitesAPI(project: unknown, suites: unknown[] = [], permissions: un
     const projectPath = anonymous ? '/api/v1/public/projects/{projectKey}' : '/api/v1/projects/{projectKey}'
     const suitesPath = anonymous ? '/api/v1/public/projects/{projectKey}/suites' : '/api/v1/projects/{projectKey}/suites'
     if (path === projectPath) return Promise.resolve({ data: project, response: { ok: true } })
-    if (path === suitesPath) return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === suitesPath) return Promise.resolve({ data: { items: suites, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
       return Promise.resolve({ data: permissions === null ? undefined : permissions, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
@@ -341,7 +341,10 @@ describe('signed-in non-member (design.md D11)', () => {
       if (path === '/api/v1/public/projects/{projectKey}') return Promise.resolve({ data: projectQA, response: { ok: true } })
       if (path === '/api/v1/public/projects/{projectKey}/suites')
         return Promise.resolve({
-          data: [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null, lastRunAt: null }],
+          data: {
+            items: [{ id: 's1', key: 'p1-S1', projectId: 'p1', name: 'Smoke', caseIds: [], createdAt: '', passRate: null, lastRunAt: null }],
+            nextCursor: null,
+          },
           response: { ok: true },
         })
       return Promise.resolve({ data: undefined, response: { ok: false } })

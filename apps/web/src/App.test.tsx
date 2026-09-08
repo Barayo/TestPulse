@@ -152,36 +152,45 @@ function mockProjectData() {
       if (projectKey === 'p1')
         return Promise.resolve({
           response: { ok: true },
-          data: [{ id: 'sid1', key: 'p1-S1', projectId: 'id1', name: 'Smoke', caseIds: [], createdAt: '' }],
+          data: { items: [{ id: 'sid1', key: 'p1-S1', projectId: 'id1', name: 'Smoke', caseIds: [], createdAt: '' }], nextCursor: null },
         })
-      return Promise.resolve({ response: { ok: true }, data: [] })
+      return Promise.resolve({ response: { ok: true }, data: { items: [], nextCursor: null } })
     }
     if (path === '/api/v1/projects/{projectKey}/cases') {
       const projectKey = options?.params?.path?.projectKey
       if (projectKey === 'p1')
         return Promise.resolve({
           response: { ok: true },
-          data: [
-            { id: 'cid1', key: 'p1-1', projectId: 'id1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case A', steps: [] } },
-            { id: 'cid2', key: 'p1-2', projectId: 'id1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case B', steps: [] } },
-          ],
+          data: {
+            items: [
+              { id: 'cid1', key: 'p1-1', projectId: 'id1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case A', steps: [] } },
+              { id: 'cid2', key: 'p1-2', projectId: 'id1', folderId: 'f1', currentVersion: 1, createdAt: '', content: { title: 'Case B', steps: [] } },
+            ],
+            nextCursor: null,
+          },
         })
-      return Promise.resolve({ response: { ok: true }, data: [] })
+      return Promise.resolve({ response: { ok: true }, data: { items: [], nextCursor: null } })
     }
     if (path === '/api/v1/projects/{projectKey}/runs') {
       const projectKey = options?.params?.path?.projectKey
       if (projectKey === 'p1')
         return Promise.resolve({
           response: { ok: true },
-          data: [{ id: 'rid1', key: 'p1-R1', projectId: 'id1', projectKey: 'p1', name: 'Smoke run', createdAt: '2026-01-01T00:00:00Z' }],
+          data: {
+            items: [{ id: 'rid1', key: 'p1-R1', projectId: 'id1', projectKey: 'p1', name: 'Smoke run', createdAt: '2026-01-01T00:00:00Z' }],
+            nextCursor: null,
+          },
         })
-      return Promise.resolve({ response: { ok: true }, data: [] })
+      return Promise.resolve({ response: { ok: true }, data: { items: [], nextCursor: null } })
     }
     if (path === '/api/v1/runs/{runKey}/summary')
       return Promise.resolve({
         response: { ok: true },
         data: { runId: 'rid1', total: 2, counts: { pass: 1 } },
       })
+    if (path === '/api/v1/projects/{projectKey}/folders') return Promise.resolve({ response: { ok: true }, data: { items: [], nextCursor: null } })
+    if (path === '/api/v1/users' || path === '/api/v1/teams' || path === '/api/v1/roles')
+      return Promise.resolve({ response: { ok: true }, data: { items: [], nextCursor: null } })
     return Promise.resolve({ response: { ok: true }, data: [] })
   })
 }

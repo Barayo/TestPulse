@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { FolderIcon, FileTextIcon, FolderInputIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
+import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
@@ -366,6 +367,7 @@ export default function FolderExplorerPage() {
 
   const [project, setProject] = useState<Project>()
   const [notFound, setNotFound] = useState(false)
+  const [dataTruncated, setDataTruncated] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([])
   const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
@@ -407,19 +409,38 @@ export default function FolderExplorerPage() {
     // project like an anonymous visitor instead of hitting 403s.
     if (!projectKey || access === 'loading') return
     setNotFound(false)
-    const [{ data: p }, { data: f }, { data: c }, { data: s }, { data: flaky }] = access === 'member'
+    // Folders, cases, and suites are fetched as the complete set (not a
+    // paginated display) — the sidebar tree, ancestor breadcrumbs, per-folder
+    // stats rollup, and the three "Move to…" pickers all need every folder
+    // to be structurally correct, and the cases endpoint isn't folder-scoped
+    // server-side, so a partial page wouldn't reliably reflect what's shown
+    // in the currently browsed folder anyway. Same reference-data class as
+    // the picker/dropdown consumers fixed via fetchAllPages elsewhere.
+    const [{ data: p }, f, c, s, { data: flaky }] = access === 'member'
       ? await Promise.all([
           api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/projects/{projectKey}/cases', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
           api.GET('/api/v1/projects/{projectKey}/flaky-cases', { params: { path: { projectKey } } }),
         ])
       : await Promise.all([
           api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey } } }),
-          api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey } } }),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/public/projects/{projectKey}/cases', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
+          fetchAllPages((cursor) =>
+            api.GET('/api/v1/public/projects/{projectKey}/suites', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
+          ),
           api.GET('/api/v1/public/projects/{projectKey}/flaky-cases', { params: { path: { projectKey } } }),
         ])
     if (!p) {
@@ -427,9 +448,14 @@ export default function FolderExplorerPage() {
       return
     }
     setProject(p)
-    setFolders(f ?? [])
-    setCases(c ?? [])
-    setSuites(s ?? [])
+    setFolders(f.items)
+    setCases(c.items)
+    setSuites(s.items)
+    // Every downstream computation here (tree, stats, pickers) assumes a
+    // complete set — fetchAllPages caps its drain (security review,
+    // add-cursor-pagination task 12.1d), so a project past that ceiling
+    // gets a visible warning instead of silently wrong counts/navigation.
+    setDataTruncated(f.truncated || c.truncated || s.truncated)
     setFlakyKeys(new Set((flaky ?? []).map((fc) => fc.caseKey)))
   }, [projectKey, access])
 
@@ -805,6 +831,13 @@ export default function FolderExplorerPage() {
   return (
     <div className="space-y-4">
       <Breadcrumbs segments={breadcrumbSegments} />
+
+      {dataTruncated && (
+        <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
+          This project has more sections, cases, or suites than can be shown at once — some counts and search
+          results below may be incomplete.
+        </p>
+      )}
 
       <div className="flex">
         {isDesktop && (

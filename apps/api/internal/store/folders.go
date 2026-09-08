@@ -106,6 +106,7 @@ func (r *FolderRepo) List(ctx context.Context, projectID string) ([]domain.Folde
 // List's existing created_at ASC (insertion) order, with id ASC as the
 // deterministic tiebreak.
 func (r *FolderRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.Folder, string, error) {
+	limit = clampLimit(limit)
 	var cursorCreatedAt any
 	var cursorID any
 	if cursor != "" {

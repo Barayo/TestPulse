@@ -39,7 +39,7 @@ function mockPlanAPI(runs: unknown[] = [], suites: unknown[] = [], rollup: unkno
     if (path === '/api/v1/projects/{projectKey}') return Promise.resolve({ data: project, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: { read: true, manageProject: true }, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: suites, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/suites') return Promise.resolve({ data: { items: suites, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/plans/{planKey}') return Promise.resolve({ data: plan, response: { ok: true } })
     if (path === '/api/v1/releases/{releaseKey}') return Promise.resolve({ data: release, response: { ok: true } })
     if (path === '/api/v1/plans/{planKey}/runs') return Promise.resolve({ data: runs, response: { ok: true } })

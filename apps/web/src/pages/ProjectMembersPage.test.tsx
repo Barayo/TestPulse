@@ -34,9 +34,9 @@ function mockAPI(isTenantAdmin: boolean) {
       return Promise.resolve({ data: { id: 'p1', name: 'QA Platform', archived: false, createdAt: '' }, response: { ok: true } })
     }
     if (path === '/api/v1/projects/{projectKey}/members') return Promise.resolve({ data: membership, response: { ok: true } })
-    if (path === '/api/v1/users') return Promise.resolve({ data: users, response: { ok: true } })
-    if (path === '/api/v1/teams') return Promise.resolve({ data: teams, response: { ok: true } })
-    if (path === '/api/v1/roles') return Promise.resolve({ data: roles, response: { ok: true } })
+    if (path === '/api/v1/users') return Promise.resolve({ data: { items: users, nextCursor: null }, response: { ok: true } })
+    if (path === '/api/v1/teams') return Promise.resolve({ data: { items: teams, nextCursor: null }, response: { ok: true } })
+    if (path === '/api/v1/roles') return Promise.resolve({ data: { items: roles, nextCursor: null }, response: { ok: true } })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }

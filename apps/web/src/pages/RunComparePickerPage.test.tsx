@@ -22,7 +22,7 @@ function mockPickerAPI() {
     if (path === '/api/v1/users/me') return Promise.resolve({ data: authenticatedUser, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}')
       return Promise.resolve({ data: { id: 'p1', key: 'p1', name: 'QA', archived: false, createdAt: '' }, response: { ok: true } })
-    if (path === '/api/v1/projects/{projectKey}/runs') return Promise.resolve({ data: runs, response: { ok: true } })
+    if (path === '/api/v1/projects/{projectKey}/runs') return Promise.resolve({ data: { items: runs, nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
       return Promise.resolve({ data: { read: true }, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })

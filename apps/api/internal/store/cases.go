@@ -354,6 +354,7 @@ func (r *CaseRepo) List(ctx context.Context, projectID string) ([]domain.TestCas
 // List's existing created_at ASC (insertion) order, with id ASC as the
 // deterministic tiebreak.
 func (r *CaseRepo) ListPage(ctx context.Context, projectID, cursor string, limit int) ([]domain.TestCase, string, error) {
+	limit = clampLimit(limit)
 	var cursorCreatedAt any
 	var cursorID any
 	if cursor != "" {

@@ -169,11 +169,17 @@ function FolderRow({
 export function FoldersPanel({
   folders,
   totalCount,
+  truncated,
   onSeeAll,
   onSelectFolder,
 }: {
   folders: LandingFolder[]
   totalCount: number
+  // fetchAllPages caps its drain (add-cursor-pagination task 12.1d) —
+  // above the cap, `totalCount` undercounts. `truncated` tells the panel
+  // to show it as a floor ("500+") instead of silently claiming an exact,
+  // wrong total.
+  truncated?: boolean
   onSeeAll: () => void
   onSelectFolder: (folderId: string) => void
 }) {
@@ -182,7 +188,7 @@ export function FoldersPanel({
     <PanelShell
       icon={<FolderIcon className="size-4" aria-hidden="true" />}
       title="Library"
-      seeAllLabel={totalCount > 0 ? `see all ${totalCount} ›` : 'go to Library ›'}
+      seeAllLabel={totalCount > 0 ? `see all ${totalCount}${truncated ? '+' : ''} ›` : 'go to Library ›'}
       seeAllAriaLabel="Go to Library"
       onSeeAll={onSeeAll}
       isEmpty={folders.length === 0}
@@ -198,11 +204,13 @@ export function FoldersPanel({
 export function SuitesPanel({
   suites,
   totalCount,
+  truncated,
   onSeeAll,
   onSelectSuite,
 }: {
   suites: LandingSuite[]
   totalCount: number
+  truncated?: boolean
   onSeeAll: () => void
   onSelectSuite: (suiteId: string) => void
 }) {
@@ -210,7 +218,7 @@ export function SuitesPanel({
     <PanelShell
       icon={<LayersIcon className="size-4" aria-hidden="true" />}
       title="Suites"
-      seeAllLabel={totalCount > 0 ? `see all ${totalCount} ›` : 'go to Suites ›'}
+      seeAllLabel={totalCount > 0 ? `see all ${totalCount}${truncated ? '+' : ''} ›` : 'go to Suites ›'}
       seeAllAriaLabel="Go to Suites"
       onSeeAll={onSeeAll}
       isEmpty={suites.length === 0}
