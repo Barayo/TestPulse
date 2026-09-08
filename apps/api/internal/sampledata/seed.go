@@ -385,9 +385,25 @@ func Seed(ctx context.Context, svc *service.Service) error {
 
 	// --- Settings cases ----------------------------------------------
 
+	// add-reusable-steps: a shared step group demonstrating the Shared
+	// Steps admin surface and the case editor's group-reference UI in the
+	// showroom, not just in tests — both Settings cases below need an
+	// admin session before their own action, a genuine shared sub-flow
+	// rather than a contrived one.
+	loginAsAdmin, err := svc.CreateStepGroup(ctx, p.ID, "Log in as admin", []domain.Step{
+		{Action: "Open the login page"},
+		{Action: "Enter the admin account's email and password"},
+		{Action: "Submit the login form", Expected: "The admin lands on the project dashboard"},
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
 	displayName, err := svc.CreateCase(ctx, p.ID, settings.ID, domain.CaseContent{
-		Title:    "Update profile display name",
-		Steps:    []domain.Step{{Action: "Change the display name and save", Expected: "The new name appears immediately across the UI"}},
+		Title: "Update profile display name",
+		Steps: []domain.Step{
+			{GroupRef: &domain.StepGroupRef{GroupKey: loginAsAdmin.Key}},
+			{Action: "Change the display name and save", Expected: "The new name appears immediately across the UI"},
+		},
 		Priority: domain.PriorityMedium,
 		Tags:     []string{"settings"},
 		Platform: "web",
@@ -397,8 +413,11 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	timezone, err := svc.CreateCase(ctx, p.ID, settings.ID, domain.CaseContent{
-		Title:     "Change timezone preference",
-		Steps:     []domain.Step{{Action: "Select a new timezone and save", Expected: "Timestamps across the app reflect the new timezone"}},
+		Title: "Change timezone preference",
+		Steps: []domain.Step{
+			{GroupRef: &domain.StepGroupRef{GroupKey: loginAsAdmin.Key}},
+			{Action: "Select a new timezone and save", Expected: "Timestamps across the app reflect the new timezone"},
+		},
 		Priority:  domain.PriorityLow,
 		Tags:      []string{"settings"},
 		Platform:  "web",

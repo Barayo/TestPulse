@@ -5,6 +5,9 @@ import { MemoryRouter, Route, Routes, useParams } from 'react-router'
 import CaseDetailPage from './CaseDetailPage'
 import { api } from '@/lib/api'
 import { AuthProvider } from '@/lib/useAuth'
+import type { components } from '@testpulse/shared/api'
+
+type Step = components['schemas']['Step']
 
 vi.mock('@/lib/api', () => ({
   api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn(), POST: vi.fn() },
@@ -83,6 +86,11 @@ function mockDetailAPI(options?: {
   // add-jira-connector: overrides the case's own jira* fields, independent
   // of v1Content/versions.
   caseJiraFields?: { jiraIssueKey?: string | null; jiraIssueStatus?: string | null; jiraLastSyncedAt?: string | null }
+  // add-reusable-steps: overrides the current case's content.steps
+  // wholesale (so a groupRef can be included) and supplies the fetched
+  // step group CaseStepsList looks up for any groupRef it finds.
+  currentSteps?: Step[]
+  stepGroup?: { id: string; key: string; name: string; steps: unknown[]; createdAt: string; updatedAt: string } | null
 }) {
   const anon = options?.anonymous ?? false
   mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
@@ -112,10 +120,18 @@ function mockDetailAPI(options?: {
           ...(options?.currentCustomFieldValues
             ? { content: { ...limitCase.content, customFields: options.currentCustomFieldValues } }
             : {}),
+          ...(options?.currentSteps ? { content: { ...limitCase.content, steps: options.currentSteps } } : {}),
           ...(options?.caseJiraFields ?? {}),
         },
         response: { ok: true },
       })
+    if (path === '/api/v1/step-groups/{groupId}')
+      return options?.stepGroup === null
+        ? Promise.resolve({ data: undefined, response: { ok: false, status: 404 } })
+        : Promise.resolve({
+            data: options?.stepGroup ?? { id: 'sg1', key: 'SP-SG1', name: 'Log in as admin', steps: [], createdAt: '', updatedAt: '2026-01-01T00:00:00Z' },
+            response: { ok: true },
+          })
     if (path === versionsPath && opts?.params?.path?.caseKey === 'c1')
       return Promise.resolve({
         data: options?.versions ?? [
@@ -860,6 +876,40 @@ describe('CaseDetailPage', () => {
           }),
         )
       })
+    })
+
+    // add-reusable-steps: regression test for a real bug caught by e2e
+    // testing, not code review — entering edit mode used to copy the
+    // loaded case's steps into local state via a bare
+    // `{ action, expected }` map, silently dropping `groupRef`. A
+    // group-referencing case's block would then render (and, worse,
+    // re-save) as plain independent steps instead of a group block,
+    // and — combined with the server treating each such step as its own
+    // reference to resolve — duplicated the group's content on every
+    // save that touched the case at all.
+    it('preserves groupRef when entering edit mode, rendering a group block rather than plain steps', async () => {
+      mockDetailAPI({
+        currentSteps: [
+          { action: 'open login page', groupRef: { groupId: 'sg1', groupKey: 'SP-SG1', snapshotUpdatedAt: '2026-01-01T00:00:00Z' } },
+          { action: 'own step' },
+        ],
+        stepGroup: {
+          id: 'sg1',
+          key: 'SP-SG1',
+          name: 'Log in as admin',
+          steps: [{ action: 'open login page' }],
+          createdAt: '',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      expect(await screen.findByText('Log in as admin')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /detach/i })).toBeInTheDocument()
+      // The group's own step is not an individually-editable Textarea here.
+      expect(screen.queryByLabelText(/^action for step 1/i)).not.toBeInTheDocument()
     })
   })
 

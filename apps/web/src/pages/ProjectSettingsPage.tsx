@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { CustomFieldsCard } from '@/components/CustomFieldsCard'
+import { StepGroupsCard } from '@/components/StepGroupsCard'
 import { ReleasesSettingsCard } from '@/components/ReleasesSettingsCard'
 
 // Project-level settings (enable-public-project-access) — currently just
@@ -127,6 +128,7 @@ export default function ProjectSettingsPage() {
     <div className="space-y-6">
       <Breadcrumbs segments={[{ label: 'Settings' }]} />
 
+      {projectKey && <StepGroupsCard projectKey={projectKey} />}
       {projectKey && <CustomFieldsCard projectKey={projectKey} />}
       {projectKey && <ReleasesSettingsCard projectKey={projectKey} />}
 

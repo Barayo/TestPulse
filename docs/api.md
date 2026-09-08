@@ -154,6 +154,16 @@ internal `id` in paths — they aren't in scope for this scheme.
 | DELETE | `/api/v1/custom-fields/{fieldId}/options/{optionId}` | Remove an option from a `select` field, requires `manageProject` |
 | PUT | `/api/v1/custom-fields/{fieldId}/options/order` | Set the display order of a `select` field's options (`optionIds`), requires `manageProject` |
 
+**Shared step groups** (`add-reusable-steps`) — project-scoped, named, ordered lists of steps a case's own step content may reference instead of retyping them. A case step carrying `groupRef` (`{groupKey}` on input) is resolved and snapshotted into the saved version's content server-side at save time — editing the source group afterward never changes an already-saved version. List/get require `read`; create/update/delete require `manageProject`. See [Test management](test-management.md#test-cases-and-versioning) for the snapshot/staleness/refresh/detach model.
+
+| Method | Path | Description |
+|---|---|---|
+| GET | `/api/v1/projects/{projectKey}/step-groups` | List a project's shared step groups |
+| POST | `/api/v1/projects/{projectKey}/step-groups` | Create a step group (`name`, `steps`) — requires `manageProject` |
+| GET | `/api/v1/step-groups/{groupId}` | Get a step group |
+| PUT | `/api/v1/step-groups/{groupId}` | Rename and/or redefine a step group's steps — requires `manageProject`. Never changes an already-saved case version that referenced it |
+| DELETE | `/api/v1/step-groups/{groupId}` | Soft-delete a step group — requires `manageProject`. Already-saved case versions are unaffected |
+
 **Folders** — project-level, orthogonal to suites; every case belongs to
 exactly one folder, defaulting to the project's root; see
 [Database](database.md) for the tree model.

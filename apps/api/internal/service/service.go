@@ -472,6 +472,126 @@ func resolveActor(ctx context.Context) (domain.ResultActorKind, string) {
 
 // CreateCase creates a case; an empty folderID defaults to the project's
 // root folder (design D8).
+// resolveStepGroupRefs expands every GroupRef-carrying step entry into its
+// referenced step group's full step sequence — every resulting step is
+// stamped with the same GroupRef (GroupID/GroupKey plus a
+// SnapshotUpdatedAt), so a contiguous run of resolved steps sharing one
+// GroupRef is how a client identifies "one group block" after save
+// (add-reusable-steps design.md: snapshot at save time, never a live
+// reference). The server looks up each referenced group itself and
+// discards any client-supplied Action/Expected on a GroupRef entry — a
+// client's claim about a group's content is never trusted, closing the
+// spoofing gap a naive client-snapshot design would open. A GroupRef to a
+// group outside projectID, or to no group at all, is rejected.
+//
+// previousSteps is the case's own previous version's already-resolved
+// step content — nil for CreateCase (no previous version exists). It
+// exists to fix a real bug found during frontend design (Pepe, reviewing
+// this exact function): without it, editing a case for any reason
+// silently re-resolved every GroupRef entry to its group's *current*
+// content, even one the author never chose to refresh — directly
+// contradicting spec.md's "staleness is surfaced, never applied
+// silently." Now: an incoming entry's SnapshotUpdatedAt is compared
+// against the group's actual current UpdatedAt. A match (the client just
+// refreshed, or created the reference fresh) resolves to current content.
+// A mismatch means the client is knowingly resending an old, unrefreshed
+// snapshot — the server looks up that exact (group, snapshot) pair in
+// previousSteps and carries its content forward unchanged instead of
+// silently adopting the group's new content. That carried-forward content
+// was itself server-resolved and persisted by this same service on a
+// prior save, never client-supplied, so reusing it verbatim carries no
+// spoofing risk. If no match is found there (e.g. a brand-new reference
+// just inserted in this edit), it falls back to resolving fresh — the
+// same safe default CreateCase always uses.
+//
+// A contiguous run of input steps sharing one GroupRef.GroupKey is
+// resolved exactly ONCE, not once per entry in the run. Found via a real
+// e2e test, not code review: the frontend (matching what the server
+// itself produces) represents an already-resolved reference as N flat
+// steps that all carry the same GroupRef — resolving each independently
+// would re-expand the group N times, producing N*len(group.Steps) steps
+// instead of len(group.Steps) on every save that merely round-trips an
+// untouched block (e.g. editing an unrelated field elsewhere in the
+// case).
+func (s *Service) resolveStepGroupRefs(ctx context.Context, projectID string, steps, previousSteps []domain.Step) ([]domain.Step, error) {
+	resolved := make([]domain.Step, 0, len(steps))
+	for i := 0; i < len(steps); {
+		step := steps[i]
+		if step.GroupRef == nil {
+			resolved = append(resolved, step)
+			i++
+			continue
+		}
+		j := i + 1
+		for j < len(steps) && steps[j].GroupRef != nil && steps[j].GroupRef.GroupKey == step.GroupRef.GroupKey {
+			j++
+		}
+		i = j
+
+		group, err := s.store.StepGroups.GetByKey(ctx, step.GroupRef.GroupKey)
+		if err != nil {
+			if errors.Is(err, store.ErrNotFound) {
+				return nil, invalid("step group %q not found", step.GroupRef.GroupKey)
+			}
+			return nil, err
+		}
+		if group.ProjectID != projectID {
+			return nil, invalid("step group %q does not belong to this project", step.GroupRef.GroupKey)
+		}
+
+		if !step.GroupRef.SnapshotUpdatedAt.Equal(group.UpdatedAt) {
+			if carried, ok := carryForwardGroupRef(previousSteps, group.ID, step.GroupRef.SnapshotUpdatedAt); ok {
+				resolved = append(resolved, carried...)
+				continue
+			}
+		}
+
+		for _, groupStep := range group.Steps {
+			resolved = append(resolved, domain.Step{
+				Action:   groupStep.Action,
+				Expected: groupStep.Expected,
+				GroupRef: &domain.StepGroupRef{GroupID: group.ID, GroupKey: group.Key, SnapshotUpdatedAt: group.UpdatedAt},
+			})
+		}
+	}
+	return resolved, nil
+}
+
+// hasGroupRef reports whether any step carries a GroupRef — EditCase only
+// pays for fetching the case's previous version's content (needed by
+// carryForwardGroupRef) when there's actually a group reference to
+// resolve.
+func hasGroupRef(steps []domain.Step) bool {
+	for _, s := range steps {
+		if s.GroupRef != nil {
+			return true
+		}
+	}
+	return false
+}
+
+// carryForwardGroupRef finds the contiguous run of steps in previousSteps
+// stamped with GroupRef{GroupID: groupID, SnapshotUpdatedAt:
+// snapshotUpdatedAt} and returns a copy of it, if present.
+func carryForwardGroupRef(previousSteps []domain.Step, groupID string, snapshotUpdatedAt time.Time) ([]domain.Step, bool) {
+	matches := func(s domain.Step) bool {
+		return s.GroupRef != nil && s.GroupRef.GroupID == groupID && s.GroupRef.SnapshotUpdatedAt.Equal(snapshotUpdatedAt)
+	}
+	for i := 0; i < len(previousSteps); i++ {
+		if !matches(previousSteps[i]) {
+			continue
+		}
+		j := i
+		for j < len(previousSteps) && matches(previousSteps[j]) {
+			j++
+		}
+		run := make([]domain.Step, j-i)
+		copy(run, previousSteps[i:j])
+		return run, true
+	}
+	return nil, false
+}
+
 func (s *Service) CreateCase(ctx context.Context, projectID, folderID string, content domain.CaseContent) (domain.TestCase, error) {
 	if err := content.Validate(); err != nil {
 		return domain.TestCase{}, invalid("%s", err)
@@ -479,6 +599,11 @@ func (s *Service) CreateCase(ctx context.Context, projectID, folderID string, co
 	if err := s.validateCustomFieldValues(ctx, projectID, content.CustomFields); err != nil {
 		return domain.TestCase{}, err
 	}
+	resolvedSteps, err := s.resolveStepGroupRefs(ctx, projectID, content.Steps, nil)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	content.Steps = resolvedSteps
 	actorKind, actorRefID := resolveActor(ctx)
 	c, err := s.store.Cases.Create(ctx, projectID, folderID, content, actorKind, actorRefID)
 	if err != nil {
@@ -555,15 +680,28 @@ func (s *Service) EditCase(ctx context.Context, caseID string, content domain.Ca
 	if err := content.Validate(); err != nil {
 		return domain.TestCase{}, invalid("%s", err)
 	}
+	projectID, err := s.store.Cases.ProjectID(ctx, caseID)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
 	if len(content.CustomFields) > 0 {
-		projectID, err := s.store.Cases.ProjectID(ctx, caseID)
-		if err != nil {
-			return domain.TestCase{}, err
-		}
 		if err := s.validateCustomFieldValues(ctx, projectID, content.CustomFields); err != nil {
 			return domain.TestCase{}, err
 		}
 	}
+	var previousSteps []domain.Step
+	if hasGroupRef(content.Steps) {
+		previous, err := s.store.Cases.Get(ctx, caseID)
+		if err != nil {
+			return domain.TestCase{}, err
+		}
+		previousSteps = previous.Content.Steps
+	}
+	resolvedSteps, err := s.resolveStepGroupRefs(ctx, projectID, content.Steps, previousSteps)
+	if err != nil {
+		return domain.TestCase{}, err
+	}
+	content.Steps = resolvedSteps
 	actorKind, actorRefID := resolveActor(ctx)
 	c, err := s.store.Cases.NewVersion(ctx, caseID, content, actorKind, actorRefID)
 	if err != nil {

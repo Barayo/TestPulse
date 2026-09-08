@@ -168,7 +168,7 @@ export default function CaseDetailPage() {
     if (!testCase) return
     setTitle(testCase.content.title)
     setFormat(testCase.content.format ?? 'steps')
-    setSteps((testCase.content.steps ?? []).map((s) => ({ action: s.action, expected: s.expected ?? '' })))
+    setSteps((testCase.content.steps ?? []).map((s) => ({ action: s.action, expected: s.expected ?? '', groupRef: s.groupRef })))
     setDescription(testCase.content.description ?? '')
     setGherkinSource(testCase.content.gherkinSource ?? '')
     setPriority(testCase.content.priority ?? 'medium')
@@ -210,7 +210,7 @@ export default function CaseDetailPage() {
       params: { path: { caseKey } },
       body: {
         title: title.trim(),
-        steps: steps.filter((s) => s.action.trim()),
+        steps: steps.filter((s) => s.action?.trim() || s.groupRef),
         description,
         format,
         gherkinSource,
@@ -354,6 +354,7 @@ export default function CaseDetailPage() {
                 onStepsChange={setSteps}
                 onDescriptionChange={setDescription}
                 onGherkinSourceChange={setGherkinSource}
+                projectKey={projectKey}
               />
 
               <div className="flex justify-end gap-2 border-t pt-4">
@@ -377,6 +378,7 @@ export default function CaseDetailPage() {
               <CaseContentView
                 content={testCase.content}
                 emptyStateAction={canEdit ? <Button onClick={() => setIsEditing(true)}>+ Add steps</Button> : undefined}
+                projectKey={projectKey}
               />
             </>
           )}

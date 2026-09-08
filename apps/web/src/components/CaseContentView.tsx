@@ -21,9 +21,11 @@ export function caseContentHeading(format: CaseContent['format']): string {
 export function CaseContentView({
   content,
   emptyStateAction,
+  projectKey,
 }: {
   content: Pick<CaseContent, 'format' | 'steps' | 'description' | 'gherkinSource'>
   emptyStateAction?: ReactNode
+  projectKey?: string
 }) {
   if (content.format === 'text') {
     if (!content.description?.trim()) {
@@ -57,5 +59,5 @@ export function CaseContentView({
     return <GherkinView source={content.gherkinSource} />
   }
 
-  return <CaseStepsList steps={content.steps} emptyStateAction={emptyStateAction} />
+  return <CaseStepsList steps={content.steps} emptyStateAction={emptyStateAction} projectKey={projectKey} />
 }

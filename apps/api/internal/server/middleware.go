@@ -200,6 +200,10 @@ func projectIDFromCustomField(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForCustomField(r.Context(), chi.URLParam(r, "fieldID"))
 }
 
+func projectIDFromStepGroup(h *api, r *http.Request) (string, error) {
+	return h.svc.ProjectIDForStepGroup(r.Context(), chi.URLParam(r, "groupID"))
+}
+
 func projectIDFromResult(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForResult(r.Context(), chi.URLParam(r, "resultID"))
 }

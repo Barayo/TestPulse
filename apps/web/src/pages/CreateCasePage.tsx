@@ -88,7 +88,7 @@ export default function CreateCasePage() {
       body: {
         title: title.trim(),
         folderId: (targetFolder ?? root)?.id ?? '',
-        steps: steps.filter((s) => s.action.trim()),
+        steps: steps.filter((s) => s.action?.trim() || s.groupRef),
         description,
         format,
         gherkinSource,
@@ -135,6 +135,7 @@ export default function CreateCasePage() {
             onStepsChange={setSteps}
             onDescriptionChange={setDescription}
             onGherkinSourceChange={setGherkinSource}
+            projectKey={projectKey}
           />
 
           <div className="flex justify-end gap-2 border-t pt-4">

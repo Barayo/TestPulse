@@ -31,6 +31,7 @@ export function CaseFormatEditor({
   onStepsChange,
   onDescriptionChange,
   onGherkinSourceChange,
+  projectKey,
 }: {
   format: CaseFormat
   steps: Step[]
@@ -40,9 +41,10 @@ export function CaseFormatEditor({
   onStepsChange: (steps: Step[]) => void
   onDescriptionChange: (description: string) => void
   onGherkinSourceChange: (gherkinSource: string) => void
+  projectKey?: string
 }) {
   const hasContentFor = (f: CaseFormat) => {
-    if (f === 'steps') return steps.some((s) => s.action.trim())
+    if (f === 'steps') return steps.some((s) => s.action?.trim() || s.groupRef)
     if (f === 'text') return description.trim() !== ''
     return gherkinSource.trim() !== ''
   }
@@ -85,7 +87,7 @@ export function CaseFormatEditor({
         })}
       </div>
 
-      {format === 'steps' && <CaseStepsList steps={steps} onChange={onStepsChange} />}
+      {format === 'steps' && <CaseStepsList steps={steps} onChange={onStepsChange} projectKey={projectKey} />}
       {format === 'text' && (
         <Card>
           <CardContent>

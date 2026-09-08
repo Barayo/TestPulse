@@ -985,6 +985,72 @@ paths:
       tags: [customFields]
       responses:
         "204": { description: Removed }
+  /api/v1/projects/{projectKey}/step-groups:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listStepGroups
+      summary: List a project's shared step groups (add-reusable-steps) — requires read
+      tags: [stepGroups]
+      responses:
+        "200":
+          description: Step groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StepGroup" }
+    post:
+      operationId: createStepGroup
+      summary: Create a shared step group — requires manageProject
+      tags: [stepGroups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepGroupInput" }
+      responses:
+        "201":
+          description: Created step group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepGroup" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/step-groups/{groupId}:
+    parameters:
+      - { name: groupId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getStepGroup
+      summary: Get a step group — requires read on its project
+      tags: [stepGroups]
+      responses:
+        "200":
+          description: Step group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepGroup" }
+    put:
+      operationId: updateStepGroup
+      summary: Rename and/or redefine a step group's steps — requires manageProject. Never changes an already-saved case version that referenced it.
+      tags: [stepGroups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepGroupInput" }
+      responses:
+        "200":
+          description: Updated step group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepGroup" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      operationId: deleteStepGroup
+      summary: Soft-delete a step group — requires manageProject. Already-saved case versions are unaffected.
+      tags: [stepGroups]
+      responses:
+        "204": { description: Deleted }
   /api/v1/projects/{projectKey}/imports:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -2541,10 +2607,25 @@ components:
       enum: [low, medium, high, critical]
     Step:
       type: object
-      required: [action]
       properties:
         action: { type: string }
         expected: { type: string }
+        groupRef:
+          $ref: "#/components/schemas/StepGroupRef"
+          description: >-
+            When set, this step references a shared step group
+            (add-reusable-steps) instead of carrying its own action/expected
+            — the server resolves and expands it to the group's full step
+            sequence at save time, ignoring any action/expected the client
+            supplied on this entry. On input, only groupKey is read; id and
+            snapshotUpdatedAt are server-set and returned on output.
+    StepGroupRef:
+      type: object
+      required: [groupKey]
+      properties:
+        groupId: { type: string, readOnly: true }
+        groupKey: { type: string }
+        snapshotUpdatedAt: { type: string, format: date-time, readOnly: true }
     CaseContent:
       type: object
       required: [title]
@@ -3297,6 +3378,35 @@ components:
         caseCount:
           type: integer
           description: The project's current cases with a value set for this field.
+    StepGroup:
+      type: object
+      required: [id, key, name, steps, createdAt, updatedAt]
+      description: >-
+        A project-scoped, named, ordered list of steps a test case's
+        content may reference (add-reusable-steps). Mutable in place, not
+        itself versioned — editing it never changes an already-saved case
+        version that previously referenced it (see the Step schema's
+        groupRef).
+      properties:
+        id: { type: string }
+        key: { type: string }
+        name: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/Step" }
+        createdAt: { type: string, format: date-time }
+        updatedAt:
+          type: string
+          format: date-time
+          description: Compared against a referencing step's snapshotUpdatedAt to detect staleness while editing a case.
+    StepGroupInput:
+      type: object
+      required: [name, steps]
+      properties:
+        name: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/Step" }
     ProjectSummary:
       type: object
       required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite, archived, tags]

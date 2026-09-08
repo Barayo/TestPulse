@@ -30,6 +30,11 @@ func registerWriteTools(srv *sdkmcp.Server, svc *service.Service) {
 		Annotations: writeAnnotations(false),
 	}, upsertTestSuite(svc))
 	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "upsert_step_group",
+		Description: "Create a new shared step group (set projectKey), or edit an existing one by groupKey. Reference a step group from upsert_test_case/bulk_add_cases's steps by setting a step's groupKey instead of action/expected.",
+		Annotations: writeAnnotations(false),
+	}, upsertStepGroup(svc))
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
 		Name:        "bulk_add_cases",
 		Description: "Create multiple test cases in one project as a single atomic batch: if any case is invalid, none are created.",
 		Annotations: writeAnnotations(false),
@@ -51,15 +56,24 @@ func registerWriteTools(srv *sdkmcp.Server, svc *service.Service) {
 	}, updateRunItemStatus(svc))
 }
 
-// StepInput mirrors domain.Step for MCP tool input.
+// StepInput mirrors domain.Step for MCP tool input. Set groupKey instead
+// of action/expected to reference an existing shared step group
+// (add-reusable-steps) — the server resolves it to that group's full
+// current step sequence, ignoring any action/expected also sent on this
+// entry (the same anti-spoofing rule enforced on the REST path).
 type StepInput struct {
-	Action   string `json:"action" jsonschema:"the action to perform"`
+	Action   string `json:"action,omitempty" jsonschema:"the action to perform; omit when groupKey is set"`
 	Expected string `json:"expected,omitempty" jsonschema:"the expected outcome of this step"`
+	GroupKey string `json:"groupKey,omitempty" jsonschema:"key of an existing shared step group to reference in place of action/expected"`
 }
 
 func toDomainSteps(steps []StepInput) []domain.Step {
 	out := make([]domain.Step, len(steps))
 	for i, s := range steps {
+		if s.GroupKey != "" {
+			out[i] = domain.Step{GroupRef: &domain.StepGroupRef{GroupKey: s.GroupKey}}
+			continue
+		}
 		out[i] = domain.Step{Action: s.Action, Expected: s.Expected}
 	}
 	return out
@@ -165,6 +179,46 @@ func upsertTestSuite(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestSuite
 		}
 		s, err := svc.CreateSuite(ctx, projectID, in.Name)
 		return nil, s, err
+	}
+}
+
+type UpsertStepGroupInput struct {
+	ProjectKey string      `json:"projectKey,omitempty" jsonschema:"project key; required when creating a new step group (omit groupKey)"`
+	GroupKey   string      `json:"groupKey,omitempty" jsonschema:"existing step group key to edit; omit to create a new step group in projectKey"`
+	Name       string      `json:"name" jsonschema:"step group name"`
+	Steps      []StepInput `json:"steps" jsonschema:"the group's ordered steps"`
+}
+
+func upsertStepGroup(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertStepGroupInput, domain.StepGroup] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpsertStepGroupInput) (*sdkmcp.CallToolResult, domain.StepGroup, error) {
+		steps := toDomainSteps(in.Steps)
+		if in.GroupKey != "" {
+			groupID, err := svc.StepGroupIDByKey(ctx, in.GroupKey)
+			if err != nil {
+				return nil, domain.StepGroup{}, notFoundf("step group", in.GroupKey, err)
+			}
+			projectID, err := svc.ProjectIDForStepGroup(ctx, groupID)
+			if err != nil {
+				return nil, domain.StepGroup{}, err
+			}
+			if err := svc.Authorize(ctx, domain.PermManageProject, projectID); err != nil {
+				return nil, domain.StepGroup{}, err
+			}
+			g, err := svc.UpdateStepGroup(ctx, groupID, in.Name, steps)
+			return nil, g, err
+		}
+		if in.ProjectKey == "" {
+			return nil, domain.StepGroup{}, fmt.Errorf("projectKey is required to create a new step group")
+		}
+		projectID, err := svc.ProjectIDByKey(ctx, in.ProjectKey)
+		if err != nil {
+			return nil, domain.StepGroup{}, notFoundf("project", in.ProjectKey, err)
+		}
+		if err := svc.Authorize(ctx, domain.PermManageProject, projectID); err != nil {
+			return nil, domain.StepGroup{}, err
+		}
+		g, err := svc.CreateStepGroup(ctx, projectID, in.Name, steps)
+		return nil, g, err
 	}
 }
 

@@ -1,9 +1,11 @@
 package domain
 
 import (
+	"encoding/json"
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestStatusValidation(t *testing.T) {
@@ -87,6 +89,73 @@ func TestCaseContentFormatValidation(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "format") {
 		t.Errorf("error %q does not name the invalid field", err)
+	}
+}
+
+func TestStepGroupValidation(t *testing.T) {
+	valid := StepGroup{Name: "Log in as admin", Steps: []Step{{Action: "open login page"}}}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid step group rejected: %v", err)
+	}
+
+	missingName := StepGroup{Steps: []Step{{Action: "x"}}}
+	err := missingName.Validate()
+	if err == nil {
+		t.Fatal("step group without name accepted")
+	}
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("error %q does not name the missing field", err)
+	}
+
+	noSteps := StepGroup{Name: "Empty"}
+	err = noSteps.Validate()
+	if err == nil {
+		t.Fatal("step group with zero steps accepted")
+	}
+	if !strings.Contains(err.Error(), "step") {
+		t.Errorf("error %q does not name the missing steps", err)
+	}
+
+	missingAction := StepGroup{Name: "x", Steps: []Step{{Expected: "something happens"}}}
+	err = missingAction.Validate()
+	if err == nil {
+		t.Fatal("step group with a step missing action accepted")
+	}
+	if !strings.Contains(err.Error(), "action") {
+		t.Errorf("error %q does not name the missing action", err)
+	}
+}
+
+func TestStepGroupRefRoundTripsThroughJSON(t *testing.T) {
+	snapshotTime := time.Date(2026, 9, 8, 12, 0, 0, 0, time.UTC)
+	step := Step{
+		GroupRef: &StepGroupRef{GroupID: "sg1", GroupKey: "log-in-as-admin", SnapshotUpdatedAt: snapshotTime},
+	}
+	data, err := json.Marshal(step)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var decoded Step
+	if err := json.Unmarshal(data, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if decoded.GroupRef == nil {
+		t.Fatal("GroupRef = nil after round-trip, want non-nil")
+	}
+	if decoded.GroupRef.GroupID != "sg1" || decoded.GroupRef.GroupKey != "log-in-as-admin" {
+		t.Errorf("GroupRef = %+v, want GroupID=sg1 GroupKey=log-in-as-admin", decoded.GroupRef)
+	}
+	if !decoded.GroupRef.SnapshotUpdatedAt.Equal(snapshotTime) {
+		t.Errorf("SnapshotUpdatedAt = %v, want %v", decoded.GroupRef.SnapshotUpdatedAt, snapshotTime)
+	}
+
+	plain := Step{Action: "click submit"}
+	data, err = json.Marshal(plain)
+	if err != nil {
+		t.Fatalf("marshal plain: %v", err)
+	}
+	if strings.Contains(string(data), "groupRef") {
+		t.Errorf("plain step JSON = %s, want no groupRef key when unset", data)
 	}
 }
 

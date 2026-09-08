@@ -104,6 +104,104 @@ func TestMCPUpsertTestCaseDeniedWithoutPermission(t *testing.T) {
 	}
 }
 
+func TestMCPUpsertTestCaseResolvesGroupKeyStep(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-case-groupref-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "case-groupref-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Case GroupRef Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	group, err := svc.CreateStepGroup(ctx, project.ID, "Log in as admin", []domain.Step{
+		{Action: "open login page"}, {Action: "enter admin credentials"},
+	})
+	if err != nil {
+		t.Fatalf("CreateStepGroup: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var created domain.TestCase
+	callTool(t, session, "upsert_test_case", map[string]any{
+		"projectKey": project.Key,
+		"title":      "Admin can view settings",
+		"priority":   "medium",
+		"steps": []map[string]any{
+			{"groupKey": group.Key},
+			{"action": "open settings"},
+		},
+	}, &created)
+	if len(created.Content.Steps) != 3 {
+		t.Fatalf("Steps = %d, want 3 (2 from the group + 1 own step)", len(created.Content.Steps))
+	}
+	if created.Content.Steps[0].Action != "open login page" {
+		t.Errorf("Steps[0] = %+v, want the group's first step", created.Content.Steps[0])
+	}
+}
+
+// --- Requirement: upsert_step_group tool ---
+
+func TestMCPUpsertStepGroupCreatesThenEdits(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-stepgroup-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "stepgroup-agent")
+	project, err := svc.CreateProject(context.Background(), service.ProjectInput{Name: "MCP StepGroup Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+
+	var created domain.StepGroup
+	callTool(t, session, "upsert_step_group", map[string]any{
+		"projectKey": project.Key,
+		"name":       "Log in as admin",
+		"steps":      []map[string]any{{"action": "open login page"}},
+	}, &created)
+	if created.Key == "" || created.Name != "Log in as admin" || len(created.Steps) != 1 {
+		t.Fatalf("created = %+v", created)
+	}
+
+	var edited domain.StepGroup
+	callTool(t, session, "upsert_step_group", map[string]any{
+		"groupKey": created.Key,
+		"name":     "Log in as admin (edited)",
+		"steps":    []map[string]any{{"action": "a"}, {"action": "b"}},
+	}, &edited)
+	if edited.ID != created.ID {
+		t.Errorf("edited.ID = %q, want %q (edit in place, not a duplicate)", edited.ID, created.ID)
+	}
+	if edited.Name != "Log in as admin (edited)" || len(edited.Steps) != 2 {
+		t.Fatalf("edited = %+v", edited)
+	}
+}
+
+func TestMCPUpsertStepGroupDeniedWithoutManageProject(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-stepgroup-noperm-admin@example.com"))
+	owner, err := svc.CreateUser(ctx, "mcp-stepgroup-noperm-owner@example.com", "correcthorse1", false)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP StepGroup No-Perm Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	readOnlyToken := mustCreateScopedToken(t, svc, admin, actorForUser(owner), project.ID, domain.Role{Name: "Read Only (mcp stepgroup test)", CanRead: true})
+
+	session := mustConnectMCP(t, ts, readOnlyToken)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "upsert_step_group", Arguments: map[string]any{
+		"projectKey": project.Key, "name": "Should be denied", "steps": []map[string]any{{"action": "a"}},
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("upsert_step_group with a read-only scoped token succeeded, want a permission error")
+	}
+}
+
 // --- Requirement: upsert_test_suite tool ---
 
 func TestMCPUpsertTestSuiteCreates(t *testing.T) {

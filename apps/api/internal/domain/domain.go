@@ -123,10 +123,54 @@ type CaseContent struct {
 	GherkinSource string `json:"gherkinSource,omitempty"`
 }
 
-// Step is a single test case step.
+// Step is a single test case step. A step carrying GroupRef references a
+// shared StepGroup instead of (or alongside) its own Action/Expected —
+// Action/Expected on such a step are unused; the step expands to the
+// referenced group's full step sequence, resolved and snapshotted
+// server-side at case-save time (add-reusable-steps).
 type Step struct {
-	Action   string `json:"action"`
-	Expected string `json:"expected,omitempty"`
+	Action   string        `json:"action"`
+	Expected string        `json:"expected,omitempty"`
+	GroupRef *StepGroupRef `json:"groupRef,omitempty"`
+}
+
+// StepGroupRef records which StepGroup a resolved step entry came from,
+// and when its content was last resolved — SnapshotUpdatedAt is compared
+// against the live group's UpdatedAt to detect staleness while editing a
+// case (never while merely viewing a saved version).
+type StepGroupRef struct {
+	GroupID           string    `json:"groupId"`
+	GroupKey          string    `json:"groupKey"`
+	SnapshotUpdatedAt time.Time `json:"snapshotUpdatedAt"`
+}
+
+// StepGroup is a project-scoped, named, ordered list of steps that a test
+// case's content may reference (add-reusable-steps). Mutable in place —
+// unlike a test case, a StepGroup is not itself versioned; its edit
+// history is the generic audit log, matching Folder/CustomField.
+type StepGroup struct {
+	ID        string    `json:"id"`
+	ProjectID string    `json:"projectId"`
+	Key       string    `json:"key"`
+	Name      string    `json:"name"`
+	Steps     []Step    `json:"steps"`
+	CreatedAt time.Time `json:"createdAt"`
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+func (g StepGroup) Validate() error {
+	if g.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	if len(g.Steps) == 0 {
+		return fmt.Errorf("at least one step is required")
+	}
+	for i, s := range g.Steps {
+		if s.Action == "" {
+			return fmt.Errorf("step %d: action is required", i+1)
+		}
+	}
+	return nil
 }
 
 func (c CaseContent) Validate() error {

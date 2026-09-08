@@ -815,6 +815,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/step-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a project's shared step groups (add-reusable-steps) — requires read */
+        get: operations["listStepGroups"];
+        put?: never;
+        /** Create a shared step group — requires manageProject */
+        post: operations["createStepGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/step-groups/{groupId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        /** Get a step group — requires read on its project */
+        get: operations["getStepGroup"];
+        /** Rename and/or redefine a step group's steps — requires manageProject. Never changes an already-saved case version that referenced it. */
+        put: operations["updateStepGroup"];
+        post?: never;
+        /** Soft-delete a step group — requires manageProject. Already-saved case versions are unaffected. */
+        delete: operations["deleteStepGroup"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/imports": {
         parameters: {
             query?: never;
@@ -2178,8 +2219,16 @@ export interface components {
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "critical";
         Step: {
-            action: string;
+            action?: string;
             expected?: string;
+            /** @description When set, this step references a shared step group (add-reusable-steps) instead of carrying its own action/expected — the server resolves and expands it to the group's full step sequence at save time, ignoring any action/expected the client supplied on this entry. On input, only groupKey is read; id and snapshotUpdatedAt are server-set and returned on output. */
+            groupRef?: components["schemas"]["StepGroupRef"];
+        };
+        StepGroupRef: {
+            readonly groupId?: string;
+            groupKey: string;
+            /** Format: date-time */
+            readonly snapshotUpdatedAt?: string;
         };
         CaseContent: {
             title: string;
@@ -2655,6 +2704,24 @@ export interface components {
         CustomFieldDeletionPreview: {
             /** @description The project's current cases with a value set for this field. */
             caseCount: number;
+        };
+        /** @description A project-scoped, named, ordered list of steps a test case's content may reference (add-reusable-steps). Mutable in place, not itself versioned — editing it never changes an already-saved case version that previously referenced it (see the Step schema's groupRef). */
+        StepGroup: {
+            id: string;
+            key: string;
+            name: string;
+            steps: components["schemas"]["Step"][];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Compared against a referencing step's snapshotUpdatedAt to detect staleness while editing a case.
+             */
+            updatedAt: string;
+        };
+        StepGroupInput: {
+            name: string;
+            steps: components["schemas"]["Step"][];
         };
         ProjectSummary: {
             projectId: string;
@@ -4619,6 +4686,124 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    listStepGroups: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Step groups */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepGroup"][];
+                };
+            };
+        };
+    };
+    createStepGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepGroupInput"];
+            };
+        };
+        responses: {
+            /** @description Created step group */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepGroup"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    getStepGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Step group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepGroup"];
+                };
+            };
+        };
+    };
+    updateStepGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StepGroupInput"];
+            };
+        };
+        responses: {
+            /** @description Updated step group */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepGroup"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    deleteStepGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                groupId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
             204: {
                 headers: {
                     [name: string]: unknown;

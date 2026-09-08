@@ -478,6 +478,55 @@ func TestSeedContentShowcasesCustomFields(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesSharedStepGroup covers add-reusable-steps task
+// 10: the Shared Steps admin page and the case editor's group-reference
+// UI need a real seeded group referenced by more than one case to be
+// demonstrable in the showroom, not just in tests.
+func TestSeedContentShowcasesSharedStepGroup(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	groups, err := svc.ListStepGroups(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListStepGroups: %v", err)
+	}
+	var group *domain.StepGroup
+	for i := range groups {
+		if groups[i].Name == "Log in as admin" {
+			group = &groups[i]
+		}
+	}
+	if group == nil {
+		t.Fatal("no \"Log in as admin\" step group seeded")
+	}
+	if len(group.Steps) < 2 {
+		t.Errorf("group.Steps = %+v, want at least 2 steps", group.Steps)
+	}
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	referencingCount := 0
+	for _, c := range cases {
+		for _, s := range c.Content.Steps {
+			if s.GroupRef != nil && s.GroupRef.GroupID == group.ID {
+				referencingCount++
+				break
+			}
+		}
+	}
+	if referencingCount < 2 {
+		t.Errorf("cases referencing the shared group = %d, want at least 2", referencingCount)
+	}
+}
+
 // TestSeedContentEndsOnAHealthyRun covers the project health-badge
 // showcase: the chronologically LAST-created run is the one that
 // determines the project's shown pass rate.

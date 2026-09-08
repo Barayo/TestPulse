@@ -467,7 +467,7 @@ export default function RunItemDetailPage() {
             <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               {caseContentHeading(item.content.format)}
             </p>
-            <CaseContentView content={item.content} />
+            <CaseContentView content={item.content} projectKey={projectKey} />
           </div>
           {item.content.expectedResult && (
             <div>
