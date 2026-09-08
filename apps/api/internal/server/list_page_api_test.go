@@ -6,6 +6,7 @@ package server_test
 // store -> back out over JSON).
 
 import (
+	"encoding/base64"
 	"fmt"
 	"testing"
 )
@@ -355,4 +356,33 @@ func TestScenario_ListRunsOverHTTPDefaultsToBareArrayNeverAgain(t *testing.T) {
 	if resp.NextCursor != nil {
 		t.Errorf("nextCursor = %v, want nil (only page)", resp.NextCursor)
 	}
+}
+
+// TestScenario_MalformedCursorReturns400NotAnArbitraryPage covers the spec's
+// "A malformed or unrecognized cursor is rejected" scenario (spec.md):
+// found unenforced by Paco's pre-commit QA pass — every *Page store method's
+// decodeCursor/decodeCursorWithRank error reached handlers.go's respond()
+// unwrapped, matching none of its typed-error cases, so it fell through to
+// the default 500 branch instead of the documented 400. Covers a
+// representative slice of the eight affected endpoints (owning cursor vs.
+// rank-aware cursor, project-scoped vs. instance-scoped, authenticated vs.
+// public) since the fix is a single shared root cause, not eight separate
+// ones.
+func TestScenario_MalformedCursorReturns400NotAnArbitraryPage(t *testing.T) {
+	h := apiServer(t)
+	var p struct{ Key string }
+	call(t, h, "POST", "/api/v1/projects", jmap{"name": "Malformed Cursor"}, 201, &p)
+	call(t, h, "PATCH", fmt.Sprintf("/api/v1/projects/%s", p.Key), jmap{"publicAccess": true}, 200, nil)
+
+	const garbage = "garbage!!!notbase64"
+	var errResp jmap
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/runs?cursor=%s", p.Key, garbage), nil, 400, &errResp)
+	call(t, h, "GET", fmt.Sprintf("/api/v1/public/projects/%s/runs?cursor=%s", p.Key, garbage), nil, 400, nil)
+	call(t, h, "GET", "/api/v1/users?cursor="+garbage, nil, 400, nil)
+	call(t, h, "GET", "/api/v1/roles?cursor="+garbage, nil, 400, nil) // rank-aware cursor codec
+
+	// Well-formed JSON but missing the required fields must also 400, not
+	// silently return an arbitrary page (same decodeCursor validation path).
+	emptyPayload := base64.URLEncoding.EncodeToString([]byte(`{}`))
+	call(t, h, "GET", fmt.Sprintf("/api/v1/projects/%s/runs?cursor=%s", p.Key, emptyPayload), nil, 400, nil)
 }

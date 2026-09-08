@@ -15,6 +15,14 @@ const (
 	MaxPageLimit     = 200
 )
 
+// ErrInvalidCursor is returned by decodeCursor/decodeCursorWithRank for a
+// cursor a client didn't just receive from this same endpoint — malformed
+// encoding, malformed JSON, or well-formed JSON missing required fields.
+// handlers.go's respond() maps it to 400 (spec.md: "A malformed or
+// unrecognized cursor is rejected"); found unenforced (mapped to a bare 500
+// instead) by Paco's pre-commit QA pass on this change.
+var ErrInvalidCursor = fmt.Errorf("invalid cursor")
+
 type cursorPayload struct {
 	CreatedAt time.Time `json:"createdAt"`
 	ID        string    `json:"id"`
@@ -40,14 +48,14 @@ func encodeCursor(createdAt time.Time, id string) string {
 func decodeCursor(cursor string) (createdAt time.Time, id string, err error) {
 	data, err := base64.URLEncoding.DecodeString(cursor)
 	if err != nil {
-		return time.Time{}, "", fmt.Errorf("invalid cursor encoding: %w", err)
+		return time.Time{}, "", fmt.Errorf("invalid cursor encoding: %w: %w", ErrInvalidCursor, err)
 	}
 	var payload cursorPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return time.Time{}, "", fmt.Errorf("invalid cursor payload: %w", err)
+		return time.Time{}, "", fmt.Errorf("invalid cursor payload: %w: %w", ErrInvalidCursor, err)
 	}
 	if payload.ID == "" || payload.CreatedAt.IsZero() {
-		return time.Time{}, "", fmt.Errorf("invalid cursor: missing createdAt or id")
+		return time.Time{}, "", fmt.Errorf("invalid cursor: missing createdAt or id: %w", ErrInvalidCursor)
 	}
 	return payload.CreatedAt, payload.ID, nil
 }
@@ -76,14 +84,14 @@ func encodeCursorWithRank(rank int, createdAt time.Time, id string) string {
 func decodeCursorWithRank(cursor string) (rank int, createdAt time.Time, id string, err error) {
 	data, err := base64.URLEncoding.DecodeString(cursor)
 	if err != nil {
-		return 0, time.Time{}, "", fmt.Errorf("invalid cursor encoding: %w", err)
+		return 0, time.Time{}, "", fmt.Errorf("invalid cursor encoding: %w: %w", ErrInvalidCursor, err)
 	}
 	var payload rankedCursorPayload
 	if err := json.Unmarshal(data, &payload); err != nil {
-		return 0, time.Time{}, "", fmt.Errorf("invalid cursor payload: %w", err)
+		return 0, time.Time{}, "", fmt.Errorf("invalid cursor payload: %w: %w", ErrInvalidCursor, err)
 	}
 	if payload.ID == "" || payload.CreatedAt.IsZero() {
-		return 0, time.Time{}, "", fmt.Errorf("invalid cursor: missing createdAt or id")
+		return 0, time.Time{}, "", fmt.Errorf("invalid cursor: missing createdAt or id: %w", ErrInvalidCursor)
 	}
 	return payload.Rank, payload.CreatedAt, payload.ID, nil
 }
