@@ -76,11 +76,14 @@ test('Requirement: Reusable step groups — extract, reference, edit, refresh, d
   await page.getByRole('button', { name: /create test case/i }).click()
   await page.waitForURL(/\/cases\/(?!new)/)
 
-  // 4. Edit the shared group's own content from the admin page.
+  // 4. Edit the shared group's own content from the admin page — staged
+  // locally, only sent on an explicit Save changes (add-reusable-steps
+  // QA fix: this editor no longer saves on every keystroke).
   await page.goto(`/projects/${projectKey}/settings`)
   await page.getByText('Log in as admin').click()
-  const groupSaved = page.waitForResponse((r) => r.url().includes('/api/v1/step-groups/') && r.request().method() === 'PUT')
   await page.getByLabel(/^Action for step 1/i).fill('Navigate to /admin/login (v2)')
+  const groupSaved = page.waitForResponse((r) => r.url().includes('/api/v1/step-groups/') && r.request().method() === 'PUT')
+  await page.getByRole('button', { name: /save changes/i }).click()
   await groupSaved
 
   // 5. The second case's editor now shows a staleness pill on that block.
