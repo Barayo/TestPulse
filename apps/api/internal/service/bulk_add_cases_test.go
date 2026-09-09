@@ -153,3 +153,128 @@ func TestBulkAddCasesValidatesCustomFieldsAgainstBatchFetchedList(t *testing.T) 
 		t.Fatalf("project has %d cases after the rejected second batch, want 2 (only the first batch)", len(all))
 	}
 }
+
+// Security review finding (add-reusable-steps, post-implementation Luis
+// pass): BulkAddCases skipped resolveStepGroupRefs entirely, unlike
+// CreateCase/EditCase — a groupRef step went straight to the store
+// unvalidated, breaking bulk_add_cases's own "all-or-nothing" contract and
+// silently bricking the case on its next validated edit. These four tests
+// cover the same ground step_group_resolution_test.go covers for
+// CreateCase, through the BulkAddCases contract instead.
+
+func TestBulkAddCasesResolvesGroupRefToFullStepSequence(t *testing.T) {
+	s := bulkAddCasesTestService(t)
+	ctx := context.Background()
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Group Ref"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	group, err := s.CreateStepGroup(ctx, project.ID, "Log in as admin", []domain.Step{
+		{Action: "open login page"},
+		{Action: "enter credentials"},
+	})
+	if err != nil {
+		t.Fatalf("CreateStepGroup: %v", err)
+	}
+
+	created, err := s.BulkAddCases(ctx, project.ID, "", []domain.CaseContent{
+		{
+			Title:    "Uses a shared group",
+			Priority: domain.PriorityMedium,
+			Steps:    []domain.Step{{GroupRef: &domain.StepGroupRef{GroupKey: group.Key}}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BulkAddCases: %v", err)
+	}
+	steps := created[0].Content.Steps
+	if len(steps) != 2 || steps[0].Action != "open login page" || steps[1].Action != "enter credentials" {
+		t.Fatalf("created case steps = %+v, want the group's full resolved content", steps)
+	}
+}
+
+func TestBulkAddCasesIgnoresClientSuppliedContentOnAGroupRef(t *testing.T) {
+	s := bulkAddCasesTestService(t)
+	ctx := context.Background()
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Group Ref Spoofing"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	group, err := s.CreateStepGroup(ctx, project.ID, "Real group", []domain.Step{{Action: "real content"}})
+	if err != nil {
+		t.Fatalf("CreateStepGroup: %v", err)
+	}
+
+	created, err := s.BulkAddCases(ctx, project.ID, "", []domain.CaseContent{
+		{
+			Title:    "Spoofing attempt",
+			Priority: domain.PriorityMedium,
+			Steps: []domain.Step{{
+				Action:   "attacker-supplied action",
+				Expected: "attacker-supplied expected",
+				GroupRef: &domain.StepGroupRef{GroupKey: group.Key},
+			}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BulkAddCases: %v", err)
+	}
+	if got := created[0].Content.Steps[0].Action; got != "real content" {
+		t.Fatalf("resolved step action = %q, want the group's real content, not the client-supplied value", got)
+	}
+}
+
+func TestBulkAddCasesRejectsUnknownGroupKey(t *testing.T) {
+	s := bulkAddCasesTestService(t)
+	ctx := context.Background()
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Unknown Group"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	_, err = s.BulkAddCases(ctx, project.ID, "", []domain.CaseContent{
+		{
+			Title:    "Unknown group",
+			Priority: domain.PriorityMedium,
+			Steps:    []domain.Step{{GroupRef: &domain.StepGroupRef{GroupKey: "SP-SG999"}}},
+		},
+	})
+	if err == nil {
+		t.Fatal("BulkAddCases with an unknown group key = nil error, want rejected")
+	}
+	all, listErr := s.ListCases(ctx, project.ID)
+	if listErr != nil {
+		t.Fatalf("ListCases: %v", listErr)
+	}
+	if len(all) != 0 {
+		t.Fatalf("project has %d cases after a rejected batch, want 0", len(all))
+	}
+}
+
+func TestBulkAddCasesRejectsGroupRefFromAnotherProject(t *testing.T) {
+	s := bulkAddCasesTestService(t)
+	ctx := context.Background()
+	project1, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Cross Project 1"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	project2, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Cross Project 2"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	otherGroup, err := s.CreateStepGroup(ctx, project2.ID, "Other project's group", []domain.Step{{Action: "x"}})
+	if err != nil {
+		t.Fatalf("CreateStepGroup: %v", err)
+	}
+
+	_, err = s.BulkAddCases(ctx, project1.ID, "", []domain.CaseContent{
+		{
+			Title:    "Cross-project reference attempt",
+			Priority: domain.PriorityMedium,
+			Steps:    []domain.Step{{GroupRef: &domain.StepGroupRef{GroupKey: otherGroup.Key}}},
+		},
+	})
+	if err == nil {
+		t.Fatal("BulkAddCases with a group ref from a different project = nil error, want rejected")
+	}
+}

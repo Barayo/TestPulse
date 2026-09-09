@@ -529,14 +529,16 @@ func (s *Service) resolveStepGroupRefs(ctx context.Context, projectID string, st
 		i = j
 
 		group, err := s.store.StepGroups.GetByKey(ctx, step.GroupRef.GroupKey)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return nil, invalid("step group %q not found", step.GroupRef.GroupKey)
-			}
+		if err != nil && !errors.Is(err, store.ErrNotFound) {
 			return nil, err
 		}
-		if group.ProjectID != projectID {
-			return nil, invalid("step group %q does not belong to this project", step.GroupRef.GroupKey)
+		// One generic message for both "no such group" and "group exists
+		// but belongs to another project" (matches
+		// validateCustomFieldValuesAgainst's precedent) — a distinguishable
+		// error would let an actor probe whether a specific step-group key
+		// exists in a project they can't otherwise see into.
+		if err != nil || group.ProjectID != projectID {
+			return nil, invalid("step group %q not found", step.GroupRef.GroupKey)
 		}
 
 		if !step.GroupRef.SnapshotUpdatedAt.Equal(group.UpdatedAt) {
@@ -630,6 +632,7 @@ func (s *Service) BulkAddCases(ctx context.Context, projectID, folderID string, 
 	if err != nil {
 		return nil, err
 	}
+	resolvedContents := make([]domain.CaseContent, len(contents))
 	for i, content := range contents {
 		if err := content.Validate(); err != nil {
 			return nil, invalid("case %d: %s", i, err)
@@ -637,9 +640,20 @@ func (s *Service) BulkAddCases(ctx context.Context, projectID, folderID string, 
 		if err := validateCustomFieldValuesAgainst(fields, content.CustomFields); err != nil {
 			return nil, err
 		}
+		// Security review finding: this batch path must resolve GroupRef
+		// steps the same as CreateCase/EditCase — skipping it let an
+		// unvalidated, potentially cross-project or nonexistent group
+		// reference reach the store, breaking this tool's own
+		// all-or-nothing contract.
+		resolvedSteps, err := s.resolveStepGroupRefs(ctx, projectID, content.Steps, nil)
+		if err != nil {
+			return nil, err
+		}
+		content.Steps = resolvedSteps
+		resolvedContents[i] = content
 	}
 	actorKind, actorRefID := resolveActor(ctx)
-	cases, err := s.store.Cases.CreateBatch(ctx, projectID, folderID, contents, actorKind, actorRefID)
+	cases, err := s.store.Cases.CreateBatch(ctx, projectID, folderID, resolvedContents, actorKind, actorRefID)
 	if err != nil {
 		return nil, err
 	}

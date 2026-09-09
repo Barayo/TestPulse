@@ -8,6 +8,7 @@ package service_test
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -139,6 +140,48 @@ func TestCreateCaseRejectsUnknownGroupKey(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("CreateCase with an unknown group key = nil error, want rejected")
+	}
+}
+
+// Security review finding (add-reusable-steps, post-implementation Luis
+// pass): "not found" and "belongs to another project" used to be two
+// distinguishable error messages, letting any actor with case-create
+// access to one project probe whether a specific step-group key exists in
+// a project they can't otherwise see into (group keys are predictable,
+// sequential per project). Both cases must now produce the identical
+// generic message, matching validateCustomFieldValuesAgainst's existing
+// precedent for the same class of leak.
+func TestCreateCaseGivesIdenticalErrorForUnknownAndCrossProjectGroupKeys(t *testing.T) {
+	s, st := resolutionTestServiceAndStore(t)
+	ctx := context.Background()
+	p1 := mustResolutionProject(t, s)
+	p2 := mustResolutionProject(t, s)
+
+	otherGroup, err := st.StepGroups.Create(ctx, p2.ID, "Other project's group", []domain.Step{{Action: "x"}})
+	if err != nil {
+		t.Fatalf("StepGroups.Create: %v", err)
+	}
+
+	_, unknownErr := s.CreateCase(ctx, p1.ID, "", domain.CaseContent{
+		Title:    "Unknown group",
+		Priority: domain.PriorityMedium,
+		Steps:    []domain.Step{{GroupRef: &domain.StepGroupRef{GroupKey: "SP-SG999"}}},
+	})
+	_, crossProjectErr := s.CreateCase(ctx, p1.ID, "", domain.CaseContent{
+		Title:    "Cross-project reference attempt",
+		Priority: domain.PriorityMedium,
+		Steps:    []domain.Step{{GroupRef: &domain.StepGroupRef{GroupKey: otherGroup.Key}}},
+	})
+	if unknownErr == nil || crossProjectErr == nil {
+		t.Fatalf("expected both to be rejected, got unknownErr=%v crossProjectErr=%v", unknownErr, crossProjectErr)
+	}
+	wantUnknown := `step group "SP-SG999" not found`
+	wantCrossProject := fmt.Sprintf("step group %q not found", otherGroup.Key)
+	if unknownErr.Error() != wantUnknown {
+		t.Fatalf("unknown-key error = %q, want %q", unknownErr.Error(), wantUnknown)
+	}
+	if crossProjectErr.Error() != wantCrossProject {
+		t.Fatalf("cross-project error = %q, want %q — a message that instead reveals the group belongs to another project is an existence oracle", crossProjectErr.Error(), wantCrossProject)
 	}
 }
 
