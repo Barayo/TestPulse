@@ -394,6 +394,8 @@ export default function FolderExplorerPage() {
   const [contentCreatingFolder, setContentCreatingFolder] = useState(false)
   const [newFolderName, setNewFolderName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget | null>(null)
+  const [deleteError, setDeleteError] = useState<string | undefined>(undefined)
+  const [bulkMoveError, setBulkMoveError] = useState<string | undefined>(undefined)
   const [creatingSuiteFromSelection, setCreatingSuiteFromSelection] = useState(false)
   const [newSuiteFromSelectionName, setNewSuiteFromSelectionName] = useState('')
   const [search, setSearch] = useState('')
@@ -488,6 +490,18 @@ export default function FolderExplorerPage() {
     const ancestors = ancestorChain(folders, selectedFolderId).map((f) => f.id)
     setExpanded((prev) => new Set([...prev, ...ancestors]))
   }, [selectedFolderId, folders])
+
+  // A fresh delete/bulk-move target clears any stale error from a previous
+  // attempt on a different target; a failed confirmDelete/handleBulkMove
+  // doesn't change deleteTarget/bulkMoveKeys itself, so this doesn't wipe
+  // the error it just set (Paco's QA pass on add-folder-slug-urls).
+  useEffect(() => {
+    if (deleteTarget) setDeleteError(undefined)
+  }, [deleteTarget])
+
+  useEffect(() => {
+    if (bulkMoveKeys) setBulkMoveError(undefined)
+  }, [bulkMoveKeys])
 
   // A slug-path that only resolved via a folder's previous identity (it
   // was moved since the URL was bookmarked) redirects the address bar to
@@ -828,31 +842,58 @@ export default function FolderExplorerPage() {
     })
   }
 
-  async function confirmDelete() {
-    if (!deleteTarget) return
+  // Returns an error message on failure, same discipline as moveFolder above
+  // (Paco's QA pass on add-folder-slug-urls, 2026-09-10: this used to
+  // discard the API response entirely and close the dialog/reload as if the
+  // delete had succeeded).
+  async function confirmDelete(): Promise<string | undefined> {
+    if (!deleteTarget) return undefined
     if (deleteTarget.kind === 'case') {
-      await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey: deleteTarget.key } } })
+      const { error, response } = await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey: deleteTarget.key } } })
+      if (!response.ok) return (error as { error?: string })?.error ?? 'Could not delete this case.'
     } else if (deleteTarget.kind === 'bulk') {
-      await Promise.all([bulkDeleteCases(deleteTarget.keys), bulkDeleteFolders(deleteTarget.folderIds)])
+      const [casesError, foldersError] = await Promise.all([
+        bulkDeleteCases(deleteTarget.keys),
+        bulkDeleteFolders(deleteTarget.folderIds),
+      ])
+      const error = [casesError, foldersError].filter(Boolean).join(' ')
+      if (error) return error
       setSelected(new Set())
       setLastToggledId(null)
     } else {
-      await api.DELETE('/api/v1/folders/{folderId}', { params: { path: { folderId: deleteTarget.id } } })
+      const { error, response } = await api.DELETE('/api/v1/folders/{folderId}', { params: { path: { folderId: deleteTarget.id } } })
+      if (!response.ok) return (error as { error?: string })?.error ?? 'Could not delete this section.'
     }
     setDeleteTarget(null)
     await load()
     bumpLanding()
+    return undefined
   }
 
-  async function handleBulkMove(targetFolderId: string) {
-    if (!bulkMoveKeys) return
+  // Same error-surfacing discipline as confirmDelete above (Paco's QA pass).
+  async function handleBulkMove(targetFolderId: string): Promise<string | undefined> {
+    if (!bulkMoveKeys) return undefined
     const { folderIds, caseKeys } = splitSelection(bulkMoveKeys)
-    await Promise.all([bulkMoveCases(caseKeys, targetFolderId), bulkMoveFolders(folderIds, targetFolderId)])
+    const [casesError, foldersError] = await Promise.all([
+      bulkMoveCases(caseKeys, targetFolderId),
+      bulkMoveFolders(folderIds, targetFolderId),
+    ])
+    const error = [casesError, foldersError].filter(Boolean).join(' ')
+    if (error) return error
     setBulkMoveKeys(null)
     setSelected(new Set())
     setLastToggledId(null)
     await load()
     bumpLanding()
+    return undefined
+  }
+
+  function handleConfirmDelete() {
+    void confirmDelete().then((error) => setDeleteError(error))
+  }
+
+  function handleSelectBulkMoveTarget(targetFolderId: string) {
+    void handleBulkMove(targetFolderId).then((error) => setBulkMoveError(error))
   }
 
   function openCase(caseKey: string) {
@@ -1339,8 +1380,13 @@ export default function FolderExplorerPage() {
             query={bulkMoveQuery}
             onQueryChange={setBulkMoveQuery}
             folderStats={folderStats}
-            onSelect={(targetFolderId) => void handleBulkMove(targetFolderId)}
+            onSelect={handleSelectBulkMoveTarget}
           />
+          {bulkMoveError && (
+            <p role="alert" className="text-sm text-destructive">
+              {bulkMoveError}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1406,7 +1452,7 @@ export default function FolderExplorerPage() {
                 <Button variant="outline" onClick={() => setDeleteTarget(null)}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={() => void confirmDelete()}>
+                <Button variant="destructive" onClick={handleConfirmDelete}>
                   Delete case
                 </Button>
               </DialogFooter>
@@ -1432,7 +1478,7 @@ export default function FolderExplorerPage() {
                 <Button variant="outline" onClick={() => setDeleteTarget(null)}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={() => void confirmDelete()}>
+                <Button variant="destructive" onClick={handleConfirmDelete}>
                   Confirm delete
                 </Button>
               </DialogFooter>
@@ -1451,11 +1497,16 @@ export default function FolderExplorerPage() {
                 <Button variant="outline" onClick={() => setDeleteTarget(null)}>
                   Cancel
                 </Button>
-                <Button variant="destructive" onClick={() => void confirmDelete()}>
+                <Button variant="destructive" onClick={handleConfirmDelete}>
                   Delete section
                 </Button>
               </DialogFooter>
             </>
+          )}
+          {deleteError && (
+            <p role="alert" className="text-sm text-destructive">
+              {deleteError}
+            </p>
           )}
         </DialogContent>
       </Dialog>

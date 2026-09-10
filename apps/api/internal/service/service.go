@@ -594,9 +594,34 @@ func carryForwardGroupRef(previousSteps []domain.Step, groupID string, snapshotU
 	return nil, false
 }
 
+// checkFolderBelongsToProject confines folderID to projectID before any
+// create/insert that would otherwise trust a caller-supplied folder ID
+// verbatim (Luis's post-implementation review of add-folder-slug-urls,
+// 2026-09-10) -- the same cross-project graft risk #175 already fixed for
+// MoveCase/MoveFolder, but CreateCase/CreateFolder/BulkAddCases never had
+// the equivalent check. An empty folderID is left alone: it resolves to the
+// caller's own project's root folder downstream (store.resolveFolderID),
+// which is always correct.
+func (s *Service) checkFolderBelongsToProject(ctx context.Context, projectID, folderID string) error {
+	if folderID == "" {
+		return nil
+	}
+	destProjectID, err := s.store.Folders.ProjectID(ctx, folderID)
+	if err != nil {
+		return err
+	}
+	if destProjectID != projectID {
+		return invalid("folder belongs to a different project")
+	}
+	return nil
+}
+
 func (s *Service) CreateCase(ctx context.Context, projectID, folderID string, content domain.CaseContent) (domain.TestCase, error) {
 	if err := content.Validate(); err != nil {
 		return domain.TestCase{}, invalid("%s", err)
+	}
+	if err := s.checkFolderBelongsToProject(ctx, projectID, folderID); err != nil {
+		return domain.TestCase{}, err
 	}
 	if err := s.validateCustomFieldValues(ctx, projectID, content.CustomFields); err != nil {
 		return domain.TestCase{}, err
@@ -624,6 +649,9 @@ func (s *Service) CreateCase(ctx context.Context, projectID, folderID string, co
 func (s *Service) BulkAddCases(ctx context.Context, projectID, folderID string, contents []domain.CaseContent) ([]domain.TestCase, error) {
 	if len(contents) == 0 {
 		return nil, invalid("cases is required")
+	}
+	if err := s.checkFolderBelongsToProject(ctx, projectID, folderID); err != nil {
+		return nil, err
 	}
 	// Custom fields fetched once for the whole batch rather than once per
 	// case (#180's lower-impact companion N+1) -- every case validates
@@ -848,6 +876,9 @@ func (s *Service) DeleteCase(ctx context.Context, caseID string) error {
 func (s *Service) CreateFolder(ctx context.Context, projectID string, in domain.NewFolder) (domain.Folder, error) {
 	if err := in.Validate(); err != nil {
 		return domain.Folder{}, invalid("%s", err)
+	}
+	if err := s.checkFolderBelongsToProject(ctx, projectID, in.ParentFolderID); err != nil {
+		return domain.Folder{}, err
 	}
 	slug := domain.Slugify(in.Name)
 	// "" excludeFolderID: a brand-new folder has no previous identity of

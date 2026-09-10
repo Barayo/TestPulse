@@ -32,4 +32,25 @@ describe('bulkMoveCases', () => {
       )
     }
   })
+
+  it('resolves undefined when every move succeeds', async () => {
+    const result = await bulkMoveCases(['c1', 'c2'], 'f2')
+    expect(result).toBeUndefined()
+  })
+
+  it('resolves an error message naming how many moves failed', async () => {
+    mockPUT
+      .mockResolvedValueOnce({ response: { ok: false }, error: { error: 'nope' } })
+      .mockResolvedValueOnce({ response: { ok: true } })
+
+    const result = await bulkMoveCases(['c1', 'c2'], 'f2')
+    expect(result).toBe('Could not move 1 of 2 cases.')
+  })
+
+  it('resolves an error message when every move fails', async () => {
+    mockPUT.mockResolvedValue({ response: { ok: false }, error: { error: 'nope' } })
+
+    const result = await bulkMoveCases(['c1', 'c2'], 'f2')
+    expect(result).toBe('Could not move the selected cases.')
+  })
 })

@@ -278,3 +278,30 @@ func TestBulkAddCasesRejectsGroupRefFromAnotherProject(t *testing.T) {
 		t.Fatal("BulkAddCases with a group ref from a different project = nil error, want rejected")
 	}
 }
+
+// Same cross-project graft risk as CreateCase/MoveCase (#175, and Luis's
+// post-implementation review of add-folder-slug-urls, 2026-09-10) but for
+// the folderID BulkAddCases shares every batch member into.
+func TestBulkAddCasesRejectsFolderFromDifferentProject(t *testing.T) {
+	s := bulkAddCasesTestService(t)
+	ctx := context.Background()
+	project1, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Cross Project Folder 1"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	project2, err := s.CreateProject(ctx, service.ProjectInput{Name: "Bulk Add Cases Cross Project Folder 2"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	rootProject2, err := rootFolder(t, s, ctx, project2.ID)
+	if err != nil {
+		t.Fatalf("rootFolder: %v", err)
+	}
+
+	_, err = s.BulkAddCases(ctx, project1.ID, rootProject2.ID, []domain.CaseContent{
+		{Title: "Cross-project folder attempt", Priority: domain.PriorityMedium},
+	})
+	if err == nil {
+		t.Fatal("BulkAddCases in project 1 targeting project 2's folder = nil error, want rejected")
+	}
+}

@@ -1936,5 +1936,77 @@ describe('FolderExplorerPage', () => {
       expect(await screen.findByText(/a section named "nacionales" already exists here/i)).toBeInTheDocument()
       expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
+
+    // Paco's QA pass on add-folder-slug-urls (2026-09-10): confirmDelete and
+    // the bulk delete/move helpers used to discard the API response entirely
+    // and unconditionally close the dialog/reload as if the operation had
+    // succeeded. Mirrors the move-folder error-surfacing pattern above.
+    it('shows an error and keeps the dialog open when deleting a case fails', async () => {
+      mockExplorerAPI()
+      mockDELETE.mockResolvedValue({ error: {}, response: { ok: false } })
+      renderExplorer()
+      const caseRow = (await screen.findByText('Daily transfer limit')).closest('li') as HTMLElement
+      await userEvent.click(within(caseRow).getByRole('button', { name: /actions for daily transfer limit/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: /^delete case$/i }))
+
+      expect(await screen.findByText(/could not delete this case/i)).toBeInTheDocument()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText('Daily transfer limit')).toBeInTheDocument()
+    })
+
+    it('shows an error and keeps the dialog open when deleting a folder fails', async () => {
+      mockExplorerAPI({ deletePreview: { caseCount: 0, folderCount: 0 } })
+      mockDELETE.mockResolvedValue({ error: {}, response: { ok: false } })
+      renderExplorer()
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Nacionales')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for nacionales/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /^delete$/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByRole('button', { name: /^delete section$/i }))
+
+      expect(await screen.findByText(/could not delete this section/i)).toBeInTheDocument()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getAllByText('Nacionales').length).toBeGreaterThan(0)
+    })
+
+    it('shows an error and keeps the dialog open when a bulk delete partially fails', async () => {
+      const caseTwo = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Case Two' } }
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      mockDELETE.mockResolvedValueOnce({ response: { ok: false }, error: { error: 'nope' } }).mockResolvedValue({ response: { ok: true } })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      const title = await within(list).findByText('Daily transfer limit')
+      fireEvent.click(title, { shiftKey: true })
+      fireEvent.click(screen.getByText('Case Two'), { shiftKey: true })
+
+      await userEvent.click(screen.getByRole('button', { name: /^delete$/i }))
+      await screen.findByRole('heading', { name: /delete 2 cases/i })
+      await userEvent.click(screen.getByRole('button', { name: /confirm delete/i }))
+
+      expect(await screen.findByText(/could not delete 1 of 2 cases/i)).toBeInTheDocument()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText(/2 selected/i)).toBeInTheDocument()
+    })
+
+    it('shows an error and keeps the dialog open when a bulk move fails', async () => {
+      const caseTwo = { ...limitCase, id: 'c2', key: 'c2', content: { ...limitCase.content, title: 'Case Two' } }
+      mockExplorerAPI({ cases: [limitCase, caseTwo] })
+      mockPUT.mockResolvedValue({ response: { ok: false }, error: { error: 'a section named "Nacionales" already exists here' } })
+      renderExplorer()
+      const list = await screen.findByRole('list', { name: 'Section contents' })
+      const title = await within(list).findByText('Daily transfer limit')
+      fireEvent.click(title, { shiftKey: true })
+      fireEvent.click(screen.getByText('Case Two'), { shiftKey: true })
+
+      await userEvent.click(screen.getByRole('button', { name: /^move to…$/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByText('Nacionales'))
+
+      expect(await screen.findByText(/could not move the selected cases/i)).toBeInTheDocument()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
+      expect(screen.getByText(/2 selected/i)).toBeInTheDocument()
+    })
   })
 })

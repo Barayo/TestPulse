@@ -32,4 +32,30 @@ describe('bulkDeleteFolders', () => {
       )
     }
   })
+
+  it('resolves undefined when every delete succeeds', async () => {
+    const result = await bulkDeleteFolders(['f1', 'f2'])
+    expect(result).toBeUndefined()
+  })
+
+  // Paco's QA pass on add-folder-slug-urls (2026-09-10): a rejected delete
+  // (e.g. a slug-collision-adjacent 4xx) was silently discarded, so the
+  // caller had no way to tell the user anything failed. Mirrors moveFolder's
+  // established error-surfacing pattern.
+  it('resolves an error message naming how many deletes failed', async () => {
+    mockDELETE
+      .mockResolvedValueOnce({ response: { ok: true } })
+      .mockResolvedValueOnce({ response: { ok: false }, error: { error: 'nope' } })
+      .mockResolvedValueOnce({ response: { ok: true } })
+
+    const result = await bulkDeleteFolders(['f1', 'f2', 'f3'])
+    expect(result).toBe('Could not delete 1 of 3 sections.')
+  })
+
+  it('resolves an error message when every delete fails', async () => {
+    mockDELETE.mockResolvedValue({ response: { ok: false }, error: { error: 'nope' } })
+
+    const result = await bulkDeleteFolders(['f1', 'f2'])
+    expect(result).toBe('Could not delete the selected sections.')
+  })
 })

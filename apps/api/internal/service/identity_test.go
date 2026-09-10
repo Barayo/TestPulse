@@ -1712,6 +1712,62 @@ func TestMoveFolderRejectsTargetFromDifferentProject(t *testing.T) {
 	}
 }
 
+// Luis's post-implementation review of add-folder-slug-urls (2026-09-10):
+// CreateCase never confirmed folderID belongs to projectID, unlike MoveCase
+// (#175's precedent, TestMoveCaseRejectsFolderFromDifferentProject above).
+// The gap predates add-folder-slug-urls but matters more now that this
+// project's sibling-slug uniqueness guarantees are scoped by the inserted
+// row's own project_id -- a cross-project folderID could otherwise graft a
+// case into a subtree with none of this project's own checks ever having run.
+func TestCreateCaseRejectsFolderFromDifferentProject(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "cross-project-case-creator@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	projectA, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectB, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootB, err := rootFolder(t, s, ctx, projectB.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var verr *service.ValidationError
+	if _, err := s.CreateCase(ctx, projectA.ID, rootB.ID, domain.CaseContent{Title: "Login", Priority: domain.PriorityMedium}); !errors.As(err, &verr) {
+		t.Fatalf("CreateCase in project A targeting project B's folder = %v, want ValidationError", err)
+	}
+}
+
+// Same gap as above, for CreateFolder (Luis's finding).
+func TestCreateFolderRejectsParentFromDifferentProject(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "cross-project-folder-creator@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	projectA, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project A"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	projectB, err := s.CreateProject(ctx, service.ProjectInput{Name: "Project B"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rootB, err := rootFolder(t, s, ctx, projectB.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var verr *service.ValidationError
+	if _, err := s.CreateFolder(ctx, projectA.ID, domain.NewFolder{Name: "Grafted", ParentFolderID: rootB.ID}); !errors.As(err, &verr) {
+		t.Fatalf("CreateFolder in project A targeting project B's parent = %v, want ValidationError", err)
+	}
+}
+
 func TestRestoreVersionCreatesNewVersionWithOldContent(t *testing.T) {
 	s := testService(t)
 	admin := mustCreateUser(t, s, "restorer@example.com", "correcthorse", true)
