@@ -174,7 +174,7 @@ func (h *api) respond(w http.ResponseWriter, status int, v any, err error) {
 			writeJSON(w, http.StatusConflict, map[string]string{"error": err.Error()})
 		case errors.Is(err, store.ErrNotFound):
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
-		case errors.Is(err, store.ErrRootFolder), errors.Is(err, store.ErrFolderCycle):
+		case errors.Is(err, store.ErrRootFolder), errors.Is(err, store.ErrFolderCycle), errors.Is(err, store.ErrFolderSlugTaken):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		case errors.Is(err, store.ErrInvalidCursor):
 			writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})

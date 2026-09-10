@@ -5,6 +5,8 @@ import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
+import { buildSlugPath, resolveSlugPath } from '@/lib/folderSlugPath'
+import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { FolderTree, CASE_ID_MIME } from '@/components/FolderTree'
 import { ResizeHandle } from '@/components/ResizeHandle'
 import { useResizableWidth } from '@/lib/useResizableWidth'
@@ -360,7 +362,10 @@ function CaseRow({
 }
 
 export default function FolderExplorerPage() {
-  const { projectKey, folderId } = useParams<{ projectKey: string; folderId?: string }>()
+  // add-folder-slug-urls: the URL's trailing segment is a slug-path
+  // (e.g. "authentication/two-factor"), resolved below against the
+  // loaded folder tree — not a folder ID.
+  const { projectKey, '*': slugPath } = useParams<{ projectKey: string; '*': string }>()
   const navigate = useNavigate()
   const bumpLanding = useBumpDataRevision()
   const isDesktop = useMediaQuery('(min-width: 768px)')
@@ -369,6 +374,8 @@ export default function FolderExplorerPage() {
   const [notFound, setNotFound] = useState(false)
   const [dataTruncated, setDataTruncated] = useState(false)
   const [folders, setFolders] = useState<Folder[]>([])
+  const [justMoved, setJustMoved] = useState<{ name: string } | null>(null)
+  const [createFolderError, setCreateFolderError] = useState<string | undefined>(undefined)
   const [cases, setCases] = useState<TestCase[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [flakyKeys, setFlakyKeys] = useState<Set<string>>(new Set())
@@ -377,6 +384,7 @@ export default function FolderExplorerPage() {
   const [movingCaseKey, setMovingCaseKey] = useState<string | null>(null)
   const [moveQuery, setMoveQuery] = useState('')
   const [movingFolderId, setMovingFolderId] = useState<string | null>(null)
+  const [moveFolderError, setMoveFolderError] = useState<string | undefined>(undefined)
   const [moveFolderQuery, setMoveFolderQuery] = useState('')
   const [bulkMoveKeys, setBulkMoveKeys] = useState<string[] | null>(null)
   const [bulkMoveQuery, setBulkMoveQuery] = useState('')
@@ -464,14 +472,37 @@ export default function FolderExplorerPage() {
   }, [load])
 
   const root = folders.find((f) => !f.parentFolderId)
-  const selectedFolderId = folderId ?? root?.id
+  const slugSegments = slugPath ? slugPath.split('/') : []
+  const resolution = root ? resolveSlugPath(slugSegments, folders, root.id) : null
+  const folderNotFound = Boolean(root) && folders.length > 0 && !resolution
+  const selectedFolderId = resolution?.folder.id
   const selectedFolder = folders.find((f) => f.id === selectedFolderId)
+
+  function libraryUrl(folder: Folder): string {
+    const path = buildSlugPath(folder, folders)
+    return `/projects/${projectKey}/library${path ? `/${path}` : ''}`
+  }
 
   useEffect(() => {
     if (!selectedFolderId) return
     const ancestors = ancestorChain(folders, selectedFolderId).map((f) => f.id)
     setExpanded((prev) => new Set([...prev, ...ancestors]))
   }, [selectedFolderId, folders])
+
+  // A slug-path that only resolved via a folder's previous identity (it
+  // was moved since the URL was bookmarked) redirects the address bar to
+  // the folder's current URL — via `replace` so the stale URL isn't left
+  // in browser history — and shows a one-shot confirmation banner. Firing
+  // only on resolution?.redirected transitioning to true (not on every
+  // render) means the banner doesn't reappear on a subsequent reload: by
+  // then the URL bar already holds the resolved, live-matching path, so
+  // resolution.redirected is false.
+  useEffect(() => {
+    if (!resolution?.redirected || !projectKey) return
+    navigate(libraryUrl(resolution.folder), { replace: true })
+    setJustMoved({ name: resolution.folder.name })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resolution?.redirected, resolution?.folder.id, projectKey])
 
   // Everything below, through the keyboard-nav effects, is computed above
   // the early-return guards (unlike most of this component's render-only
@@ -575,7 +606,7 @@ export default function FolderExplorerPage() {
         const target = orderedVisibleEntries[focusedIndex]
         if (!target) return
         if (target.kind === 'case') openCase(target.id)
-        else navigate(`/projects/${projectKey}/library/${target.id}`)
+        else navigate(libraryUrl(target.folder))
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -604,6 +635,17 @@ export default function FolderExplorerPage() {
             </Link>
           </>
         )}
+      </p>
+    )
+  }
+  // Distinct from the "project not found" state above: the project loaded
+  // fine, but this slug-path doesn't resolve against its folder tree
+  // (neither a live match nor a previous-identity redirect) — e.g. a
+  // malformed URL, or a bookmark that's survived more than one move.
+  if (folderNotFound) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        Section not found. <Link to={`/projects/${projectKey}/library`} className="underline">Go to Library</Link>
       </p>
     )
   }
@@ -700,14 +742,23 @@ export default function FolderExplorerPage() {
     return suites.filter((s) => s.caseIds.includes(caseId)).map((s) => s.name)
   }
 
-  async function createFolder(parentId: string, name: string) {
-    if (!projectKey || !name.trim()) return
-    await api.POST('/api/v1/projects/{projectKey}/folders', {
+  // Returns an error message on failure (e.g. a sibling-name collision,
+  // add-folder-slug-urls) so the caller can keep its input row open with
+  // the typed text intact instead of silently closing — this previously
+  // never checked response.ok at all, so any failure just made the create
+  // row vanish with no feedback.
+  async function createFolder(parentId: string, name: string): Promise<string | undefined> {
+    if (!projectKey || !name.trim()) return undefined
+    const { error, response } = await api.POST('/api/v1/projects/{projectKey}/folders', {
       params: { path: { projectKey } },
       body: { name: name.trim(), parentFolderId: parentId },
     })
+    if (!response.ok) {
+      return (error as { error?: string })?.error ?? 'Could not create this section.'
+    }
     await load()
     bumpLanding()
+    return undefined
   }
 
   // Dropping onto the case's own current folder is a no-op — not an error,
@@ -723,13 +774,22 @@ export default function FolderExplorerPage() {
     bumpLanding()
   }
 
-  async function moveFolder(folderIdToMove: string, targetParentId: string) {
-    await api.PUT('/api/v1/folders/{folderId}', {
+  // Returns an error message on failure (add-folder-slug-urls: a move can
+  // now be rejected for a sibling-slug collision or a still-reserved slug
+  // at the destination, not just the pre-existing cross-project/cycle
+  // checks) so the caller can surface it instead of silently closing the
+  // picker as if the move had happened.
+  async function moveFolder(folderIdToMove: string, targetParentId: string): Promise<string | undefined> {
+    const { error, response } = await api.PUT('/api/v1/folders/{folderId}', {
       params: { path: { folderId: folderIdToMove } },
       body: { parentFolderId: targetParentId },
     })
+    if (!response.ok) {
+      return (error as { error?: string })?.error ?? 'Could not move this section.'
+    }
     await load()
     bumpLanding()
+    return undefined
   }
 
   async function requestDeleteFolder(folder: Folder) {
@@ -821,16 +881,23 @@ export default function FolderExplorerPage() {
     // No href when Library would be the sole remaining segment (browsing
     // the root itself) — that's "current location," not a distinct
     // ancestor; see the matching comment in CaseDetailPage.tsx.
-    { label: 'Library', href: folderAncestors.length > 0 ? `/projects/${projectKey}/library/${root.id}` : undefined },
+    { label: 'Library', href: folderAncestors.length > 0 ? libraryUrl(root) : undefined },
     ...folderAncestors.map((f) => ({
       label: f.name,
-      href: `/projects/${projectKey}/library/${f.id}`,
+      href: libraryUrl(f),
     })),
   ])
 
   return (
     <div className="space-y-4">
       <Breadcrumbs segments={breadcrumbSegments} />
+
+      {justMoved && (
+        <ConfirmBanner
+          message={`Section "${justMoved.name}" moved — showing its current location.`}
+          onDismiss={() => setJustMoved(null)}
+        />
+      )}
 
       {dataTruncated && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
@@ -848,7 +915,10 @@ export default function FolderExplorerPage() {
               selectedId={selectedFolderId}
               expanded={expanded}
               folderStats={folderStats}
-              onSelect={(id) => navigate(`/projects/${projectKey}/library/${id}`)}
+              onSelect={(id) => {
+                const target = folders.find((f) => f.id === id)
+                if (target) navigate(libraryUrl(target))
+              }}
               onToggle={(id) =>
                 setExpanded((prev) => {
                   const next = new Set(prev)
@@ -861,15 +931,29 @@ export default function FolderExplorerPage() {
                 setExpanded((prev) => new Set(prev).add(parentId))
                 setTreeCreatingIn(parentId)
                 setNewFolderName('')
+                setCreateFolderError(undefined)
               }}
               creatingIn={treeCreatingIn}
               newFolderValue={newFolderName}
-              onNewFolderValueChange={setNewFolderName}
-              onConfirmNewFolder={() => {
-                if (treeCreatingIn) void createFolder(treeCreatingIn, newFolderName)
-                setTreeCreatingIn(null)
+              onNewFolderValueChange={(v) => {
+                setNewFolderName(v)
+                setCreateFolderError(undefined)
               }}
-              onCancelNewFolder={() => setTreeCreatingIn(null)}
+              onConfirmNewFolder={() => {
+                if (!treeCreatingIn) return
+                void createFolder(treeCreatingIn, newFolderName).then((error) => {
+                  if (error) {
+                    setCreateFolderError(error)
+                    return
+                  }
+                  setTreeCreatingIn(null)
+                })
+              }}
+              onCancelNewFolder={() => {
+                setTreeCreatingIn(null)
+                setCreateFolderError(undefined)
+              }}
+              newFolderError={createFolderError}
               onDropCase={(caseKey, folderId) => void moveCase(caseKey, folderId)}
               canCreate={Boolean(permissions?.sectionCreate)}
               width={treeWidth.width}
@@ -906,6 +990,7 @@ export default function FolderExplorerPage() {
                 onClick={() => {
                   setContentCreatingFolder(true)
                   setNewFolderName('')
+                  setCreateFolderError(undefined)
                 }}
               >
                 + New section
@@ -1020,28 +1105,46 @@ export default function FolderExplorerPage() {
           <Card>
             <CardContent className="p-0">
               {contentCreatingFolder && (
-                <div className="flex items-center gap-2 border-b bg-accent px-3 py-2">
-                  <input
-                    aria-label="New section name"
-                    autoFocus
-                    className="h-7 flex-1 rounded border px-2 text-sm"
-                    value={newFolderName}
-                    onChange={(e) => setNewFolderName(e.target.value)}
-                    onKeyDown={(e) => {
-                      // Stops this keydown from ever reaching the page's
-                      // global keyboard-shortcut listener on `window` — by
-                      // the time that listener would run, this input may
-                      // already be unmounting (Enter here also closes it),
-                      // so `document.activeElement` can no longer be relied
-                      // on to signal "an editable element handled this."
-                      e.stopPropagation()
-                      if (e.key === 'Enter') {
-                        void createFolder(selectedFolderId, newFolderName)
-                        setContentCreatingFolder(false)
-                      }
-                      if (e.key === 'Escape') setContentCreatingFolder(false)
-                    }}
-                  />
+                <div className="border-b bg-accent px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      aria-label="New section name"
+                      autoFocus
+                      className="h-7 flex-1 rounded border px-2 text-sm"
+                      value={newFolderName}
+                      onChange={(e) => {
+                        setNewFolderName(e.target.value)
+                        setCreateFolderError(undefined)
+                      }}
+                      onKeyDown={(e) => {
+                        // Stops this keydown from ever reaching the page's
+                        // global keyboard-shortcut listener on `window` — by
+                        // the time that listener would run, this input may
+                        // already be unmounting (Enter here also closes it),
+                        // so `document.activeElement` can no longer be relied
+                        // on to signal "an editable element handled this."
+                        e.stopPropagation()
+                        if (e.key === 'Enter') {
+                          void createFolder(selectedFolderId, newFolderName).then((error) => {
+                            if (error) {
+                              setCreateFolderError(error)
+                              return
+                            }
+                            setContentCreatingFolder(false)
+                          })
+                        }
+                        if (e.key === 'Escape') {
+                          setContentCreatingFolder(false)
+                          setCreateFolderError(undefined)
+                        }
+                      }}
+                    />
+                  </div>
+                  {createFolderError && (
+                    <p role="alert" className="mt-1 text-sm text-destructive">
+                      {createFolderError}
+                    </p>
+                  )}
                 </div>
               )}
               {searchEntireLibrary ? (
@@ -1100,7 +1203,7 @@ export default function FolderExplorerPage() {
                       onDragOver={() => setDragOverFolderId(f.id)}
                       onDragLeave={() => setDragOverFolderId(null)}
                       onDrop={(caseKey) => void moveCase(caseKey, f.id)}
-                      onNavigate={() => navigate(`/projects/${projectKey}/library/${f.id}`)}
+                      onNavigate={() => navigate(libraryUrl(f))}
                       canMove={Boolean(permissions?.sectionEdit)}
                       onMoveTo={() => {
                         setMoveFolderQuery('')
@@ -1183,7 +1286,15 @@ export default function FolderExplorerPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={movingFolderId !== null} onOpenChange={(open) => !open && setMovingFolderId(null)}>
+      <Dialog
+        open={movingFolderId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setMovingFolderId(null)
+            setMoveFolderError(undefined)
+          }
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogTitle>Move to…</DialogTitle>
           <FolderPicker
@@ -1193,10 +1304,22 @@ export default function FolderExplorerPage() {
             onQueryChange={setMoveFolderQuery}
             folderStats={folderStats}
             onSelect={(targetFolderId) => {
-              if (movingFolderId) void moveFolder(movingFolderId, targetFolderId)
-              setMovingFolderId(null)
+              if (!movingFolderId) return
+              void moveFolder(movingFolderId, targetFolderId).then((error) => {
+                if (error) {
+                  setMoveFolderError(error)
+                  return
+                }
+                setMovingFolderId(null)
+                setMoveFolderError(undefined)
+              })
             }}
           />
+          {moveFolderError && (
+            <p role="alert" className="text-sm text-destructive">
+              {moveFolderError}
+            </p>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -1262,7 +1385,8 @@ export default function FolderExplorerPage() {
             onQueryChange={setBrowseQuery}
             folderStats={folderStats}
             onSelect={(targetFolderId) => {
-              navigate(`/projects/${projectKey}/library/${targetFolderId}`)
+              const target = folders.find((f) => f.id === targetFolderId)
+              if (target) navigate(libraryUrl(target))
               setBrowsingSections(false)
             }}
           />

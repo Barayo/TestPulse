@@ -7,6 +7,7 @@ import (
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -23,10 +24,14 @@ var ErrRootFolder = fmt.Errorf("root folder cannot be moved or deleted")
 // the folder from the tree or create an unreachable loop.
 var ErrFolderCycle = fmt.Errorf("a folder cannot be moved into itself or one of its own subfolders")
 
+// ErrFolderSlugTaken is returned when a folder's derived slug collides
+// with a live sibling under the same parent (add-folder-slug-urls).
+var ErrFolderSlugTaken = fmt.Errorf("a section with that name already exists here")
+
 func scanFolder(row pgx.Row) (domain.Folder, error) {
 	var f domain.Folder
-	var parent *string
-	if err := row.Scan(&f.ID, &f.ProjectID, &parent, &f.Name, &f.CreatedAt); err != nil {
+	var parent, previousSlug, previousParent *string
+	if err := row.Scan(&f.ID, &f.ProjectID, &parent, &f.Name, &f.Slug, &f.CreatedAt, &previousSlug, &previousParent); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return domain.Folder{}, ErrNotFound
 		}
@@ -35,10 +40,16 @@ func scanFolder(row pgx.Row) (domain.Folder, error) {
 	if parent != nil {
 		f.ParentFolderID = *parent
 	}
+	if previousSlug != nil {
+		f.PreviousSlug = *previousSlug
+	}
+	if previousParent != nil {
+		f.PreviousParentFolderID = *previousParent
+	}
 	return f, nil
 }
 
-const folderColumns = "id, project_id, parent_folder_id, name, created_at"
+const folderColumns = "id, project_id, parent_folder_id, name, slug, created_at, previous_slug, previous_parent_folder_id"
 
 // ProjectID resolves the project a folder belongs to — used by
 // requirePermission's per-resource resolver (add-project-rbac design.md D5).
@@ -71,13 +82,66 @@ func (r *FolderRepo) Get(ctx context.Context, folderID string) (domain.Folder, e
 }
 
 // Create inserts a subfolder; a parent is always required (only the DB
-// trigger on project creation may create a root folder).
-func (r *FolderRepo) Create(ctx context.Context, projectID, parentFolderID, name string) (domain.Folder, error) {
+// trigger on project creation may create a root folder). slug is the
+// caller-computed (domain.Slugify) routing slug for name (add-folder-
+// slug-urls) — the caller is expected to have already checked
+// LiveSlugConflict/SlugReserved, but the unique index is the final
+// authority; ErrFolderSlugTaken surfaces a violation the caller's own
+// check somehow missed (e.g. a race) as a clean error, not a 500.
+func (r *FolderRepo) Create(ctx context.Context, projectID, parentFolderID, name, slug string) (domain.Folder, error) {
 	row := r.pool.QueryRow(ctx,
-		`INSERT INTO test_case_folders (project_id, parent_folder_id, name)
-		 VALUES ($1, $2, $3) RETURNING `+folderColumns,
-		projectID, parentFolderID, name)
-	return scanFolder(row)
+		`INSERT INTO test_case_folders (project_id, parent_folder_id, name, slug)
+		 VALUES ($1, $2, $3, $4) RETURNING `+folderColumns,
+		projectID, parentFolderID, name, slug)
+	f, err := scanFolder(row)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "test_case_folders_project_parent_slug_idx" {
+		return domain.Folder{}, ErrFolderSlugTaken
+	}
+	return f, err
+}
+
+// LiveSlugConflict returns the live sibling folder already holding slug
+// under parentFolderID, if any (add-folder-slug-urls sibling-uniqueness).
+func (r *FolderRepo) LiveSlugConflict(ctx context.Context, projectID, parentFolderID, slug string) (domain.Folder, bool, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT `+folderColumns+` FROM test_case_folders
+		 WHERE project_id = $1 AND parent_folder_id = $2 AND slug = $3 AND NOT deleted`,
+		projectID, parentFolderID, slug)
+	f, err := scanFolder(row)
+	if errors.Is(err, ErrNotFound) {
+		return domain.Folder{}, false, nil
+	}
+	if err != nil {
+		return domain.Folder{}, false, err
+	}
+	return f, true, nil
+}
+
+// SlugReserved reports whether slug is still reserved under
+// parentFolderID by some OTHER folder's own previous identity —
+// add-folder-slug-urls' single-hop redirect guarantee: a freed slug can't
+// be reclaimed by a different folder while it's still serving as another
+// folder's redirect target (otherwise an old bookmark could silently
+// resolve to the wrong, unrelated folder that later reused the name).
+// excludeFolderID must be the folder actually being created/moved (""
+// for a brand-new folder, which never has a previous identity of its own
+// to conflict with) — without excluding it, moving a folder back to a
+// parent it previously occupied would be blocked by its own leftover
+// previous-identity stamp from that earlier move, not a real conflict
+// with a different folder (found via manual testing, not written ahead
+// of time — see TestMoveFolderBackToItsOwnPreviousParentSucceeds).
+func (r *FolderRepo) SlugReserved(ctx context.Context, projectID, parentFolderID, slug, excludeFolderID string) (bool, error) {
+	var exists bool
+	err := r.pool.QueryRow(ctx,
+		`SELECT EXISTS (
+		   SELECT 1 FROM test_case_folders
+		   WHERE project_id = $1 AND previous_parent_folder_id = $2 AND previous_slug = $3 AND NOT deleted
+		     AND ($4 = '' OR id::text != $4)
+		 )`,
+		projectID, parentFolderID, slug, excludeFolderID,
+	).Scan(&exists)
+	return exists, err
 }
 
 // List returns every non-deleted folder in a project (flat; callers
@@ -208,12 +272,21 @@ func (r *FolderRepo) Delete(ctx context.Context, folderID string) error {
 // Move reparents folderID under targetParentID. Rejects moving the root
 // folder (ErrRootFolder, it has no parent) and rejects a target that is
 // folderID itself or anywhere in its own subtree (ErrFolderCycle), reusing
-// subtreeCTE rather than walking the tree in Go.
+// subtreeCTE rather than walking the tree in Go. Every move stamps
+// previous_parent_folder_id/previous_slug to the folder's identity from
+// immediately before this move (add-folder-slug-urls' single-hop
+// redirect) — the folder's slug itself never changes on a move (it's
+// derived from name, not parent), so "previous identity" is just its old
+// parent paired with its unchanged slug; a second move overwrites both
+// with the new "before" state, not accumulating history. A slug collision
+// with an existing child of targetParentID surfaces as ErrFolderSlugTaken,
+// not a 500.
 func (r *FolderRepo) Move(ctx context.Context, folderID, targetParentID string) (domain.Folder, error) {
 	var parentFolderID *string
+	var slug string
 	err := r.pool.QueryRow(ctx,
-		`SELECT parent_folder_id FROM test_case_folders WHERE id = $1 AND NOT deleted`, folderID,
-	).Scan(&parentFolderID)
+		`SELECT parent_folder_id, slug FROM test_case_folders WHERE id = $1 AND NOT deleted`, folderID,
+	).Scan(&parentFolderID, &slug)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Folder{}, ErrNotFound
 	}
@@ -236,9 +309,16 @@ func (r *FolderRepo) Move(ctx context.Context, folderID, targetParentID string) 
 	}
 
 	row := r.pool.QueryRow(ctx,
-		`UPDATE test_case_folders SET parent_folder_id = $2 WHERE id = $1 RETURNING `+folderColumns,
-		folderID, targetParentID)
-	return scanFolder(row)
+		`UPDATE test_case_folders
+		 SET parent_folder_id = $2, previous_parent_folder_id = $3, previous_slug = $4
+		 WHERE id = $1 RETURNING `+folderColumns,
+		folderID, targetParentID, *parentFolderID, slug)
+	f, err := scanFolder(row)
+	var pgErr *pgconn.PgError
+	if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "test_case_folders_project_parent_slug_idx" {
+		return domain.Folder{}, ErrFolderSlugTaken
+	}
+	return f, err
 }
 
 // SubtreeCounts previews how many cases and descendant folders (not

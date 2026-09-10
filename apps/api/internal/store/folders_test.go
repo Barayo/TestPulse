@@ -41,7 +41,7 @@ func TestCreateNestedSubfolder(t *testing.T) {
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
 
-	auth, err := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
+	auth, err := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
 	if err != nil {
 		t.Fatalf("create subfolder: %v", err)
 	}
@@ -49,7 +49,7 @@ func TestCreateNestedSubfolder(t *testing.T) {
 		t.Errorf("ParentFolderID = %q, want %q", auth.ParentFolderID, root.ID)
 	}
 
-	login, err := s.Folders.Create(ctx, p.ID, auth.ID, "Login")
+	login, err := s.Folders.Create(ctx, p.ID, auth.ID, "Login", "login")
 	if err != nil {
 		t.Fatalf("create nested subfolder: %v", err)
 	}
@@ -63,7 +63,7 @@ func TestListTreeShowsAllFoldersAndCases(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
 
 	c, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("Login works"), domain.ResultActorUnknown, "")
 	if err != nil {
@@ -91,7 +91,7 @@ func TestMoveCaseBetweenFolders(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
 	c := mustCase(t, s, p.ID, "Login works") // starts in root
 
 	if err := s.Cases.Move(ctx, c.ID, auth.ID); err != nil {
@@ -108,7 +108,7 @@ func TestMovingCaseDoesNotAffectSuiteMembership(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
 	c := mustCase(t, s, p.ID, "Login works")
 	suite, _ := s.Suites.Create(ctx, p.ID, "smoke")
 	if err := s.Suites.AddCase(ctx, suite.ID, c.ID); err != nil {
@@ -133,8 +133,8 @@ func TestDeleteFolderCascadesSoftDeleteToSubtree(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
-	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login") // subfolder of auth
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
+	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login", "login") // subfolder of auth
 	c, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("case in auth"), domain.ResultActorUnknown, "")
 	if err != nil {
 		t.Fatal(err)
@@ -183,8 +183,8 @@ func TestSubtreeCountsForDeletePreview(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
-	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login")
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
+	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login", "login")
 	if _, err := s.Cases.Create(ctx, p.ID, auth.ID, defaultContent("case in auth"), domain.ResultActorUnknown, ""); err != nil {
 		t.Fatal(err)
 	}
@@ -207,7 +207,7 @@ func TestSubtreeCountsForDeletePreview(t *testing.T) {
 	}
 
 	// A leaf folder with nothing in it previews as zero/zero.
-	empty, _ := s.Folders.Create(ctx, p.ID, root.ID, "Empty")
+	empty, _ := s.Folders.Create(ctx, p.ID, root.ID, "Empty", "empty")
 	caseCount, folderCount, err = s.Folders.SubtreeCounts(ctx, empty.ID)
 	if err != nil {
 		t.Fatalf("SubtreeCounts(empty): %v", err)
@@ -236,8 +236,8 @@ func TestMoveFolderReparents(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
-	settings, _ := s.Folders.Create(ctx, p.ID, root.ID, "Settings")
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
+	settings, _ := s.Folders.Create(ctx, p.ID, root.ID, "Settings", "settings")
 
 	moved, err := s.Folders.Move(ctx, auth.ID, settings.ID)
 	if err != nil {
@@ -260,8 +260,8 @@ func TestMoveFolderRejectsCycles(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth")
-	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login")
+	auth, _ := s.Folders.Create(ctx, p.ID, root.ID, "Auth", "auth")
+	login, _ := s.Folders.Create(ctx, p.ID, auth.ID, "Login", "login")
 
 	if _, err := s.Folders.Move(ctx, auth.ID, login.ID); !errors.Is(err, store.ErrFolderCycle) {
 		t.Errorf("Move(auth, into descendant login) = %v, want ErrFolderCycle", err)
@@ -283,7 +283,7 @@ func TestRootFolderCannotBeMoved(t *testing.T) {
 	ctx := context.Background()
 	p := mustProject(t, s)
 	root, _ := s.Folders.Root(ctx, p.ID)
-	other, _ := s.Folders.Create(ctx, p.ID, root.ID, "Other")
+	other, _ := s.Folders.Create(ctx, p.ID, root.ID, "Other", "other")
 
 	if _, err := s.Folders.Move(ctx, root.ID, other.ID); !errors.Is(err, store.ErrRootFolder) {
 		t.Errorf("Move(root) = %v, want ErrRootFolder", err)
@@ -303,7 +303,7 @@ func TestSubtreeDeleteNeverCrossesIntoAnotherProject(t *testing.T) {
 	projectB := mustProject(t, s)
 
 	rootA, _ := s.Folders.Root(ctx, projectA.ID)
-	folderA, err := s.Folders.Create(ctx, projectA.ID, rootA.ID, "In A")
+	folderA, err := s.Folders.Create(ctx, projectA.ID, rootA.ID, "In A", "in-a")
 	if err != nil {
 		t.Fatalf("create folder in A: %v", err)
 	}
@@ -313,7 +313,7 @@ func TestSubtreeDeleteNeverCrossesIntoAnotherProject(t *testing.T) {
 	}
 
 	rootB, _ := s.Folders.Root(ctx, projectB.ID)
-	folderB, err := s.Folders.Create(ctx, projectB.ID, rootB.ID, "In B")
+	folderB, err := s.Folders.Create(ctx, projectB.ID, rootB.ID, "In B", "in-b")
 	if err != nil {
 		t.Fatalf("create folder in B: %v", err)
 	}

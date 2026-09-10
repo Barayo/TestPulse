@@ -237,7 +237,7 @@ func TestProjectCreationCreatesRootFolder(t *testing.T) {
 	// A second NULL-parent folder for the same project is rejected by the
 	// partial unique index — "exactly one root" is a hard DB guarantee.
 	if _, err := pool.Exec(ctx,
-		`INSERT INTO test_case_folders (project_id, parent_folder_id, name) VALUES ($1, NULL, 'Another root')`,
+		`INSERT INTO test_case_folders (project_id, parent_folder_id, name, slug) VALUES ($1, NULL, 'Another root', 'another-root')`,
 		projectID); err == nil {
 		t.Error("second root folder accepted, want unique-index violation")
 	}
@@ -260,7 +260,7 @@ func TestFolderSoftDeleteColumnAndFilteredIndexes(t *testing.T) {
 
 	var subID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO test_case_folders (project_id, parent_folder_id, name) VALUES ($1, $2, 'Auth') RETURNING id, deleted`,
+		`INSERT INTO test_case_folders (project_id, parent_folder_id, name, slug) VALUES ($1, $2, 'Auth', 'auth') RETURNING id, deleted`,
 		projectID, root).Scan(&subID, new(bool)); err != nil {
 		t.Fatalf("insert subfolder (expected a deleted column to exist): %v", err)
 	}
@@ -315,7 +315,7 @@ func TestCaseFolderIsMandatoryAndNested(t *testing.T) {
 	// Nested subfolder under root.
 	var subID string
 	if err := pool.QueryRow(ctx,
-		`INSERT INTO test_case_folders (project_id, parent_folder_id, name) VALUES ($1, $2, 'Auth') RETURNING id`,
+		`INSERT INTO test_case_folders (project_id, parent_folder_id, name, slug) VALUES ($1, $2, 'Auth', 'auth') RETURNING id`,
 		projectID, root).Scan(&subID); err != nil {
 		t.Fatalf("insert subfolder: %v", err)
 	}

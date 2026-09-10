@@ -305,7 +305,14 @@ export default function ProjectPage() {
               totalCount={landing.totalFolders}
               truncated={landing.truncated}
               onSeeAll={() => navigate(`/projects/${projectKey}/library`)}
-              onSelectFolder={(folderId) => navigate(`/projects/${projectKey}/library/${folderId}`)}
+              // add-folder-slug-urls: folderId here is actually a slug-path
+              // (LandingFolder/LandingFolderChild.id, matching LandingSuite/
+              // LandingRun's own key-not-id convention) — "" for the root
+              // "Unsectioned" pseudo-row, whose URL is the bare /library
+              // route, not /library/.
+              onSelectFolder={(folderId) =>
+                navigate(`/projects/${projectKey}/library${folderId ? `/${folderId}` : ''}`)
+              }
             />
             <SuitesPanel
               suites={landing.suites}

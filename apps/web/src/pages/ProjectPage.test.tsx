@@ -298,7 +298,7 @@ describe('ProjectPage landing', () => {
     it('navigates to the root section when the Unsectioned row is clicked', async () => {
       const rootCase = { ...caseInOnboarding, id: 'c2', folderId: 'root' }
       mockProjectAPI({ cases: [caseInOnboarding, rootCase] })
-      renderWithRoutes(<Route path="/projects/:projectKey/library/:folderId" element={<div>library stub</div>} />)
+      renderWithRoutes(<Route path="/projects/:projectKey/library/*" element={<div>library stub</div>} />)
       await userEvent.click(await screen.findByText('Unsectioned'))
       expect(await screen.findByText('library stub')).toBeInTheDocument()
     })
@@ -442,7 +442,7 @@ describe('ProjectPage landing', () => {
   it('navigates to the library route when a section row is clicked', async () => {
     mockProjectAPI()
     renderWithRoutes(
-      <Route path="/projects/:projectKey/library/:folderId" element={<div>library explorer stub</div>} />,
+      <Route path="/projects/:projectKey/library/*" element={<div>library explorer stub</div>} />,
     )
     await userEvent.click(await screen.findByText('Onboarding'))
     expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
@@ -678,7 +678,7 @@ describe('ProjectPage landing', () => {
     it('clicking a section with no subsections still navigates to it, unaffected by the expand behavior', async () => {
       mockProjectAPI({ folders: [rootFolder, small], cases: makeCases('fSmall', 2) })
       renderWithRoutes(
-        <Route path="/projects/:projectKey/library/:folderId" element={<div>library explorer stub</div>} />,
+        <Route path="/projects/:projectKey/library/*" element={<div>library explorer stub</div>} />,
       )
       await userEvent.click(await screen.findByText('Small'))
       expect(await screen.findByText('library explorer stub')).toBeInTheDocument()

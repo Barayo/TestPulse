@@ -117,7 +117,10 @@ const PROJECT_CONTENT_ROUTES: RouteEntry[] = [
   { path: '/projects/:projectKey/suites/:suiteKey', element: <SuiteDetailPage />, anonymous: true },
   { path: '/projects/:projectKey/runs', element: <RunsPage />, anonymous: true },
   { path: '/projects/:projectKey/library', element: <FolderExplorerPage />, anonymous: true },
-  { path: '/projects/:projectKey/library/:folderId', element: <FolderExplorerPage />, anonymous: true },
+  // add-folder-slug-urls: a slash-separated path of slugified ancestor
+  // folder names (e.g. /library/authentication/two-factor), resolved
+  // client-side against the already-loaded folder tree — not a folder ID.
+  { path: '/projects/:projectKey/library/*', element: <FolderExplorerPage />, anonymous: true },
   { path: '/projects/:projectKey/cases/:caseKey', element: <CaseDetailPage />, anonymous: true },
   { path: '/runs/:runKey', element: <RunPage />, anonymous: true },
   { path: '/runs/:runKey/items/:caseKey', element: <RunItemDetailPage />, anonymous: true },

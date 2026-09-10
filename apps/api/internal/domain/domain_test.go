@@ -234,6 +234,30 @@ func TestFolderNameRequired(t *testing.T) {
 	}
 }
 
+// add-folder-slug-urls: a name that slugifies to nothing (emoji/punctuation
+// only) would silently produce a meaningless URL segment if allowed, so
+// it's rejected at validation time instead of given a fallback slug.
+func TestFolderNameRejectsUnslugifiableName(t *testing.T) {
+	err := ValidateFolderName("🎉🎉🎉")
+	if err == nil {
+		t.Fatal("name with no slugifiable characters accepted")
+	}
+}
+
+// add-folder-slug-urls: once the sibling-uniqueness index exists, an
+// unbounded name becomes an unbounded slug, which can fail Postgres's
+// btree index row-size limit with a generic 500 rather than a clean 4xx —
+// capped here instead so that failure mode is unreachable.
+func TestFolderNameRejectsOverMaxLength(t *testing.T) {
+	if err := ValidateFolderName(strings.Repeat("a", 255)); err != nil {
+		t.Errorf("255-character name rejected: %v", err)
+	}
+	err := ValidateFolderName(strings.Repeat("a", 256))
+	if err == nil {
+		t.Fatal("256-character name accepted")
+	}
+}
+
 func TestNewFolderRequiresParent(t *testing.T) {
 	// A user can never directly create a root folder — only the DB trigger
 	// creates roots, on project creation.

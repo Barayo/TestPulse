@@ -193,7 +193,7 @@ func TestListFoldersPageWrapsStorePagination(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Root: %v", err)
 	}
-	if _, err := st.Folders.Create(ctx, p.ID, root.ID, "Folder One"); err != nil {
+	if _, err := st.Folders.Create(ctx, p.ID, root.ID, "Folder One", "folder-one"); err != nil {
 		t.Fatalf("create folder 1: %v", err)
 	}
 

@@ -5,10 +5,10 @@ import type { components } from '@testpulse/shared/api'
 type Folder = components['schemas']['Folder']
 type TestCase = components['schemas']['TestCase']
 
-const root: Folder = { id: 'root', projectId: 'p1', name: 'Root', createdAt: '' }
-const authentication: Folder = { id: 'authentication', projectId: 'p1', parentFolderId: 'root', name: 'Authentication', createdAt: '' }
-const twoFactor: Folder = { id: 'two-factor', projectId: 'p1', parentFolderId: 'authentication', name: 'Two-Factor', createdAt: '' }
-const backupCodes: Folder = { id: 'backup-codes', projectId: 'p1', parentFolderId: 'two-factor', name: 'Backup Codes', createdAt: '' }
+const root: Folder = { id: 'root', projectId: 'p1', name: 'Root', slug: 'root', createdAt: '' }
+const authentication: Folder = { id: 'authentication', projectId: 'p1', parentFolderId: 'root', name: 'Authentication', slug: 'authentication', createdAt: '' }
+const twoFactor: Folder = { id: 'two-factor', projectId: 'p1', parentFolderId: 'authentication', name: 'Two-Factor', slug: 'two-factor', createdAt: '' }
+const backupCodes: Folder = { id: 'backup-codes', projectId: 'p1', parentFolderId: 'two-factor', name: 'Backup Codes', slug: 'backup-codes', createdAt: '' }
 const folders = [root, authentication, twoFactor, backupCodes]
 
 function makeCase(key: string, folderId: string): TestCase {
@@ -74,7 +74,7 @@ describe('resolveSuiteCaseKeys', () => {
   })
 
   it('returns an empty array for a folder with no cases anywhere in its subtree', () => {
-    const emptyFolder: Folder = { id: 'empty', projectId: 'p1', parentFolderId: 'root', name: 'Empty', createdAt: '' }
+    const emptyFolder: Folder = { id: 'empty', projectId: 'p1', parentFolderId: 'root', name: 'Empty', slug: 'empty', createdAt: '' }
     const result = resolveSuiteCaseKeys(['empty'], [], [...folders, emptyFolder], cases)
     expect(result).toEqual([])
   })

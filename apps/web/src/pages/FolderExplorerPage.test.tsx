@@ -41,9 +41,9 @@ const allPermissions = {
   manageProject: true,
 }
 
-const root = { id: 'root', projectId: 'p1', name: 'Root', createdAt: '' }
-const transferencias = { id: 'transferencias', projectId: 'p1', parentFolderId: 'root', name: 'Transferencias', createdAt: '' }
-const nacionales = { id: 'nacionales', projectId: 'p1', parentFolderId: 'transferencias', name: 'Nacionales', createdAt: '' }
+const root = { id: 'root', projectId: 'p1', name: 'Root', slug: 'root', createdAt: '' }
+const transferencias = { id: 'transferencias', projectId: 'p1', parentFolderId: 'root', name: 'Transferencias', slug: 'transferencias', createdAt: '' }
+const nacionales = { id: 'nacionales', projectId: 'p1', parentFolderId: 'transferencias', name: 'Nacionales', slug: 'nacionales', createdAt: '' }
 
 const limitCase = {
   id: 'c1',
@@ -136,7 +136,7 @@ function renderExplorer(path = '/projects/p1/library/transferencias') {
       <AuthProvider>
         <Routes>
           <Route path="/projects/:projectKey/library" element={<FolderExplorerPage />} />
-          <Route path="/projects/:projectKey/library/:folderId" element={<FolderExplorerPage />} />
+          <Route path="/projects/:projectKey/library/*" element={<FolderExplorerPage />} />
           <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailProbe />} />
           <Route path="/projects/:projectKey/suites/:suiteKey" element={<SuiteDetailProbe />} />
           <Route path="/login" element={<p>login stub</p>} />
@@ -222,7 +222,7 @@ describe('FolderExplorerPage', () => {
 
   it('shows "Library" as a plain, non-interactive crumb when browsing the root itself — the page has no other heading announcing where you are', async () => {
     mockExplorerAPI()
-    renderExplorer('/projects/p1/library/root')
+    renderExplorer('/projects/p1/library')
     await screen.findByRole('list', { name: 'Section contents' })
     const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
     expect(within(nav).getByText('Library')).toBeInTheDocument()
@@ -685,7 +685,7 @@ describe('FolderExplorerPage', () => {
     // rejects it anyway (ErrFolderCycle), so it shouldn't even be offered.
     it("the move-folder picker excludes the folder's own subtree", async () => {
       mockExplorerAPI()
-      renderExplorer('/projects/p1/library/root')
+      renderExplorer('/projects/p1/library')
       const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Transferencias')).closest('li') as HTMLElement
       await userEvent.click(within(folderRow).getByRole('button', { name: /actions for transferencias/i }))
       await userEvent.click(screen.getByRole('menuitem', { name: /move to/i }))
@@ -1585,7 +1585,7 @@ describe('FolderExplorerPage', () => {
     // of "Transferencias", the folder rendered by default) — used to prove
     // the resolved count really recurses, not just reads a direct-children
     // count (design.md D7).
-    const nacionalesSub = { id: 'nacionalesSub', projectId: 'p1', parentFolderId: 'nacionales', name: 'Internal Transfers', createdAt: '' }
+    const nacionalesSub = { id: 'nacionalesSub', projectId: 'p1', parentFolderId: 'nacionales', name: 'Internal Transfers', slug: 'internal-transfers', createdAt: '' }
     const caseInNacionales = { ...limitCase, id: 'c3', key: 'c3', folderId: 'nacionales', content: { ...limitCase.content, title: 'Case In Nacionales' } }
     const caseInNacionalesSub = {
       ...limitCase,
@@ -1847,6 +1847,94 @@ describe('FolderExplorerPage', () => {
       await userEvent.click(within(menu).getByRole('menuitem', { name: /^delete$/i }))
 
       expect(await screen.findByRole('heading', { name: /delete 2 cases/i })).toBeInTheDocument()
+    })
+  })
+
+  describe('slug-path URLs (add-folder-slug-urls)', () => {
+    it('shows a real not-found state for a slug-path that matches no folder', async () => {
+      mockExplorerAPI()
+      renderExplorer('/projects/p1/library/nonexistent')
+      expect(await screen.findByText(/section not found/i)).toBeInTheDocument()
+      expect(screen.getByRole('link', { name: /go to library/i })).toHaveAttribute('href', '/projects/p1/library')
+    })
+
+    it('resolves a multi-segment slug-path to the correct nested folder', async () => {
+      mockExplorerAPI()
+      renderExplorer('/projects/p1/library/transferencias/nacionales')
+      await screen.findByText(/nothing here yet in nacionales/i)
+      const nav = screen.getByRole('navigation', { name: 'Breadcrumb' })
+      expect(within(nav).getByText('Nacionales')).toBeInTheDocument()
+      expect(within(nav).getByText('Transferencias')).toBeInTheDocument()
+    })
+
+    it('shows an error and keeps the create row open with the typed name intact when creation fails', async () => {
+      mockExplorerAPI()
+      mockPOST.mockResolvedValue({ error: { error: 'a section named "Nacionales" already exists here' }, response: { ok: false } })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.click(screen.getByRole('button', { name: /\+ new section/i }))
+      await userEvent.type(screen.getByLabelText('New section name'), 'Nacionales')
+      fireEvent.keyDown(screen.getByLabelText('New section name'), { key: 'Enter' })
+
+      expect(await screen.findByText(/a section named "nacionales" already exists here/i)).toBeInTheDocument()
+      expect(screen.getByLabelText('New section name')).toHaveValue('Nacionales')
+    })
+
+    it('clears the create-folder error once the user edits the field again', async () => {
+      mockExplorerAPI()
+      mockPOST.mockResolvedValue({ error: { error: 'a section named "Nacionales" already exists here' }, response: { ok: false } })
+      renderExplorer()
+      await screen.findByText('Daily transfer limit')
+      await userEvent.click(screen.getByRole('button', { name: /\+ new section/i }))
+      await userEvent.type(screen.getByLabelText('New section name'), 'Nacionales')
+      fireEvent.keyDown(screen.getByLabelText('New section name'), { key: 'Enter' })
+      await screen.findByText(/a section named "nacionales" already exists here/i)
+
+      await userEvent.type(screen.getByLabelText('New section name'), '!')
+      expect(screen.queryByText(/a section named "nacionales" already exists here/i)).not.toBeInTheDocument()
+    })
+
+    it('redirects to a moved folder\'s current URL and shows a one-shot banner when the old URL only resolves via its previous identity', async () => {
+      // "auth" used to live directly under root (slug "auth"); it's been
+      // moved under "transferencias" since, freeing that old slug there.
+      const authMoved = {
+        id: 'auth',
+        projectId: 'p1',
+        parentFolderId: 'transferencias',
+        name: 'Auth',
+        slug: 'auth',
+        previousParentFolderId: 'root',
+        previousSlug: 'auth',
+        createdAt: '',
+      }
+      mockExplorerAPI({ folders: [root, transferencias, nacionales, authMoved] })
+      renderExplorer('/projects/p1/library/auth')
+
+      const nav = await screen.findByRole('navigation', { name: 'Breadcrumb' })
+      await waitFor(() => expect(within(nav).getByText('Auth')).toBeInTheDocument())
+      expect(within(nav).getByText('Transferencias')).toBeInTheDocument()
+      expect(await screen.findByText(/section "auth" moved — showing its current location/i)).toBeInTheDocument()
+    })
+
+    it('does not show the moved banner for a URL that already resolves live (no redirect needed)', async () => {
+      mockExplorerAPI()
+      renderExplorer()
+      await screen.findByRole('list', { name: 'Section contents' })
+      expect(screen.queryByText(/moved — showing its current location/i)).not.toBeInTheDocument()
+    })
+
+    it('shows an error and keeps the move-to dialog open when moving a folder fails (e.g. a slug collision at the destination)', async () => {
+      mockExplorerAPI()
+      mockPUT.mockResolvedValue({ error: { error: 'a section named "Nacionales" already exists here' }, response: { ok: false } })
+      renderExplorer('/projects/p1/library')
+      const folderRow = (await within(await screen.findByRole('list', { name: 'Section contents' })).findByText('Transferencias')).closest('li') as HTMLElement
+      await userEvent.click(within(folderRow).getByRole('button', { name: /actions for transferencias/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /move to/i }))
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(within(dialog).getByText('Library'))
+
+      expect(await screen.findByText(/a section named "nacionales" already exists here/i)).toBeInTheDocument()
+      expect(screen.getByRole('dialog')).toBeInTheDocument()
     })
   })
 })

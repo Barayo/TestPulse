@@ -19,6 +19,9 @@ type Props = {
   onNewFolderValueChange?: (value: string) => void
   onConfirmNewFolder?: () => void
   onCancelNewFolder?: () => void
+  // add-folder-slug-urls: surfaced under the inline create row when the
+  // last confirm attempt was rejected (e.g. a sibling-name collision).
+  newFolderError?: string
   onDropCase?: (caseId: string, folderId: string) => void
   // Direct-children case counts only, no recursive rollup (rework-library-ux
   // design.md) — computed client-side by the caller from data already
@@ -64,31 +67,44 @@ function InlineNewFolderRow({
   onChange,
   onConfirm,
   onCancel,
+  error,
 }: {
   depth: number
   value: string
   onChange: (value: string) => void
   onConfirm: () => void
   onCancel: () => void
+  // add-folder-slug-urls: a sibling-name collision from the last confirm
+  // attempt — kept visible (and the row kept open, value intact) until the
+  // user edits the field again or cancels, rather than the row silently
+  // vanishing on a rejected create.
+  error?: string
 }) {
   return (
-    <div className="flex items-center gap-1.5 py-1" style={{ paddingLeft: indentPx(depth) }}>
-      <span className="w-3 shrink-0" />
-      <input
-        aria-label="New section name"
-        autoFocus
-        className="h-6 w-full rounded border px-1 text-sm"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => {
-          // See FolderExplorerPage.tsx's content-pane creator for why this
-          // must stop propagation rather than rely on focus state: Enter
-          // both confirms and unmounts this input in the same keydown.
-          e.stopPropagation()
-          if (e.key === 'Enter') onConfirm()
-          if (e.key === 'Escape') onCancel()
-        }}
-      />
+    <div className="py-1" style={{ paddingLeft: indentPx(depth) }}>
+      <div className="flex items-center gap-1.5">
+        <span className="w-3 shrink-0" />
+        <input
+          aria-label="New section name"
+          autoFocus
+          className="h-6 w-full rounded border px-1 text-sm"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={(e) => {
+            // See FolderExplorerPage.tsx's content-pane creator for why this
+            // must stop propagation rather than rely on focus state: Enter
+            // both confirms and unmounts this input in the same keydown.
+            e.stopPropagation()
+            if (e.key === 'Enter') onConfirm()
+            if (e.key === 'Escape') onCancel()
+          }}
+        />
+      </div>
+      {error && (
+        <p role="alert" className="mt-1 pl-4.5 text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   )
 }
@@ -107,6 +123,7 @@ function TreeNode({
   onNewFolderValueChange,
   onConfirmNewFolder,
   onCancelNewFolder,
+  newFolderError,
   onDropCase,
   folderStats,
   canCreate = true,
@@ -198,6 +215,7 @@ function TreeNode({
             onNewFolderValueChange={onNewFolderValueChange}
             onConfirmNewFolder={onConfirmNewFolder}
             onCancelNewFolder={onCancelNewFolder}
+            newFolderError={newFolderError}
             onDropCase={onDropCase}
             folderStats={folderStats}
             canCreate={canCreate}
@@ -210,6 +228,7 @@ function TreeNode({
           onChange={(v) => onNewFolderValueChange?.(v)}
           onConfirm={() => onConfirmNewFolder?.()}
           onCancel={() => onCancelNewFolder?.()}
+          error={newFolderError}
         />
       )}
     </div>
@@ -229,6 +248,7 @@ export function FolderTree({
   onNewFolderValueChange,
   onConfirmNewFolder,
   onCancelNewFolder,
+  newFolderError,
   onDropCase,
   folderStats,
   canCreate = true,
@@ -254,6 +274,7 @@ export function FolderTree({
           onNewFolderValueChange={onNewFolderValueChange}
           onConfirmNewFolder={onConfirmNewFolder}
           onCancelNewFolder={onCancelNewFolder}
+          newFolderError={newFolderError}
           onDropCase={onDropCase}
           folderStats={folderStats}
           canCreate={canCreate}

@@ -311,6 +311,12 @@ func ValidateFolderName(name string) error {
 	if name == "" {
 		return fmt.Errorf("name is required")
 	}
+	if len(name) > 255 {
+		return fmt.Errorf("name must be 255 characters or fewer")
+	}
+	if Slugify(name) == "" {
+		return fmt.Errorf("name needs at least one letter or number")
+	}
 	return nil
 }
 
@@ -501,7 +507,16 @@ type Folder struct {
 	ProjectID      string    `json:"projectId"`
 	ParentFolderID string    `json:"parentFolderId,omitempty"`
 	Name           string    `json:"name"`
+	Slug           string    `json:"slug"`
 	CreatedAt      time.Time `json:"createdAt"`
+	// PreviousSlug/PreviousParentFolderID record this folder's single most
+	// recent prior identity (add-folder-slug-urls) — set when the folder
+	// is moved, overwritten (not accumulated) on each subsequent move.
+	// Exposed to the frontend so slug-path resolution can fall back to a
+	// folder's previous identity for a one-hop redirect, entirely
+	// client-side against the already-loaded folder list.
+	PreviousSlug           string `json:"previousSlug,omitempty"`
+	PreviousParentFolderID string `json:"previousParentFolderId,omitempty"`
 }
 
 // ActorKind/ActorRefID mirror test_run_results' identical columns

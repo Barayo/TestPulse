@@ -69,6 +69,22 @@ func MigrateWithOptions(ctx context.Context, pool *pgxpool.Pool, allowMissing bo
 	return goose.UpContext(ctx, sqlDB, "migrations", opts...)
 }
 
+// MigrateTo applies migrations up to and including the given goose version
+// only — not used by any production code path. Exists for tests that need
+// to insert pre-migration data and then apply one specific migration to
+// exercise its own data-backfill logic (e.g. add-folder-slug-urls'
+// disambiguation), rather than starting from an already-fully-migrated,
+// empty schema.
+func MigrateTo(ctx context.Context, pool *pgxpool.Pool, version int64) error {
+	goose.SetBaseFS(migrationsFS)
+	if err := goose.SetDialect("postgres"); err != nil {
+		return err
+	}
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer func() { _ = sqlDB.Close() }()
+	return goose.UpToContext(ctx, sqlDB, "migrations", version)
+}
+
 // MigrationsCurrent reports whether the database schema is at the latest
 // embedded migration version.
 func MigrationsCurrent(ctx context.Context, pool *pgxpool.Pool) (bool, error) {

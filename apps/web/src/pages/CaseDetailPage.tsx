@@ -5,6 +5,7 @@ import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
+import { buildSlugPath } from '@/lib/folderSlugPath'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -204,6 +205,11 @@ export default function CaseDetailPage() {
   const folderName = folder && root && folder.id !== root.id ? folder.name : 'Library'
   const suiteNames = suites.filter((s) => s.caseIds.includes(testCase.id)).map((s) => s.name)
 
+  function libraryUrl(target: Folder | undefined): string {
+    const path = target ? buildSlugPath(target, folders) : ''
+    return `/projects/${projectKey}/library${path ? `/${path}` : ''}`
+  }
+
   async function saveEdit() {
     if (!title.trim() || !caseKey) return
     await api.PUT('/api/v1/cases/{caseKey}', {
@@ -300,7 +306,7 @@ export default function CaseDetailPage() {
     // when the lone segment has no href, same as an unsectioned Suites/Runs
     // page having nothing left to show).
     { label: 'Library', href: hasFolderAncestor ? `/projects/${projectKey}/library` : undefined },
-    ...(hasFolderAncestor && folder ? [{ label: folder.name, href: `/projects/${projectKey}/library/${folder.id}` }] : []),
+    ...(hasFolderAncestor && folder ? [{ label: folder.name, href: libraryUrl(folder) }] : []),
   ])
 
   return (
@@ -312,7 +318,7 @@ export default function CaseDetailPage() {
           <div className="flex items-center gap-3">
             {!isEditing && (
               <Link
-                to={`/projects/${projectKey}/library/${(folder ?? root)?.id}`}
+                to={libraryUrl(folder ?? root)}
                 aria-label={`Back to ${folderName}`}
                 className="text-2xl leading-none text-primary hover:text-primary/70"
               >

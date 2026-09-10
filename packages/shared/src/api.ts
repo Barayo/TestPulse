@@ -2265,8 +2265,14 @@ export interface components {
             /** @description Absent for a project's root folder. */
             parentFolderId?: string;
             name: string;
+            /** @description URL-routing slug derived from name (add-folder-slug-urls) — used client-side to build/resolve a folder's human-readable browser URL. Unique only per (project, parent folder), not globally. */
+            slug: string;
             /** Format: date-time */
             createdAt: string;
+            /** @description This folder's slug immediately before its most recent move — absent if it has never been moved. Combined with previousParentFolderId, lets the frontend resolve a bookmarked URL from before that one move (single-hop redirect only, not a full history). */
+            previousSlug?: string;
+            /** @description This folder's parent immediately before its most recent move — absent if it has never been moved. */
+            previousParentFolderId?: string;
         };
         FolderListPage: {
             items: components["schemas"]["Folder"][];

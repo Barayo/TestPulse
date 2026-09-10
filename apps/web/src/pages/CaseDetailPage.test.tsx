@@ -17,8 +17,8 @@ const mockPUT = vi.mocked(api.PUT)
 const mockDELETE = vi.mocked(api.DELETE)
 const mockPOST = vi.mocked(api.POST)
 
-const root = { id: 'root', projectId: 'p1', name: 'Root', createdAt: '' }
-const transferencias = { id: 'transferencias', projectId: 'p1', parentFolderId: 'root', name: 'Transferencias', createdAt: '' }
+const root = { id: 'root', projectId: 'p1', name: 'Root', slug: 'root', createdAt: '' }
+const transferencias = { id: 'transferencias', projectId: 'p1', parentFolderId: 'root', name: 'Transferencias', slug: 'transferencias', createdAt: '' }
 
 const limitCase = {
   id: 'c1',
@@ -158,8 +158,8 @@ function mockDetailAPI(options?: {
 }
 
 function LibraryProbe() {
-  const { folderId } = useParams<{ folderId?: string }>()
-  return <p data-testid="library-probe">library {folderId ?? ''}</p>
+  const { '*': slugPath } = useParams<{ '*': string }>()
+  return <p data-testid="library-probe">library {slugPath ?? ''}</p>
 }
 
 function renderDetail(path = '/projects/p1/cases/c1') {
@@ -169,7 +169,7 @@ function renderDetail(path = '/projects/p1/cases/c1') {
         <Routes>
           <Route path="/projects/:projectKey/cases/:caseKey" element={<CaseDetailPage />} />
           <Route path="/projects/:projectKey/library" element={<LibraryProbe />} />
-          <Route path="/projects/:projectKey/library/:folderId" element={<LibraryProbe />} />
+          <Route path="/projects/:projectKey/library/*" element={<LibraryProbe />} />
           <Route path="/login" element={<p>login stub</p>} />
         </Routes>
       </AuthProvider>

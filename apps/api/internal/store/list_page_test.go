@@ -513,11 +513,11 @@ func TestFolderListPageKeepsInsertionOrderAndResumes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Root: %v", err)
 	}
-	f1, err := s.Folders.Create(ctx, p.ID, root.ID, "Folder One")
+	f1, err := s.Folders.Create(ctx, p.ID, root.ID, "Folder One", "folder-one")
 	if err != nil {
 		t.Fatalf("create folder 1: %v", err)
 	}
-	f2, err := s.Folders.Create(ctx, p.ID, root.ID, "Folder Two")
+	f2, err := s.Folders.Create(ctx, p.ID, root.ID, "Folder Two", "folder-two")
 	if err != nil {
 		t.Fatalf("create folder 2: %v", err)
 	}
@@ -642,7 +642,7 @@ func TestFolderListPageExcludesSoftDeletedFolders(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Root: %v", err)
 	}
-	f, err := s.Folders.Create(ctx, p.ID, root.ID, "Soon Deleted")
+	f, err := s.Folders.Create(ctx, p.ID, root.ID, "Soon Deleted", "soon-deleted")
 	if err != nil {
 		t.Fatalf("create folder: %v", err)
 	}

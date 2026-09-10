@@ -839,16 +839,51 @@ func (s *Service) DeleteCase(ctx context.Context, caseID string) error {
 
 // --- Folders ---
 
+// CreateFolder rejects a name whose derived slug collides with a live
+// sibling under the same parent, or is still reserved as another folder's
+// move-redirect target (add-folder-slug-urls) — both checked before the
+// insert so the error can name the actual colliding folder, matching
+// Pepe's UI design; the store's own unique index is the final authority
+// for a race either check somehow missed.
 func (s *Service) CreateFolder(ctx context.Context, projectID string, in domain.NewFolder) (domain.Folder, error) {
 	if err := in.Validate(); err != nil {
 		return domain.Folder{}, invalid("%s", err)
 	}
-	f, err := s.store.Folders.Create(ctx, projectID, in.ParentFolderID, in.Name)
+	slug := domain.Slugify(in.Name)
+	// "" excludeFolderID: a brand-new folder has no previous identity of
+	// its own yet, so there's nothing for SlugReserved to need to exclude.
+	if err := s.checkFolderSlugAvailable(ctx, projectID, in.ParentFolderID, slug, ""); err != nil {
+		return domain.Folder{}, err
+	}
+	f, err := s.store.Folders.Create(ctx, projectID, in.ParentFolderID, in.Name, slug)
 	if err != nil {
 		return domain.Folder{}, err
 	}
 	s.audit(ctx, "create", "folder", f.ID)
 	return f, nil
+}
+
+// checkFolderSlugAvailable is CreateFolder/MoveFolder's shared
+// pre-write check: reject a slug already held by a live sibling under
+// parentFolderID (naming it in the error, per Pepe's UI design), or still
+// reserved as another folder's redirect target after a move.
+// excludeFolderID is the folder actually being created ("") or moved (its
+// own ID) — MoveFolder must exclude the folder from SlugReserved's search,
+// or moving a folder back to a parent it previously occupied would be
+// blocked by its own leftover previous-identity stamp from the earlier
+// move (a real bug found via manual testing, not anticipated by design).
+func (s *Service) checkFolderSlugAvailable(ctx context.Context, projectID, parentFolderID, slug, excludeFolderID string) error {
+	if conflict, found, err := s.store.Folders.LiveSlugConflict(ctx, projectID, parentFolderID, slug); err != nil {
+		return err
+	} else if found {
+		return invalid("a section named %q already exists here", conflict.Name)
+	}
+	if reserved, err := s.store.Folders.SlugReserved(ctx, projectID, parentFolderID, slug, excludeFolderID); err != nil {
+		return err
+	} else if reserved {
+		return invalid("that name was used here recently and is still reserved for a moment — try a different name")
+	}
+	return nil
 }
 
 func (s *Service) ListFolders(ctx context.Context, projectID string) ([]domain.Folder, error) {
@@ -883,6 +918,9 @@ func (s *Service) MoveFolder(ctx context.Context, folderID, targetParentID strin
 	}
 	if destProjectID != before.ProjectID {
 		return domain.Folder{}, invalid("target parent folder belongs to a different project")
+	}
+	if err := s.checkFolderSlugAvailable(ctx, before.ProjectID, targetParentID, before.Slug, folderID); err != nil {
+		return domain.Folder{}, err
 	}
 	f, err := s.store.Folders.Move(ctx, folderID, targetParentID)
 	if err != nil {

@@ -2,7 +2,13 @@ import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { useDataRevision } from '@/lib/DataRevision'
+import { buildSlugPath } from '@/lib/folderSlugPath'
 
+// id holds the folder's slug-path (add-folder-slug-urls), not its internal
+// id — matching LandingSuite/LandingRun.id already holding a key below.
+// The root folder's own slug-path is "" (its URL is the bare /library
+// route, not /library/<slug>) — callers building a navigate() target must
+// handle that empty-string case explicitly.
 export type LandingFolderChild = { id: string; name: string; caseCount: number }
 // children holds this section's immediate subsections (enrich-project-landing-panels'
 // inline-expand preview) — empty when it has none.
@@ -155,9 +161,9 @@ export function useProjectLanding(
           const subsections = folders.filter((sf) => sf.parentFolderId === f.id)
           const children: LandingFolderChild[] = subsections.map((sf) => {
             const childIds = descendantIds(sf.id)
-            return { id: sf.id, name: sf.name, caseCount: cases.filter((c) => childIds.has(c.folderId)).length }
+            return { id: buildSlugPath(sf, folders), name: sf.name, caseCount: cases.filter((c) => childIds.has(c.folderId)).length }
           })
-          return { id: f.id, name: f.name, caseCount, subsectionCount: subsections.length, children }
+          return { id: buildSlugPath(f, folders), name: f.name, caseCount, subsectionCount: subsections.length, children }
         })
 
         // Cases created before any subsection existed default into root,
@@ -167,7 +173,7 @@ export function useProjectLanding(
         // other row rather than being exempted from the cap.
         const rootCaseCount = root ? cases.filter((c) => c.folderId === root.id).length : 0
         if (root && rootCaseCount > 0) {
-          landingFolders.unshift({ id: root.id, name: 'Unsectioned', caseCount: rootCaseCount, subsectionCount: 0, children: [] })
+          landingFolders.unshift({ id: '', name: 'Unsectioned', caseCount: rootCaseCount, subsectionCount: 0, children: [] })
         }
 
         const landingSuites: LandingSuite[] = suites
