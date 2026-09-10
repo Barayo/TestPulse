@@ -214,6 +214,13 @@ test.describe('Requirement: Run item detail page', () => {
 
     await page.getByText('Login works').first().click()
     await expect(page.getByRole('heading', { name: 'Login works' })).toBeVisible()
+    // The item/run load and the viewer's project permissions load via
+    // separate requests — the heading (from the former) can render before
+    // canRecord (gated on the latter) flips true, during which window the
+    // keyboard shortcut handler is a no-op. Wait for a permission-gated
+    // control to confirm shortcuts are actually armed before pressing one,
+    // rather than racing the heading's appearance.
+    await expect(page.getByRole('button', { name: /^failed$/i })).toBeVisible()
 
     await page.keyboard.press('f')
 
