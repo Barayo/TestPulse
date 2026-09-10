@@ -29,7 +29,7 @@ The system SHALL create one populated Sample Project automatically the first tim
 - **THEN** the server still starts and serves requests normally
 
 ### Requirement: Sample Project content demonstrates core capabilities
-The Sample Project SHALL contain, at creation: at least five sections with test cases carrying varied classification fields (priority spanning all four levels, tags, platform, testType, automated); at least four suites; an open run with recorded verdicts; a closed run; a run created via JUnit-XML import including at least one unmatched case; and at least one case with more than one version. The chronologically last-created run SHALL have a pass rate of at least 85%, so the project's health indicator shows its healthy state. The Sample Project itself SHALL carry at least one project-level tag, so the project-tags feature is visible without any manual setup.
+The Sample Project SHALL contain, at creation: at least five sections with test cases carrying varied classification fields (priority spanning all four levels, tags, platform, testType, automated); at least four suites; an open run with recorded verdicts; a closed run; a run created via JUnit-XML import including at least one unmatched case; and at least one case with more than one version. The chronologically last-created run SHALL have a pass rate of at least 85%, so the project's health indicator shows its healthy state. The Sample Project itself SHALL carry at least one project-level tag, so the project-tags feature is visible without any manual setup. At least one run item SHALL have a mix of marked step verdicts (at least one `pass` and at least one `failed`), so the step-level-results capability is visible without any manual setup.
 
 #### Scenario: Sample Project has an open and a closed run
 - **WHEN** the Sample Project is seeded
@@ -54,6 +54,10 @@ The Sample Project SHALL contain, at creation: at least five sections with test 
 #### Scenario: Sample Project demonstrates project-level tags
 - **WHEN** the Sample Project is seeded
 - **THEN** it has at least one project-level tag assigned, visible on the project list
+
+#### Scenario: Sample Project demonstrates step-level results
+- **WHEN** the Sample Project is seeded
+- **THEN** at least one run item has step verdicts marked, including at least one `pass` and at least one `failed`, and the run item's most recent result carries a matching step snapshot
 
 ### Requirement: Sample Project demonstrates the flaky-test signal
 At least one Sample Project case SHALL have its currently-pinned version included in two or more runs with different recorded verdicts, without being edited between those runs, so the case's version-level flaky indicator has genuine data to show.
