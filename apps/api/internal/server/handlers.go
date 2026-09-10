@@ -126,6 +126,7 @@ func mountAPI(r chi.Router, h *api) {
 	r.Route("/items/{itemID}", func(r chi.Router) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/results", h.listResults)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Post("/results", h.recordResult)
+		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Put("/steps/{stepIndex}", h.setStepResult)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Put("/status", h.updateItem)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/attachments", h.listStagedAttachments)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromItem)).Post("/attachments", h.stageAttachment)
@@ -869,6 +870,25 @@ func (h *api) recordResult(w http.ResponseWriter, r *http.Request) {
 	}
 	out, err := h.svc.RecordResult(r.Context(), chi.URLParam(r, "itemID"), res)
 	h.respond(w, http.StatusCreated, out, err)
+}
+
+// setStepResult marks one step's verdict, independent of the item's
+// overall verdict (add-step-level-results).
+func (h *api) setStepResult(w http.ResponseWriter, r *http.Request) {
+	stepIndex, err := strconv.Atoi(chi.URLParam(r, "stepIndex"))
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	body, err := decode[struct {
+		Verdict domain.Verdict `json:"verdict"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	out, err := h.svc.SetStepResult(r.Context(), chi.URLParam(r, "itemID"), stepIndex, body.Verdict)
+	h.respond(w, http.StatusOK, out, err)
 }
 
 func (h *api) updateItem(w http.ResponseWriter, r *http.Request) {

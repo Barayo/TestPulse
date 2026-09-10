@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -591,7 +592,22 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		}
 		items = append(items, it)
 	}
-	return items, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	byItem, err := stepStatesByItems(ctx, r.pool, ids)
+	if err != nil {
+		return nil, err
+	}
+	for i, it := range items {
+		items[i].StepStates = byItem[it.ID]
+	}
+	return items, nil
 }
 
 // ItemsPage is Items, cursor-paginated (add-cursor-pagination). Unlike
@@ -677,6 +693,18 @@ func (r *RunRepo) ItemsPage(ctx context.Context, runID, assigneeID, cursor strin
 		last := items[limit-1]
 		nextCursor = encodeCursor(last.CreatedAt, last.ID)
 		items = items[:limit]
+	}
+
+	ids := make([]string, len(items))
+	for i, it := range items {
+		ids[i] = it.ID
+	}
+	byItem, err := stepStatesByItems(ctx, r.pool, ids)
+	if err != nil {
+		return nil, "", err
+	}
+	for i, it := range items {
+		items[i].StepStates = byItem[it.ID]
 	}
 	return items, nextCursor, nil
 }
@@ -811,6 +839,20 @@ func (r *RunRepo) AppendResult(ctx context.Context, itemID string, res domain.Ne
 	if _, err := insertInlineAttachments(ctx, tx, itemID, out.ID, res.Attachments); err != nil {
 		return domain.Result{}, err
 	}
+
+	if len(res.StepResults) > 0 {
+		steps := append([]domain.StepResult(nil), res.StepResults...)
+		sort.Slice(steps, func(i, j int) bool { return steps[i].StepIndex < steps[j].StepIndex })
+		for _, sr := range steps {
+			if _, err := tx.Exec(ctx,
+				`INSERT INTO test_run_result_steps (result_id, step_index, verdict) VALUES ($1, $2, $3)`,
+				out.ID, sr.StepIndex, sr.Verdict); err != nil {
+				return domain.Result{}, err
+			}
+		}
+		out.StepResults = steps
+	}
+
 	if len(res.AttachmentIDs) > 0 || len(res.Attachments) > 0 {
 		// Read back within the same transaction — a separate pool
 		// connection would not yet see these uncommitted inserts/updates.
@@ -870,8 +912,13 @@ func (r *RunRepo) Results(ctx context.Context, itemID string) ([]domain.Result, 
 	if err != nil {
 		return nil, err
 	}
+	stepsByResult, err := stepResultsByResults(ctx, r.pool, ids)
+	if err != nil {
+		return nil, err
+	}
 	for i, res := range results {
 		results[i].Attachments = byResult[res.ID]
+		results[i].StepResults = stepsByResult[res.ID]
 	}
 	return results, nil
 }

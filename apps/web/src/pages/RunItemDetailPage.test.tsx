@@ -1162,3 +1162,102 @@ describe('signed-in non-member (design.md D11)', () => {
     expect(mockGET).not.toHaveBeenCalledWith('/api/v1/users')
   })
 })
+
+// add-step-level-results.
+describe('step-level results (add-step-level-results)', () => {
+  const multiStepItem = {
+    ...item,
+    stepStates: [{ stepIndex: 0, verdict: 'pass' }],
+    content: {
+      ...item.content,
+      steps: [
+        { action: 'open login page', expected: 'form visible' },
+        { action: 'enter credentials' },
+        { action: 'submit' },
+      ],
+    },
+  }
+
+  it('marking a step calls the per-step endpoint and shows the new mark, without recording an overall verdict', async () => {
+    mockItemAPI(multiStepItem)
+    mockPUT.mockResolvedValue({ data: { stepIndex: 1, verdict: 'failed' }, response: { ok: true } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    const group = screen.getByRole('group', { name: /mark step 2 result/i })
+    await userEvent.click(within(group).getByRole('button', { name: /mark step 2 as fail/i }))
+
+    await waitFor(() => {
+      expect(mockPUT).toHaveBeenCalledWith(
+        '/api/v1/items/{itemId}/steps/{stepIndex}',
+        expect.objectContaining({ params: { path: { itemId: 'i1', stepIndex: 1 } }, body: { verdict: 'failed' } }),
+      )
+    })
+    await waitFor(() => {
+      expect(within(group).getByRole('button', { name: /mark step 2 as fail/i })).toHaveAttribute('aria-pressed', 'true')
+    })
+    expect(mockPOST).not.toHaveBeenCalled()
+  })
+
+  it('shows an error and leaves the mark unchanged when marking a step fails', async () => {
+    mockItemAPI(multiStepItem)
+    mockPUT.mockResolvedValue({ error: { error: 'nope' }, response: { ok: false } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+
+    const group = screen.getByRole('group', { name: /mark step 2 result/i })
+    await userEvent.click(within(group).getByRole('button', { name: /mark step 2 as fail/i }))
+
+    expect(await screen.findByText('nope')).toBeInTheDocument()
+    expect(within(group).getByRole('button', { name: /mark step 2 as fail/i })).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('shows a step-snapshot summary on a history entry that has marked steps', async () => {
+    mockItemAPI(multiStepItem, undefined, [
+      {
+        id: 'res1',
+        runItemId: 'i1',
+        actor: 'ana',
+        verdict: 'failed',
+        comment: '',
+        createdAt: new Date().toISOString(),
+        stepResults: [
+          { stepIndex: 0, verdict: 'pass' },
+          { stepIndex: 1, verdict: 'failed' },
+        ],
+      },
+    ])
+    renderPage()
+    expect(await screen.findByText('2/3 steps marked · 1 failed')).toBeInTheDocument()
+  })
+
+  it('shows no step-snapshot summary on a history entry with no marked steps', async () => {
+    mockItemAPI(multiStepItem, undefined, [
+      { id: 'res1', runItemId: 'i1', actor: 'ana', verdict: 'pass', comment: '', createdAt: new Date().toISOString() },
+    ])
+    renderPage()
+    await screen.findByText(/^ana$/)
+    expect(screen.queryByText(/steps marked/i)).not.toBeInTheDocument()
+  })
+
+  it("expanding a history entry's step snapshot shows that attempt's verdicts, not the item's current live marks", async () => {
+    mockItemAPI(multiStepItem, undefined, [
+      {
+        id: 'res1',
+        runItemId: 'i1',
+        actor: 'ana',
+        verdict: 'failed',
+        comment: '',
+        createdAt: new Date().toISOString(),
+        stepResults: [{ stepIndex: 1, verdict: 'blocked' }],
+      },
+    ])
+    renderPage()
+    const summary = await screen.findByText('1/3 steps marked · 1 blocked')
+    const details = summary.closest('details')!
+    await userEvent.click(summary)
+    expect(details).toHaveAttribute('open')
+    expect(within(details).getByText('Step 2')).toBeInTheDocument()
+    expect(within(details).getByText('blocked')).toBeInTheDocument()
+  })
+})

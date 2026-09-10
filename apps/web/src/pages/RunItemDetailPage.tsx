@@ -29,6 +29,8 @@ import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel, type CaseResultsData } from '@/components/CaseResultsPanel'
 import { toResultsData, RECENT_EXECUTIONS_LIMIT } from '@/lib/caseResultsData'
 import { CaseContentView, caseContentHeading } from '@/components/CaseContentView'
+import { ExecutionStepsList } from '@/components/ExecutionStepsList'
+import { StepSnapshotSummary } from '@/components/StepSnapshotSummary'
 import { StatusBadge } from '@/components/StatusBadge'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
 import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
@@ -45,6 +47,13 @@ type Verdict = components['schemas']['Verdict']
 type Result = components['schemas']['Result']
 type Project = components['schemas']['Project']
 type Attachment = components['schemas']['Attachment']
+
+// A case's content is step-based unless it's explicitly text or gherkin
+// (mirrors CaseContentView's own dispatch) — add-step-level-results only
+// applies where there's a discrete Step[] to mark.
+function isStepFormat(format: string | undefined): boolean {
+  return format !== 'text' && format !== 'gherkin'
+}
 
 function isValidDate(iso: string): boolean {
   return iso !== '' && !Number.isNaN(new Date(iso).getTime())
@@ -68,6 +77,7 @@ export default function RunItemDetailPage() {
   const [items, setItems] = useState<RunItem[]>([])
   const [results, setResults] = useState<Result[]>([])
   const [resultsData, setResultsData] = useState<CaseResultsData>()
+  const [stepMarkError, setStepMarkError] = useState<string | undefined>(undefined)
   const [notFound, setNotFound] = useState(false)
   // Resolved by load()'s own run fetch (design.md D11) — a signed-in
   // non-member ends up 'public' here, same as an anonymous visitor,
@@ -345,6 +355,30 @@ export default function RunItemDetailPage() {
     }
   }
 
+  // Marks one step's verdict, independent of the item's overall verdict
+  // (add-step-level-results) — persisted immediately via its own endpoint,
+  // not batched with recordVerdict. Updates local state optimistically
+  // from the response rather than a full item refetch, since this fires
+  // once per click while a tester works through a case.
+  async function markStep(stepIndex: number, verdict: Verdict) {
+    if (!item) return
+    const { data, error, response } = await api.PUT('/api/v1/items/{itemId}/steps/{stepIndex}', {
+      params: { path: { itemId: item.id, stepIndex } },
+      body: { verdict },
+    })
+    if (!response.ok || !data) {
+      setStepMarkError((error as { error?: string })?.error ?? 'Could not mark this step.')
+      return
+    }
+    setStepMarkError(undefined)
+    const marked = data
+    setItem((prev) => {
+      if (!prev) return prev
+      const others = (prev.stepStates ?? []).filter((s) => s.stepIndex !== marked.stepIndex)
+      return { ...prev, stepStates: [...others, marked].sort((a, b) => a.stepIndex - b.stepIndex) }
+    })
+  }
+
   const lastVerdict = results.length > 0 ? results[results.length - 1].verdict : undefined
 
   function handleCommentKeyDown(e: ReactKeyboardEvent<HTMLTextAreaElement>) {
@@ -467,7 +501,20 @@ export default function RunItemDetailPage() {
             <p className="panel-title text-xs font-semibold tracking-wide text-muted-foreground uppercase">
               {caseContentHeading(item.content.format)}
             </p>
-            <CaseContentView content={item.content} projectKey={projectKey} />
+            {isStepFormat(item.content.format) ? (
+              <ExecutionStepsList
+                steps={item.content.steps ?? []}
+                stepStates={item.stepStates ?? []}
+                onMark={(stepIndex, verdict) => void markStep(stepIndex, verdict)}
+              />
+            ) : (
+              <CaseContentView content={item.content} projectKey={projectKey} />
+            )}
+            {stepMarkError && (
+              <p role="alert" className="text-xs text-destructive">
+                {stepMarkError}
+              </p>
+            )}
           </div>
           {item.content.expectedResult && (
             <div>
@@ -732,6 +779,12 @@ export default function RunItemDetailPage() {
                       <AttachmentStrip
                         attachments={r.attachments}
                         onSelect={(index) => setHistoryLightbox({ resultId: r.id, index })}
+                      />
+                    )}
+                    {isStepFormat(item.content.format) && (
+                      <StepSnapshotSummary
+                        stepResults={r.stepResults ?? []}
+                        totalSteps={item.content.steps?.length ?? 0}
                       />
                     )}
                   </li>

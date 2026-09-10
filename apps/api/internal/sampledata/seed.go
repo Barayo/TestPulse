@@ -194,8 +194,15 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// --- Authentication cases ------------------------------------------
 
 	login, err := svc.CreateCase(ctx, p.ID, auth.ID, domain.CaseContent{
-		Title:     "User can log in with valid credentials",
-		Steps:     []domain.Step{{Action: "Enter a valid email and password", Expected: "The user lands on the dashboard"}},
+		Title: "User can log in with valid credentials",
+		// Three discrete steps (rather than one) so this case doubles as
+		// the step-level-results showcase below — its hotfix-run result
+		// gets real per-step marks, not just an overall verdict.
+		Steps: []domain.Step{
+			{Action: "Navigate to the login page", Expected: "The login form is displayed"},
+			{Action: "Enter a valid email and password", Expected: "The credentials are accepted"},
+			{Action: "Submit the login form", Expected: "The user lands on the dashboard"},
+		},
 		Priority:  domain.PriorityHigh,
 		Tags:      []string{"smoke", "auth"},
 		Platform:  "web",
@@ -703,7 +710,12 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// (add-run-comparison-timing) while "Release 1.1 regression" above
 	// carries none — the comparison showcase demonstrates both the real
 	// duration figure and the "No timing data" state side by side, rather
-	// than leaving the stat silently absent on both runs.
+	// than leaving the stat silently absent on both runs. Also marks two of
+	// its three steps (add-step-level-results): the first passes, the
+	// second — entering credentials — fails, matching the hotfix's own
+	// "Login with valid credentials genuinely regresses" story above,
+	// so the showroom demonstrates per-step marking and its immutable
+	// per-result history snapshot without any manual setup.
 	hotfixItems, err := svc.RunItems(ctx, hotfixRun.ID, "")
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
@@ -711,6 +723,12 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	for _, item := range hotfixItems {
 		if item.CaseID != login.ID {
 			continue
+		}
+		if _, err := svc.SetStepResult(ctx, item.ID, 0, domain.VerdictPass); err != nil {
+			return fmt.Errorf("sampledata: marking step 0: %w", err)
+		}
+		if _, err := svc.SetStepResult(ctx, item.ID, 1, domain.VerdictFailed); err != nil {
+			return fmt.Errorf("sampledata: marking step 1: %w", err)
 		}
 		start := hotfixRun.CreatedAt
 		end := start.Add(4200 * time.Millisecond)

@@ -1392,6 +1392,27 @@ func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.Ne
 	if err := s.checkAssigneeRestriction(ctx, itemID); err != nil {
 		return domain.Result{}, err
 	}
+
+	// Two paths (add-step-level-results, design.md): a caller-supplied
+	// StepResults is used verbatim as this result's snapshot and then
+	// synced into the item's live carry-forward state (below, after the
+	// result is created); an omitted one means the interactive UI already
+	// persisted steps incrementally, so the item's *current* live state is
+	// what gets snapshotted — and is left untouched afterward (carry
+	// forward, not reset).
+	suppliedStepResults := len(res.StepResults) > 0
+	if suppliedStepResults {
+		if err := s.checkStepIndicesInBounds(ctx, itemID, res.StepResults); err != nil {
+			return domain.Result{}, err
+		}
+	} else {
+		live, err := s.store.Runs.StepStates(ctx, itemID)
+		if err != nil {
+			return domain.Result{}, err
+		}
+		res.StepResults = live
+	}
+
 	for i, a := range res.Attachments {
 		contentType, err := attachmentimage.ValidateUpload(a.Data)
 		if err != nil {
@@ -1418,8 +1439,53 @@ func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.Ne
 	if err != nil {
 		return domain.Result{}, attachmentErrorAsInvalid(err)
 	}
+	if suppliedStepResults {
+		// Keep the item's live, carry-forward state consistent with what
+		// was just reported, so a later retest builds on it rather than
+		// stale prior marks (design.md).
+		for _, sr := range res.StepResults {
+			if _, err := s.store.Runs.SetStepState(ctx, itemID, sr.StepIndex, sr.Verdict); err != nil {
+				return domain.Result{}, err
+			}
+		}
+	}
 	s.audit(ctx, "record_result", "run_item", itemID)
 	return result, nil
+}
+
+// checkStepIndicesInBounds rejects any stepResults entry whose StepIndex
+// falls outside itemID's pinned step count (add-step-level-results) — a
+// client/security-relevant boundary re-validated server-side, never
+// trusted from the request alone.
+func (s *Service) checkStepIndicesInBounds(ctx context.Context, itemID string, stepResults []domain.StepResult) error {
+	count, err := s.store.Runs.ItemStepCount(ctx, itemID)
+	if err != nil {
+		return err
+	}
+	for _, sr := range stepResults {
+		if sr.StepIndex >= count {
+			return invalid("step index %d is out of bounds (item has %d steps)", sr.StepIndex, count)
+		}
+	}
+	return nil
+}
+
+// SetStepResult marks one step's verdict, independent of the item's
+// overall verdict (add-step-level-results) — persisted immediately, not
+// batched with RecordResult. Subject to the same assignee-restriction gate
+// as recording a result, since this is the same execution surface.
+func (s *Service) SetStepResult(ctx context.Context, itemID string, stepIndex int, verdict domain.Verdict) (domain.StepResult, error) {
+	sr := domain.StepResult{StepIndex: stepIndex, Verdict: verdict}
+	if err := sr.Validate(); err != nil {
+		return domain.StepResult{}, invalid("%s", err)
+	}
+	if err := s.checkAssigneeRestriction(ctx, itemID); err != nil {
+		return domain.StepResult{}, err
+	}
+	if err := s.checkStepIndicesInBounds(ctx, itemID, []domain.StepResult{sr}); err != nil {
+		return domain.StepResult{}, err
+	}
+	return s.store.Runs.SetStepState(ctx, itemID, stepIndex, verdict)
 }
 
 func (s *Service) Results(ctx context.Context, itemID string) ([]domain.Result, error) {

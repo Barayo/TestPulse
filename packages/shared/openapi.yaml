@@ -1201,6 +1201,33 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/steps/{stepIndex}:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+      - { name: stepIndex, in: path, required: true, schema: { type: integer } }
+    put:
+      operationId: setStepResult
+      summary: Mark one step's verdict, independent of the item's overall verdict
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verdict]
+              properties:
+                verdict: { $ref: "#/components/schemas/Verdict" }
+      responses:
+        "200":
+          description: The updated step verdict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/items/{itemId}/attachments:
     parameters:
       - { name: itemId, in: path, required: true, schema: { type: string } }
@@ -2602,6 +2629,15 @@ components:
     Verdict:
       type: string
       enum: [pass, failed, skipped, blocked]
+    StepResult:
+      type: object
+      required: [stepIndex, verdict]
+      description: >-
+        A single step's verdict, identified by its position in the run
+        item's pinned content.steps array (add-step-level-results).
+      properties:
+        stepIndex: { type: integer }
+        verdict: { $ref: "#/components/schemas/Verdict" }
     Priority:
       type: string
       enum: [low, medium, high, critical]
@@ -3083,6 +3119,13 @@ components:
           format: date-time
           nullable: true
           description: When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
+        stepStates:
+          type: array
+          items: { $ref: "#/components/schemas/StepResult" }
+          description: >-
+            This item's live, carry-forward step verdicts
+            (add-step-level-results) — not reset when an overall verdict is
+            recorded. Absent/empty when no step has ever been marked.
     RunItemListPage:
       type: object
       required: [items, nextCursor]
@@ -3132,6 +3175,16 @@ components:
             Inline image attachments, created in the same transaction as
             this result — for a client that already has the bytes and wants
             a single atomic call.
+        stepResults:
+          type: array
+          items: { $ref: "#/components/schemas/StepResult" }
+          description: >-
+            Optional (add-step-level-results). When supplied, becomes this
+            result's step-verdict snapshot verbatim and also becomes the
+            item's new live step verdicts, overriding whatever was
+            previously marked. When omitted, the item's current live step
+            verdicts (set via PUT .../items/{itemId}/steps/{stepIndex}) are
+            snapshotted instead.
     NewAttachment:
       type: object
       required: [filename, contentType, data]
@@ -3186,6 +3239,13 @@ components:
         attachments:
           type: array
           items: { $ref: "#/components/schemas/Attachment" }
+        stepResults:
+          type: array
+          items: { $ref: "#/components/schemas/StepResult" }
+          description: >-
+            This result's immutable step-verdict snapshot, taken at the
+            moment it was recorded (add-step-level-results). Absent when no
+            step was marked at that time.
         createdAt: { type: string, format: date-time }
     ImportRequest:
       type: object

@@ -664,6 +664,93 @@ func TestSeedContentShowcasesRunComparisonTiming(t *testing.T) {
 	}
 }
 
+// TestSeedContentDemonstratesStepLevelResults covers add-step-level-results'
+// sample-data requirement: at least one run item has step verdicts marked
+// (a real pass and a real failed), and its most recent result carries a
+// matching step snapshot — the "Login with valid credentials" item on the
+// hotfix run, reusing the same regression/hotfix pair the run-comparison
+// showcase above already exercises.
+func TestSeedContentDemonstratesStepLevelResults(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var login *domain.TestCase
+	for i, c := range cases {
+		if c.Content.Title == "User can log in with valid credentials" {
+			login = &cases[i]
+		}
+	}
+	if login == nil {
+		t.Fatal("no case titled \"User can log in with valid credentials\" seeded")
+	}
+	if len(login.Content.Steps) < 2 {
+		t.Fatalf("login case has %d steps, want at least 2 to demonstrate a mixed pass/failed mark", len(login.Content.Steps))
+	}
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var hotfix *domain.Run
+	for i, r := range runs {
+		if r.Name == "Release 1.1.1 hotfix verification" {
+			hotfix = &runs[i]
+		}
+	}
+	if hotfix == nil {
+		t.Fatal("missing the \"Release 1.1.1 hotfix verification\" run")
+	}
+
+	items, err := svc.RunItems(actorCtx, hotfix.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	var loginItem *domain.RunItem
+	for i, it := range items {
+		if it.CaseID == login.ID {
+			loginItem = &items[i]
+		}
+	}
+	if loginItem == nil {
+		t.Fatal("login case has no item on the hotfix run")
+	}
+
+	hasPass, hasFailed := false, false
+	for _, s := range loginItem.StepStates {
+		if s.Verdict == domain.VerdictPass {
+			hasPass = true
+		}
+		if s.Verdict == domain.VerdictFailed {
+			hasFailed = true
+		}
+	}
+	if !hasPass || !hasFailed {
+		t.Errorf("login item's live StepStates = %+v, want at least one pass and one failed", loginItem.StepStates)
+	}
+
+	results, err := svc.Results(actorCtx, loginItem.ID)
+	if err != nil {
+		t.Fatalf("Results: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("login item on the hotfix run has no results")
+	}
+	last := results[len(results)-1]
+	if len(last.StepResults) == 0 {
+		t.Error("login item's most recent result has no step snapshot, want it to match the live marks")
+	}
+}
+
 // TestSeedContentHasAnOpenRunAmongClosedSuiteHistory covers
 // rework-suite-run-flow D7: the Stability card's "Open + closed" view needs
 // a suite with a real mix of closed history AND a trailing open run to

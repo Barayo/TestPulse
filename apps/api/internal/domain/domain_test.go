@@ -45,6 +45,28 @@ func TestVerdictBecomesStatus(t *testing.T) {
 	}
 }
 
+func TestStepResultValidation(t *testing.T) {
+	valid := StepResult{StepIndex: 0, Verdict: VerdictPass}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid step result rejected: %v", err)
+	}
+
+	negativeIndex := StepResult{StepIndex: -1, Verdict: VerdictPass}
+	err := negativeIndex.Validate()
+	if err == nil {
+		t.Fatal("step result with a negative index accepted")
+	}
+	if !strings.Contains(err.Error(), "index") {
+		t.Errorf("error %q does not name the invalid index", err)
+	}
+
+	invalidVerdict := StepResult{StepIndex: 0, Verdict: "bogus"}
+	err = invalidVerdict.Validate()
+	if err == nil {
+		t.Fatal("step result with an invalid verdict accepted")
+	}
+}
+
 func TestCaseContentValidation(t *testing.T) {
 	valid := CaseContent{Title: "Login works", Priority: PriorityMedium}
 	if err := valid.Validate(); err != nil {

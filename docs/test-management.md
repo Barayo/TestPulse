@@ -328,6 +328,28 @@ Open a run (`/runs/{key}`) — this is the one screen in TestPulse designed for 
 - A **Retest** button appears on failed items; marking retest sets the item back to an executable state (`retest` status) without erasing the prior failure from history.
 - Right-clicking an item row opens a shortcut menu: open its execution page (same as clicking the row), **Assign to…**, or jump straight to the case's own page in the Library without visiting the execution page first. On an open run, with permission to record results, the same menu also offers **Pass**/**Failed**/**Blocked**/**Skipped** for that row alone — the same four verdicts the bulk "Mark as" menu offers, just scoped to one item instead of a whole selection — and, when that row is currently failed, a **Retest** action identical to the one on the item's own page. Neither the verdicts nor Retest appear on a closed run or without that permission. If the row is part of an active multi-item selection (see **Assigning items**, below), the menu switches to the same bulk actions available in the bulk action bar instead — right-clicking a row outside the current selection always shows the ordinary single-item menu, and opening either menu never changes which items are selected.
 
+### Step-level results
+
+For a case with discrete steps (not a Gherkin scenario or a free-text
+description), each step on the item's own page carries a compact **P F B
+S** control for marking that individual step's verdict — pass, failed,
+blocked, or skipped — independently of the item's overall verdict. Marking
+a step is a small write that persists immediately, the moment you click:
+there's nothing to save separately, and recording the overall verdict
+below doesn't require any step to be marked first (or at all) — it works
+exactly as it always has if you never touch a step marker. Step marks
+persist across a retest rather than resetting, so if only one step's
+outcome actually changed, that's the only one you need to re-click.
+
+Every time you record an overall verdict, whatever step marks are set at
+that moment are captured as part of that result — an immutable snapshot,
+not a live view. The **This run** history shows each past result's step
+snapshot as a small expandable summary (e.g. "3/5 steps marked · 1
+failed"), so you can see exactly which step broke on a given attempt even
+after later retests have moved the item's live markers on. A result with
+no steps marked (including every result recorded before this capability
+existed) shows no step summary at all.
+
 ### Assigning items
 
 Each row shows who it's assigned to, or **Unassigned**. **Assign to…** (from

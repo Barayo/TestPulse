@@ -64,6 +64,28 @@ func ParseVerdict(s string) (Verdict, error) {
 // Status returns the run item status a verdict implies.
 func (v Verdict) Status() Status { return Status(v) }
 
+// StepResult is one step's verdict, identified by its position in the run
+// item's pinned content.steps array (add-step-level-results) — steps have
+// no stable ID of their own, but a run item's pinned steps never change
+// after creation, so the array index is a stable, sufficient identifier.
+// Used both for a run item's live, carry-forward step marks
+// (RunItem.StepStates) and for a single result's immutable snapshot
+// (Result.StepResults).
+type StepResult struct {
+	StepIndex int     `json:"stepIndex"`
+	Verdict   Verdict `json:"verdict"`
+}
+
+func (r StepResult) Validate() error {
+	if r.StepIndex < 0 {
+		return fmt.Errorf("step index must not be negative")
+	}
+	if _, err := ParseVerdict(string(r.Verdict)); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Priority of a test case version.
 type Priority string
 
@@ -223,11 +245,26 @@ type NewResult struct {
 	// (add-run-item-screenshot-attachments design.md).
 	AttachmentIDs []string        `json:"attachmentIds,omitempty"`
 	Attachments   []NewAttachment `json:"attachments,omitempty"`
+	// StepResults optionally submits step-level verdicts atomically with
+	// this overall verdict (add-step-level-results) — used by a
+	// non-interactive caller (e.g. a future agent/import path) that
+	// already knows every step's outcome up front. When supplied, these
+	// values become this result's snapshot verbatim, overriding whatever
+	// the run item's live step verdicts currently are, and also become
+	// the run item's new live step verdicts (so a later retest carries
+	// forward from what was just reported). When omitted, the run item's
+	// current live step verdicts are snapshotted instead.
+	StepResults []StepResult `json:"stepResults,omitempty"`
 }
 
 func (r NewResult) Validate() error {
 	if _, err := ParseVerdict(string(r.Verdict)); err != nil {
 		return err
+	}
+	for i, sr := range r.StepResults {
+		if err := sr.Validate(); err != nil {
+			return fmt.Errorf("stepResults[%d]: %w", i, err)
+		}
 	}
 	return nil
 }
@@ -708,6 +745,11 @@ type RunItem struct {
 	JiraIssueSummary *string    `json:"jiraIssueSummary,omitempty"`
 	JiraIssueStatus  *string    `json:"jiraIssueStatus,omitempty"`
 	JiraLastSyncedAt *time.Time `json:"jiraLastSyncedAt,omitempty"`
+	// StepStates are this run item's live, carry-forward step verdicts
+	// (add-step-level-results) — not reset when an overall verdict is
+	// recorded; see Result.StepResults for a past attempt's immutable
+	// snapshot.
+	StepStates []StepResult `json:"stepStates,omitempty"`
 }
 
 // CaseExecution is one run item's outcome, viewed from the case's side
@@ -737,7 +779,12 @@ type Result struct {
 	Version     string          `json:"version,omitempty"`
 	Tags        []string        `json:"tags,omitempty"`
 	Attachments []Attachment    `json:"attachments,omitempty"`
-	CreatedAt   time.Time       `json:"createdAt"`
+	// StepResults is this result's immutable snapshot of step verdicts,
+	// taken at the moment it was recorded (add-step-level-results) —
+	// never changes afterward, even as the run item's live step verdicts
+	// (RunItem.StepStates) continue to change.
+	StepResults []StepResult `json:"stepResults,omitempty"`
+	CreatedAt   time.Time    `json:"createdAt"`
 }
 
 // Attachment is an image (screenshot) evidencing a run item result

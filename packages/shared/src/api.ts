@@ -981,6 +981,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/items/{itemId}/steps/{stepIndex}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+                stepIndex: number;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Mark one step's verdict, independent of the item's overall verdict */
+        put: operations["setStepResult"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/items/{itemId}/attachments": {
         parameters: {
             query?: never;
@@ -2216,6 +2236,11 @@ export interface components {
         RunStatus: "open" | "closed";
         /** @enum {string} */
         Verdict: "pass" | "failed" | "skipped" | "blocked";
+        /** @description A single step's verdict, identified by its position in the run item's pinned content.steps array (add-step-level-results). */
+        StepResult: {
+            stepIndex: number;
+            verdict: components["schemas"]["Verdict"];
+        };
         /** @enum {string} */
         Priority: "low" | "medium" | "high" | "critical";
         Step: {
@@ -2510,6 +2535,8 @@ export interface components {
              * @description When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
              */
             jiraLastSyncedAt?: string | null;
+            /** @description This item's live, carry-forward step verdicts (add-step-level-results) — not reset when an overall verdict is recorded. Absent/empty when no step has ever been marked. */
+            stepStates?: components["schemas"]["StepResult"][];
         };
         RunItemListPage: {
             items: components["schemas"]["RunItem"][];
@@ -2535,6 +2562,8 @@ export interface components {
             attachmentIds?: string[];
             /** @description Inline image attachments, created in the same transaction as this result — for a client that already has the bytes and wants a single atomic call. */
             attachments?: components["schemas"]["NewAttachment"][];
+            /** @description Optional (add-step-level-results). When supplied, becomes this result's step-verdict snapshot verbatim and also becomes the item's new live step verdicts, overriding whatever was previously marked. When omitted, the item's current live step verdicts (set via PUT .../items/{itemId}/steps/{stepIndex}) are snapshotted instead. */
+            stepResults?: components["schemas"]["StepResult"][];
         };
         NewAttachment: {
             /** @description Scopes this attachment to one matched test within a bulk import request. Omit when submitting directly on a NewResult, which has no ambiguity about which result it belongs to. */
@@ -2576,6 +2605,8 @@ export interface components {
             version?: string;
             tags?: string[];
             attachments?: components["schemas"]["Attachment"][];
+            /** @description This result's immutable step-verdict snapshot, taken at the moment it was recorded (add-step-level-results). Absent when no step was marked at that time. */
+            stepResults?: components["schemas"]["StepResult"][];
             /** Format: date-time */
             createdAt: string;
         };
@@ -5059,6 +5090,39 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+        };
+    };
+    setStepResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+                stepIndex: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    verdict: components["schemas"]["Verdict"];
+                };
+            };
+        };
+        responses: {
+            /** @description The updated step verdict */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StepResult"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
         };
