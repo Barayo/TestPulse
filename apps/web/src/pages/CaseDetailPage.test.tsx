@@ -91,6 +91,9 @@ function mockDetailAPI(options?: {
   // step group CaseStepsList looks up for any groupRef it finds.
   currentSteps?: Step[]
   stepGroup?: { id: string; key: string; name: string; steps: unknown[]; createdAt: string; updatedAt: string } | null
+  // add-requirements-traceability: the project's full requirement list —
+  // caseIds determines which show as linked on this case.
+  requirements?: unknown[]
 }) {
   const anon = options?.anonymous ?? false
   mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
@@ -109,6 +112,7 @@ function mockDetailAPI(options?: {
     const customFieldsPath = anon
       ? '/api/v1/public/projects/{projectKey}/custom-fields'
       : '/api/v1/projects/{projectKey}/custom-fields'
+    const requirementsPath = '/api/v1/projects/{projectKey}/requirements'
     if (path === projectPath)
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
     if (path === foldersPath)
@@ -147,6 +151,8 @@ function mockDetailAPI(options?: {
       })
     if (path === executionsPath) return Promise.resolve({ data: options?.executions ?? [], response: { ok: true } })
     if (path === customFieldsPath) return Promise.resolve({ data: options?.customFields ?? [], response: { ok: true } })
+    if (path === requirementsPath && !anon)
+      return Promise.resolve({ data: options?.requirements ?? [], response: { ok: true } })
     if (path === '/api/v1/users' && !anon)
       return Promise.resolve({ data: { items: options?.users ?? [], nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anon) {
@@ -1198,6 +1204,56 @@ describe('CaseDetailPage', () => {
       // anonymous visitor — GET /api/v1/users (the unscoped identity
       // directory) must never fire on the public/non-member branch.
       expect(mockGET).not.toHaveBeenCalledWith('/api/v1/users')
+    })
+  })
+
+  describe('Requirements panel (add-requirements-traceability)', () => {
+    const requirement1 = { id: 'r1', key: 'p1-REQ1', projectId: 'p1', name: 'Guest checkout', description: '', externalRef: '', caseIds: ['c1'], createdAt: '' }
+    const requirement2 = { id: 'r2', key: 'p1-REQ2', projectId: 'p1', name: 'Saved-card checkout', description: '', externalRef: '', caseIds: [], createdAt: '' }
+
+    it('shows linked requirements as chips linking to their detail page', async () => {
+      mockDetailAPI({ requirements: [requirement1, requirement2] })
+      renderDetail()
+
+      const link = await screen.findByRole('link', { name: 'Guest checkout' })
+      expect(link).toHaveAttribute('href', '/projects/p1/requirements/p1-REQ1')
+      // Unlinked requirements appear only as options in the "link" picker,
+      // never as their own chip/link.
+      expect(screen.queryByRole('link', { name: 'Saved-card checkout' })).not.toBeInTheDocument()
+    })
+
+    it('links a requirement via the picker and unlinks via the × control', async () => {
+      mockDetailAPI({ requirements: [requirement1, requirement2] })
+      mockPUT.mockResolvedValue({ data: undefined, response: { ok: true } })
+      mockDELETE.mockResolvedValue({ data: undefined, response: { ok: true } })
+      renderDetail()
+      await screen.findByText('Requirements')
+
+      await userEvent.selectOptions(screen.getByLabelText('Link a requirement'), 'p1-REQ2')
+      await waitFor(() =>
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/requirements/{requirementKey}/cases/{caseKey}',
+          expect.objectContaining({ params: { path: { requirementKey: 'p1-REQ2', caseKey: 'c1' } } }),
+        ),
+      )
+
+      await userEvent.click(screen.getByRole('button', { name: 'Unlink Guest checkout' }))
+      await waitFor(() =>
+        expect(mockDELETE).toHaveBeenCalledWith(
+          '/api/v1/requirements/{requirementKey}/cases/{caseKey}',
+          expect.objectContaining({ params: { path: { requirementKey: 'p1-REQ1', caseKey: 'c1' } } }),
+        ),
+      )
+    })
+
+    it('hides link/unlink controls without manageProject', async () => {
+      mockDetailAPI({ requirements: [requirement1, requirement2], permissions: { ...fullPermissions, manageProject: false } })
+      renderDetail()
+      await screen.findByText('Requirements')
+
+      expect(screen.queryByLabelText('Link a requirement')).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: /unlink/i })).not.toBeInTheDocument()
+      expect(screen.getByRole('link', { name: 'Guest checkout' })).toBeInTheDocument()
     })
   })
 })

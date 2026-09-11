@@ -37,6 +37,7 @@ type Store struct {
 	TestPlans           *TestPlanRepo
 	Search              *SearchRepo
 	StepGroups          *StepGroupRepo
+	Requirements        *RequirementRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -64,6 +65,7 @@ func New(pool *pgxpool.Pool) *Store {
 		TestPlans:           &TestPlanRepo{pool: pool},
 		Search:              &SearchRepo{pool: pool},
 		StepGroups:          &StepGroupRepo{pool: pool},
+		Requirements:        &RequirementRepo{pool: pool},
 	}
 }
 

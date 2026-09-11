@@ -555,6 +555,27 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	// --- Requirements (add-requirements-traceability) ---------------
+	// Three requirements demonstrating all three coverage statuses against
+	// release 2026.1 on first look, not an empty state:
+	//   - "User authentication": login passed on both plans, twoFactor
+	//     passed on iOS — every linked case has a passing result under this
+	//     release → covered.
+	//   - "Checkout": checkoutValid passed on iOS but failed on Android
+	//     (created after, so it's the latest result under this release) →
+	//     failing.
+	//   - "Reporting exports": links reportingList, which never ran under
+	//     either Test Plan above → not run.
+	if _, err := Requirement(ctx, svc, p.ID, "User authentication", "Users can log in and, where enabled, verify with a second factor.", "", []string{login.ID, twoFactor.ID}); err != nil {
+		return fmt.Errorf("sampledata: creating User authentication requirement: %w", err)
+	}
+	if _, err := Requirement(ctx, svc, p.ID, "Checkout", "A customer can complete checkout with a valid cart.", "", []string{checkoutValid.ID}); err != nil {
+		return fmt.Errorf("sampledata: creating Checkout requirement: %w", err)
+	}
+	if _, err := Requirement(ctx, svc, p.ID, "Reporting exports", "Reports can be listed and exported.", "", []string{reportingList.ID}); err != nil {
+		return fmt.Errorf("sampledata: creating Reporting exports requirement: %w", err)
+	}
+
 	// --- Runs -------------------------------------------------------
 	// Created in order — the LAST run created is what drives the project's
 	// shown pass rate (ProjectRepo.Summaries uses only the most recent run),

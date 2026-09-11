@@ -732,6 +732,109 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Rollup" }
+  /api/v1/releases/{releaseKey}/requirements-coverage:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getReleaseRequirementsCoverage
+      summary: Coverage matrix for every requirement in the release's project, scoped to this release's Test Plans
+      tags: [requirements]
+      responses:
+        "200":
+          description: Coverage matrix
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RequirementCoverage" }
+  /api/v1/projects/{projectKey}/requirements:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listRequirements
+      summary: List a project's requirements
+      tags: [requirements]
+      responses:
+        "200":
+          description: Requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Requirement" }
+    post:
+      operationId: createRequirement
+      summary: Create a requirement
+      tags: [requirements]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequirementInput" }
+      responses:
+        "201":
+          description: Created requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requirement" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/requirements/{requirementKey}:
+    parameters:
+      - { name: requirementKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRequirement
+      summary: Get a requirement
+      tags: [requirements]
+      responses:
+        "200":
+          description: Requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requirement" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: updateRequirement
+      summary: Update a requirement's name, description, and externalRef
+      tags: [requirements]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequirementInput" }
+      responses:
+        "200":
+          description: Updated requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requirement" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteRequirement
+      summary: Delete a requirement (rejected while it still has linked cases)
+      tags: [requirements]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Requirement still has linked cases }
+  /api/v1/requirements/{requirementKey}/cases/{caseKey}:
+    parameters:
+      - { name: requirementKey, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: linkRequirementCase
+      summary: Link a case to a requirement (n:m, idempotent)
+      tags: [requirements]
+      responses:
+        "204": { description: Linked }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: unlinkRequirementCase
+      summary: Unlink a case from a requirement (case and requirement both survive)
+      tags: [requirements]
+      responses:
+        "204": { description: Unlinked }
   /api/v1/projects/{projectKey}/plans:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -3059,6 +3162,50 @@ components:
           type: integer
           nullable: true
           description: Null when runCount is 0 (or every run has no items yet).
+    Requirement:
+      type: object
+      required: [id, key, projectId, name, description, externalRef, caseIds, createdAt]
+      description: >-
+        A project-scoped, flat (no hierarchy) record linkable to test cases
+        (add-requirements-traceability). externalRef is a free-text field
+        only — no live Jira/ADO sync.
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-REQ{n}. Immutable."
+        projectId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        externalRef: { type: string }
+        caseIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    RequirementInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        externalRef: { type: string }
+    CoverageStatus:
+      type: string
+      enum: [notRun, failing, covered]
+    RequirementCoverage:
+      type: object
+      required: [requirementId, requirementKey, name, status, caseCount]
+      description: >-
+        One row of a Release's coverage matrix — computed via a worst-case
+        rollup across a Requirement's linked cases' latest results among
+        that Release's Test Plans specifically (add-requirements-traceability
+        design.md D3), never stored.
+      properties:
+        requirementId: { type: string }
+        requirementKey: { type: string }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/CoverageStatus" }
+        caseCount: { type: integer }
     RunItemAssignee:
       type: object
       required: [kind, id, name]

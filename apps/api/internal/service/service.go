@@ -1190,6 +1190,90 @@ func (s *Service) TestPlanRollup(ctx context.Context, testPlanID string) (domain
 	return s.store.TestPlans.Rollup(ctx, testPlanID)
 }
 
+// --- Requirements (add-requirements-traceability) ---
+//
+// Requirement CRUD carries no actor/permission parameter, matching
+// Release/TestPlan CRUD's shape above — manageProject is enforced by
+// requirePermission at the routing layer.
+
+func (s *Service) CreateRequirement(ctx context.Context, projectID, name, description, externalRef string) (domain.Requirement, error) {
+	if err := (domain.Requirement{Name: name}).Validate(); err != nil {
+		return domain.Requirement{}, invalid("%s", err)
+	}
+	req, err := s.store.Requirements.Create(ctx, projectID, name, description, externalRef)
+	if err != nil {
+		return domain.Requirement{}, err
+	}
+	s.audit(ctx, "create", "requirement", req.ID)
+	return req, nil
+}
+
+func (s *Service) ListRequirements(ctx context.Context, projectID string) ([]domain.Requirement, error) {
+	return s.store.Requirements.List(ctx, projectID)
+}
+
+func (s *Service) GetRequirement(ctx context.Context, requirementID string) (domain.Requirement, error) {
+	return s.store.Requirements.Get(ctx, requirementID)
+}
+
+func (s *Service) UpdateRequirement(ctx context.Context, requirementID, name, description, externalRef string) (domain.Requirement, error) {
+	req := domain.Requirement{ID: requirementID, Name: name, Description: description, ExternalRef: externalRef}
+	if err := req.Validate(); err != nil {
+		return domain.Requirement{}, invalid("%s", err)
+	}
+	updated, err := s.store.Requirements.Update(ctx, req)
+	if err != nil {
+		return domain.Requirement{}, err
+	}
+	s.audit(ctx, "update", "requirement", requirementID)
+	return updated, nil
+}
+
+func (s *Service) DeleteRequirement(ctx context.Context, requirementID string) error {
+	if err := s.store.Requirements.Delete(ctx, requirementID); err != nil {
+		return err
+	}
+	s.audit(ctx, "delete", "requirement", requirementID)
+	return nil
+}
+
+// LinkRequirementCase validates the case belongs to the same project as
+// the requirement (mirrors AddCaseToSuite's inline cross-project guard)
+// before linking. Idempotent — linking an already-linked pair succeeds.
+func (s *Service) LinkRequirementCase(ctx context.Context, requirementID, caseID string) error {
+	reqProjectID, err := s.store.Requirements.ProjectID(ctx, requirementID)
+	if err != nil {
+		return err
+	}
+	caseProjectID, err := s.store.Cases.ProjectID(ctx, caseID)
+	if err != nil {
+		return err
+	}
+	if caseProjectID != reqProjectID {
+		return invalid("case belongs to a different project")
+	}
+	if err := s.store.Requirements.LinkCase(ctx, requirementID, caseID); err != nil {
+		return err
+	}
+	s.audit(ctx, "link_case", "requirement", requirementID)
+	return nil
+}
+
+func (s *Service) UnlinkRequirementCase(ctx context.Context, requirementID, caseID string) error {
+	if err := s.store.Requirements.UnlinkCase(ctx, requirementID, caseID); err != nil {
+		return err
+	}
+	s.audit(ctx, "unlink_case", "requirement", requirementID)
+	return nil
+}
+
+// ReleaseRequirementsCoverage returns a Release's coverage matrix — a
+// single store-level aggregate query (design.md D3), never a client-side
+// per-case fetch loop.
+func (s *Service) ReleaseRequirementsCoverage(ctx context.Context, releaseID string) ([]domain.RequirementCoverage, error) {
+	return s.store.Requirements.CoverageForRelease(ctx, releaseID)
+}
+
 // --- Runs ---
 
 // RunInput creates a run from a suite's cases and/or an explicit list,

@@ -22,6 +22,8 @@ import ProjectReportsPage from '@/pages/ProjectReportsPage'
 import ReleasesPage from '@/pages/ReleasesPage'
 import ReleaseDetailPage from '@/pages/ReleaseDetailPage'
 import TestPlanDetailPage from '@/pages/TestPlanDetailPage'
+import RequirementsPage from '@/pages/RequirementsPage'
+import RequirementDetailPage from '@/pages/RequirementDetailPage'
 import LoginPage from '@/pages/LoginPage'
 import SetupPage from '@/pages/SetupPage'
 import ForgotPasswordPage from '@/pages/ForgotPasswordPage'
@@ -138,6 +140,8 @@ const ACCOUNT_ONLY_ROUTES: RouteEntry[] = [
   { path: '/projects/:projectKey/releases', element: <ReleasesPage /> },
   { path: '/projects/:projectKey/releases/:releaseKey', element: <ReleaseDetailPage /> },
   { path: '/projects/:projectKey/releases/:releaseKey/plans/:planKey', element: <TestPlanDetailPage /> },
+  { path: '/projects/:projectKey/requirements', element: <RequirementsPage /> },
+  { path: '/projects/:projectKey/requirements/:requirementKey', element: <RequirementDetailPage /> },
   { path: '/projects/:projectKey/members', element: <ProjectMembersPage /> },
   { path: '/projects/:projectKey/settings', element: <ProjectSettingsPage /> },
   { path: '/settings/people', element: <PeoplePage /> },

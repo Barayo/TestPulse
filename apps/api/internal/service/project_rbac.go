@@ -296,6 +296,10 @@ func (s *Service) ProjectIDForTestPlan(ctx context.Context, testPlanID string) (
 	return s.store.TestPlans.ProjectID(ctx, testPlanID)
 }
 
+func (s *Service) ProjectIDForRequirement(ctx context.Context, requirementID string) (string, error) {
+	return s.store.Requirements.ProjectID(ctx, requirementID)
+}
+
 // --- Human-readable key resolution (add-human-readable-keys D4) ---
 // Resolves a client-supplied key to its internal id, once, at the API
 // boundary — everything below this point (RBAC resolvers, other service
@@ -347,6 +351,10 @@ func (s *Service) ReleaseIDByKey(ctx context.Context, key string) (string, error
 
 func (s *Service) TestPlanIDByKey(ctx context.Context, key string) (string, error) {
 	return s.store.TestPlans.IDByKey(ctx, key)
+}
+
+func (s *Service) RequirementIDByKey(ctx context.Context, key string) (string, error) {
+	return s.store.Requirements.IDByKey(ctx, key)
 }
 
 // --- Teams ---

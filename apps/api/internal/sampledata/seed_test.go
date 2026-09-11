@@ -1846,3 +1846,53 @@ func TestSeedContentShowcasesProjectTags(t *testing.T) {
 		t.Error("Sample Project should have at least one tag assigned, want project-tags showcased")
 	}
 }
+
+func TestSeedContentDemonstratesRequirementsTraceability(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	requirements, err := svc.ListRequirements(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRequirements: %v", err)
+	}
+	if len(requirements) < 3 {
+		t.Fatalf("got %d seeded requirements, want at least 3 to demonstrate a real mix", len(requirements))
+	}
+	for _, r := range requirements {
+		if len(r.CaseIDs) == 0 {
+			t.Errorf("requirement %q has no linked cases — showroom should never require a fresh click-through", r.Name)
+		}
+	}
+
+	releases, err := svc.ListReleases(actorCtx, p.ID, "")
+	if err != nil {
+		t.Fatalf("ListReleases: %v", err)
+	}
+	var release *domain.Release
+	for i, r := range releases {
+		if r.Name == "2026.1" {
+			release = &releases[i]
+		}
+	}
+	if release == nil {
+		t.Fatal("missing the \"2026.1\" release")
+	}
+
+	coverage, err := svc.ReleaseRequirementsCoverage(actorCtx, release.ID)
+	if err != nil {
+		t.Fatalf("ReleaseRequirementsCoverage: %v", err)
+	}
+	statuses := map[domain.CoverageStatus]bool{}
+	for _, c := range coverage {
+		statuses[c.Status] = true
+	}
+	if !statuses[domain.CoverageCovered] || !statuses[domain.CoverageFailing] || !statuses[domain.CoverageNotRun] {
+		t.Errorf("coverage statuses = %+v, want at least one covered, failing, and notRun entry (a real mix, not all one status)", statuses)
+	}
+}

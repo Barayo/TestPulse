@@ -83,6 +83,21 @@ func TestPlan(ctx context.Context, svc *service.Service, projectID, releaseID, n
 	return svc.CreateTestPlan(ctx, projectID, releaseID, name, description)
 }
 
+// Requirement creates a requirement and links caseIDs to it
+// (add-requirements-traceability).
+func Requirement(ctx context.Context, svc *service.Service, projectID, name, description, externalRef string, caseIDs []string) (domain.Requirement, error) {
+	r, err := svc.CreateRequirement(ctx, projectID, name, description, externalRef)
+	if err != nil {
+		return domain.Requirement{}, err
+	}
+	for _, caseID := range caseIDs {
+		if err := svc.LinkRequirementCase(ctx, r.ID, caseID); err != nil {
+			return domain.Requirement{}, err
+		}
+	}
+	return r, nil
+}
+
 // Actors is a small pool of example authors — human and agent — cycled by
 // RunWithVerdicts so recorded results attribute to varied, realistic names.
 // An empty entry means "no override": RecordResult defaults the result's

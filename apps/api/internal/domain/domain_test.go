@@ -207,6 +207,22 @@ func TestReleaseValidation(t *testing.T) {
 	}
 }
 
+func TestRequirementValidation(t *testing.T) {
+	valid := Requirement{Name: "Checkout supports guest users"}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid requirement rejected: %v", err)
+	}
+
+	missingName := Requirement{}
+	err := missingName.Validate()
+	if err == nil {
+		t.Fatal("requirement without a name accepted")
+	}
+	if !strings.Contains(err.Error(), "name") {
+		t.Errorf("error %q does not name the missing field", err)
+	}
+}
+
 func TestTestPlanValidation(t *testing.T) {
 	valid := TestPlan{Name: "iOS", ReleaseID: "rel-1"}
 	if err := valid.Validate(); err != nil {

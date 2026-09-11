@@ -21,6 +21,22 @@ type Release = components['schemas']['Release']
 type ReleaseStatus = components['schemas']['ReleaseStatus']
 type TestPlan = components['schemas']['TestPlan']
 type Project = components['schemas']['Project']
+type RequirementCoverage = components['schemas']['RequirementCoverage']
+
+// Reuses the exact status-tint tokens StatusPill's pillClasses already
+// registers (bg-status-*-bg/fg) rather than misusing StatusPill itself,
+// which is rate-based (0-100) — coverage is a 3-state categorical status,
+// not a percentage (add-requirements-traceability design.md D6 deviation).
+const COVERAGE_PILL: Record<RequirementCoverage['status'], { label: string; className: string }> = {
+  covered: { label: 'Covered', className: 'bg-status-healthy-bg text-status-healthy-fg' },
+  failing: { label: 'Failing', className: 'bg-status-risk-bg text-status-risk-fg' },
+  notRun: { label: 'Not run', className: 'bg-status-neutral-bg text-status-neutral-fg' },
+}
+
+function CoverageStatusPill({ status }: { status: RequirementCoverage['status'] }) {
+  const { label, className } = COVERAGE_PILL[status]
+  return <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold ${className}`}>{label}</span>
+}
 
 // Normalized (never undefined) — the generated Rollup schema types passRate
 // as optional since it isn't in `required`, even though the API always
@@ -66,6 +82,7 @@ export default function ReleaseDetailPage() {
   const [release, setRelease] = useState<Release>()
   const [plans, setPlans] = useState<PlanRow[]>([])
   const [rollup, setRollup] = useState<RollupRow>()
+  const [coverage, setCoverage] = useState<RequirementCoverage[]>()
   const [creatingPlan, setCreatingPlan] = useState(false)
   const [planName, setPlanName] = useState('')
   const [planDescription, setPlanDescription] = useState('')
@@ -83,11 +100,13 @@ export default function ReleaseDetailPage() {
     ])
     setProject(p)
     setRelease(rel)
-    const [{ data: planList }, { data: releaseRollup }] = await Promise.all([
+    const [{ data: planList }, { data: releaseRollup }, { data: coverageRows }] = await Promise.all([
       api.GET('/api/v1/releases/{releaseKey}/plans', { params: { path: { releaseKey } } }),
       api.GET('/api/v1/releases/{releaseKey}/rollup', { params: { path: { releaseKey } } }),
+      api.GET('/api/v1/releases/{releaseKey}/requirements-coverage', { params: { path: { releaseKey } } }),
     ])
     setRollup({ runCount: releaseRollup?.runCount ?? 0, passRate: releaseRollup?.passRate ?? null })
+    setCoverage(coverageRows ?? [])
     const rows = await Promise.all(
       (planList ?? []).map(async (plan) => {
         const { data: planRollup } = await api.GET('/api/v1/plans/{planKey}/rollup', { params: { path: { planKey: plan.key } } })
@@ -171,27 +190,67 @@ export default function ReleaseDetailPage() {
       </div>
 
       <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="tp-heading text-lg">Test Plans</CardTitle>
-            {canManage && (
-              <Button type="button" variant="outline" onClick={() => setCreatingPlan(true)}>
-                + New test plan
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            {plans.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No test plans yet.</p>
-            ) : (
-              <ul aria-label="Test plans" className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))' }}>
-                {plans.map((plan) => (
-                  <TestPlanCard key={plan.id} plan={plan} projectKey={projectKey} releaseKey={releaseKey} />
-                ))}
-              </ul>
-            )}
-          </CardContent>
-        </Card>
+        <div className="space-y-7">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle className="tp-heading text-lg">Test Plans</CardTitle>
+              {canManage && (
+                <Button type="button" variant="outline" onClick={() => setCreatingPlan(true)}>
+                  + New test plan
+                </Button>
+              )}
+            </CardHeader>
+            <CardContent>
+              {plans.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No test plans yet.</p>
+              ) : (
+                <ul aria-label="Test plans" className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))' }}>
+                  {plans.map((plan) => (
+                    <TestPlanCard key={plan.id} plan={plan} projectKey={projectKey} releaseKey={releaseKey} />
+                  ))}
+                </ul>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="tp-heading text-lg">Requirements Coverage</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!coverage || coverage.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  No requirements in this project yet. Link cases to requirements to see coverage here.
+                </p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs text-muted-foreground">
+                      <th className="py-1.5 font-normal">Requirement</th>
+                      <th className="py-1.5 font-normal">Status</th>
+                      <th className="py-1.5 text-right font-normal">Linked cases</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {coverage.map((row) => (
+                      <tr key={row.requirementId} className="border-b last:border-b-0">
+                        <td className="py-2">
+                          <Link to={`/projects/${projectKey}/requirements/${row.requirementKey}`} className="hover:underline">
+                            {row.name}
+                          </Link>
+                        </td>
+                        <td className="py-2">
+                          <CoverageStatusPill status={row.status} />
+                        </td>
+                        <td className="py-2 text-right">{row.caseCount}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </CardContent>
+          </Card>
+        </div>
 
         <div className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5">
           <CaseSidebarSection title="Properties">

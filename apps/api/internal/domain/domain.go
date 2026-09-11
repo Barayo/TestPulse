@@ -660,6 +660,46 @@ type Rollup struct {
 	PassRate *int `json:"passRate,omitempty"`
 }
 
+// Requirement is a project-scoped, flat (no hierarchy) record linkable to
+// test cases (add-requirements-traceability design.md). ExternalRef is a
+// free-text field only (e.g. a Jira/ADO key or URL) — no live sync.
+type Requirement struct {
+	ID          string    `json:"id"`
+	Key         string    `json:"key"`
+	ProjectID   string    `json:"projectId"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	ExternalRef string    `json:"externalRef"`
+	CaseIDs     []string  `json:"caseIds"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
+func (r Requirement) Validate() error {
+	if r.Name == "" {
+		return fmt.Errorf("name is required")
+	}
+	return nil
+}
+
+// CoverageStatus is a Requirement's computed (never stored) coverage state
+// for a given Release, per the worst-case rollup rule (design.md D3).
+type CoverageStatus string
+
+const (
+	CoverageNotRun  CoverageStatus = "notRun"
+	CoverageFailing CoverageStatus = "failing"
+	CoverageCovered CoverageStatus = "covered"
+)
+
+// RequirementCoverage is one row of a Release's coverage matrix.
+type RequirementCoverage struct {
+	RequirementID  string         `json:"requirementId"`
+	RequirementKey string         `json:"requirementKey"`
+	Name           string         `json:"name"`
+	Status         CoverageStatus `json:"status"`
+	CaseCount      int            `json:"caseCount"`
+}
+
 type Run struct {
 	ID        string `json:"id"`
 	Key       string `json:"key"`

@@ -288,6 +288,24 @@ For a project with no Releases, nothing in the navigation changes. Once a projec
 
 Release- and Test-Plan-level pass rate/run-count rollups are always computed as a single server-side aggregate query, never assembled by fetching every child entity individually — the same discipline the project list's own summary aggregation follows.
 
+## Requirements and coverage
+
+Requirements are **optional**, like Releases — a project that never creates one is unaffected. They exist for teams that need to prove which parts of the product are actually tested, not just that some tests passed.
+
+A **Requirement** is a project-scoped, flat record (no nesting) with a `name`, an optional `description`, and an optional free-text external reference (e.g. a Jira key) — TestPulse does not sync it live from Jira/ADO, it's just a label. Creating, editing, deleting, and linking/unlinking requires Manage Project, the same permission that governs Releases.
+
+A Requirement can link to any number of test cases, and a case can link to any number of Requirements — editable from either side: the Requirement's own page (a case picker, same one Suite membership uses), or a "Requirements" row on the case's own detail page (add/remove there updates the identical link). Linking is purely diagnostic/organizational — it has no effect on how the case runs or how its overall verdict is recorded.
+
+The payoff is the **coverage matrix** on a Release's own page: for each Requirement in the project, a status computed by a worst-case rollup across its linked cases' latest results **among that Release's own Test Plans only** — a case that passed under a different Release, or under no Release at all, does not count.
+
+- **Not run** — the Requirement has no linked cases, or at least one linked case has no result yet under this Release (including a result that's only `skipped`, which tells you nothing about coverage either way).
+- **Failing** — every linked case has a result under this Release, and at least one of them is Failed or Blocked.
+- **Covered** — every linked case has a result under this Release, and all of them are Pass.
+
+Like the Release/Test Plan rollups, this is always one server-side aggregate query per view, never a per-case fetch loop. Deleting a Requirement is blocked while it still has linked cases, mirroring how deleting a Release is blocked while it still has Test Plans.
+
+For a project with no Requirements, nothing in the navigation changes. The entry point lives on **Project Settings**, next to Releases — the first Requirement is created from the Requirements page reached from there.
+
 ## Runs: version pinning in practice
 
 Creating a run requires Create Run; recording a verdict or marking retest requires Record Result — the seeded Tester role, the least-privileged default, already has both.

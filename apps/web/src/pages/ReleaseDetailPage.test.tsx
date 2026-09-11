@@ -33,7 +33,11 @@ const release = {
   createdAt: '2026-01-12T00:00:00Z',
 }
 
-function mockDetailAPI(plans: unknown[] = [], rollup: unknown = { runCount: 14, passRate: 84 }) {
+function mockDetailAPI(
+  plans: unknown[] = [],
+  rollup: unknown = { runCount: 14, passRate: 84 },
+  coverage: unknown[] = [],
+) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/projects/{projectKey}') return Promise.resolve({ data: project, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions')
@@ -41,6 +45,8 @@ function mockDetailAPI(plans: unknown[] = [], rollup: unknown = { runCount: 14, 
     if (path === '/api/v1/releases/{releaseKey}') return Promise.resolve({ data: release, response: { ok: true } })
     if (path === '/api/v1/releases/{releaseKey}/plans') return Promise.resolve({ data: plans, response: { ok: true } })
     if (path === '/api/v1/releases/{releaseKey}/rollup') return Promise.resolve({ data: rollup, response: { ok: true } })
+    if (path === '/api/v1/releases/{releaseKey}/requirements-coverage')
+      return Promise.resolve({ data: coverage, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: false } })
   })
 }
@@ -138,5 +144,30 @@ describe('ReleaseDetailPage', () => {
         expect.objectContaining({ body: expect.objectContaining({ status: 'maintained' }) }),
       ),
     )
+  })
+
+  describe('Requirements Coverage section (add-requirements-traceability)', () => {
+    it('shows an empty state when the project has no requirements', async () => {
+      mockDetailAPI([], { runCount: 0, passRate: null }, [])
+      renderPage()
+
+      await screen.findByRole('heading', { name: '2026.1' })
+      expect(screen.getByText(/no requirements in this project yet/i)).toBeInTheDocument()
+    })
+
+    it('renders each requirement with its status pill and linked-case count, linking to its detail page', async () => {
+      mockDetailAPI([], { runCount: 0, passRate: null }, [
+        { requirementId: 'r1', requirementKey: 'SHOP-REQ1', name: 'Guest checkout', status: 'covered', caseCount: 2 },
+        { requirementId: 'r2', requirementKey: 'SHOP-REQ2', name: 'Saved-card checkout', status: 'failing', caseCount: 1 },
+        { requirementId: 'r3', requirementKey: 'SHOP-REQ3', name: 'Refunds', status: 'notRun', caseCount: 0 },
+      ])
+      renderPage()
+
+      const coveredLink = await screen.findByRole('link', { name: 'Guest checkout' })
+      expect(coveredLink).toHaveAttribute('href', '/projects/SHOP/requirements/SHOP-REQ1')
+      expect(screen.getByText('Covered')).toBeInTheDocument()
+      expect(screen.getByText('Failing')).toBeInTheDocument()
+      expect(screen.getByText('Not run')).toBeInTheDocument()
+    })
   })
 })

@@ -220,6 +220,10 @@ func projectIDFromTestPlan(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForTestPlan(r.Context(), resolvedID(r, "planKey"))
 }
 
+func projectIDFromRequirement(h *api, r *http.Request) (string, error) {
+	return h.svc.ProjectIDForRequirement(r.Context(), resolvedID(r, "requirementKey"))
+}
+
 // projectIDFromAuditEntity resolves GET /audit's project the same way the
 // other projectIDFrom* resolvers do for their own routes, but from query
 // params (entityType/entityId) rather than a path param, since audit

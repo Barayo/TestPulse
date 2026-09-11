@@ -37,6 +37,7 @@ type Project = components['schemas']['Project']
 type Folder = components['schemas']['Folder']
 type CaseVersion = components['schemas']['CaseVersion']
 type Suite = components['schemas']['Suite']
+type Requirement = components['schemas']['Requirement']
 type Step = components['schemas']['Step']
 
 function firstNameOf(displayName: string): string {
@@ -55,6 +56,10 @@ export default function CaseDetailPage() {
   const [testCase, setTestCase] = useState<TestCase>()
   const [versions, setVersions] = useState<CaseVersion[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
+  // Requirements has no public endpoint (add-requirements-traceability,
+  // matching introduce-release-test-plan's Releases) — stays empty for an
+  // anonymous visitor, exactly like ProjectPage.tsx's Releases panel.
+  const [requirements, setRequirements] = useState<Requirement[]>([])
   const [resultsData, setResultsData] = useState<CaseResultsData>()
   const [notFound, setNotFound] = useState(false)
   // Resolves a version's actor to a display name + avatar (link-case-version-actor-to-identity)
@@ -93,7 +98,7 @@ export default function CaseDetailPage() {
     if (!projectKey || !caseKey || access === 'loading') return
     setNotFound(false)
     if (access === 'member') {
-      const [{ data: p }, f, { data: c }, { data: v }, s, users, { data: execs }, { data: fields }] = await Promise.all([
+      const [{ data: p }, f, { data: c }, { data: v }, s, users, { data: execs }, { data: fields }, { data: reqs }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
         fetchAllPages((cursor) =>
           api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
@@ -110,6 +115,7 @@ export default function CaseDetailPage() {
           params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
         }),
         api.GET('/api/v1/projects/{projectKey}/custom-fields', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/projects/{projectKey}/requirements', { params: { path: { projectKey } } }),
       ])
       if (!p || !c) {
         setNotFound(true)
@@ -122,6 +128,7 @@ export default function CaseDetailPage() {
       setSuites(s.items)
       setResultsData(toResultsData(execs ?? []))
       setCustomFieldDefs(fields ?? [])
+      setRequirements(reqs ?? [])
       setUserIdentities(
         Object.fromEntries(
           users.items.map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
@@ -204,6 +211,8 @@ export default function CaseDetailPage() {
   const folder = folders.find((f) => f.id === testCase.folderId)
   const folderName = folder && root && folder.id !== root.id ? folder.name : 'Library'
   const suiteNames = suites.filter((s) => s.caseIds.includes(testCase.id)).map((s) => s.name)
+  const linkedRequirements = requirements.filter((r) => r.caseIds.includes(testCase.id))
+  const unlinkedRequirements = requirements.filter((r) => !r.caseIds.includes(testCase.id))
 
   function libraryUrl(target: Folder | undefined): string {
     const path = target ? buildSlugPath(target, folders) : ''
@@ -266,8 +275,25 @@ export default function CaseDetailPage() {
     await load()
   }
 
+  async function linkRequirement(requirementKey: string) {
+    if (!requirementKey || !caseKey) return
+    await api.PUT('/api/v1/requirements/{requirementKey}/cases/{caseKey}', {
+      params: { path: { requirementKey, caseKey } },
+    })
+    await load()
+  }
+
+  async function unlinkRequirement(requirementKey: string) {
+    if (!caseKey) return
+    await api.DELETE('/api/v1/requirements/{requirementKey}/cases/{caseKey}', {
+      params: { path: { requirementKey, caseKey } },
+    })
+    await load()
+  }
+
   const canEdit = Boolean(permissions?.caseEdit)
   const canDelete = Boolean(permissions?.caseDelete)
+  const canManageRequirements = Boolean(permissions?.manageProject)
 
   const actionMenuItems: RowActionMenuItem[] = [
     ...(canEdit
@@ -492,6 +518,51 @@ export default function CaseDetailPage() {
                     {name}
                   </span>
                 ))
+              }
+              wrap
+            />
+            <PropertyRow
+              label="Requirements"
+              value={
+                <>
+                  {linkedRequirements.map((r) => (
+                    <span
+                      key={r.id}
+                      className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5"
+                    >
+                      <Link to={`/projects/${projectKey}/requirements/${r.key}`} className="hover:underline">
+                        {r.name}
+                      </Link>
+                      {canManageRequirements && (
+                        <button
+                          type="button"
+                          aria-label={`Unlink ${r.name}`}
+                          className="text-muted-foreground hover:text-foreground"
+                          onClick={() => void unlinkRequirement(r.key)}
+                        >
+                          ×
+                        </button>
+                      )}
+                    </span>
+                  ))}
+                  {canManageRequirements && unlinkedRequirements.length > 0 && (
+                    <select
+                      aria-label="Link a requirement"
+                      className="rounded-md border border-input bg-background px-1.5 py-0.5 text-xs"
+                      value=""
+                      onChange={(e) => {
+                        if (e.target.value) void linkRequirement(e.target.value)
+                      }}
+                    >
+                      <option value="">+ Link requirement…</option>
+                      {unlinkedRequirements.map((r) => (
+                        <option key={r.id} value={r.key}>
+                          {r.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </>
               }
               wrap
             />

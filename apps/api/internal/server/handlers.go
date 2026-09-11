@@ -51,6 +51,8 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/releases", h.listReleases)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/releases", h.createRelease)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/plans", h.listTestPlansByProject)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/requirements", h.listRequirements)
+			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/requirements", h.createRequirement)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/custom-fields", h.listCustomFields)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/custom-fields", h.createCustomField)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Put("/custom-fields/order", h.reorderCustomFields)
@@ -114,6 +116,18 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRelease)).Get("/rollup", h.releaseRollup)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRelease)).Get("/plans", h.listTestPlans)
 		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRelease)).Post("/plans", h.createTestPlan)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRelease)).Get("/requirements-coverage", h.releaseRequirementsCoverage)
+	})
+	r.Route("/requirements/{requirementKey}", func(r chi.Router) {
+		r.Use(h.resolveKey("requirementKey", h.svc.RequirementIDByKey))
+		r.With(h.requirePermission(domain.PermRead, projectIDFromRequirement)).Get("/", h.getRequirement)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRequirement)).Put("/", h.updateRequirement)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRequirement)).Delete("/", h.deleteRequirement)
+		r.Route("/cases/{caseKey}", func(r chi.Router) {
+			r.Use(h.resolveKey("caseKey", h.svc.CaseIDByKey))
+			r.With(h.requirePermission(domain.PermManageProject, projectIDFromRequirement)).Put("/", h.linkRequirementCase)
+			r.With(h.requirePermission(domain.PermManageProject, projectIDFromRequirement)).Delete("/", h.unlinkRequirementCase)
+		})
 	})
 	r.Route("/plans/{planKey}", func(r chi.Router) {
 		r.Use(h.resolveKey("planKey", h.svc.TestPlanIDByKey))
@@ -625,8 +639,8 @@ func (h *api) listReleases(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) createRelease(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name        string              `json:"name"`
-		Description string              `json:"description"`
+		Name        string               `json:"name"`
+		Description string               `json:"description"`
 		Status      domain.ReleaseStatus `json:"status"`
 	}](r)
 	if err != nil {
@@ -644,8 +658,8 @@ func (h *api) getRelease(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) updateRelease(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name        string              `json:"name"`
-		Description string              `json:"description"`
+		Name        string               `json:"name"`
+		Description string               `json:"description"`
 		Status      domain.ReleaseStatus `json:"status"`
 	}](r)
 	if err != nil {
@@ -726,6 +740,66 @@ func (h *api) testPlanRollup(w http.ResponseWriter, r *http.Request) {
 func (h *api) listRunsByTestPlan(w http.ResponseWriter, r *http.Request) {
 	runs, err := h.svc.ListRunsByTestPlan(r.Context(), resolvedID(r, "planKey"))
 	h.respond(w, http.StatusOK, runs, err)
+}
+
+// --- Requirements (add-requirements-traceability) ---
+
+func (h *api) listRequirements(w http.ResponseWriter, r *http.Request) {
+	reqs, err := h.svc.ListRequirements(r.Context(), resolvedID(r, "projectKey"))
+	h.respond(w, http.StatusOK, reqs, err)
+}
+
+func (h *api) createRequirement(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		ExternalRef string `json:"externalRef"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	req, err := h.svc.CreateRequirement(r.Context(), resolvedID(r, "projectKey"), body.Name, body.Description, body.ExternalRef)
+	h.respond(w, http.StatusCreated, req, err)
+}
+
+func (h *api) getRequirement(w http.ResponseWriter, r *http.Request) {
+	req, err := h.svc.GetRequirement(r.Context(), resolvedID(r, "requirementKey"))
+	h.respond(w, http.StatusOK, req, err)
+}
+
+func (h *api) updateRequirement(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		ExternalRef string `json:"externalRef"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	req, err := h.svc.UpdateRequirement(r.Context(), resolvedID(r, "requirementKey"), body.Name, body.Description, body.ExternalRef)
+	h.respond(w, http.StatusOK, req, err)
+}
+
+func (h *api) deleteRequirement(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.DeleteRequirement(r.Context(), resolvedID(r, "requirementKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) linkRequirementCase(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.LinkRequirementCase(r.Context(), resolvedID(r, "requirementKey"), resolvedID(r, "caseKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) unlinkRequirementCase(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.UnlinkRequirementCase(r.Context(), resolvedID(r, "requirementKey"), resolvedID(r, "caseKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) releaseRequirementsCoverage(w http.ResponseWriter, r *http.Request) {
+	coverage, err := h.svc.ReleaseRequirementsCoverage(r.Context(), resolvedID(r, "releaseKey"))
+	h.respond(w, http.StatusOK, coverage, err)
 }
 
 // unmatchedTestJSON is the wire shape of one unmatched entry in an

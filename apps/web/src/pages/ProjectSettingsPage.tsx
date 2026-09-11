@@ -12,6 +12,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/u
 import { CustomFieldsCard } from '@/components/CustomFieldsCard'
 import { StepGroupsCard } from '@/components/StepGroupsCard'
 import { ReleasesSettingsCard } from '@/components/ReleasesSettingsCard'
+import { RequirementsSettingsCard } from '@/components/RequirementsSettingsCard'
 
 // Project-level settings (enable-public-project-access) — currently just
 // the "Public access" toggle. Gated on manageProject (broader than
@@ -131,6 +132,7 @@ export default function ProjectSettingsPage() {
       {projectKey && <StepGroupsCard projectKey={projectKey} />}
       {projectKey && <CustomFieldsCard projectKey={projectKey} />}
       {projectKey && <ReleasesSettingsCard projectKey={projectKey} />}
+      {projectKey && <RequirementsSettingsCard projectKey={projectKey} />}
 
       <Card>
         <CardHeader>

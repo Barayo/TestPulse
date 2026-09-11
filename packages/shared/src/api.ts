@@ -559,6 +559,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/releases/{releaseKey}/requirements-coverage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        /** Coverage matrix for every requirement in the release's project, scoped to this release's Test Plans */
+        get: operations["getReleaseRequirementsCoverage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/requirements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a project's requirements */
+        get: operations["listRequirements"];
+        put?: never;
+        /** Create a requirement */
+        post: operations["createRequirement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirementKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementKey: string;
+            };
+            cookie?: never;
+        };
+        /** Get a requirement */
+        get: operations["getRequirement"];
+        /** Update a requirement's name, description, and externalRef */
+        put: operations["updateRequirement"];
+        post?: never;
+        /** Delete a requirement (rejected while it still has linked cases) */
+        delete: operations["deleteRequirement"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/requirements/{requirementKey}/cases/{caseKey}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementKey: string;
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /** Link a case to a requirement (n:m, idempotent) */
+        put: operations["linkRequirementCase"];
+        post?: never;
+        /** Unlink a case from a requirement (case and requirement both survive) */
+        delete: operations["unlinkRequirementCase"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/plans": {
         parameters: {
             query?: never;
@@ -2498,6 +2579,34 @@ export interface components {
             /** @description Null when runCount is 0 (or every run has no items yet). */
             passRate?: number | null;
         };
+        /** @description A project-scoped, flat (no hierarchy) record linkable to test cases (add-requirements-traceability). externalRef is a free-text field only — no live Jira/ADO sync. */
+        Requirement: {
+            id: string;
+            /** @description Human-readable identifier, scoped to the project: {projectKey}-REQ{n}. Immutable. */
+            key: string;
+            projectId: string;
+            name: string;
+            description: string;
+            externalRef: string;
+            caseIds: string[];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        RequirementInput: {
+            name: string;
+            description?: string;
+            externalRef?: string;
+        };
+        /** @enum {string} */
+        CoverageStatus: "notRun" | "failing" | "covered";
+        /** @description One row of a Release's coverage matrix — computed via a worst-case rollup across a Requirement's linked cases' latest results among that Release's Test Plans specifically (add-requirements-traceability design.md D3), never stored. */
+        RequirementCoverage: {
+            requirementId: string;
+            requirementKey: string;
+            name: string;
+            status: components["schemas"]["CoverageStatus"];
+            caseCount: number;
+        };
         /** @description A run item's real assignee (link-run-item-assignee-to-identity) — always a real user or team, resolved at read time so the name is always current. */
         RunItemAssignee: {
             /** @enum {string} */
@@ -4300,6 +4409,200 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Rollup"];
                 };
+            };
+        };
+    };
+    getReleaseRequirementsCoverage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                releaseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coverage matrix */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RequirementCoverage"][];
+                };
+            };
+        };
+    };
+    listRequirements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Requirements */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"][];
+                };
+            };
+        };
+    };
+    createRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequirementInput"];
+            };
+        };
+        responses: {
+            /** @description Created requirement */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    getRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Requirement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    updateRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RequirementInput"];
+            };
+        };
+        responses: {
+            /** @description Updated requirement */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Requirement"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteRequirement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+            /** @description Requirement still has linked cases */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    linkRequirementCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementKey: string;
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Linked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unlinkRequirementCase: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                requirementKey: string;
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unlinked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
