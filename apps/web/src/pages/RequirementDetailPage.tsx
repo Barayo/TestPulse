@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams } from 'react-router'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
@@ -206,6 +206,12 @@ export default function RequirementDetailPage() {
             )}
           </CardHeader>
           <CardContent>
+            {requirement.description && (
+              <div className="mb-4 space-y-1">
+                <p className="tp-label">Description</p>
+                <p className="text-sm text-muted-foreground">{requirement.description}</p>
+              </div>
+            )}
             {isEditingCases ? (
               <SuiteCaseGrid
                 cases={gridCases}
@@ -225,9 +231,14 @@ export default function RequirementDetailPage() {
                 {gridCases
                   .filter((c) => selected.has(c.id))
                   .map((c) => (
-                    <li key={c.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                      <span className="truncate">{c.title}</span>
-                      <span className="tp-label shrink-0">{c.id}</span>
+                    <li key={c.id} className="py-2 text-sm">
+                      <Link
+                        to={`/projects/${projectKey}/cases/${c.id}`}
+                        className="flex items-center justify-between gap-3 hover:underline"
+                      >
+                        <span className="truncate">{c.title}</span>
+                        <span className="tp-label shrink-0">{c.id}</span>
+                      </Link>
                     </li>
                   ))}
               </ul>
@@ -238,7 +249,6 @@ export default function RequirementDetailPage() {
         <div className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5">
           <CaseSidebarSection title="Properties">
             <PropertyRow label="Key" value={requirement.key} />
-            <PropertyRow label="Description" value={requirement.description || '—'} />
             <PropertyRow label="External reference" value={requirement.externalRef || '—'} />
             <PropertyRow label="Created" value={new Date(requirement.createdAt).toLocaleDateString()} />
           </CaseSidebarSection>

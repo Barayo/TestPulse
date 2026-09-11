@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { ClipboardListIcon } from 'lucide-react'
+import { ClipboardListIcon, ListChecksIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -223,30 +223,38 @@ export default function ReleaseDetailPage() {
                   No requirements in this project yet. Link cases to requirements to see coverage here.
                 </p>
               ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b text-left text-xs text-muted-foreground">
-                      <th className="py-1.5 font-normal">Requirement</th>
-                      <th className="py-1.5 font-normal">Status</th>
-                      <th className="py-1.5 text-right font-normal">Linked cases</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {coverage.map((row) => (
-                      <tr key={row.requirementId} className="border-b last:border-b-0">
-                        <td className="py-2">
-                          <Link to={`/projects/${projectKey}/requirements/${row.requirementKey}`} className="hover:underline">
-                            {row.name}
-                          </Link>
-                        </td>
-                        <td className="py-2">
-                          <CoverageStatusPill status={row.status} />
-                        </td>
-                        <td className="py-2 text-right">{row.caseCount}</td>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="tp-label py-1.5 font-normal">Requirement</th>
+                        <th className="tp-label py-1.5 font-normal">Status</th>
+                        <th className="tp-label py-1.5 text-right font-normal">Linked cases</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {coverage.map((row) => (
+                        <tr key={row.requirementId} className="border-b last:border-b-0 hover:bg-muted/40">
+                          <td className="py-2">
+                            <Link
+                              to={`/projects/${projectKey}/requirements/${row.requirementKey}`}
+                              className="flex items-center gap-2 hover:underline"
+                            >
+                              <span className="flex size-5 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                                <ListChecksIcon className="size-3" aria-hidden="true" />
+                              </span>
+                              {row.name}
+                            </Link>
+                          </td>
+                          <td className="py-2">
+                            <CoverageStatusPill status={row.status} />
+                          </td>
+                          <td className="py-2 text-right">{row.caseCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>

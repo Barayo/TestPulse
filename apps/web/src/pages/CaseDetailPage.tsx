@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
-import { FolderInputIcon, Trash2Icon } from 'lucide-react'
+import { FolderInputIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
@@ -537,10 +537,10 @@ export default function CaseDetailPage() {
                         <button
                           type="button"
                           aria-label={`Unlink ${r.name}`}
-                          className="text-muted-foreground hover:text-foreground"
+                          className="text-muted-foreground hover:text-destructive"
                           onClick={() => void unlinkRequirement(r.key)}
                         >
-                          ×
+                          <XIcon className="size-3" aria-hidden="true" />
                         </button>
                       )}
                     </span>
