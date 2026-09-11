@@ -191,7 +191,12 @@ a new version rather than modifying or reusing the target version's
 own version number. A version's content MAY include values for the
 project's custom fields (see `case-custom-fields`); those values are
 versioned exactly like every other field — immutable once recorded,
-never rewritten by a later field/option rename or deletion.
+never rewritten by a later field/option rename or deletion. A version's
+steps MAY include entries that reference a shared step group (see
+`reusable-steps`); such entries are resolved server-side into their
+referenced group's full content at the moment the version is saved, and
+that resolved content — like every other field on the version — never
+changes afterward, regardless of later edits to the source step group.
 
 #### Scenario: Editing creates a new version
 - **WHEN** a user with `caseEdit` permission edits the steps of a case at version 1
@@ -226,6 +231,13 @@ never rewritten by a later field/option rename or deletion.
   value, no other content
 - **THEN** a new version is created, and the previous version's recorded
   value for that field is unchanged and still retrievable
+
+#### Scenario: A version's steps resolved from a shared group are fixed at save time
+- **WHEN** a case version is saved with a step entry referencing a shared
+  step group, and that step group is edited afterward
+- **THEN** the saved version's step content, including the entries
+  resolved from that group, remains exactly what was persisted at save
+  time
 
 ### Requirement: Test suite grouping
 The system SHALL let a user with `suiteCreate` permission create suites within a project, and a user with `suiteEditMembership` permission manage an n:m membership between suites and test cases. Every suite SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. The web UI SHALL present suite creation and suite membership editing through the same checkbox-grid selection component: a filterable, checkbox-per-case list with a persistent selection count, rather than separate one-case-at-a-time flows. Toggling a case's checkbox SHALL update the selection regardless of which filter is currently applied, and changing a filter SHALL NOT alter which cases are selected. Suite creation SHALL let a user select cases in the same screen as naming the suite, rather than requiring the suite to be created empty first. Editing an existing suite's membership SHALL present the same grid pre-checked with its current members, committing only the net difference (added and removed cases) when saved.
@@ -274,7 +286,7 @@ Deleting a test case SHALL be a soft delete: the case disappears from authoring 
 - **THEN** the request is rejected with `403`
 
 ### Requirement: Project-level case folders
-The system SHALL let a user with `sectionCreate` permission organize test cases into a nested folder tree, scoped per project and independent of suite membership. Every project SHALL have a root folder created automatically with the project. Every test case SHALL belong to exactly one folder at a time, defaulting to the project's root folder when not specified. Moving a case between folders SHALL require `caseEdit` permission, and the destination folder MUST belong to the same project as the case — the server is the authoritative guard against a cross-project destination, regardless of client-side filtering.
+The system SHALL let a user with `sectionCreate` permission organize test cases into a nested folder tree, scoped per project and independent of suite membership. Every project SHALL have a root folder created automatically with the project. Every test case SHALL belong to exactly one folder at a time, defaulting to the project's root folder when not specified. Moving a case between folders SHALL require `caseEdit` permission, and the destination folder MUST belong to the same project as the case — the server is the authoritative guard against a cross-project destination, regardless of client-side filtering. A folder's name (and its derived slug) MUST be unique among its siblings under the same parent folder, enforced both when the folder is created and when an existing folder is moved into a new parent (see `folder-slug-urls`'s sibling-uniqueness requirement).
 
 #### Scenario: Moving a case into another project's folder is rejected
 - **WHEN** a user attempts to move a case into a folder that belongs to a different project than the case's own
