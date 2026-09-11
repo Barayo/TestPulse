@@ -8,8 +8,10 @@
   ],
   "overrides": {
     "@redocly/openapi-core": {
-      "js-yaml": "4.3.0",
+      "js-yaml": "^4.3.2",
       "minimatch": "^10.2.5"
-    }
+    },
+    "js-yaml": "^4.3.2",
+    "hono": "^4.13.5"
   }
 }
