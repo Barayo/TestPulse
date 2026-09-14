@@ -277,6 +277,82 @@ describe('ImportProjectPage — Connect stage (add-testrail-importer tasks.md 7.
   })
 })
 
+describe('ImportProjectPage — Qase Connect stage (add-qase-importer tasks.md 3.3)', () => {
+  it('renders Qase-specific connection fields, not TestRail\'s, plus the trademark disclaimer (design.md D-Q6)', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/qase')
+    await screen.findByText('Connect to Qase')
+
+    expect(screen.getByLabelText(/qase api token/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/qase project code/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/testrail site url/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/testrail account email/i)).not.toBeInTheDocument()
+
+    expect(screen.getByText(/not affiliated with, endorsed by, or sponsored by Qase/i)).toBeInTheDocument()
+    expect(screen.getByText(/Qase is a trademark of Qase Ltd\./i)).toBeInTheDocument()
+  })
+
+  it('renders an optional Advanced base-URL override, collapsed by default (design.md D-Q2)', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/qase')
+    await screen.findByText('Connect to Qase')
+
+    expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+    expect(screen.getByLabelText(/base url/i)).toBeInTheDocument()
+  })
+
+  it('"Preview import" stays disabled until the required fields are filled', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/qase')
+    await screen.findByText('Connect to Qase')
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/qase api token/i), 'token-123')
+    await userEvent.type(screen.getByLabelText(/qase project code/i), 'PRJ')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeEnabled()
+  })
+
+  it('submitting posts source "qase" with apiToken/projectCode credentials, no baseUrl when Advanced is untouched', async () => {
+    mockBaseAPI()
+    mockPOST.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/import-jobs')
+        return Promise.resolve({
+          data: importJob({ id: 'job1', source: 'qase', status: 'pending' }),
+          response: { ok: true, status: 201 },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderImportPage('/projects/import/qase')
+    await screen.findByText('Connect to Qase')
+    await userEvent.type(screen.getByLabelText(/qase api token/i), 'token-123')
+    await userEvent.type(screen.getByLabelText(/qase project code/i), 'PRJ')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /preview import/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/import-jobs',
+        expect.objectContaining({
+          params: { path: { projectKey: 'QAP' } },
+          body: {
+            source: 'qase',
+            mode: 'dry_run',
+            credentials: { apiToken: 'token-123', projectCode: 'PRJ' },
+          },
+        }),
+      )
+    })
+  })
+})
+
 describe('ImportProjectPage — Preview stage (tasks.md 7.4)', () => {
   async function reachPreview(report: { counts: Record<string, number>; unmapped: string[] }) {
     mockBaseAPI()

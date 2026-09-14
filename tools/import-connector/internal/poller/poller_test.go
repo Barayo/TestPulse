@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/importer"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
 )
@@ -79,6 +80,20 @@ func (fakeTestRail) ListCaseFields(context.Context) ([]testrailclient.CaseField,
 
 func newFakeTestRail(_, _, _ string) importer.TestRailReader { return fakeTestRail{} }
 
+type fakeQase struct{}
+
+func (fakeQase) ListSuites(context.Context, string) ([]qaseclient.Suite, error) {
+	return []qaseclient.Suite{{ID: 1, Title: "Master"}}, nil
+}
+func (fakeQase) ListCases(context.Context, string) ([]qaseclient.Case, error) {
+	return []qaseclient.Case{{ID: 100, SuiteID: 1, Title: "Login case"}}, nil
+}
+func (fakeQase) ListCaseFields(context.Context) ([]qaseclient.CustomField, error) {
+	return nil, nil
+}
+
+func newFakeQase(_, _ string) importer.QaseReader { return fakeQase{} }
+
 func claimedJob(mode string) *testpulseclient.ClaimedJob {
 	return &testpulseclient.ClaimedJob{
 		Job: testpulseclient.ImportJob{ID: "job-1", ProjectID: "proj-1", Mode: mode},
@@ -89,9 +104,16 @@ func claimedJob(mode string) *testpulseclient.ClaimedJob {
 	}
 }
 
+func claimedQaseJob(mode string) *testpulseclient.ClaimedJob {
+	return &testpulseclient.ClaimedJob{
+		Job:         testpulseclient.ImportJob{ID: "job-2", ProjectID: "proj-1", Mode: mode},
+		Credentials: map[string]string{"apiToken": "token-123", "projectCode": "PRJ"},
+	}
+}
+
 func TestOnceReturnsFalseWhenNothingPending(t *testing.T) {
 	tp := &fakeTestPulse{}
-	ran := Once(context.Background(), tp, newFakeTestRail, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "testrail", discardLogger())
 	if ran {
 		t.Error("Once returned true with nothing pending")
 	}
@@ -102,7 +124,7 @@ func TestOnceReturnsFalseWhenNothingPending(t *testing.T) {
 
 func TestOnceCompletesDryRunJobWithoutTestPulseWrites(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed)")
 	}
@@ -119,7 +141,7 @@ func TestOnceCompletesDryRunJobWithoutTestPulseWrites(t *testing.T) {
 
 func TestOnceRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -140,7 +162,7 @@ func TestOnceReportsFailureWhenProjectUnresolvable(t *testing.T) {
 	// fail loudly (job marked failed) rather than silently import into
 	// the wrong project or panic.
 	tp := &fakeTestPulse{claimed: claimedJob("real"), projects: nil}
-	ran := Once(context.Background(), tp, newFakeTestRail, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed, even though it failed)")
 	}
@@ -159,11 +181,61 @@ func TestOnceReportsFailureWhenCredentialsMissing(t *testing.T) {
 	claimed := claimedJob("real")
 	claimed.Credentials = map[string]string{"siteUrl": "https://x.testrail.io"} // missing email/apiKey/projectId
 	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
 	if tp.completedWith == nil || tp.completedWith.status != "failed" {
 		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
+	}
+}
+
+func TestOnceCompletesQaseDryRunJobWithoutTestPulseWrites(t *testing.T) {
+	tp := &fakeTestPulse{claimed: claimedQaseJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "qase", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true (a job was claimed)")
+	}
+	if tp.createdFolders != 0 || tp.createdCases != 0 {
+		t.Errorf("dry run made TestPulse writes: folders=%d cases=%d", tp.createdFolders, tp.createdCases)
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "succeeded" {
+		t.Fatalf("completedWith = %+v, want succeeded", tp.completedWith)
+	}
+	if tp.completedWith.report.Counts["cases"] != 1 {
+		t.Errorf("report = %+v, want 1 case counted", tp.completedWith.report)
+	}
+}
+
+func TestOnceQaseRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
+	tp := &fakeTestPulse{claimed: claimedQaseJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "qase", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true")
+	}
+	if tp.createdCases != 1 {
+		t.Errorf("createdCases = %d, want 1", tp.createdCases)
+	}
+	if len(tp.reportedCalls) == 0 {
+		t.Error("ReportProgress was never called during a real run")
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "succeeded" {
+		t.Fatalf("completedWith = %+v, want succeeded", tp.completedWith)
+	}
+}
+
+func TestOnceQaseReportsFailureWhenCredentialsMissing(t *testing.T) {
+	claimed := claimedQaseJob("real")
+	claimed.Credentials = map[string]string{"apiToken": "token-123"} // missing projectCode
+	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, "qase", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true")
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "failed" {
+		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
+	}
+	if tp.createdCases != 0 {
+		t.Errorf("createdCases = %d, want 0 (never got as far as writing)", tp.createdCases)
 	}
 }

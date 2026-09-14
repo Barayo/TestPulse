@@ -89,11 +89,12 @@ jiraConnector:
     limits:
       memory: 64Mi
 
-# Optional TestRail importer (add-testrail-importer) — a separate
-# Deployment, per the same standing decision as jiraConnector above.
-# Disabled by default. Unlike jiraConnector, it holds no third-party
-# (TestRail) credentials in its own config at all — those are entered once
-# in the browser and travel to the importer per-job, encrypted at rest; see
+# Optional structural project importer (add-testrail-importer,
+# add-qase-importer) — a separate Deployment, per the same standing
+# decision as jiraConnector above. Disabled by default. Unlike
+# jiraConnector, it holds no third-party (TestRail/Qase) credentials in
+# its own config at all — those are entered once in the browser and
+# travel to the importer per-job, encrypted at rest; see
 # docs/integrations.md.
 importConnector:
   enabled: false
@@ -101,8 +102,8 @@ importConnector:
     repository: ghcr.io/barayo/testpulse-import-connector
     tag: ""              # defaults to the chart appVersion
     pullPolicy: IfNotPresent
-  source: testrail        # --source flag value; TestRail is the only
-                          # backend today (#190-193 track future ones)
+  source: testrail        # --source flag value: "testrail" or "qase"
+                          # today (#191-193 track future backends)
   pollInterval: 5s
   # For evaluation only — prefer existingSecret for a real deployment, since
   # this file may be checked into version control.

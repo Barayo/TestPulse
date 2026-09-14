@@ -135,6 +135,13 @@ export default function ProjectsPage() {
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/testrail'),
     },
+    {
+      key: 'qase',
+      label: 'Import from Qase',
+      description: 'Bring in suites and cases from an existing Qase project.',
+      icon: DatabaseIcon,
+      onSelect: () => navigate('/projects/import/qase'),
+    },
   ]
 
   async function handleCreate(e: FormEvent) {

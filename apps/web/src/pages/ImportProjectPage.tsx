@@ -22,6 +22,13 @@ const POLL_INTERVAL_MS = 2500
 
 type TargetMode = 'new' | 'existing'
 
+// Sources with a dedicated Connect-form field set. Every other value (an
+// unknown/mistyped :source segment) falls through to the "Unknown import
+// source" guard below.
+type Source = 'testrail' | 'qase'
+
+const SOURCE_LABEL: Record<Source, string> = { testrail: 'TestRail', qase: 'Qase' }
+
 // One Card per stage, appended top-to-bottom as the user progresses — no
 // wizard/stepper primitive exists in this codebase, and one importer
 // (TestRail) doesn't justify inventing one. `phase` drives which single
@@ -74,6 +81,10 @@ export default function ImportProjectPage() {
   const [testRailProjectId, setTestRailProjectId] = useState('')
   const [email, setEmail] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [apiToken, setApiToken] = useState('')
+  const [projectCode, setProjectCode] = useState('')
+  const [qaseBaseUrl, setQaseBaseUrl] = useState('')
+  const [qaseAdvancedOpen, setQaseAdvancedOpen] = useState(false)
   const [targetMode, setTargetMode] = useState<TargetMode>('new')
   const [newProjectName, setNewProjectName] = useState('')
   const [existingProjectKey, setExistingProjectKey] = useState('')
@@ -107,7 +118,7 @@ export default function ImportProjectPage() {
           setDryRunJob(data)
           setPhase('preview')
         } else if (data.status === 'failed') {
-          setConnectError(data.error ?? 'Could not scan this TestRail project.')
+          setConnectError(data.error ?? `Could not scan this ${source === 'qase' ? 'Qase' : 'TestRail'} project.`)
           setPhase('connect')
         } else {
           setDryRunJob(data)
@@ -138,23 +149,33 @@ export default function ImportProjectPage() {
   if (!user?.isTenantAdmin) {
     return <p className="text-sm text-muted-foreground">You don&apos;t have permission to create a project.</p>
   }
-  if (source !== 'testrail') {
+  if (source !== 'testrail' && source !== 'qase') {
     return <p className="text-sm text-muted-foreground">Unknown import source &ldquo;{source}&rdquo;.</p>
   }
 
+  const targetChosen = targetMode === 'new' ? newProjectName.trim().length > 0 : existingProjectKey.length > 0
   const canSubmitConnect =
-    siteUrl.trim().length > 0 &&
-    email.trim().length > 0 &&
-    apiKey.length > 0 &&
-    testRailProjectId.trim().length > 0 &&
-    (targetMode === 'new' ? newProjectName.trim().length > 0 : existingProjectKey.length > 0)
+    source === 'testrail'
+      ? siteUrl.trim().length > 0 &&
+        email.trim().length > 0 &&
+        apiKey.length > 0 &&
+        testRailProjectId.trim().length > 0 &&
+        targetChosen
+      : apiToken.length > 0 && projectCode.trim().length > 0 && targetChosen
 
-  function credentialsBody() {
+  function credentialsBody(): Record<string, string> {
+    if (source === 'testrail') {
+      return {
+        siteUrl: siteUrl.trim(),
+        email: email.trim(),
+        apiKey,
+        testRailProjectId: testRailProjectId.trim(),
+      }
+    }
     return {
-      siteUrl: siteUrl.trim(),
-      email: email.trim(),
-      apiKey,
-      testRailProjectId: testRailProjectId.trim(),
+      apiToken,
+      projectCode: projectCode.trim(),
+      ...(qaseBaseUrl.trim() ? { baseUrl: qaseBaseUrl.trim() } : {}),
     }
   }
 
@@ -184,12 +205,21 @@ export default function ImportProjectPage() {
       }
       setTargetProject(project)
 
+      // TS can't carry the top-level `source` narrowing into a separately
+      // declared async function closure (a hoisting limitation, not a real
+      // possibility of `source` being undefined here — the component
+      // already returned early above if it were) — re-asserted once, not
+      // re-checked, since the guard above is the actual source of truth.
+      const importSource = source as Source
       const { data, error, response } = await api.POST('/api/v1/projects/{projectKey}/import-jobs', {
         params: { path: { projectKey: project.key } },
-        body: { source: 'testrail', mode: 'dry_run', credentials: credentialsBody() },
+        body: { source: importSource, mode: 'dry_run', credentials: credentialsBody() },
       })
       if (!response.ok || !data) {
-        setConnectError((error as { error?: string } | undefined)?.error ?? 'Could not start the TestRail scan.')
+        setConnectError(
+          (error as { error?: string } | undefined)?.error ??
+            `Could not start the ${SOURCE_LABEL[importSource]} scan.`,
+        )
         return
       }
       setDryRunJob(data)
@@ -205,6 +235,10 @@ export default function ImportProjectPage() {
     setTestRailProjectId('')
     setEmail('')
     setApiKey('')
+    setApiToken('')
+    setProjectCode('')
+    setQaseBaseUrl('')
+    setQaseAdvancedOpen(false)
     setTargetMode('new')
     setNewProjectName('')
     setExistingProjectKey('')
@@ -221,7 +255,7 @@ export default function ImportProjectPage() {
     setImportError(undefined)
     const { data, error, response } = await api.POST('/api/v1/projects/{projectKey}/import-jobs', {
       params: { path: { projectKey: targetProject.key } },
-      body: { source: 'testrail', mode: 'real', credentials: credentialsBody() },
+      body: { source: source as Source, mode: 'real', credentials: credentialsBody() },
     })
     if (!response.ok || !data) {
       setImportError((error as { error?: string } | undefined)?.error ?? 'Could not start the import.')
@@ -233,7 +267,7 @@ export default function ImportProjectPage() {
 
   const breadcrumbSegments: Crumb[] = [
     { label: 'Projects', href: '/' },
-    { label: 'Import from TestRail' },
+    { label: `Import from ${SOURCE_LABEL[source]}` },
   ]
 
   const report = dryRunJob?.report
@@ -252,82 +286,162 @@ export default function ImportProjectPage() {
 
   const connectSummary =
     targetProject &&
-    `${siteUrl.replace(/^https?:\/\//, '')} · project ${testRailProjectId} · ${email} → ${
-      targetMode === 'new' ? 'creating' : 'into'
-    } ${targetProject.name}`
+    (source === 'testrail'
+      ? `${siteUrl.replace(/^https?:\/\//, '')} · project ${testRailProjectId} · ${email} → ${
+          targetMode === 'new' ? 'creating' : 'into'
+        } ${targetProject.name}`
+      : `Qase project ${projectCode} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
 
   return (
     <div className="space-y-6">
       <Breadcrumbs segments={breadcrumbSegments} />
 
       <div>
-        <h1 className="tp-heading text-2xl">Import from TestRail</h1>
+        <h1 className="tp-heading text-2xl">Import from {SOURCE_LABEL[source]}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          Recreates TestRail suites and sections as nested folders, and TestRail cases inside them — doesn&apos;t
-          touch TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this version — see the
-          note below.
+          {source === 'testrail' ? (
+            <>
+              Recreates TestRail suites and sections as nested folders, and TestRail cases inside them —
+              doesn&apos;t touch TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this
+              version — see the note below.
+            </>
+          ) : (
+            <>
+              Recreates Qase suites as nested folders, and Qase cases inside them — doesn&apos;t touch
+              TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this version — see the note
+              below.
+            </>
+          )}
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Connect to TestRail</CardTitle>
+          <CardTitle className="tp-heading">Connect to {SOURCE_LABEL[source]}</CardTitle>
         </CardHeader>
         <CardContent>
           {phase === 'connect' ? (
             <form onSubmit={handleConnectSubmit} className="space-y-4">
-              <p className="text-sm text-muted-foreground">
-                TestPulse reads your TestRail project over its REST API using an account email and API key —
-                nothing is written back to TestRail.
-              </p>
+              {source === 'testrail' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    TestPulse reads your TestRail project over its REST API using an account email and API key —
+                    nothing is written back to TestRail.
+                  </p>
 
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="space-y-1">
-                  <Label htmlFor="testrail-site-url">TestRail site URL</Label>
-                  <Input
-                    id="testrail-site-url"
-                    value={siteUrl}
-                    onChange={(e) => setSiteUrl(e.target.value)}
-                    placeholder="https://yourcompany.testrail.io"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="testrail-project-id">TestRail project ID</Label>
-                  <Input
-                    id="testrail-project-id"
-                    value={testRailProjectId}
-                    onChange={(e) => setTestRailProjectId(e.target.value)}
-                    placeholder="e.g. 1"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="testrail-email">TestRail account email</Label>
-                  <Input
-                    id="testrail-email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="qa-lead@acme.com"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label htmlFor="testrail-api-key">TestRail API key</Label>
-                  <Input
-                    id="testrail-api-key"
-                    type="password"
-                    value={apiKey}
-                    onChange={(e) => setApiKey(e.target.value)}
-                  />
-                </div>
-              </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="testrail-site-url">TestRail site URL</Label>
+                      <Input
+                        id="testrail-site-url"
+                        value={siteUrl}
+                        onChange={(e) => setSiteUrl(e.target.value)}
+                        placeholder="https://yourcompany.testrail.io"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="testrail-project-id">TestRail project ID</Label>
+                      <Input
+                        id="testrail-project-id"
+                        value={testRailProjectId}
+                        onChange={(e) => setTestRailProjectId(e.target.value)}
+                        placeholder="e.g. 1"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="testrail-email">TestRail account email</Label>
+                      <Input
+                        id="testrail-email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="qa-lead@acme.com"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="testrail-api-key">TestRail API key</Label>
+                      <Input
+                        id="testrail-api-key"
+                        type="password"
+                        value={apiKey}
+                        onChange={(e) => setApiKey(e.target.value)}
+                      />
+                    </div>
+                  </div>
 
-              <p className="text-xs text-muted-foreground">
-                Need a key? In TestRail: <strong className="font-semibold">My Settings → API Keys → Add Key</strong>.
-              </p>
+                  <p className="text-xs text-muted-foreground">
+                    Need a key? In TestRail:{' '}
+                    <strong className="font-semibold">My Settings → API Keys → Add Key</strong>.
+                  </p>
 
-              <p className="text-xs text-muted-foreground">
-                Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Idera, Inc.
-                TestRail is a trademark of Idera, Inc.
-              </p>
+                  <p className="text-xs text-muted-foreground">
+                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Idera,
+                    Inc. TestRail is a trademark of Idera, Inc.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    TestPulse reads your Qase project over its REST API using an API token — nothing is written
+                    back to Qase.
+                  </p>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="qase-api-token">Qase API token</Label>
+                      <Input
+                        id="qase-api-token"
+                        type="password"
+                        value={apiToken}
+                        onChange={(e) => setApiToken(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="qase-project-code">Qase project code</Label>
+                      <Input
+                        id="qase-project-code"
+                        value={projectCode}
+                        onChange={(e) => setProjectCode(e.target.value)}
+                        placeholder="e.g. PRJ"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Need a token? In Qase: <strong className="font-semibold">My Profile → API Token</strong>.
+                  </p>
+
+                  {qaseAdvancedOpen ? (
+                    <div className="max-w-sm space-y-1">
+                      <Label htmlFor="qase-base-url">Base URL</Label>
+                      <Input
+                        id="qase-base-url"
+                        value={qaseBaseUrl}
+                        onChange={(e) => setQaseBaseUrl(e.target.value)}
+                        placeholder="https://api.qase.io/v1"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Only needed for an Enterprise dedicated-VPC deployment — leave blank for Qase&apos;s public
+                        API.
+                      </p>
+                    </div>
+                  ) : (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="px-0"
+                      onClick={() => setQaseAdvancedOpen(true)}
+                    >
+                      Advanced
+                    </Button>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Qase
+                    Ltd. Qase is a trademark of Qase Ltd.
+                  </p>
+                </>
+              )}
 
               <div className="space-y-2">
                 <Label>Import into</Label>
@@ -412,7 +526,7 @@ export default function ImportProjectPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Loader2Icon className="size-6 animate-spin text-muted-foreground" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">Scanning your TestRail project…</p>
+            <p className="text-sm text-muted-foreground">Scanning your {SOURCE_LABEL[source]} project…</p>
           </CardContent>
         </Card>
       )}
@@ -449,8 +563,8 @@ export default function ImportProjectPage() {
             <p className="text-sm text-muted-foreground">
               Run and result history also isn&apos;t imported in this version — structure and cases only, a
               permanent v1 boundary. And to be explicit: none of this creates or changes any TestPulse{' '}
-              <strong className="font-semibold text-foreground">Suite</strong> (the run-scoping kind) — TestRail
-              suites become folders, full stop.
+              <strong className="font-semibold text-foreground">Suite</strong> (the run-scoping kind) —{' '}
+              {SOURCE_LABEL[source]} suites become folders, full stop.
             </p>
 
             <div className="flex items-center justify-end gap-2 border-t pt-4">

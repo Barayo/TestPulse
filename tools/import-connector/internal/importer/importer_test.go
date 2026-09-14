@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
 )
@@ -313,5 +314,152 @@ func TestRunRealModeCallsExecuteAndReportsProgress(t *testing.T) {
 	}
 	if len(progressCalls) != 2 || progressCalls[len(progressCalls)-1] != [2]int{2, 2} {
 		t.Errorf("progressCalls = %+v, want 2 calls ending at 2/2", progressCalls)
+	}
+}
+
+// fakeQase serves a fixed suite/case/field-metadata fixture, keyed
+// exactly like the real client's own method signatures so it satisfies
+// QaseReader structurally.
+type fakeQase struct {
+	suites []qaseclient.Suite
+	cases  []qaseclient.Case
+	fields []qaseclient.CustomField
+}
+
+func (f *fakeQase) ListSuites(context.Context, string) ([]qaseclient.Suite, error) {
+	return f.suites, nil
+}
+func (f *fakeQase) ListCases(context.Context, string) ([]qaseclient.Case, error) {
+	return f.cases, nil
+}
+func (f *fakeQase) ListCaseFields(context.Context) ([]qaseclient.CustomField, error) {
+	return f.fields, nil
+}
+
+func TestBuildQasePlanMapsNestedSuiteTreeToFolderHierarchy(t *testing.T) {
+	qr := &fakeQase{
+		suites: []qaseclient.Suite{
+			{ID: 1, Title: "Auth", ParentID: nil},
+			{ID: 2, Title: "Login", ParentID: intPtr(1)},
+		},
+		cases: []qaseclient.Case{
+			{ID: 100, SuiteID: 2, Title: "Login with valid credentials"},
+		},
+	}
+
+	plan, err := BuildQasePlan(context.Background(), qr, "PRJ")
+	if err != nil {
+		t.Fatalf("BuildQasePlan: %v", err)
+	}
+	if len(plan.Suites) != 1 || plan.Suites[0].Name != "Auth" {
+		t.Fatalf("plan.Suites = %+v, want one top-level Auth folder", plan.Suites)
+	}
+	authFolder := plan.Suites[0]
+	if len(authFolder.Children) != 1 || authFolder.Children[0].Name != "Login" {
+		t.Fatalf("Auth's children = %+v, want one nested Login folder", authFolder.Children)
+	}
+	loginFolder := authFolder.Children[0]
+	if len(loginFolder.Cases) != 1 || loginFolder.Cases[0].Title != "Login with valid credentials" {
+		t.Fatalf("Login's cases = %+v, want the one case placed there", loginFolder.Cases)
+	}
+}
+
+func TestBuildQasePlanRootSuiteWithNoParentIsTopLevel(t *testing.T) {
+	qr := &fakeQase{
+		suites: []qaseclient.Suite{
+			{ID: 1, Title: "Smoke", ParentID: nil},
+			{ID: 2, Title: "Regression", ParentID: nil},
+		},
+	}
+	plan, err := BuildQasePlan(context.Background(), qr, "PRJ")
+	if err != nil {
+		t.Fatalf("BuildQasePlan: %v", err)
+	}
+	if len(plan.Suites) != 2 {
+		t.Fatalf("plan.Suites = %+v, want 2 top-level folders (both roots)", plan.Suites)
+	}
+}
+
+func TestQaseMappableCustomFieldCreatedOnceAndReusedAcrossCases(t *testing.T) {
+	qr := &fakeQase{
+		suites: []qaseclient.Suite{{ID: 1, Title: "Master", ParentID: nil}},
+		cases: []qaseclient.Case{
+			{ID: 100, SuiteID: 1, Title: "Case A", CustomFields: []qaseclient.CustomFieldValue{{ID: 7, Value: "Manual"}}},
+			{ID: 101, SuiteID: 1, Title: "Case B", CustomFields: []qaseclient.CustomFieldValue{{ID: 7, Value: "Manual"}}},
+			{ID: 102, SuiteID: 1, Title: "Case C", CustomFields: []qaseclient.CustomFieldValue{{ID: 7, Value: "Automated"}}},
+		},
+		fields: []qaseclient.CustomField{
+			{ID: 7, Title: "Automation Type", Type: "selectbox"},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	plan, err := BuildQasePlan(context.Background(), qr, "PRJ")
+	if err != nil {
+		t.Fatalf("BuildQasePlan: %v", err)
+	}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+
+	if len(tp.createdFields) != 1 {
+		t.Fatalf("created fields = %+v, want exactly 1 (reused across all 3 cases)", tp.createdFields)
+	}
+	if tp.createdFields[0].Name != "Automation Type" {
+		t.Errorf("field name = %q, want Automation Type (the Qase title)", tp.createdFields[0].Name)
+	}
+	if len(tp.createdOptions) != 2 {
+		t.Fatalf("created options = %+v, want exactly 2 distinct values (Manual, Automated), each created once", tp.createdOptions)
+	}
+}
+
+func TestQaseUnmappableCustomFieldNamedInReportOnce(t *testing.T) {
+	qr := &fakeQase{
+		suites: []qaseclient.Suite{{ID: 1, Title: "Master", ParentID: nil}},
+		cases: []qaseclient.Case{
+			{ID: 100, SuiteID: 1, Title: "Case A", CustomFields: []qaseclient.CustomFieldValue{{ID: 8, Value: "42"}}},
+			{ID: 101, SuiteID: 1, Title: "Case B", CustomFields: []qaseclient.CustomFieldValue{{ID: 8, Value: "7"}}},
+		},
+		fields: []qaseclient.CustomField{
+			{ID: 8, Title: "Owner", Type: "user"}, // no TestPulse equivalent
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	plan, err := BuildQasePlan(context.Background(), qr, "PRJ")
+	if err != nil {
+		t.Fatalf("BuildQasePlan: %v", err)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0] != "Owner" {
+		t.Fatalf("plan.Unmapped = %+v, want [\"Owner\"] named once despite 2 cases using it", plan.Unmapped)
+	}
+
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdFields) != 0 {
+		t.Errorf("created fields = %+v, want none — Owner has no TestPulse equivalent", tp.createdFields)
+	}
+	for _, c := range tp.createdCases {
+		if len(c.CustomFields) != 0 {
+			t.Errorf("case %+v should have no custom fields — the only one it had is unmappable", c)
+		}
+	}
+}
+
+func TestRunQaseDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
+	qr := &fakeQase{
+		suites: []qaseclient.Suite{{ID: 1, Title: "Master", ParentID: nil}},
+		cases:  []qaseclient.Case{{ID: 100, SuiteID: 1, Title: "Case A"}},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root", failOnAnyMethod: true}
+
+	report, err := RunQase(context.Background(), qr, tp, "QA", "PRJ", true, nil)
+	if err != nil {
+		t.Fatalf("RunQase: %v", err)
+	}
+	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
+		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)
+	}
+	if len(tp.createdFolders) != 0 || len(tp.createdCases) != 0 {
+		t.Errorf("dry run made TestPulse writes: folders=%+v cases=%+v", tp.createdFolders, tp.createdCases)
 	}
 }

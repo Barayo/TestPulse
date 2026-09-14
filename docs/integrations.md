@@ -141,3 +141,61 @@ docker compose -f deploy/compose/docker-compose.yml --profile import-connector u
 `importConnector.agentToken` (fine for evaluation) or
 `importConnector.existingSecret` (a Secret with an `agentToken` key, for a
 real deployment) — see `deploy/helm/testpulse/values.yaml`.
+
+## Qase importer
+
+> Independent, unofficial integration — not affiliated with, endorsed by,
+> or sponsored by Qase Ltd. "Qase" is a trademark of Qase Ltd. No Qase logo
+> is used anywhere in TestPulse's docs or UI.
+
+The Qase importer (`add-qase-importer`) is the same `tools/import-connector`
+tool as the TestRail importer above, with `--source=qase` instead of
+`--source=testrail` — the job/route/report contract, poll-not-push control
+direction, and Connect → Preview → Result flow are all identical and
+unchanged; only the source-specific client and mapping logic differ.
+
+### What it does and doesn't import
+
+- **Imports**: Qase Suites, mapped directly to a TestPulse Folder tree —
+  a root suite (no parent) becomes a top-level Folder, a nested suite
+  becomes a nested Folder, preserving Qase's own suite hierarchy exactly.
+  Unlike TestRail, Qase has no separate "suite vs. section" split, so this
+  mapping is one level simpler. Cases (with steps and any `text`/`select`
+  -mappable custom fields) are created in their suite's mapped Folder.
+  TestPulse's own `Suite` construct is never created, modified, or
+  otherwise touched by this import.
+- **Does not import**: run/result history, Qase's nested/child-step trees
+  (TestPulse's own `Step` type has no nested-step concept at all), Qase's
+  data-driven parameterized cases (each Qase case imports as one plain
+  TestPulse case), and any Qase custom field with no TestPulse equivalent
+  (`number`, `checkbox`, `multiselect`, `url`, `user`, `datetime` — dropped,
+  but always named individually in the job's report, never silently or
+  collapsed into a summary count). Structure and cases only, the same
+  permanent v1 boundary as the TestRail importer.
+- Every import starts as a **dry run**, identical in shape to the TestRail
+  importer's.
+
+### Auth: an API token and project code, no site URL required
+
+Qase has no self-hosted product, so unlike TestRail's required site URL,
+the importer's credentials are just a Qase **API token** and the target
+**project code** (the short string in a Qase project's own URL, e.g.
+`PRJ`) — entered once in the browser (the Connect screen at **+ New
+project → Import from Qase**), stored encrypted at rest exactly like
+TestRail's credentials, and handed to the importer only at claim time. An
+optional **base URL** override (collapsed under "Advanced" on the Connect
+screen) is available for Qase Enterprise customers on a dedicated-VPC
+hostname; it defaults to Qase's public SaaS API
+(`https://api.qase.io/v1`). The importer's own TestPulse identity uses the
+same per-project-scoped agent token model as the TestRail importer.
+
+**Docker Compose**: the same `import-connector` profile, with `--source=qase`:
+
+```sh
+TESTPULSE_AGENT_TOKEN=... \
+docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
+  run import-connector --source=qase
+```
+
+**Helm**: the same `importConnector.enabled: true` chart values, setting
+`importConnector.source: qase` in place of the default `testrail`.

@@ -103,9 +103,12 @@ services:
   # decision as jira-connector above. Off by default: only starts with
   # `docker compose --profile import-connector up`. Unlike jira-connector,
   # it holds no third-party credentials in its own config — the TestRail
-  # site URL/email/API key are entered once in the browser (+ New project
-  # → Import from TestRail) and travel to the importer per-job, encrypted
-  # at rest — see docs/integrations.md.
+  # site URL/email/API key (or, for Qase, an API token/project code) are
+  # entered once in the browser (+ New project → Import from TestRail/Qase)
+  # and travel to the importer per-job, encrypted at rest — see
+  # docs/integrations.md. `--source=testrail` below is this service's
+  # default; override it per run for a different vendor, e.g.
+  # `docker compose --profile import-connector run import-connector --source=qase`.
   import-connector:
     profiles: ["import-connector"]
     build:

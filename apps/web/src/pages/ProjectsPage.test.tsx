@@ -816,6 +816,36 @@ describe('ProjectsPage', () => {
       expect(await screen.findByText('Import page stub')).toBeInTheDocument()
     })
 
+    // add-qase-importer tasks.md 3.1: the same data-driven source list
+    // gains a second connector entry — one more array item, not a new
+    // branch of menu markup.
+    it('also offers "Import from Qase" alongside Start from scratch/TestRail', async () => {
+      mockProjectsList([])
+      renderPage()
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+
+      const menu = screen.getByRole('menu', { name: /new project/i })
+      const qase = within(menu).getByRole('menuitem', { name: /import from qase/i })
+      expect(qase).toBeInTheDocument()
+    })
+
+    it('navigates to /projects/import/qase when "Import from Qase" is chosen', async () => {
+      mockProjectsList([])
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<ProjectsPage />} />
+              <Route path="/projects/import/:source" element={<div>Import page stub</div>} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      )
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /import from qase/i }))
+      expect(await screen.findByText('Import page stub')).toBeInTheDocument()
+    })
+
     it('closes the menu on Escape without navigating or opening the create form', async () => {
       mockProjectsList([])
       renderPage()

@@ -15,7 +15,9 @@ package importer
 import (
 	"context"
 	"fmt"
+	"strconv"
 
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
 )
@@ -41,6 +43,21 @@ func mapFieldType(typeID int) (fieldType string, ok bool) {
 	}
 }
 
+// Qase custom field type strings (get_custom_fields' "type") that map
+// onto TestPulse's text/select custom field types (design.md D-Q4).
+// Every other type ("number", "checkbox", "multiselect", "url", "user",
+// "datetime") has no TestPulse equivalent and is dropped.
+func mapQaseFieldType(fieldType string) (string, bool) {
+	switch fieldType {
+	case "string", "text":
+		return "text", true
+	case "selectbox", "radio":
+		return "select", true
+	default:
+		return "", false
+	}
+}
+
 // TestRailReader is the read-only subset of *testrailclient.Client this
 // package needs — satisfied structurally, so tests can supply a fake.
 type TestRailReader interface {
@@ -48,6 +65,14 @@ type TestRailReader interface {
 	ListSections(ctx context.Context, projectID, suiteID int) ([]testrailclient.Section, error)
 	ListCases(ctx context.Context, projectID, suiteID int) ([]testrailclient.Case, error)
 	ListCaseFields(ctx context.Context) ([]testrailclient.CaseField, error)
+}
+
+// QaseReader is the read-only subset of *qaseclient.Client this package
+// needs — satisfied structurally, so tests can supply a fake.
+type QaseReader interface {
+	ListSuites(ctx context.Context, projectCode string) ([]qaseclient.Suite, error)
+	ListCases(ctx context.Context, projectCode string) ([]qaseclient.Case, error)
+	ListCaseFields(ctx context.Context) ([]qaseclient.CustomField, error)
 }
 
 // TestPulseWriter is the write subset of *testpulseclient.Client this
@@ -61,12 +86,20 @@ type TestPulseWriter interface {
 	AddCustomFieldOption(ctx context.Context, fieldID, value string) (testpulseclient.CustomFieldOption, error)
 }
 
-// casePlan is a TestRail case pared down to what Execute needs: its
+// stepPlan is a source-agnostic case step — the mapping target for both
+// TestRail's Content/Expected and Qase's Action/Expected shapes.
+type stepPlan struct {
+	Action   string
+	Expected string
+}
+
+// casePlan is a source case pared down to what execute needs: its
 // title/steps, and only the custom field values whose type is mappable
-// (system_name -> raw TestRail value).
+// (a source-specific field key -> raw source value; TestRail's is the
+// field's system_name, Qase's is the field's numeric id as a string).
 type casePlan struct {
 	Title        string
-	Steps        []testrailclient.Step
+	Steps        []stepPlan
 	CustomFields map[string]string
 }
 
@@ -143,7 +176,7 @@ func BuildPlan(ctx context.Context, tr TestRailReader, testRailProjectID int) (P
 		buildFolder = func(sectionID int, name string) *folderPlan {
 			fp := &folderPlan{Name: name}
 			for _, c := range casesBySection[sectionID] {
-				cp := casePlan{Title: c.Title, Steps: c.Steps, CustomFields: map[string]string{}}
+				cp := casePlan{Title: c.Title, Steps: toStepPlanFromTestRail(c.Steps), CustomFields: map[string]string{}}
 				for key, value := range c.CustomFields {
 					if _, mappable := plan.fieldTypes[key]; mappable {
 						cp.CustomFields[key] = value
@@ -195,13 +228,35 @@ func countEntities(plan Plan) map[string]int {
 	return counts
 }
 
-func toTestPulseSteps(steps []testrailclient.Step) []testpulseclient.Step {
+func toStepPlanFromTestRail(steps []testrailclient.Step) []stepPlan {
+	if len(steps) == 0 {
+		return nil
+	}
+	out := make([]stepPlan, len(steps))
+	for i, s := range steps {
+		out[i] = stepPlan{Action: s.Content, Expected: s.Expected}
+	}
+	return out
+}
+
+func toStepPlanFromQase(steps []qaseclient.Step) []stepPlan {
+	if len(steps) == 0 {
+		return nil
+	}
+	out := make([]stepPlan, len(steps))
+	for i, s := range steps {
+		out[i] = stepPlan{Action: s.Action, Expected: s.Expected}
+	}
+	return out
+}
+
+func toTestPulseSteps(steps []stepPlan) []testpulseclient.Step {
 	if len(steps) == 0 {
 		return nil
 	}
 	out := make([]testpulseclient.Step, len(steps))
 	for i, s := range steps {
-		out[i] = testpulseclient.Step{Action: s.Content, Expected: s.Expected}
+		out[i] = testpulseclient.Step{Action: s.Action, Expected: s.Expected}
 	}
 	return out
 }
@@ -308,6 +363,110 @@ type Report struct {
 // mode; it is never called during a dry run, since nothing is created.
 func Run(ctx context.Context, tr TestRailReader, tp TestPulseWriter, projectKey string, testRailProjectID int, dryRun bool, progress func(current, total int)) (Report, error) {
 	plan, err := BuildPlan(ctx, tr, testRailProjectID)
+	if err != nil {
+		return Report{}, err
+	}
+	report := Report{Counts: countEntities(plan), Unmapped: plan.Unmapped}
+	if dryRun {
+		return report, nil
+	}
+	if err := execute(ctx, tp, projectKey, plan, progress); err != nil {
+		return report, err
+	}
+	return report, nil
+}
+
+// BuildQasePlan crawls a Qase project's full suite/case structure and its
+// site-wide custom field metadata, producing the folder hierarchy
+// design.md D-Q3 describes plus the unmapped-field list D-Q4 requires —
+// purely from Qase reads, no TestPulseWriter involved. Unlike TestRail,
+// Qase has a single suite tree per project (no separate suite/section
+// levels): each root suite (ParentID == nil) becomes a top-level folder,
+// and each child suite nests beneath its parent's mapped folder,
+// recursively.
+func BuildQasePlan(ctx context.Context, qr QaseReader, projectCode string) (Plan, error) {
+	fieldsMeta, err := qr.ListCaseFields(ctx)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Qase case fields: %w", err)
+	}
+	plan := Plan{
+		Unmapped:    []string{},
+		fieldTypes:  map[string]string{},
+		fieldLabels: map[string]string{},
+	}
+	for _, f := range fieldsMeta {
+		key := strconv.Itoa(f.ID)
+		plan.fieldLabels[key] = f.Title
+		if ft, ok := mapQaseFieldType(f.Type); ok {
+			plan.fieldTypes[key] = ft
+		}
+	}
+
+	suites, err := qr.ListSuites(ctx, projectCode)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Qase suites: %w", err)
+	}
+	cases, err := qr.ListCases(ctx, projectCode)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Qase cases: %w", err)
+	}
+
+	casesBySuite := map[int][]qaseclient.Case{}
+	for _, c := range cases {
+		casesBySuite[c.SuiteID] = append(casesBySuite[c.SuiteID], c)
+	}
+	childrenByParent := map[int][]qaseclient.Suite{}
+	var roots []qaseclient.Suite
+	for _, s := range suites {
+		if s.ParentID == nil {
+			roots = append(roots, s)
+			continue
+		}
+		childrenByParent[*s.ParentID] = append(childrenByParent[*s.ParentID], s)
+	}
+
+	unmappedSeen := map[string]bool{}
+	var buildFolder func(suite qaseclient.Suite) *folderPlan
+	buildFolder = func(suite qaseclient.Suite) *folderPlan {
+		fp := &folderPlan{Name: suite.Title}
+		for _, c := range casesBySuite[suite.ID] {
+			cp := casePlan{Title: c.Title, Steps: toStepPlanFromQase(c.Steps), CustomFields: map[string]string{}}
+			for _, cfv := range c.CustomFields {
+				key := strconv.Itoa(cfv.ID)
+				if _, mappable := plan.fieldTypes[key]; mappable {
+					cp.CustomFields[key] = cfv.Value
+					continue
+				}
+				label := plan.fieldLabels[key]
+				if label == "" {
+					label = key
+				}
+				if !unmappedSeen[label] {
+					unmappedSeen[label] = true
+					plan.Unmapped = append(plan.Unmapped, label)
+				}
+			}
+			fp.Cases = append(fp.Cases, cp)
+		}
+		for _, child := range childrenByParent[suite.ID] {
+			fp.Children = append(fp.Children, buildFolder(child))
+		}
+		return fp
+	}
+
+	for _, root := range roots {
+		plan.Suites = append(plan.Suites, buildFolder(root))
+	}
+
+	return plan, nil
+}
+
+// RunQase crawls a Qase project (projectCode) via qr and, unless dryRun,
+// writes the resulting folder/case structure into TestPulse project
+// projectKey via tp — the Qase counterpart to Run, sharing the same
+// execute/Report/dry-run-never-writes machinery.
+func RunQase(ctx context.Context, qr QaseReader, tp TestPulseWriter, projectKey, projectCode string, dryRun bool, progress func(current, total int)) (Report, error) {
+	plan, err := BuildQasePlan(ctx, qr, projectCode)
 	if err != nil {
 		return Report{}, err
 	}
