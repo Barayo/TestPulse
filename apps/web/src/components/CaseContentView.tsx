@@ -23,7 +23,7 @@ export function CaseContentView({
   emptyStateAction,
   projectKey,
 }: {
-  content: Pick<CaseContent, 'format' | 'steps' | 'description' | 'gherkinSource'>
+  content: Pick<CaseContent, 'format' | 'steps' | 'description' | 'gherkinSource' | 'parameters'>
   emptyStateAction?: ReactNode
   projectKey?: string
 }) {
@@ -59,5 +59,12 @@ export function CaseContentView({
     return <GherkinView source={content.gherkinSource} />
   }
 
-  return <CaseStepsList steps={content.steps} emptyStateAction={emptyStateAction} projectKey={projectKey} />
+  return (
+    <CaseStepsList
+      steps={content.steps}
+      emptyStateAction={emptyStateAction}
+      projectKey={projectKey}
+      parameterColumns={content.parameters?.columns.filter((c) => c !== 'Name')}
+    />
+  )
 }

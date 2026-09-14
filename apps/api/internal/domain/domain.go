@@ -143,6 +143,51 @@ type CaseContent struct {
 	// full narrative) and the other formats (an optional summary).
 	Format        Format `json:"format,omitempty"`
 	GherkinSource string `json:"gherkinSource,omitempty"`
+	// Parameters is the optional data-driven table (add-parameterized-cases)
+	// — nil for the overwhelming majority of cases. Only meaningful when
+	// Format is FormatSteps; Steps' Action/Expected text may reference
+	// {columnName} placeholders substituted per row at run-item creation.
+	Parameters *CaseParameters `json:"parameters,omitempty"`
+}
+
+// SubstituteParams returns a copy of steps with every {column} placeholder
+// in Action/Expected replaced by row's corresponding value — row's own
+// "Name" entry is never itself a substitution target (it's the row's
+// label, not a step-text placeholder). A step with no placeholders passes
+// through unchanged; a placeholder with no entry in row substitutes as an
+// empty string rather than panicking (validation already guarantees every
+// referenced token names a real column, but a column can still lack a
+// value for a particular row).
+func SubstituteParams(steps []Step, row map[string]string) []Step {
+	out := make([]Step, len(steps))
+	for i, s := range steps {
+		out[i] = Step{
+			Action:   substitutePlaceholders(s.Action, row),
+			Expected: substitutePlaceholders(s.Expected, row),
+			GroupRef: s.GroupRef,
+		}
+	}
+	return out
+}
+
+func substitutePlaceholders(text string, row map[string]string) string {
+	return placeholderPattern.ReplaceAllStringFunc(text, func(match string) string {
+		token := match[1 : len(match)-1]
+		if token == "Name" {
+			return match
+		}
+		return row[token]
+	})
+}
+
+// CaseParameters is a case's data-driven table (add-parameterized-cases).
+// Columns[0] is always "Name" — required, never removable in the editor,
+// used as each row's label wherever a row is shown (run item name/history).
+// Rows are ordered maps keyed by column name; a row missing a value for one
+// of its own declared columns substitutes as an empty string, never a panic.
+type CaseParameters struct {
+	Columns []string            `json:"columns"`
+	Rows    []map[string]string `json:"rows"`
 }
 
 // Step is a single test case step. A step carrying GroupRef references a
@@ -204,6 +249,72 @@ func (c CaseContent) Validate() error {
 	}
 	if c.Format != "" && !validFormats[c.Format] {
 		return fmt.Errorf("invalid format %q: must be one of steps, text, gherkin", c.Format)
+	}
+	if err := c.validateParameters(); err != nil {
+		return err
+	}
+	return nil
+}
+
+var placeholderPattern = regexp.MustCompile(`\{([^{}]+)\}`)
+
+// Defense-in-depth bounds on a parameter table's shape — generous for any
+// legitimate data-driven test matrix, but a backstop against an accidental
+// or malicious oversized table (the only prior limit was the server's
+// global request-body cap).
+const (
+	maxParameterRows    = 500
+	maxParameterColumns = 50
+)
+
+// validateParameters enforces add-parameterized-cases design.md D1/D2/D6:
+// a case with zero parameter rows is exempt entirely (existing cases with
+// literal `{brace}` text in their steps must keep saving unchanged). Only
+// once Parameters.Rows is non-empty do the Name-column, unique-row-name,
+// steps-format, and placeholder-matches-column rules apply.
+func (c CaseContent) validateParameters() error {
+	if c.Parameters == nil || len(c.Parameters.Rows) == 0 {
+		return nil
+	}
+	if c.Format != "" && c.Format != FormatSteps {
+		return fmt.Errorf("parameterized cases must use the steps format")
+	}
+	if len(c.Parameters.Rows) > maxParameterRows {
+		return fmt.Errorf("parameter table has %d rows, maximum is %d", len(c.Parameters.Rows), maxParameterRows)
+	}
+	if len(c.Parameters.Columns) > maxParameterColumns {
+		return fmt.Errorf("parameter table has %d columns, maximum is %d", len(c.Parameters.Columns), maxParameterColumns)
+	}
+	if len(c.Parameters.Columns) == 0 || c.Parameters.Columns[0] != "Name" {
+		return fmt.Errorf("parameter table's first column must be named Name")
+	}
+	columns := map[string]bool{}
+	for _, col := range c.Parameters.Columns {
+		if columns[col] {
+			return fmt.Errorf("parameter column %q is used more than once", col)
+		}
+		columns[col] = true
+	}
+	seenNames := map[string]bool{}
+	for i, row := range c.Parameters.Rows {
+		name := row["Name"]
+		if name == "" {
+			return fmt.Errorf("parameter row %d is missing a Name value", i)
+		}
+		if seenNames[name] {
+			return fmt.Errorf("parameter row name %q is used more than once", name)
+		}
+		seenNames[name] = true
+	}
+	for _, step := range c.Steps {
+		for _, text := range [2]string{step.Action, step.Expected} {
+			for _, match := range placeholderPattern.FindAllStringSubmatch(text, -1) {
+				token := match[1]
+				if !columns[token] {
+					return fmt.Errorf("step references unknown parameter %q", token)
+				}
+			}
+		}
 	}
 	return nil
 }
@@ -790,6 +901,11 @@ type RunItem struct {
 	// recorded; see Result.StepResults for a past attempt's immutable
 	// snapshot.
 	StepStates []StepResult `json:"stepStates,omitempty"`
+	// TestDataRow is this item's parameterized-case data-row values
+	// (add-parameterized-cases), excluding the row's own "Name" (already
+	// carried by TestName). Nil for the overwhelming majority of items —
+	// those not expanded from a parameter table row.
+	TestDataRow map[string]string `json:"testDataRow,omitempty"`
 }
 
 // CaseExecution is one run item's outcome, viewed from the case's side

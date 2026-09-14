@@ -4,11 +4,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { CaseStepsList } from '@/components/CaseStepsList'
+import { CaseParametersEditor } from '@/components/CaseParametersEditor'
 import { GherkinEditor } from '@/components/GherkinEditor'
 import { useCaseFormatSwitch, CASE_FORMAT_LABELS, type CaseFormat } from '@/lib/useCaseFormatSwitch'
 import type { components } from '@testpulse/shared/api'
 
 type Step = components['schemas']['Step']
+type CaseParameters = components['schemas']['CaseParameters']
 
 const FORMAT_ICONS: Record<CaseFormat, typeof ListChecksIcon> = {
   steps: ListChecksIcon,
@@ -27,24 +29,28 @@ export function CaseFormatEditor({
   steps,
   description,
   gherkinSource,
+  parameters,
   onFormatChange,
   onStepsChange,
   onDescriptionChange,
   onGherkinSourceChange,
+  onParametersChange,
   projectKey,
 }: {
   format: CaseFormat
   steps: Step[]
   description: string
   gherkinSource: string
+  parameters?: CaseParameters
   onFormatChange: (format: CaseFormat) => void
   onStepsChange: (steps: Step[]) => void
   onDescriptionChange: (description: string) => void
   onGherkinSourceChange: (gherkinSource: string) => void
+  onParametersChange: (parameters: CaseParameters | undefined) => void
   projectKey?: string
 }) {
   const hasContentFor = (f: CaseFormat) => {
-    if (f === 'steps') return steps.some((s) => s.action?.trim() || s.groupRef)
+    if (f === 'steps') return steps.some((s) => s.action?.trim() || s.groupRef) || (parameters?.rows.length ?? 0) > 0
     if (f === 'text') return description.trim() !== ''
     return gherkinSource.trim() !== ''
   }
@@ -61,6 +67,7 @@ export function CaseFormatEditor({
     onStepsChange([{ action: '', expected: '' }])
     onDescriptionChange('')
     onGherkinSourceChange('')
+    onParametersChange(undefined)
     onFormatChange(next)
   }
 
@@ -87,7 +94,12 @@ export function CaseFormatEditor({
         })}
       </div>
 
-      {format === 'steps' && <CaseStepsList steps={steps} onChange={onStepsChange} projectKey={projectKey} />}
+      {format === 'steps' && (
+        <>
+          <CaseStepsList steps={steps} onChange={onStepsChange} projectKey={projectKey} />
+          <CaseParametersEditor parameters={parameters} steps={steps} onChange={onParametersChange} />
+        </>
+      )}
       {format === 'text' && (
         <Card>
           <CardContent>

@@ -299,6 +299,30 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
+	// Parameterized (data-driven) case (add-parameterized-cases): one Steps
+	// template with a 3-row data table instead of three near-duplicate
+	// cases — the showroom for the capability. Added to Sprint 12
+	// execution below, expanding into 3 distinctly-named, substituted run
+	// items rather than one.
+	loginCredentials, err := svc.CreateCase(ctx, p.ID, auth.ID, domain.CaseContent{
+		Title:    "Login handles valid, invalid, and locked credentials",
+		Steps:    []domain.Step{{Action: "Enter {username} and {password}, then submit", Expected: "{expectedResult}"}},
+		Priority: domain.PriorityHigh,
+		Tags:     []string{"smoke", "auth", "data-driven"},
+		Platform: "web",
+		TestType: "functional",
+		Parameters: &domain.CaseParameters{
+			Columns: []string{"Name", "username", "password", "expectedResult"},
+			Rows: []map[string]string{
+				{"Name": "valid credentials", "username": "jane.doe@example.com", "password": "correct-horse-battery-staple", "expectedResult": "The user lands on the dashboard"},
+				{"Name": "wrong password", "username": "jane.doe@example.com", "password": "not-the-right-password", "expectedResult": "An error message is shown and the user stays on the login page"},
+				{"Name": "locked account", "username": "locked.user@example.com", "password": "correct-horse-battery-staple", "expectedResult": "The account is reported as locked"},
+			},
+		},
+	})
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
 	// Authentication's own direct cases (not the Two-Factor subsection) span
 	// every priority level plus both automated and manual on their own —
 	// the Library's per-section critical badge/coverage meter has a real
@@ -597,8 +621,15 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if _, err := svc.AddRunItem(ctx, sprintRun.ID, passwordReset.ID); err != nil {
 		return fmt.Errorf("sampledata: adding pending sprint item: %w", err)
 	}
-	// Two of the four items are assigned to different real project members,
-	// two are left unassigned — real data for the assignee display, filter
+	// add-parameterized-cases: expands into 3 items (one per data row),
+	// named "Login handles valid, invalid, and locked credentials —
+	// <row Name>" — the run board's showroom for parameterized expansion,
+	// alongside the single-item cases above.
+	if _, err := svc.AddRunItem(ctx, sprintRun.ID, loginCredentials.ID); err != nil {
+		return fmt.Errorf("sampledata: adding parameterized sprint items: %w", err)
+	}
+	// Two of the items are assigned to different real project members, the
+	// rest are left unassigned — real data for the assignee display, filter
 	// (including Unassigned), and bulk-assign flow
 	// (add-run-item-assignment-ui, link-run-item-assignee-to-identity) to
 	// show against, rather than every item sharing one state.

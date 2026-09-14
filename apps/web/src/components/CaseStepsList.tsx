@@ -53,6 +53,32 @@ function expandGroup(group: StepGroup): Step[] {
   }))
 }
 
+// Tints a {token} substring text-primary/bold when it names a real
+// parameter column — never any {...}-shaped text, so an ordinary case's
+// incidental literal braces are never mistakenly highlighted
+// (add-parameterized-cases: the case's own unsubstituted template view).
+function renderWithPlaceholders(text: string | undefined, columns: string[] | undefined): ReactNode {
+  if (!text || !columns || columns.length === 0) return text
+  const pattern = /\{([^{}]+)\}/g
+  const parts: ReactNode[] = []
+  let lastIndex = 0
+  let match: RegExpExecArray | null
+  let key = 0
+  while ((match = pattern.exec(text)) !== null) {
+    if (!columns.includes(match[1])) continue
+    if (match.index > lastIndex) parts.push(text.slice(lastIndex, match.index))
+    parts.push(
+      <span key={key++} className="text-primary font-bold">
+        {match[0]}
+      </span>,
+    )
+    lastIndex = match.index + match[0].length
+  }
+  if (parts.length === 0) return text
+  if (lastIndex < text.length) parts.push(text.slice(lastIndex))
+  return parts
+}
+
 function GroupBlockBody({ steps, startIndex }: { steps: Step[]; startIndex: number }) {
   return (
     <ol className="space-y-3 border-t px-3 py-3">
@@ -199,12 +225,18 @@ export function CaseStepsList({
   onChange,
   projectKey,
   bare,
+  parameterColumns,
 }: {
   steps: Step[] | undefined
   emptyStateAction?: ReactNode
   onChange?: (steps: Step[]) => void
   projectKey?: string
   bare?: boolean
+  // Read mode only (add-parameterized-cases): the case's own parameter
+  // column names, used to tint recognized {token} placeholders in the
+  // unsubstituted template view. Omitted entirely for run-item execution
+  // views, whose step text already arrived pre-substituted from the API.
+  parameterColumns?: string[]
 }) {
   const editable = Boolean(onChange)
   const list = useMemo(() => steps ?? [], [steps])
@@ -325,7 +357,9 @@ export function CaseStepsList({
                       className="text-base font-medium leading-relaxed"
                     />
                   ) : (
-                    <p className="text-base font-medium leading-relaxed">{s.action}</p>
+                    <p className="text-base font-medium leading-relaxed">
+                      {renderWithPlaceholders(s.action, parameterColumns)}
+                    </p>
                   )}
                   {editable ? (
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
@@ -343,7 +377,7 @@ export function CaseStepsList({
                       <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
                         <p className="text-base leading-relaxed text-foreground">
                           <span className="tp-label mr-1.5 text-primary">Expected:</span>
-                          {s.expected}
+                          {renderWithPlaceholders(s.expected, parameterColumns)}
                         </p>
                       </div>
                     )

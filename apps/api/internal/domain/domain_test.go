@@ -2,6 +2,7 @@ package domain
 
 import (
 	"encoding/json"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
@@ -204,6 +205,133 @@ func TestReleaseValidation(t *testing.T) {
 	unset := Release{Name: "2026.1"}
 	if err := unset.Validate(); err != nil {
 		t.Errorf("release with no status rejected: %v", err)
+	}
+}
+
+func TestCaseContentParametersValidation(t *testing.T) {
+	valid := CaseContent{
+		Title:  "Login works",
+		Format: FormatSteps,
+		Steps:  []Step{{Action: "Enter {username}", Expected: "{username} is accepted"}},
+		Parameters: &CaseParameters{
+			Columns: []string{"Name", "username"},
+			Rows: []map[string]string{
+				{"Name": "valid", "username": "admin@example.com"},
+				{"Name": "invalid", "username": "nobody@example.com"},
+			},
+		},
+	}
+	if err := valid.Validate(); err != nil {
+		t.Errorf("valid parameterized content rejected: %v", err)
+	}
+
+	duplicateNames := valid
+	duplicateNames.Parameters = &CaseParameters{
+		Columns: []string{"Name", "username"},
+		Rows: []map[string]string{
+			{"Name": "valid", "username": "a@example.com"},
+			{"Name": "valid", "username": "b@example.com"},
+		},
+	}
+	err := duplicateNames.Validate()
+	if err == nil {
+		t.Fatal("duplicate row names accepted")
+	}
+	if !strings.Contains(err.Error(), "valid") {
+		t.Errorf("error %q does not name the duplicated row", err)
+	}
+
+	unmatchedPlaceholder := valid
+	unmatchedPlaceholder.Steps = []Step{{Action: "Enter {password}"}}
+	err = unmatchedPlaceholder.Validate()
+	if err == nil {
+		t.Fatal("unmatched placeholder accepted")
+	}
+	if !strings.Contains(err.Error(), "password") {
+		t.Errorf("error %q does not name the unmatched placeholder", err)
+	}
+
+	nonStepsFormat := valid
+	nonStepsFormat.Format = FormatText
+	if err := nonStepsFormat.Validate(); err == nil {
+		t.Error("parameters on a non-steps format accepted")
+	}
+
+	missingNameColumn := valid
+	missingNameColumn.Parameters = &CaseParameters{
+		Columns: []string{"username"},
+		Rows:    []map[string]string{{"username": "a@example.com"}},
+	}
+	if err := missingNameColumn.Validate(); err == nil {
+		t.Error("parameter table missing a Name first column accepted")
+	}
+
+	duplicateColumns := valid
+	duplicateColumns.Parameters = &CaseParameters{
+		Columns: []string{"Name", "username", "username"},
+		Rows:    []map[string]string{{"Name": "valid", "username": "a@example.com"}},
+	}
+	err = duplicateColumns.Validate()
+	if err == nil {
+		t.Fatal("duplicate column names accepted")
+	}
+	if !strings.Contains(err.Error(), "username") {
+		t.Errorf("error %q does not name the duplicated column", err)
+	}
+
+	zeroRowsWithLiteralBraces := CaseContent{
+		Title: "x",
+		Steps: []Step{{Action: "Enter {anything}"}},
+	}
+	if err := zeroRowsWithLiteralBraces.Validate(); err != nil {
+		t.Errorf("zero-row case with literal braces rejected: %v", err)
+	}
+
+	tooManyRows := valid
+	rows := make([]map[string]string, maxParameterRows+1)
+	for i := range rows {
+		rows[i] = map[string]string{"Name": fmt.Sprintf("row%d", i), "username": "a@example.com"}
+	}
+	tooManyRows.Parameters = &CaseParameters{Columns: []string{"Name", "username"}, Rows: rows}
+	if err := tooManyRows.Validate(); err == nil {
+		t.Errorf("parameter table with %d rows accepted, want rejected above %d", len(rows), maxParameterRows)
+	}
+
+	tooManyColumns := valid
+	columns := make([]string, maxParameterColumns+1)
+	columns[0] = "Name"
+	for i := 1; i < len(columns); i++ {
+		columns[i] = fmt.Sprintf("col%d", i)
+	}
+	tooManyColumns.Parameters = &CaseParameters{Columns: columns, Rows: []map[string]string{{"Name": "x"}}}
+	if err := tooManyColumns.Validate(); err == nil {
+		t.Errorf("parameter table with %d columns accepted, want rejected above %d", len(columns), maxParameterColumns)
+	}
+}
+
+func TestSubstituteParams(t *testing.T) {
+	steps := []Step{
+		{Action: "Enter {username} and {password}", Expected: "{username} is logged in"},
+		{Action: "Click submit", Expected: "no placeholders here"},
+	}
+	row := map[string]string{"Name": "valid", "username": "admin", "password": "hunter2"}
+
+	got := SubstituteParams(steps, row)
+
+	if got[0].Action != "Enter admin and hunter2" {
+		t.Errorf("Action = %q, want substituted", got[0].Action)
+	}
+	if got[0].Expected != "admin is logged in" {
+		t.Errorf("Expected = %q, want substituted", got[0].Expected)
+	}
+	if got[1].Action != "Click submit" || got[1].Expected != "no placeholders here" {
+		t.Errorf("step with no placeholders changed: %+v", got[1])
+	}
+
+	rowMissingValue := map[string]string{"Name": "partial", "username": "admin"}
+	gotMissing := SubstituteParams([]Step{{Action: "Enter {username} / {password}"}}, rowMissingValue)
+	if gotMissing[0].Action != "Enter admin / " {
+		t.Errorf("Action with missing column value = %q, want empty substitution not a panic", gotMissing[0].Action)
 	}
 }
 

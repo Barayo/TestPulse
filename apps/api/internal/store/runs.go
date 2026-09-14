@@ -16,6 +16,35 @@ type RunRepo struct {
 	pool *pgxpool.Pool
 }
 
+// applyTestDataRow substitutes content's steps in place and populates
+// it.TestDataRow when rowName names a real row in the pinned version's
+// Parameters (add-parameterized-cases design.md D3) — nothing to
+// snapshot separately since the row data lives inside the same immutable
+// case version content already carries. A no-op when rowName is nil (the
+// overwhelming majority of items) or, defensively, when the named row
+// can't be found (never expected in a healthy system, since the pinned
+// version is immutable — left unsubstituted rather than erroring the
+// whole read).
+func applyTestDataRow(it *domain.RunItem, content *domain.CaseContent, rowName *string) {
+	if rowName == nil || content.Parameters == nil {
+		return
+	}
+	for _, row := range content.Parameters.Rows {
+		if row["Name"] != *rowName {
+			continue
+		}
+		content.Steps = domain.SubstituteParams(content.Steps, row)
+		dataRow := make(map[string]string, len(row)-1)
+		for k, v := range row {
+			if k != "Name" {
+				dataRow[k] = v
+			}
+		}
+		it.TestDataRow = dataRow
+		return
+	}
+}
+
 // ErrRunClosed is returned when a mutating run-item operation (adding an
 // item, recording a result, updating status/assignee) targets a closed run
 // (add-run-lifecycle-status).
@@ -113,13 +142,13 @@ func (r *RunRepo) ResultProjectID(ctx context.Context, resultID string) (string,
 // Create inserts a run and pins each case to its current version (D2), all
 // in one transaction.
 func (r *RunRepo) Create(ctx context.Context, projectID, name string, caseIDs []string) (domain.Run, error) {
-	return r.create(ctx, projectID, name, "", "", caseIDs)
+	return r.createWithSpecs(ctx, projectID, name, "", "", specsFromCaseIDs(caseIDs))
 }
 
 // CreateWithSuite is Create for a run built from a suite (link-runs-to-suite)
 // — the run records suiteID as its source, exposed as Run.SuiteKey.
 func (r *RunRepo) CreateWithSuite(ctx context.Context, projectID, name, suiteID string, caseIDs []string) (domain.Run, error) {
-	return r.create(ctx, projectID, name, suiteID, "", caseIDs)
+	return r.createWithSpecs(ctx, projectID, name, suiteID, "", specsFromCaseIDs(caseIDs))
 }
 
 // CreateWithOptions is Create/CreateWithSuite generalized to also accept an
@@ -127,10 +156,41 @@ func (r *RunRepo) CreateWithSuite(ctx context.Context, projectID, name, suiteID 
 // suiteID and/or testPlanID may be empty; a run created with both empty
 // behaves exactly as Create.
 func (r *RunRepo) CreateWithOptions(ctx context.Context, projectID, name, suiteID, testPlanID string, caseIDs []string) (domain.Run, error) {
-	return r.create(ctx, projectID, name, suiteID, testPlanID, caseIDs)
+	return r.createWithSpecs(ctx, projectID, name, suiteID, testPlanID, specsFromCaseIDs(caseIDs))
 }
 
-func (r *RunRepo) create(ctx context.Context, projectID, name, suiteID, testPlanID string, caseIDs []string) (domain.Run, error) {
+// CreateWithSpecs is CreateWithOptions generalized to full RunItemSpecs
+// (add-parameterized-cases) — the entry point CreateRun uses once it has
+// expanded any parameterized case ids into one spec per row.
+func (r *RunRepo) CreateWithSpecs(ctx context.Context, projectID, name, suiteID, testPlanID string, items []RunItemSpec) (domain.Run, error) {
+	return r.createWithSpecs(ctx, projectID, name, suiteID, testPlanID, items)
+}
+
+// RunItemSpec is one run item to pin when creating or adding to a run — a
+// case id plus its optional testName and, for a parameterized case's
+// expanded row (add-parameterized-cases), the row's own Name used both as
+// TestName and to look up its substituted content at read time. A bare
+// case id (via specsFromCaseIDs) is the zero-value-everywhere-else case,
+// reproducing today's exact non-parameterized behavior.
+type RunItemSpec struct {
+	CaseID          string
+	TestName        string
+	TestDataRowName string
+}
+
+// specsFromCaseIDs adapts a flat case-id list to []RunItemSpec — every
+// existing caller of Create/CreateWithSuite/CreateWithOptions/AddItem
+// keeps working unmodified; only CreateRun/AddRunItem (add-parameterized-cases)
+// build richer specs directly via expandCaseIntoSpecs.
+func specsFromCaseIDs(caseIDs []string) []RunItemSpec {
+	specs := make([]RunItemSpec, len(caseIDs))
+	for i, id := range caseIDs {
+		specs[i] = RunItemSpec{CaseID: id}
+	}
+	return specs
+}
+
+func (r *RunRepo) createWithSpecs(ctx context.Context, projectID, name, suiteID, testPlanID string, items []RunItemSpec) (domain.Run, error) {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return domain.Run{}, err
@@ -176,8 +236,8 @@ func (r *RunRepo) create(ctx context.Context, projectID, name, suiteID, testPlan
 		run.TestPlanID = &testPlanID
 		run.TestPlanKey = &testPlanKey
 	}
-	for _, caseID := range caseIDs {
-		if err := pinItem(ctx, tx, run.ID, caseID, ""); err != nil {
+	for _, item := range items {
+		if _, err := pinItem(ctx, tx, run.ID, item.CaseID, item.TestName, item.TestDataRowName); err != nil {
 			return domain.Run{}, err
 		}
 	}
@@ -228,13 +288,8 @@ func (r *RunRepo) Import(ctx context.Context, projectID, name string, items []Im
 	}
 
 	for _, item := range items {
-		if err := pinItem(ctx, tx, run.ID, item.CaseID, item.TestName); err != nil {
-			return domain.Run{}, err
-		}
-		var itemID string
-		if err := tx.QueryRow(ctx,
-			`SELECT id FROM test_run_items WHERE run_id = $1 AND case_id = $2`,
-			run.ID, item.CaseID).Scan(&itemID); err != nil {
+		itemID, err := pinItem(ctx, tx, run.ID, item.CaseID, item.TestName, "")
+		if err != nil {
 			return domain.Run{}, err
 		}
 		res := item.Result
@@ -267,39 +322,75 @@ func (r *RunRepo) Import(ctx context.Context, projectID, name string, items []Im
 // testName is the literal name an external test runner reported
 // (add-execution-import); pass "" for manually-added items.
 func (r *RunRepo) AddItem(ctx context.Context, runID, caseID, testName string) (string, error) {
-	tx, err := r.pool.Begin(ctx)
+	return r.AddItemSpec(ctx, runID, RunItemSpec{CaseID: caseID, TestName: testName})
+}
+
+// AddItemSpec is AddItem generalized to a full RunItemSpec
+// (add-parameterized-cases) — a plain AddItem call is a spec with an empty
+// TestDataRowName, reproducing today's exact behavior. A thin wrapper around
+// AddItemSpecs for the common single-item case.
+func (r *RunRepo) AddItemSpec(ctx context.Context, runID string, spec RunItemSpec) (string, error) {
+	ids, err := r.AddItemSpecs(ctx, runID, []RunItemSpec{spec})
 	if err != nil {
 		return "", err
+	}
+	return ids[0], nil
+}
+
+// AddItemSpecs pins every spec into the same existing run in one
+// transaction — a parameterized case's row-expansion (service.AddRunItem)
+// must not commit some rows and fail on others, the same atomicity
+// guarantee createWithSpecs already gives run creation. Looping the
+// single-item AddItemSpec (each its own transaction) would leave a partial
+// add committed if a later row failed (add-parameterized-cases, found in
+// post-implementation review).
+func (r *RunRepo) AddItemSpecs(ctx context.Context, runID string, specs []RunItemSpec) ([]string, error) {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return nil, err
 	}
 	defer func() { _ = tx.Rollback(ctx) }()
 	if err := checkRunOpen(ctx, tx, runID); err != nil {
-		return "", err
+		return nil, err
 	}
-	if err := pinItem(ctx, tx, runID, caseID, testName); err != nil {
-		return "", err
+	ids := make([]string, 0, len(specs))
+	for _, spec := range specs {
+		itemID, err := pinItem(ctx, tx, runID, spec.CaseID, spec.TestName, spec.TestDataRowName)
+		if err != nil {
+			return nil, err
+		}
+		ids = append(ids, itemID)
 	}
-	var itemID string
-	if err := tx.QueryRow(ctx,
-		`SELECT id FROM test_run_items WHERE run_id = $1 AND case_id = $2`,
-		runID, caseID).Scan(&itemID); err != nil {
-		return "", err
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
 	}
-	return itemID, tx.Commit(ctx)
+	return ids, nil
 }
 
-// pinItem inserts a run item pinned to the case's current version.
-func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID, testName string) error {
-	tag, err := tx.Exec(ctx,
-		`INSERT INTO test_run_items (run_id, case_id, case_version, test_name)
-		 SELECT $1, id, current_version, $3 FROM test_cases WHERE id = $2 AND NOT deleted`,
-		runID, caseID, testName)
+// pinItem inserts a run item pinned to the case's current version, returning
+// the new item's id directly (RETURNING, not a follow-up SELECT by
+// run_id+case_id) — a parameterized case's rows (add-parameterized-cases)
+// can pin the same case_id more than once in the same run, which a
+// follow-up "WHERE run_id = $1 AND case_id = $2" lookup couldn't
+// disambiguate. testDataRowName is "" for every non-parameterized item.
+func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID, testName, testDataRowName string) (string, error) {
+	var rowNameArg any
+	if testDataRowName != "" {
+		rowNameArg = testDataRowName
+	}
+	var itemID string
+	err := tx.QueryRow(ctx,
+		`INSERT INTO test_run_items (run_id, case_id, case_version, test_name, test_data_row_name)
+		 SELECT $1, id, current_version, $3, $4 FROM test_cases WHERE id = $2 AND NOT deleted
+		 RETURNING id`,
+		runID, caseID, testName, rowNameArg).Scan(&itemID)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", ErrNotFound
+	}
 	if err != nil {
-		return err
+		return "", err
 	}
-	if tag.RowsAffected() == 0 {
-		return ErrNotFound
-	}
-	return nil
+	return itemID, nil
 }
 
 func (r *RunRepo) Get(ctx context.Context, runID string) (domain.Run, error) {
@@ -542,7 +633,8 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
 		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source,
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source, v.parameters,
+		        i.test_data_row_name,
 		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
 		 FROM test_run_items i
 		 JOIN test_runs r2 ON r2.id = i.run_id
@@ -571,18 +663,22 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 			automated                                                                           bool
 			customFieldsJSON                                                                    []byte
 			format, gherkinSource                                                               string
+			parametersJSON                                                                      []byte
+			testDataRowName                                                                     *string
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
 			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,
 			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource,
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource, &parametersJSON,
+			&testDataRowName,
 			&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt); err != nil {
 			return nil, err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource, &parametersJSON)()
 		if err != nil {
 			return nil, err
 		}
+		applyTestDataRow(&it, &content, testDataRowName)
 		it.Content = content
 		switch {
 		case assigneeUserID != nil:
@@ -632,7 +728,8 @@ func (r *RunRepo) ItemsPage(ctx context.Context, runID, assigneeID, cursor strin
 		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
 		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
-		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source,
+		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source, v.parameters,
+		        i.test_data_row_name,
 		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
 		 FROM test_run_items i
 		 JOIN test_runs r2 ON r2.id = i.run_id
@@ -663,18 +760,22 @@ func (r *RunRepo) ItemsPage(ctx context.Context, runID, assigneeID, cursor strin
 			automated                                                                           bool
 			customFieldsJSON                                                                    []byte
 			format, gherkinSource                                                               string
+			parametersJSON                                                                      []byte
+			testDataRowName                                                                     *string
 		)
 		if err := rows.Scan(&it.ID, &it.RunID, &it.CaseID, &it.CaseKey, &it.CaseVersion,
 			&assigneeUserID, &assigneeTeamID, &assigneeUserEmail, &assigneeTeamName, &assigneeAvatar,
 			&it.CurrentStatus, &it.TestName, &it.CreatedAt, &it.NewerVersion,
-			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource,
+			&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource, &parametersJSON,
+			&testDataRowName,
 			&it.JiraIssueKey, &it.JiraIssueSummary, &it.JiraIssueStatus, &it.JiraLastSyncedAt); err != nil {
 			return nil, "", err
 		}
-		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource)()
+		content, err := scanContent(&title, &description, &stepsJSON, &expected, &priority, &tags, &platform, &testType, &automated, &customFieldsJSON, &format, &gherkinSource, &parametersJSON)()
 		if err != nil {
 			return nil, "", err
 		}
+		applyTestDataRow(&it, &content, testDataRowName)
 		it.Content = content
 		switch {
 		case assigneeUserID != nil:

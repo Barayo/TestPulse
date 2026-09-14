@@ -167,7 +167,13 @@ function mockAssignmentAPI(items: unknown[], summary?: unknown) {
 
 function ItemPageProbe() {
   const { runKey, caseKey } = useParams<{ runKey?: string; caseKey?: string }>()
-  return <p data-testid="item-page-probe">item {runKey} {caseKey}</p>
+  const location = useLocation()
+  return (
+    <p data-testid="item-page-probe">
+      item {runKey} {caseKey}
+      {location.search}
+    </p>
+  )
 }
 
 function CaseLibraryProbe() {
@@ -252,6 +258,13 @@ describe('Run execution board', () => {
     renderRun()
     await userEvent.click(await screen.findByText('Login works'))
     expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('item r1 c1')
+  })
+
+  it('disambiguates same-caseKey items via ?row= when navigating (add-parameterized-cases)', async () => {
+    mockRunAPI([{ ...pendingItem, testName: 'valid' }])
+    renderRun()
+    await userEvent.click(await screen.findByText('Login works'))
+    expect(await screen.findByTestId('item-page-probe')).toHaveTextContent('row=valid')
   })
 
   it('the row menu offers "Open execution" and "Go to case in Library"', async () => {

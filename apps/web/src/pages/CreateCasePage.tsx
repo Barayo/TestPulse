@@ -19,6 +19,7 @@ import type { components } from '@testpulse/shared/api'
 type Project = components['schemas']['Project']
 type Folder = components['schemas']['Folder']
 type Step = components['schemas']['Step']
+type CaseParameters = components['schemas']['CaseParameters']
 
 // Case creation as a dedicated page, reusing CaseDetailPage's shell
 // (redesign-case-creation-as-page) — replaces the old 420px slide-over
@@ -40,12 +41,14 @@ export default function CreateCasePage() {
   const [steps, setSteps] = useState<Step[]>([{ action: '', expected: '' }])
   const [description, setDescription] = useState('')
   const [gherkinSource, setGherkinSource] = useState('')
+  const [parameters, setParameters] = useState<CaseParameters | undefined>(undefined)
   const [priority, setPriority] = useState<Priority>('medium')
   const [tags, setTags] = useState<string[]>([])
   const [platform, setPlatform] = useState('')
   const [testType, setTestType] = useState('')
   const [automated, setAutomated] = useState(false)
   const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({})
+  const [createError, setCreateError] = useState<string | undefined>(undefined)
 
   useEffect(() => {
     if (!projectKey) return
@@ -83,7 +86,8 @@ export default function CreateCasePage() {
 
   async function submitCreate() {
     if (!title.trim() || !projectKey) return
-    const { data } = await api.POST('/api/v1/projects/{projectKey}/cases', {
+    setCreateError(undefined)
+    const { data, error, response } = await api.POST('/api/v1/projects/{projectKey}/cases', {
       params: { path: { projectKey } },
       body: {
         title: title.trim(),
@@ -92,6 +96,7 @@ export default function CreateCasePage() {
         description,
         format,
         gherkinSource,
+        parameters,
         priority,
         tags,
         platform: platform.trim(),
@@ -100,6 +105,10 @@ export default function CreateCasePage() {
         customFields: customFieldValues,
       },
     })
+    if (!response.ok) {
+      setCreateError((error as { error?: string })?.error ?? 'Could not create this test case.')
+      return
+    }
     if (data) navigate(`/projects/${projectKey}/cases/${data.key}`)
   }
 
@@ -131,14 +140,17 @@ export default function CreateCasePage() {
             steps={steps}
             description={description}
             gherkinSource={gherkinSource}
+            parameters={parameters}
             onFormatChange={setFormat}
             onStepsChange={setSteps}
             onDescriptionChange={setDescription}
             onGherkinSourceChange={setGherkinSource}
+            onParametersChange={setParameters}
             projectKey={projectKey}
           />
 
-          <div className="flex justify-end gap-2 border-t pt-4">
+          <div className="flex items-center justify-end gap-2 border-t pt-4">
+            {createError && <p className="mr-auto text-sm text-destructive">{createError}</p>}
             <Button variant="outline" asChild>
               <Link to={`/projects/${projectKey}/library/${(targetFolder ?? root)?.id ?? ''}`}>Cancel</Link>
             </Button>

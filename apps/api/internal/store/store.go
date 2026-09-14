@@ -83,7 +83,7 @@ var ErrHasChildren = fmt.Errorf("has dependent children")
 var ErrJiraLinkNotSet = fmt.Errorf("jira issue key is not set")
 
 // contentColumns is the shared SELECT list for test_case_versions content.
-const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields, format, gherkin_source"
+const contentColumns = "title, description, steps, expected_result, priority, tags, platform, test_type, automated, custom_fields, format, gherkin_source, parameters"
 
 func marshalSteps(steps []domain.Step) ([]byte, error) {
 	if steps == nil {
@@ -100,6 +100,17 @@ func marshalCustomFields(fields map[string]string) ([]byte, error) {
 		fields = map[string]string{}
 	}
 	return json.Marshal(fields)
+}
+
+// marshalParameters marshals a possibly-nil *domain.CaseParameters to the
+// parameters column's genuinely-nullable shape (add-parameterized-cases) —
+// unlike custom_fields, nil here writes SQL NULL, matching the
+// overwhelming majority of cases that never use this field.
+func marshalParameters(params *domain.CaseParameters) ([]byte, error) {
+	if params == nil {
+		return nil, nil
+	}
+	return json.Marshal(params)
 }
 
 // claimEntityKey claims the next per-project, per-type sequential number
@@ -125,7 +136,7 @@ func claimEntityKey(ctx context.Context, tx pgx.Tx, projectID, entityType, forma
 	return fmt.Sprintf(format, projectKey, n), nil
 }
 
-func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool, customFieldsJSON *[]byte, format, gherkinSource *string) func() (domain.CaseContent, error) {
+func scanContent(title, description *string, stepsJSON *[]byte, expected *string, priority *string, tags *[]string, platform, testType *string, automated *bool, customFieldsJSON *[]byte, format, gherkinSource *string, parametersJSON *[]byte) func() (domain.CaseContent, error) {
 	return func() (domain.CaseContent, error) {
 		var steps []domain.Step
 		if err := json.Unmarshal(*stepsJSON, &steps); err != nil {
@@ -135,6 +146,13 @@ func scanContent(title, description *string, stepsJSON *[]byte, expected *string
 		if len(*customFieldsJSON) > 0 {
 			if err := json.Unmarshal(*customFieldsJSON, &customFields); err != nil {
 				return domain.CaseContent{}, fmt.Errorf("decoding custom fields: %w", err)
+			}
+		}
+		var parameters *domain.CaseParameters
+		if len(*parametersJSON) > 0 {
+			parameters = &domain.CaseParameters{}
+			if err := json.Unmarshal(*parametersJSON, parameters); err != nil {
+				return domain.CaseContent{}, fmt.Errorf("decoding parameters: %w", err)
 			}
 		}
 		return domain.CaseContent{
@@ -150,6 +168,7 @@ func scanContent(title, description *string, stepsJSON *[]byte, expected *string
 			CustomFields:   customFields,
 			Format:         domain.Format(*format),
 			GherkinSource:  *gherkinSource,
+			Parameters:     parameters,
 		}, nil
 	}
 }

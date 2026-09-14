@@ -1285,6 +1285,27 @@ type RunInput struct {
 	CaseIDs    []string
 }
 
+// expandCaseIntoSpecs turns one case id into one-or-more store.RunItemSpec
+// (add-parameterized-cases design.md D5): a case with no parameter rows
+// contributes a single bare spec, reproducing today's exact behavior; a
+// case with N rows contributes N specs, each row's Name used as both the
+// item's TestName (display) and TestDataRowName (substitution lookup).
+func (s *Service) expandCaseIntoSpecs(ctx context.Context, caseID string) ([]store.RunItemSpec, error) {
+	c, err := s.store.Cases.Get(ctx, caseID)
+	if err != nil {
+		return nil, err
+	}
+	if c.Content.Parameters == nil || len(c.Content.Parameters.Rows) == 0 {
+		return []store.RunItemSpec{{CaseID: caseID}}, nil
+	}
+	specs := make([]store.RunItemSpec, len(c.Content.Parameters.Rows))
+	for i, row := range c.Content.Parameters.Rows {
+		name := row["Name"]
+		specs[i] = store.RunItemSpec{CaseID: caseID, TestName: name, TestDataRowName: name}
+	}
+	return specs, nil
+}
+
 func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) (domain.Run, error) {
 	if in.Name == "" {
 		return domain.Run{}, invalid("name is required")
@@ -1343,12 +1364,18 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 			return domain.Run{}, invalid("case belongs to a different project")
 		}
 	}
-	var run domain.Run
-	if in.SuiteID != "" || in.TestPlanID != "" {
-		run, err = s.store.Runs.CreateWithOptions(ctx, projectID, in.Name, in.SuiteID, in.TestPlanID, unique)
-	} else {
-		run, err = s.store.Runs.Create(ctx, projectID, in.Name, unique)
+	// Each unique case id expands to one-or-more specs (add-parameterized-cases
+	// D5) — a non-parameterized case contributes exactly one bare spec, so
+	// this is a no-op multiplier for the overwhelming majority of runs.
+	var specs []store.RunItemSpec
+	for _, id := range unique {
+		caseSpecs, err := s.expandCaseIntoSpecs(ctx, id)
+		if err != nil {
+			return domain.Run{}, err
+		}
+		specs = append(specs, caseSpecs...)
 	}
+	run, err := s.store.Runs.CreateWithSpecs(ctx, projectID, in.Name, in.SuiteID, in.TestPlanID, specs)
 	if err != nil {
 		return domain.Run{}, err
 	}
@@ -1421,27 +1448,36 @@ func runClosedAsConflict(err error) error {
 	return err
 }
 
-func (s *Service) AddRunItem(ctx context.Context, runID, caseID string) (string, error) {
+// AddRunItem adds a case to an open run — returning one item id per
+// spec its case expanded into (add-parameterized-cases D5): a
+// non-parameterized case returns a single-element slice, exactly one
+// item as before this capability existed; a parameterized case returns
+// one id per data row.
+func (s *Service) AddRunItem(ctx context.Context, runID, caseID string) ([]string, error) {
 	if caseID == "" {
-		return "", invalid("caseId is required")
+		return nil, invalid("caseId is required")
 	}
 	runProjectID, err := s.store.Runs.ProjectID(ctx, runID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	caseProjectID, err := s.store.Cases.ProjectID(ctx, caseID)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 	if caseProjectID != runProjectID {
-		return "", invalid("case belongs to a different project")
+		return nil, invalid("case belongs to a different project")
 	}
-	itemID, err := s.store.Runs.AddItem(ctx, runID, caseID, "")
+	specs, err := s.expandCaseIntoSpecs(ctx, caseID)
 	if err != nil {
-		return "", runClosedAsConflict(err)
+		return nil, err
+	}
+	ids, err := s.store.Runs.AddItemSpecs(ctx, runID, specs)
+	if err != nil {
+		return nil, runClosedAsConflict(err)
 	}
 	s.audit(ctx, "add_item", "run", runID)
-	return itemID, nil
+	return ids, nil
 }
 
 func (s *Service) RunItems(ctx context.Context, runID, assignee string) ([]domain.RunItem, error) {

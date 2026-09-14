@@ -124,6 +124,30 @@ describe('CreateCasePage', () => {
     })
   })
 
+  it('creating with a test data table sends the parameters, added via the empty-state action', async () => {
+    mockCreateAPI()
+    mockPOST.mockResolvedValue({ data: { key: 'CHK-9', currentVersion: 1 }, response: { ok: true } })
+    renderCreate()
+    const title = await screen.findByRole('textbox', { name: /title/i })
+
+    await userEvent.type(title, 'Login')
+    await userEvent.type(screen.getByLabelText(/^action for step 1/i), 'Log in')
+    await userEvent.click(screen.getByRole('button', { name: '+ Add test data' }))
+    await userEvent.type(screen.getByLabelText('Row 1 name'), 'valid')
+    await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/cases',
+        expect.objectContaining({
+          body: expect.objectContaining({
+            parameters: { columns: ['Name'], rows: [{ Name: 'valid' }] },
+          }),
+        }),
+      )
+    })
+  })
+
   it('creating in Gherkin format sends format and gherkinSource', async () => {
     mockCreateAPI()
     mockPOST.mockResolvedValue({ data: { key: 'CHK-9', currentVersion: 1 }, response: { ok: true } })
@@ -142,5 +166,22 @@ describe('CreateCasePage', () => {
         }),
       )
     })
+  })
+
+  it('shows the server\'s validation error inline when creation is rejected (regression: was silently swallowed)', async () => {
+    mockCreateAPI()
+    mockPOST.mockResolvedValue({
+      data: undefined,
+      error: { error: 'step references unknown parameter "sortOrder"' },
+      response: { ok: false, status: 400 },
+    })
+    renderCreate()
+    const title = await screen.findByRole('textbox', { name: /title/i })
+    await userEvent.type(title, 'Login')
+    await userEvent.click(screen.getByRole('button', { name: /create test case/i }))
+
+    expect(await screen.findByText(/step references unknown parameter "sortOrder"/i)).toBeInTheDocument()
+    // Still on the create page — the typed title is not lost.
+    expect(screen.getByRole('textbox', { name: /title/i })).toHaveValue('Login')
   })
 })

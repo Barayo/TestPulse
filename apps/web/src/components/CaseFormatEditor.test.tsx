@@ -8,6 +8,7 @@ const noopHandlers = {
   onStepsChange: vi.fn(),
   onDescriptionChange: vi.fn(),
   onGherkinSourceChange: vi.fn(),
+  onParametersChange: vi.fn(),
 }
 
 describe('CaseFormatEditor', () => {
@@ -58,6 +59,7 @@ describe('CaseFormatEditor', () => {
     const onStepsChange = vi.fn()
     const onDescriptionChange = vi.fn()
     const onGherkinSourceChange = vi.fn()
+    const onParametersChange = vi.fn()
     render(
       <CaseFormatEditor
         format="steps"
@@ -68,6 +70,7 @@ describe('CaseFormatEditor', () => {
         onStepsChange={onStepsChange}
         onDescriptionChange={onDescriptionChange}
         onGherkinSourceChange={onGherkinSourceChange}
+        onParametersChange={onParametersChange}
       />,
     )
     await userEvent.click(screen.getByRole('button', { name: /gherkin/i }))
@@ -78,6 +81,7 @@ describe('CaseFormatEditor', () => {
     expect(onStepsChange).toHaveBeenCalledWith([{ action: '', expected: '' }])
     expect(onDescriptionChange).toHaveBeenCalledWith('')
     expect(onGherkinSourceChange).toHaveBeenCalledWith('')
+    expect(onParametersChange).toHaveBeenCalledWith(undefined)
     expect(onFormatChange).toHaveBeenCalledWith('gherkin')
   })
 

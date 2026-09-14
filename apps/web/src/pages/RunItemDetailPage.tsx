@@ -8,7 +8,7 @@ import {
   type DragEvent as ReactDragEvent,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ExternalLinkIcon, PaperclipIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
@@ -35,6 +35,7 @@ import { StatusBadge } from '@/components/StatusBadge'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
 import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
 import { assignRunItems } from '@/lib/assignRunItems'
+import { runItemUrl } from '@/lib/runItemUrl'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { timeAgo } from '@/lib/timeAgo'
 import { useProjectPermissions } from '@/lib/useProjectPermissions'
@@ -68,6 +69,8 @@ const ACCEPTED_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 
 export default function RunItemDetailPage() {
   const { runKey, caseKey } = useParams<{ runKey: string; caseKey: string }>()
+  const [searchParams] = useSearchParams()
+  const rowParam = searchParams.get('row')
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
 
@@ -151,7 +154,14 @@ export default function RunItemDetailPage() {
       runItems = pubItems.items
     }
     setAccess(resolvedAccess)
-    const match = (runItems ?? []).find((it) => it.caseKey === caseKey)
+    // testName disambiguates the multiple items that can share one caseKey
+    // in a run (add-parameterized-cases: a parameterized case's several
+    // expanded rows, or several externally-imported results for the same
+    // case) — falls back to the first caseKey match when no ?row= is
+    // present, or it names no item here, preserving the pre-existing
+    // unambiguous single-item-per-case behavior unchanged.
+    const candidates = (runItems ?? []).filter((it) => it.caseKey === caseKey)
+    const match = (rowParam ? candidates.find((it) => it.testName === rowParam) : undefined) ?? candidates[0]
     if (!r || !match) {
       setNotFound(true)
       return
@@ -187,7 +197,7 @@ export default function RunItemDetailPage() {
       setUserAvatars({})
       setResultsData(toResultsData(execs ?? []))
     }
-  }, [runKey, caseKey, user, authLoading])
+  }, [runKey, caseKey, rowParam, user, authLoading])
 
   useEffect(() => {
     void load()
@@ -338,7 +348,7 @@ export default function RunItemDetailPage() {
       if (options?.advance) {
         const currentIndex = items.findIndex((it) => it.id === item.id)
         const next = items.slice(currentIndex + 1).find((it) => it.currentStatus === 'pending')
-        navigate(next ? `/runs/${runKey}/items/${next.caseKey}` : `/runs/${runKey}`)
+        navigate(next ? runItemUrl(runKey!, next) : `/runs/${runKey}`)
         return
       }
       setComment('')
@@ -413,7 +423,7 @@ export default function RunItemDetailPage() {
     const currentIndex = items.findIndex((it) => it.id === item.id)
     const target = items[currentIndex + offset]
     if (!target) return
-    navigate(`/runs/${runKey}/items/${target.caseKey}`)
+    navigate(runItemUrl(runKey!, target))
   }
 
   useEffect(() => {
@@ -653,6 +663,27 @@ export default function RunItemDetailPage() {
               }
             />
             {item.testName && <PropertyRow label="Test name" value={item.testName} />}
+            {item.testDataRow && Object.keys(item.testDataRow).length > 0 && (
+              <PropertyRow
+                label="Test data"
+                // Ordered by the case's own defined column order (still
+                // carried on the pinned version's content.parameters — see
+                // add-parameterized-cases design.md D9) rather than
+                // Object.entries' raw order, which for server JSON is
+                // alphabetical (Go map marshaling) and would otherwise
+                // disagree with the column order shown on the case's own
+                // Test Data table.
+                value={(
+                  item.content.parameters?.columns.filter((c) => c !== 'Name' && c in item.testDataRow!) ??
+                  Object.keys(item.testDataRow)
+                ).map((key) => (
+                  <span key={key} className="rounded-full bg-muted px-2 py-0.5">
+                    <span className="text-muted-foreground">{key}:</span> {item.testDataRow![key]}
+                  </span>
+                ))}
+                wrap
+              />
+            )}
             <PropertyRow
               label="Priority"
               value={<ClassificationPills priority={item.content.priority ?? 'medium'} />}

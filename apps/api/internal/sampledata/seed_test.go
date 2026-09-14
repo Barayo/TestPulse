@@ -1896,3 +1896,83 @@ func TestSeedContentDemonstratesRequirementsTraceability(t *testing.T) {
 		t.Errorf("coverage statuses = %+v, want at least one covered, failing, and notRun entry (a real mix, not all one status)", statuses)
 	}
 }
+
+// TestSeedContentDemonstratesParameterizedCases covers add-parameterized-cases:
+// the seeded case has a real 3-row parameter table, and adding it to the
+// Sprint 12 run expanded it into one distinctly-named item per row, each
+// with server-side-substituted step text and its own testDataRow values —
+// never the raw {placeholder} template.
+func TestSeedContentDemonstratesParameterizedCases(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var loginCredentials *domain.TestCase
+	for i, c := range cases {
+		if c.Content.Title == "Login handles valid, invalid, and locked credentials" {
+			loginCredentials = &cases[i]
+		}
+	}
+	if loginCredentials == nil {
+		t.Fatal("no parameterized case titled \"Login handles valid, invalid, and locked credentials\" seeded")
+	}
+	if loginCredentials.Content.Parameters == nil || len(loginCredentials.Content.Parameters.Rows) < 3 {
+		t.Fatalf("seeded case Parameters = %+v, want a table with at least 3 rows", loginCredentials.Content.Parameters)
+	}
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var sprintRun *domain.Run
+	for i, r := range runs {
+		if r.Name == "Sprint 12 execution" {
+			sprintRun = &runs[i]
+		}
+	}
+	if sprintRun == nil {
+		t.Fatal("missing the \"Sprint 12 execution\" run")
+	}
+
+	items, err := svc.RunItems(actorCtx, sprintRun.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	byTestName := map[string]domain.RunItem{}
+	for _, it := range items {
+		if it.CaseID == loginCredentials.ID {
+			byTestName[it.TestName] = it
+		}
+	}
+	if len(byTestName) < 3 {
+		t.Fatalf("got %d run items for the parameterized case, want at least 3 (one per row): %+v", len(byTestName), byTestName)
+	}
+
+	valid, ok := byTestName["valid credentials"]
+	if !ok {
+		t.Fatal("no run item named \"valid credentials\"")
+	}
+	if len(valid.Content.Steps) == 0 || valid.Content.Steps[0].Action != "Enter jane.doe@example.com and correct-horse-battery-staple, then submit" {
+		t.Errorf("valid-credentials item step text = %+v, want the {username}/{password} placeholders substituted", valid.Content.Steps)
+	}
+	if valid.TestDataRow["username"] != "jane.doe@example.com" {
+		t.Errorf("valid-credentials item TestDataRow = %+v, want username jane.doe@example.com", valid.TestDataRow)
+	}
+
+	locked, ok := byTestName["locked account"]
+	if !ok {
+		t.Fatal("no run item named \"locked account\"")
+	}
+	if locked.TestDataRow["username"] != "locked.user@example.com" {
+		t.Errorf("locked-account item TestDataRow = %+v, want username locked.user@example.com", locked.TestDataRow)
+	}
+}

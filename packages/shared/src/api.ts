@@ -1034,7 +1034,7 @@ export interface paths {
         /** List run items with pinned content, cursor-paginated in insertion order, optionally filtered by assignee or jiraLinked */
         get: operations["listRunItems"];
         put?: never;
-        /** Add a case to an open run (pins its then-current version) */
+        /** Add a case to an open run (pins its then-current version); one id per data row for a parameterized case, otherwise a single id */
         post: operations["addRunItem"];
         delete?: never;
         options?: never;
@@ -2336,6 +2336,13 @@ export interface components {
             /** Format: date-time */
             readonly snapshotUpdatedAt?: string;
         };
+        /** @description A Steps-format case's optional data-driven table (add-parameterized-cases). columns[0] is always "Name" — required, never removable, used as each row's label wherever a row is shown (run item name, history). Step action/expected text may reference {columnName} placeholders, substituted per row when the case is added to a run — never on the case's own template view. */
+        CaseParameters: {
+            columns: string[];
+            rows: {
+                [key: string]: string;
+            }[];
+        };
         CaseContent: {
             title: string;
             description?: string;
@@ -2360,6 +2367,8 @@ export interface components {
             format?: "steps" | "text" | "gherkin";
             /** @description The raw Given/When/Then source, meaningful when format is "gherkin" (add-case-authoring-formats). */
             gherkinSource?: string;
+            /** @description Optional data-driven table (add-parameterized-cases). Steps format only; absent for the overwhelming majority of cases. */
+            parameters?: components["schemas"]["CaseParameters"];
         };
         CaseCreateInput: components["schemas"]["CaseContent"] & {
             /** @description Defaults to the project's root folder when omitted. */
@@ -2629,8 +2638,12 @@ export interface components {
             content: components["schemas"]["CaseContent"];
             /** @description True when the case has a newer version than the pinned one */
             newerVersion: boolean;
-            /** @description The literal name an external test runner reported for this item, independent of the pinned case's own title. Absent for items added manually. */
+            /** @description The literal name an external test runner reported for this item, or (add-parameterized-cases) the Name of the parameter row this item was expanded from — independent of the pinned case's own title. Absent for a plain manually-added item. */
             testName?: string;
+            /** @description This item's parameterized-case data-row values (add-parameterized-cases), excluding the row's own "Name" (already carried by testName). Absent for the overwhelming majority of items — those not expanded from a parameter table. */
+            testDataRow?: {
+                [key: string]: string;
+            };
             /** Format: date-time */
             createdAt: string;
             /** @description Linked Jira issue key (add-jira-connector), independent of the pinned case version — set via PUT .../jira-link. */
@@ -5331,14 +5344,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created run item id */
+            /** @description Created run item id(s) */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": {
-                        id: string;
+                        ids: string[];
                     };
                 };
             };

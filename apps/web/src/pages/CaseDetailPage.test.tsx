@@ -8,6 +8,7 @@ import { AuthProvider } from '@/lib/useAuth'
 import type { components } from '@testpulse/shared/api'
 
 type Step = components['schemas']['Step']
+type CaseParameters = components['schemas']['CaseParameters']
 
 vi.mock('@/lib/api', () => ({
   api: { GET: vi.fn(), PUT: vi.fn(), DELETE: vi.fn(), POST: vi.fn() },
@@ -90,6 +91,8 @@ function mockDetailAPI(options?: {
   // wholesale (so a groupRef can be included) and supplies the fetched
   // step group CaseStepsList looks up for any groupRef it finds.
   currentSteps?: Step[]
+  // add-parameterized-cases: overrides the current case's content.parameters.
+  currentParameters?: CaseParameters
   stepGroup?: { id: string; key: string; name: string; steps: unknown[]; createdAt: string; updatedAt: string } | null
   // add-requirements-traceability: the project's full requirement list —
   // caseIds determines which show as linked on this case.
@@ -124,7 +127,15 @@ function mockDetailAPI(options?: {
           ...(options?.currentCustomFieldValues
             ? { content: { ...limitCase.content, customFields: options.currentCustomFieldValues } }
             : {}),
-          ...(options?.currentSteps ? { content: { ...limitCase.content, steps: options.currentSteps } } : {}),
+          ...(options?.currentSteps || options?.currentParameters
+            ? {
+                content: {
+                  ...limitCase.content,
+                  ...(options?.currentSteps ? { steps: options.currentSteps } : {}),
+                  ...(options?.currentParameters ? { parameters: options.currentParameters } : {}),
+                },
+              }
+            : {}),
           ...(options?.caseJiraFields ?? {}),
         },
         response: { ok: true },
@@ -695,6 +706,100 @@ describe('CaseDetailPage', () => {
     })
   })
 
+  describe('parameterized (data-driven) cases (add-parameterized-cases)', () => {
+    it('shows tinted placeholders and a read-only test data table in view mode when rows exist', async () => {
+      mockDetailAPI({
+        currentSteps: [{ action: 'Start a transfer over {limit}', expected: 'Blocked before confirming' }],
+        currentParameters: { columns: ['Name', 'limit'], rows: [{ Name: 'over limit', limit: '1000' }] },
+      })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+      expect(screen.getByText('{limit}', { selector: '.text-primary' })).toBeInTheDocument()
+      expect(screen.getByRole('table')).toBeInTheDocument()
+      expect(screen.getByText('Test Data')).toBeInTheDocument()
+      expect(screen.getByText('over limit')).toBeInTheDocument()
+      expect(screen.getByText('1000')).toBeInTheDocument()
+    })
+
+    it('shows neither tinting nor a test data table in view mode when there are no rows', async () => {
+      mockDetailAPI()
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+      expect(screen.queryByRole('table')).not.toBeInTheDocument()
+      expect(screen.queryByText('Test Data')).not.toBeInTheDocument()
+    })
+
+    it('shows a saved test data table in edit mode and round-trips an edited cell through save', async () => {
+      mockDetailAPI({
+        currentParameters: {
+          columns: ['Name', 'username'],
+          rows: [{ Name: 'valid', username: 'admin@example.com' }],
+        },
+      })
+      mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      expect(screen.getByLabelText('Row 1 name')).toHaveValue('valid')
+      expect(screen.getByLabelText('Row 1 username')).toHaveValue('admin@example.com')
+
+      await userEvent.type(screen.getByLabelText('Row 1 username'), '!')
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      await waitFor(() => {
+        expect(mockPUT).toHaveBeenCalledWith(
+          '/api/v1/cases/{caseKey}',
+          expect.objectContaining({
+            body: expect.objectContaining({
+              parameters: {
+                columns: ['Name', 'username'],
+                rows: [{ Name: 'valid', username: 'admin@example.com!' }],
+              },
+            }),
+          }),
+        )
+      })
+    })
+
+    it('shows the server\'s validation error inline and stays in edit mode when a save is rejected (regression: was silently swallowed)', async () => {
+      mockDetailAPI({
+        currentParameters: {
+          columns: ['Name', 'username'],
+          rows: [{ Name: 'valid', username: 'admin@example.com' }],
+        },
+      })
+      mockPUT.mockResolvedValue({
+        data: undefined,
+        error: { error: 'step references unknown parameter "sortOrder"' },
+        response: { ok: false, status: 400 },
+      })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+      await userEvent.click(screen.getByRole('button', { name: /save changes/i }))
+
+      expect(await screen.findByText(/step references unknown parameter "sortOrder"/i)).toBeInTheDocument()
+      // Still in edit mode — the in-progress edit was not discarded.
+      expect(screen.getByRole('button', { name: /save changes/i })).toBeInTheDocument()
+    })
+
+    it('warns before switching away from Steps when only test data rows exist, no step content', async () => {
+      mockDetailAPI({
+        currentSteps: [{ action: '', expected: '' }],
+        currentParameters: { columns: ['Name'], rows: [{ Name: 'valid' }] },
+      })
+      renderDetail()
+      await screen.findByRole('heading', { name: 'Daily transfer limit' })
+      await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
+
+      await userEvent.click(screen.getByRole('button', { name: /gherkin/i }))
+      expect(screen.getByRole('dialog', { name: /switch to gherkin/i })).toBeInTheDocument()
+    })
+  })
+
   it('editing a custom field value and saving includes it in the request', async () => {
     mockDetailAPI({
       customFields: [{ id: 'f1', name: 'Automation Owner', fieldType: 'text', createdAt: '' }],
@@ -784,6 +889,7 @@ describe('CaseDetailPage', () => {
   describe('in-place editing (add-case-authoring-formats)', () => {
     it('edits the title inline in its heading slot, with no separate Title field', async () => {
       mockDetailAPI()
+      mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
       renderDetail()
       await screen.findByRole('heading', { name: 'Daily transfer limit' })
       await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))
@@ -862,6 +968,7 @@ describe('CaseDetailPage', () => {
 
     it('edits steps in place using the same card/circle shell as the read view', async () => {
       mockDetailAPI()
+      mockPUT.mockResolvedValue({ data: { ...limitCase, currentVersion: 3 }, response: { ok: true } })
       renderDetail()
       await screen.findByRole('heading', { name: 'Daily transfer limit' })
       await userEvent.click(screen.getByRole('button', { name: /^edit$/i }))

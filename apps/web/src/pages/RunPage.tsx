@@ -19,6 +19,7 @@ import { AssignDialog, type AssigneePick } from '@/components/AssignDialog'
 import { RunBulkActionBar, type BulkAction } from '@/components/RunBulkActionBar'
 import { assignRunItems } from '@/lib/assignRunItems'
 import { recordBulkVerdict } from '@/lib/recordBulkVerdict'
+import { runItemUrl } from '@/lib/runItemUrl'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { useBumpDataRevision } from '@/lib/DataRevision'
 import { useProjectPermissions } from '@/lib/useProjectPermissions'
@@ -634,7 +635,7 @@ export default function RunPage() {
       }
       if (e.key === 'Enter') {
         const target = displayOrder[focusedIndex]
-        if (target) navigate(`/runs/${runKey}/items/${target.caseKey}`)
+        if (target) navigate(runItemUrl(runKey!, target))
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -893,7 +894,7 @@ export default function RunPage() {
                           selected={selectedIds.has(item.id)}
                           selectedCount={selectedIds.size}
                           onToggleSelect={(shiftKey) => toggleSelect(item.id, shiftKey)}
-                          onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
+                          onOpenExecution={() => navigate(runItemUrl(runKey!, item))}
                           onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
                           onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                           onAssignSelected={handleAssignSelected}
@@ -921,7 +922,7 @@ export default function RunPage() {
                   selected={selectedIds.has(item.id)}
                   selectedCount={selectedIds.size}
                   onToggleSelect={(shiftKey) => toggleSelect(item.id, shiftKey)}
-                  onOpenExecution={() => navigate(`/runs/${runKey}/items/${item.caseKey}`)}
+                  onOpenExecution={() => navigate(runItemUrl(runKey!, item))}
                   onGoToCase={() => project && navigate(`/projects/${project.key}/cases/${item.caseKey}`)}
                   onAssign={() => setAssignTarget({ itemIds: [item.id] })}
                   onAssignSelected={handleAssignSelected}

@@ -1253,7 +1253,7 @@ paths:
               schema: { $ref: "#/components/schemas/RunItemListPage" }
     post:
       operationId: addRunItem
-      summary: Add a case to an open run (pins its then-current version)
+      summary: Add a case to an open run (pins its then-current version); one id per data row for a parameterized case, otherwise a single id
       tags: [runs]
       requestBody:
         required: true
@@ -1262,13 +1262,16 @@ paths:
             schema: { $ref: "#/components/schemas/AddItemInput" }
       responses:
         "201":
-          description: Created run item id
+          description: Created run item id(s)
           content:
             application/json:
               schema:
                 type: object
-                required: [id]
-                properties: { id: { type: string } }
+                required: [ids]
+                properties:
+                  ids:
+                    type: array
+                    items: { type: string }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/items/{itemId}/results:
@@ -2765,6 +2768,25 @@ components:
         groupId: { type: string, readOnly: true }
         groupKey: { type: string }
         snapshotUpdatedAt: { type: string, format: date-time, readOnly: true }
+    CaseParameters:
+      type: object
+      required: [columns, rows]
+      description: >-
+        A Steps-format case's optional data-driven table
+        (add-parameterized-cases). columns[0] is always "Name" — required,
+        never removable, used as each row's label wherever a row is shown
+        (run item name, history). Step action/expected text may reference
+        {columnName} placeholders, substituted per row when the case is
+        added to a run — never on the case's own template view.
+      properties:
+        columns:
+          type: array
+          items: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: { type: string }
     CaseContent:
       type: object
       required: [title]
@@ -2808,6 +2830,11 @@ components:
           description: >-
             The raw Given/When/Then source, meaningful when format is
             "gherkin" (add-case-authoring-formats).
+        parameters:
+          allOf: [{ $ref: "#/components/schemas/CaseParameters" }]
+          description: >-
+            Optional data-driven table (add-parameterized-cases). Steps
+            format only; absent for the overwhelming majority of cases.
     CaseCreateInput:
       allOf:
         - $ref: "#/components/schemas/CaseContent"
@@ -3244,8 +3271,17 @@ components:
           type: string
           description: >-
             The literal name an external test runner reported for this
-            item, independent of the pinned case's own title. Absent for
-            items added manually.
+            item, or (add-parameterized-cases) the Name of the parameter
+            row this item was expanded from — independent of the pinned
+            case's own title. Absent for a plain manually-added item.
+        testDataRow:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            This item's parameterized-case data-row values
+            (add-parameterized-cases), excluding the row's own "Name"
+            (already carried by testName). Absent for the overwhelming
+            majority of items — those not expanded from a parameter table.
         createdAt: { type: string, format: date-time }
         jiraIssueKey:
           type: string

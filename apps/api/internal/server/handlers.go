@@ -899,8 +899,8 @@ func (h *api) addRunItem(w http.ResponseWriter, r *http.Request) {
 		h.respond(w, 0, nil, err)
 		return
 	}
-	id, err := h.svc.AddRunItem(r.Context(), resolvedID(r, "runKey"), caseID)
-	h.respond(w, http.StatusCreated, map[string]string{"id": id}, err)
+	ids, err := h.svc.AddRunItem(r.Context(), resolvedID(r, "runKey"), caseID)
+	h.respond(w, http.StatusCreated, map[string][]string{"ids": ids}, err)
 }
 
 func (h *api) runSummary(w http.ResponseWriter, r *http.Request) {

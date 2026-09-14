@@ -153,6 +153,61 @@ describe('RunItemDetailPage', () => {
     expect(within(sidebar).getByText('v1')).toBeInTheDocument()
   })
 
+  it('resolves the item named by ?row= when several items share a caseKey (add-parameterized-cases)', async () => {
+    const valid = { ...item, id: 'i-valid', testName: 'valid', testDataRow: { username: 'admin@example.com' } }
+    const invalid = { ...item, id: 'i-invalid', testName: 'invalid', testDataRow: { username: 'nobody@example.com' } }
+    mockItemAPI(undefined, undefined, [], [valid, invalid])
+    renderPage('/runs/r1/items/c1?row=invalid')
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('invalid')).toBeInTheDocument()
+    expect(within(sidebar).getByText('nobody@example.com')).toBeInTheDocument()
+  })
+
+  it('orders Test data chips by the case\'s defined column order, not alphabetically (regression)', async () => {
+    mockItemAPI({
+      ...item,
+      testDataRow: { apple: 'a-val', zebra: 'z-val' },
+      content: { ...item.content, parameters: { columns: ['Name', 'zebra', 'apple'], rows: [] } },
+    })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    const keys = within(sidebar)
+      .getAllByText(/^(zebra|apple):$/)
+      .map((el) => el.textContent)
+    expect(keys).toEqual(['zebra:', 'apple:'])
+  })
+
+  it('falls back to the first caseKey match when no ?row= is given', async () => {
+    const valid = { ...item, id: 'i-valid', testName: 'valid' }
+    const invalid = { ...item, id: 'i-invalid', testName: 'invalid' }
+    mockItemAPI(undefined, undefined, [], [valid, invalid])
+    renderPage('/runs/r1/items/c1')
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('valid')).toBeInTheDocument()
+  })
+
+  it('shows a Test data property row with one chip per value when the item carries a parameterized row (add-parameterized-cases)', async () => {
+    mockItemAPI({ ...item, testDataRow: { username: 'admin@example.com', password: 'hunter2' } })
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).getByText('Test data')).toBeInTheDocument()
+    expect(within(sidebar).getByText('admin@example.com')).toBeInTheDocument()
+    expect(within(sidebar).getByText('hunter2')).toBeInTheDocument()
+    expect(within(sidebar).getByText('username:')).toBeInTheDocument()
+  })
+
+  it('omits the Test data property row for an item with no parameterized row', async () => {
+    mockItemAPI()
+    renderPage()
+    await screen.findByRole('heading', { name: 'Login works' })
+    const sidebar = screen.getByTestId('run-item-sidebar')
+    expect(within(sidebar).queryByText('Test data')).not.toBeInTheDocument()
+  })
+
   it('links to the item\'s test case from the Properties panel', async () => {
     mockItemAPI()
     renderPage()

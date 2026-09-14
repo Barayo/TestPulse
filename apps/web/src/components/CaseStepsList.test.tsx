@@ -81,6 +81,27 @@ describe('CaseStepsList', () => {
     render(<CaseStepsList steps={[]} emptyStateAction={<button>+ Add steps</button>} />)
     expect(screen.getByRole('button', { name: '+ Add steps' })).toBeInTheDocument()
   })
+
+  it('tints a {placeholder} matching a known parameter column (add-parameterized-cases)', () => {
+    render(
+      <CaseStepsList
+        steps={[{ action: 'Enter {username}', expected: '{username} is logged in' }]}
+        parameterColumns={['username']}
+      />,
+    )
+    expect(screen.getAllByText('{username}', { selector: '.text-primary' })).toHaveLength(2)
+  })
+
+  it('leaves literal braces untinted when they do not match a known parameter column', () => {
+    render(<CaseStepsList steps={[{ action: 'Enter a value like {this}' }]} parameterColumns={['username']} />)
+    expect(screen.queryByText('{this}', { selector: '.text-primary' })).not.toBeInTheDocument()
+    expect(screen.getByText('Enter a value like {this}')).toBeInTheDocument()
+  })
+
+  it('does not tint anything when no parameterColumns are given', () => {
+    render(<CaseStepsList steps={[{ action: 'Enter {username}' }]} />)
+    expect(screen.queryByText('{username}', { selector: '.text-primary' })).not.toBeInTheDocument()
+  })
 })
 
 describe('CaseStepsList — editable (in-place edit, add-case-authoring-formats)', () => {

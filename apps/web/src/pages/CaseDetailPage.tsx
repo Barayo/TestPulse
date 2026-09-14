@@ -17,6 +17,7 @@ import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { CaseResultsPanel, type CaseResultsData } from '@/components/CaseResultsPanel'
 import { toResultsData, RECENT_EXECUTIONS_LIMIT } from '@/lib/caseResultsData'
 import { CaseContentView, caseContentHeading } from '@/components/CaseContentView'
+import { CaseParametersView } from '@/components/CaseParametersView'
 import { PRIORITIES, type Priority, type CustomField } from '@/components/ClassificationEditor'
 import { ClassificationPills, AutomationPill } from '@/components/Pills'
 import { JiraLinkBadge } from '@/components/JiraLinkBadge'
@@ -39,6 +40,7 @@ type CaseVersion = components['schemas']['CaseVersion']
 type Suite = components['schemas']['Suite']
 type Requirement = components['schemas']['Requirement']
 type Step = components['schemas']['Step']
+type CaseParameters = components['schemas']['CaseParameters']
 
 function firstNameOf(displayName: string): string {
   return displayName.split(' ')[0]
@@ -72,11 +74,13 @@ export default function CaseDetailPage() {
   const [viewingVersion, setViewingVersion] = useState<number | null>(null)
   const [expandedVersion, setExpandedVersion] = useState<number | null>(null)
   const [isEditing, setIsEditing] = useState(false)
+  const [saveError, setSaveError] = useState<string | undefined>(undefined)
   const [title, setTitle] = useState('')
   const [format, setFormat] = useState<CaseFormat>('steps')
   const [steps, setSteps] = useState<Step[]>([])
   const [description, setDescription] = useState('')
   const [gherkinSource, setGherkinSource] = useState('')
+  const [parameters, setParameters] = useState<CaseParameters | undefined>(undefined)
   const [priority, setPriority] = useState<Priority>('medium')
   const [tags, setTags] = useState<string[]>([])
   const [platform, setPlatform] = useState('')
@@ -179,6 +183,7 @@ export default function CaseDetailPage() {
     setSteps((testCase.content.steps ?? []).map((s) => ({ action: s.action, expected: s.expected ?? '', groupRef: s.groupRef })))
     setDescription(testCase.content.description ?? '')
     setGherkinSource(testCase.content.gherkinSource ?? '')
+    setParameters(testCase.content.parameters)
     setPriority(testCase.content.priority ?? 'medium')
     setTags(testCase.content.tags ?? [])
     setPlatform(testCase.content.platform ?? '')
@@ -186,6 +191,7 @@ export default function CaseDetailPage() {
     setAutomated(testCase.content.automated ?? false)
     setCustomFieldValues(testCase.content.customFields ?? {})
     setIsEditing(false)
+    setSaveError(undefined)
   }, [testCase])
 
   if (!projectKey || !caseKey) return null
@@ -221,7 +227,8 @@ export default function CaseDetailPage() {
 
   async function saveEdit() {
     if (!title.trim() || !caseKey) return
-    await api.PUT('/api/v1/cases/{caseKey}', {
+    setSaveError(undefined)
+    const { error, response } = await api.PUT('/api/v1/cases/{caseKey}', {
       params: { path: { caseKey } },
       body: {
         title: title.trim(),
@@ -229,6 +236,7 @@ export default function CaseDetailPage() {
         description,
         format,
         gherkinSource,
+        parameters,
         expectedResult: testCase!.content.expectedResult ?? '',
         priority,
         tags,
@@ -238,6 +246,10 @@ export default function CaseDetailPage() {
         customFields: customFieldValues,
       },
     })
+    if (!response.ok) {
+      setSaveError((error as { error?: string })?.error ?? 'Could not save these changes.')
+      return
+    }
     await load()
   }
 
@@ -365,7 +377,16 @@ export default function CaseDetailPage() {
         </div>
         {!isEditing && (canEdit || actionMenuItems.length > 0) && (
           <div className="flex items-center gap-1">
-            {canEdit && <Button onClick={() => setIsEditing(true)}>Edit</Button>}
+            {canEdit && (
+              <Button
+                onClick={() => {
+                  setSaveError(undefined)
+                  setIsEditing(true)
+                }}
+              >
+                Edit
+              </Button>
+            )}
             {actionMenuItems.length > 0 && (
               <RowActionMenu label={`Actions for ${testCase.content.title}`} items={actionMenuItems} />
             )}
@@ -382,15 +403,24 @@ export default function CaseDetailPage() {
                 steps={steps}
                 description={description}
                 gherkinSource={gherkinSource}
+                parameters={parameters}
                 onFormatChange={setFormat}
                 onStepsChange={setSteps}
                 onDescriptionChange={setDescription}
                 onGherkinSourceChange={setGherkinSource}
+                onParametersChange={setParameters}
                 projectKey={projectKey}
               />
 
-              <div className="flex justify-end gap-2 border-t pt-4">
-                <Button variant="outline" onClick={() => setIsEditing(false)}>
+              <div className="flex items-center justify-end gap-2 border-t pt-4">
+                {saveError && <p className="mr-auto text-sm text-destructive">{saveError}</p>}
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setSaveError(undefined)
+                    setIsEditing(false)
+                  }}
+                >
                   Cancel
                 </Button>
                 <Button
@@ -409,9 +439,23 @@ export default function CaseDetailPage() {
               </p>
               <CaseContentView
                 content={testCase.content}
-                emptyStateAction={canEdit ? <Button onClick={() => setIsEditing(true)}>+ Add steps</Button> : undefined}
+                emptyStateAction={
+                  canEdit ? (
+                    <Button
+                      onClick={() => {
+                        setSaveError(undefined)
+                        setIsEditing(true)
+                      }}
+                    >
+                      + Add steps
+                    </Button>
+                  ) : undefined
+                }
                 projectKey={projectKey}
               />
+              {(testCase.content.parameters?.rows.length ?? 0) > 0 && (
+                <CaseParametersView parameters={testCase.content.parameters!} />
+              )}
             </>
           )}
         </div>
