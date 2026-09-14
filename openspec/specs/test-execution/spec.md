@@ -8,7 +8,7 @@ log per item, assignment/filtering, run summaries, and the run execution
 board that ties it all together for a human tester.
 ## Requirements
 ### Requirement: Run creation pins case versions
-The system SHALL let a user with `runCreate` permission on a project create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A run item MAY carry an optional `testName` — the literal name reported by an external test runner, independent of the pinned case's own title. Adding an item to an existing run SHALL also require `runCreate` permission. A run created from a suite SHALL record that suite's key; a run created without a suite (an explicit case list, or an imported run) SHALL have no suite reference. A run's recorded suite SHALL NOT change after creation, and deleting the suite later SHALL NOT affect the run or its items — only the suite reference itself is cleared. A run MAY optionally be scoped to a Test Plan at creation time; a run's Test Plan scope SHALL NOT change after creation, and deleting the Test Plan later SHALL NOT affect the run or its items — only the Test Plan reference itself is cleared. A run created with no Test Plan behaves exactly as before this capability existed.
+The system SHALL let a user with `runCreate` permission on a project create a test run from a suite and/or an explicit list of cases. Each run item MUST pin the case version that is current at the moment the item is added to the run, and that pin SHALL never change afterwards. Every run SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A run item MAY carry an optional `testName` — the literal name reported by an external test runner, or (see `parameterized-cases`) the `Name` of the parameter row it was expanded from, independent of the pinned case's own title. Adding an item to an existing run SHALL also require `runCreate` permission. A run created from a suite SHALL record that suite's key; a run created without a suite (an explicit case list, or an imported run) SHALL have no suite reference. A run's recorded suite SHALL NOT change after creation, and deleting the suite later SHALL NOT affect the run or its items — only the suite reference itself is cleared. A run MAY optionally be scoped to a Test Plan at creation time; a run's Test Plan scope SHALL NOT change after creation, and deleting the Test Plan later SHALL NOT affect the run or its items — only the Test Plan reference itself is cleared. A run created with no Test Plan behaves exactly as before this capability existed. Adding a parameterized case (see `parameterized-cases`) to a run — via a suite, an explicit case list, or a single case added to an already-open run — expands to one run item per parameter row rather than a single item.
 
 #### Scenario: Run pins versions at creation
 - **WHEN** a run is created containing a case whose current version is 2, and the case is later edited to version 3
@@ -61,6 +61,10 @@ The system SHALL let a user with `runCreate` permission on a project create a te
 #### Scenario: Runs may be listed filtered to a single Test Plan
 - **WHEN** a user with `read` permission lists a project's runs filtered to a specific Test Plan
 - **THEN** only runs scoped to that Test Plan are returned
+
+#### Scenario: Adding a parameterized case via a suite expands per row
+- **WHEN** a run is created from a suite containing a case with 2 parameter rows
+- **THEN** the run contains 2 items for that case, one per row, alongside one item each for the suite's other, non-parameterized cases
 
 ### Requirement: Run open/closed lifecycle
 Every run SHALL have a status, `open` or `closed`. Runs created via

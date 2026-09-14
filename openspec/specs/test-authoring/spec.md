@@ -104,7 +104,7 @@ The system SHALL let a Tenant Admin configure a single, instance-wide inactivity
 - **THEN** a user with `manageProject` on it can unarchive it at any time, exactly as they could a manually-archived project
 
 ### Requirement: Test case creation
-The system SHALL let a user with `caseCreate` permission on a project create test cases within it, with title, description, steps, expected result, priority, and tags. Creating a case establishes version 1. A case MAY additionally carry `platform` (free text), `testType` (free text), and `automated` (boolean, defaults to false), settable at creation or updated later. Every case SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI.
+The system SHALL let a user with `caseCreate` permission on a project create test cases within it, with title, description, steps, expected result, priority, and tags. Creating a case establishes version 1. A case MAY additionally carry `platform` (free text), `testType` (free text), and `automated` (boolean, defaults to false), settable at creation or updated later. Every case SHALL be assigned an immutable `key`, scoped to its project (see `resource-keys`), used to address it in the API and UI. A Steps-format case MAY additionally carry a parameter table (see `parameterized-cases`); no other format may.
 
 A case's content SHALL be authored in one of three formats, chosen at
 creation and changeable later: `steps` (structured `action`/`expected`
@@ -177,6 +177,10 @@ different states.
 #### Scenario: Creating a case lands on the new case's own page
 - **WHEN** a user successfully creates a case from the case-creation page
 - **THEN** the browser navigates to the new case's own detail page
+
+#### Scenario: A parameterized case's parameter table is part of its version
+- **WHEN** a case's parameter table is edited (a row or column added, removed, or changed)
+- **THEN** a new immutable version is created, exactly like any other content edit
 
 ### Requirement: Immutable test case versioning
 Every edit to a test case's content SHALL create a new immutable
