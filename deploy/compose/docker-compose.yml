@@ -98,5 +98,26 @@ services:
       app:
         condition: service_started
 
+  # Optional TestRail importer (add-testrail-importer) — a separate
+  # deployable, never part of the `app` image, per the same standing
+  # decision as jira-connector above. Off by default: only starts with
+  # `docker compose --profile import-connector up`. Unlike jira-connector,
+  # it holds no third-party credentials in its own config — the TestRail
+  # site URL/email/API key are entered once in the browser (+ New project
+  # → Import from TestRail) and travel to the importer per-job, encrypted
+  # at rest — see docs/integrations.md.
+  import-connector:
+    profiles: ["import-connector"]
+    build:
+      context: ../../tools/import-connector
+    image: testpulse-import-connector:dev
+    command: ["--source=testrail"]
+    environment:
+      TESTPULSE_URL: http://app:8080
+      TESTPULSE_AGENT_TOKEN: ${TESTPULSE_AGENT_TOKEN:-}
+    depends_on:
+      app:
+        condition: service_started
+
 volumes:
   testpulse-db:

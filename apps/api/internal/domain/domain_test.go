@@ -740,6 +740,67 @@ func TestDeriveProjectKeyIsAlwaysUppercaseAlphanumeric(t *testing.T) {
 	}
 }
 
+func TestParseImportMode(t *testing.T) {
+	for _, valid := range []string{"dry_run", "real"} {
+		if _, err := ParseImportMode(valid); err != nil {
+			t.Errorf("ParseImportMode(%q) = %v, want nil", valid, err)
+		}
+	}
+	if _, err := ParseImportMode("preview"); err == nil {
+		t.Error("ParseImportMode(\"preview\") accepted, want rejected")
+	}
+}
+
+func TestParseImportJobStatus(t *testing.T) {
+	for _, valid := range []string{"pending", "running", "succeeded", "failed"} {
+		if _, err := ParseImportJobStatus(valid); err != nil {
+			t.Errorf("ParseImportJobStatus(%q) = %v, want nil", valid, err)
+		}
+	}
+	if _, err := ParseImportJobStatus("done"); err == nil {
+		t.Error("ParseImportJobStatus(\"done\") accepted, want rejected")
+	}
+}
+
+func TestImportJobStatusTerminal(t *testing.T) {
+	nonTerminal := []ImportJobStatus{ImportJobStatusPending, ImportJobStatusRunning}
+	for _, s := range nonTerminal {
+		if s.Terminal() {
+			t.Errorf("%q.Terminal() = true, want false", s)
+		}
+	}
+	terminal := []ImportJobStatus{ImportJobStatusSucceeded, ImportJobStatusFailed}
+	for _, s := range terminal {
+		if !s.Terminal() {
+			t.Errorf("%q.Terminal() = false, want true", s)
+		}
+	}
+}
+
+func TestImportJobZeroValueIsUsable(t *testing.T) {
+	// Sanity check the struct shape compiles and a report round-trips
+	// through its fields as expected — the real persistence round-trip is
+	// covered at the store layer (section 2).
+	job := ImportJob{
+		ID:        "job1",
+		ProjectID: "p1",
+		Source:    "testrail",
+		Mode:      ImportModeDryRun,
+		Status:    ImportJobStatusPending,
+		Report: &ImportReport{
+			Counts:   map[string]int{"folders": 3, "cases": 340},
+			Unmapped: []string{"Automation Type", "Priority Matrix"},
+		},
+		CreatedBy: "u1",
+	}
+	if job.Report.Counts["cases"] != 340 {
+		t.Errorf("Report.Counts[cases] = %d, want 340", job.Report.Counts["cases"])
+	}
+	if len(job.Report.Unmapped) != 2 {
+		t.Errorf("len(Report.Unmapped) = %d, want 2", len(job.Report.Unmapped))
+	}
+}
+
 func TestDefaultDisplayName(t *testing.T) {
 	cases := []struct {
 		email string

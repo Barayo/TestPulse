@@ -34,6 +34,7 @@ async function createProject(
   const projectName = unique(label)
   await page.goto('/')
   await page.getByRole('button', { name: /new project/i }).click()
+  await page.getByRole('menuitem', { name: /start from scratch/i }).click()
   await page.getByLabel('Name').fill(projectName)
   await page.getByRole('button', { name: /^create$/i }).click()
   await page.waitForURL(/\/projects\//)

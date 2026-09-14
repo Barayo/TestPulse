@@ -1,0 +1,43 @@
+{{- if .Values.importConnector.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "testpulse.fullname" . }}-import-connector
+  labels:
+    {{- include "testpulse.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "testpulse.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: import-connector
+  template:
+    metadata:
+      labels:
+        {{- include "testpulse.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: import-connector
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        # Distroless "nonroot" user; numeric so the kubelet can verify it.
+        runAsUser: 65532
+        runAsGroup: 65532
+      containers:
+        - name: import-connector
+          image: {{ include "testpulse.importConnectorImage" . }}
+          imagePullPolicy: {{ .Values.importConnector.image.pullPolicy }}
+          args:
+            - {{ printf "--source=%s" .Values.importConnector.source | quote }}
+          env:
+            - name: TESTPULSE_URL
+              value: "http://{{ include "testpulse.fullname" . }}:{{ .Values.service.port }}"
+            - name: TESTPULSE_IMPORT_CONNECTOR_POLL_INTERVAL
+              value: {{ .Values.importConnector.pollInterval | quote }}
+            - name: TESTPULSE_AGENT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "testpulse.importConnectorSecretName" . }}
+                  key: agentToken
+          resources:
+            {{- toYaml .Values.importConnector.resources | nindent 12 }}
+{{- end }}

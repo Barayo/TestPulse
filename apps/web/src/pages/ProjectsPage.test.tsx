@@ -236,7 +236,7 @@ describe('ProjectsPage', () => {
     expect(screen.getByRole('button', { name: /create your first project/i })).toBeInTheDocument()
   })
 
-  it('reveals the create form when "+ New project" is clicked, and creates a project', async () => {
+  it('reveals the create form when "+ New project" → "Start from scratch" is chosen, and creates a project', async () => {
     mockProjectsList([])
     mockPOST.mockResolvedValue({
       data: { id: 'p2', key: 'p2', name: 'New Proj', archived: false, description: '', createdAt: '' },
@@ -245,6 +245,7 @@ describe('ProjectsPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /start from scratch/i }))
     await userEvent.type(screen.getByLabelText(/^name$/i), 'New Proj')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
 
@@ -267,6 +268,7 @@ describe('ProjectsPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /start from scratch/i }))
     await userEvent.type(screen.getByLabelText(/^name$/i), 'Tagged Proj')
     await userEvent.type(screen.getByPlaceholderText(/add a tag/i), 'mobile{Enter}')
     expect(screen.getByText('mobile')).toBeInTheDocument()
@@ -290,6 +292,7 @@ describe('ProjectsPage', () => {
     renderPage()
 
     await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /start from scratch/i }))
     await userEvent.type(screen.getByLabelText(/^name$/i), 'Full Proj')
     await userEvent.type(screen.getByLabelText(/description/i), 'desc')
     await userEvent.click(screen.getByRole('button', { name: /^create$/i }))
@@ -767,6 +770,70 @@ describe('ProjectsPage', () => {
       renderPage()
       await screen.findByText('Project 0')
       expect(screen.getByRole('button', { name: /\+ new project/i })).toBeInTheDocument()
+    })
+  })
+
+  // add-testrail-importer tasks.md 7.1: "+ New project" opens a small
+  // anchored menu (reusing CardTagEditor/HiddenSegmentsMenu's click-outside/
+  // Escape pattern) offering a data-driven list of project sources, instead
+  // of jumping straight to the inline create form.
+  describe('new project entry-point menu (add-testrail-importer)', () => {
+    it('is closed by default — no menu items until the trigger is clicked', async () => {
+      mockProjectsList([])
+      renderPage()
+      await screen.findByRole('button', { name: /^\+ new project$/i })
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+    })
+
+    it('opens a menu with "Start from scratch" and "Import from TestRail", each with a description', async () => {
+      mockProjectsList([])
+      renderPage()
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+
+      const menu = screen.getByRole('menu', { name: /new project/i })
+      const scratch = within(menu).getByRole('menuitem', { name: /start from scratch/i })
+      const testrail = within(menu).getByRole('menuitem', { name: /import from testrail/i })
+      expect(scratch).toBeInTheDocument()
+      expect(testrail).toBeInTheDocument()
+      expect(within(scratch).getByText(/create an empty project/i)).toBeInTheDocument()
+      expect(within(testrail).getByText(/bring in suites, sections, and cases/i)).toBeInTheDocument()
+    })
+
+    it('navigates to /projects/import/testrail when "Import from TestRail" is chosen', async () => {
+      mockProjectsList([])
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<ProjectsPage />} />
+              <Route path="/projects/import/:source" element={<div>Import page stub</div>} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      )
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /import from testrail/i }))
+      expect(await screen.findByText('Import page stub')).toBeInTheDocument()
+    })
+
+    it('closes the menu on Escape without navigating or opening the create form', async () => {
+      mockProjectsList([])
+      renderPage()
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+      await userEvent.keyboard('{Escape}')
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText(/^name$/i)).not.toBeInTheDocument()
+    })
+
+    it('closes the menu on an outside click', async () => {
+      mockProjectsList([project()])
+      renderPage()
+      await screen.findByText('Banca Móvil')
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+      expect(screen.getByRole('menu')).toBeInTheDocument()
+      await userEvent.click(document.body)
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument()
     })
   })
 })

@@ -1613,6 +1613,88 @@ type AuditEntry struct {
 	Detail     map[string]any `json:"detail,omitempty"`
 }
 
+// ImportMode distinguishes a dry run (read-only, produces a report with no
+// side effects) from a real import (add-testrail-importer design.md D1/D3).
+type ImportMode string
+
+const (
+	ImportModeDryRun ImportMode = "dry_run"
+	ImportModeReal   ImportMode = "real"
+)
+
+var validImportModes = map[ImportMode]bool{ImportModeDryRun: true, ImportModeReal: true}
+
+func ParseImportMode(s string) (ImportMode, error) {
+	m := ImportMode(s)
+	if !validImportModes[m] {
+		return "", fmt.Errorf("invalid import mode %q: must be one of dry_run, real", s)
+	}
+	return m, nil
+}
+
+// ImportJobStatus tracks an import job's lifecycle. pending/running are
+// in-flight; succeeded/failed are terminal — Terminal() is what the store
+// layer uses to decide when to scrub a job's stored credentials.
+type ImportJobStatus string
+
+const (
+	ImportJobStatusPending   ImportJobStatus = "pending"
+	ImportJobStatusRunning   ImportJobStatus = "running"
+	ImportJobStatusSucceeded ImportJobStatus = "succeeded"
+	ImportJobStatusFailed    ImportJobStatus = "failed"
+)
+
+var validImportJobStatuses = map[ImportJobStatus]bool{
+	ImportJobStatusPending: true, ImportJobStatusRunning: true,
+	ImportJobStatusSucceeded: true, ImportJobStatusFailed: true,
+}
+
+func ParseImportJobStatus(s string) (ImportJobStatus, error) {
+	st := ImportJobStatus(s)
+	if !validImportJobStatuses[st] {
+		return "", fmt.Errorf("invalid import job status %q: must be one of pending, running, succeeded, failed", s)
+	}
+	return st, nil
+}
+
+func (s ImportJobStatus) Terminal() bool {
+	return s == ImportJobStatusSucceeded || s == ImportJobStatusFailed
+}
+
+// ImportReport is an import job's outcome (real or dry-run): counts per
+// entity type created (or that would be created), and every item that
+// didn't survive the source's mapping onto TestPulse's domain, named
+// individually — never collapsed into a "+N more" summary
+// (add-testrail-importer design.md D7).
+type ImportReport struct {
+	Counts   map[string]int `json:"counts"`
+	Unmapped []string       `json:"unmapped"`
+}
+
+// ImportJob is a request to import a project's content from an external
+// source (add-testrail-importer). Source is deliberately an opaque string,
+// never a closed enum — apps/api's domain/service/store layers never parse
+// source-specific meaning from it; that's exclusively the importing tool's
+// job (design.md D1/D2). Credentials are held by the store layer encrypted
+// at rest and are never part of this struct's JSON representation returned
+// to a caller — see store.ImportJobRepo.
+type ImportJob struct {
+	ID              string          `json:"id"`
+	ProjectID       string          `json:"projectId"`
+	Source          string          `json:"source"`
+	Mode            ImportMode      `json:"mode"`
+	Status          ImportJobStatus `json:"status"`
+	Report          *ImportReport   `json:"report,omitempty"`
+	ProgressCurrent int             `json:"progressCurrent"`
+	ProgressTotal   int             `json:"progressTotal"`
+	Error           *string         `json:"error,omitempty"`
+	CreatedBy       string          `json:"createdBy"`
+	CreatedAt       time.Time       `json:"createdAt"`
+	UpdatedAt       time.Time       `json:"updatedAt"`
+	StartedAt       *time.Time      `json:"startedAt,omitempty"`
+	FinishedAt      *time.Time      `json:"finishedAt,omitempty"`
+}
+
 // actorContextKey is unexported so only WithActor/ActorFromContext can set
 // or read the request's resolved Actor (design D1: resolved once by auth
 // middleware, threaded through context.Context like other request-scoped

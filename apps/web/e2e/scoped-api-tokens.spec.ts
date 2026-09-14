@@ -14,6 +14,7 @@ test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-35' 
     const projectName = unique('Scoped Token Project')
     await page.goto('/')
     await page.getByRole('button', { name: /new project/i }).click()
+    await page.getByRole('menuitem', { name: /start from scratch/i }).click()
     await page.getByLabel('Name').fill(projectName)
     await page.getByRole('button', { name: /^create$/i }).click()
     await page.waitForURL(/\/projects\//)

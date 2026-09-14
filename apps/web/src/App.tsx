@@ -14,6 +14,7 @@ import NewRunPage from '@/pages/NewRunPage'
 import FolderExplorerPage from '@/pages/FolderExplorerPage'
 import CaseDetailPage from '@/pages/CaseDetailPage'
 import CreateCasePage from '@/pages/CreateCasePage'
+import ImportProjectPage from '@/pages/ImportProjectPage'
 import RunPage from '@/pages/RunPage'
 import RunItemDetailPage from '@/pages/RunItemDetailPage'
 import RunComparePage from '@/pages/RunComparePage'
@@ -137,6 +138,10 @@ const PROJECT_CONTENT_ROUTES: RouteEntry[] = [
 const ACCOUNT_ONLY_ROUTES: RouteEntry[] = [
   { path: '/projects/:projectKey/runs/new', element: <NewRunPage /> },
   { path: '/projects/:projectKey/cases/new', element: <CreateCasePage /> },
+  // add-testrail-importer: project creation itself is Tenant-Admin-only
+  // (ProjectsPage's own "+ New project" gate), so this lives alongside the
+  // rest of the account-only, no-public-equivalent routes above.
+  { path: '/projects/import/:source', element: <ImportProjectPage /> },
   { path: '/projects/:projectKey/releases', element: <ReleasesPage /> },
   { path: '/projects/:projectKey/releases/:releaseKey', element: <ReleaseDetailPage /> },
   { path: '/projects/:projectKey/releases/:releaseKey/plans/:planKey', element: <TestPlanDetailPage /> },

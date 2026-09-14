@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, Navigate, useNavigate } from 'react-router'
-import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon } from 'lucide-react'
+import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon, PlusIcon, DatabaseIcon, type LucideIcon } from 'lucide-react'
 import { TagChipsEditor } from '@/components/TagChipsEditor'
 import { useTagVocabulary } from '@/lib/useTagVocabulary'
 import { useFloatingPosition } from '@/lib/useFloatingPosition'
@@ -30,6 +30,20 @@ type Project = components['schemas']['Project']
 
 type StatusFilter = 'Healthy' | 'In progress' | 'At risk' | 'No runs yet'
 const STATUS_FILTERS: StatusFilter[] = ['Healthy', 'In progress', 'At risk', 'No runs yet']
+
+// One entry per way to start a new project (add-testrail-importer tasks.md
+// 7.1) — "Start from scratch" plus one entry per structural-import
+// connector. Deliberately data-driven: the next connector (Qase, Zephyr,
+// Kiwi TCMS, Tuskr — #190-193) is one more array entry, never a new branch
+// of menu markup. No icon color (design-system.md: color marks meaningful
+// state, and these are two equally-weighted, non-stateful choices).
+type NewProjectSource = {
+  key: string
+  label: string
+  description: string
+  icon: LucideIcon
+  onSelect: () => void
+}
 
 const SORT_KEY_LABELS: Record<SortKey, string> = {
   name: 'Name',
@@ -105,6 +119,23 @@ export default function ProjectsPage() {
       cancelled = true
     }
   }, [user, authLoading])
+
+  const newProjectSources: NewProjectSource[] = [
+    {
+      key: 'scratch',
+      label: 'Start from scratch',
+      description: 'Create an empty project and build up folders, suites, and cases manually.',
+      icon: PlusIcon,
+      onSelect: () => setCreating(true),
+    },
+    {
+      key: 'testrail',
+      label: 'Import from TestRail',
+      description: 'Bring in suites, sections, and cases from an existing TestRail project.',
+      icon: DatabaseIcon,
+      onSelect: () => navigate('/projects/import/testrail'),
+    },
+  ]
 
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
@@ -230,7 +261,7 @@ export default function ProjectsPage() {
             </p>
           )}
         </div>
-        {isTenantAdmin && <Button onClick={() => setCreating(true)}>+ New project</Button>}
+        {isTenantAdmin && <NewProjectMenu sources={newProjectSources} />}
       </div>
 
       {creating && (
@@ -524,6 +555,79 @@ function TagFilterControl({
                 </li>
               ))}
             </ul>
+          </div>,
+          document.body,
+        )}
+    </div>
+  )
+}
+
+// "+ New project" → an anchored menu of project-creation sources
+// (add-testrail-importer tasks.md 7.1-7.2) — same click-outside/Escape
+// pattern as CardTagEditor below and Breadcrumbs.tsx's HiddenSegmentsMenu,
+// anchored right since the trigger sits top-right of the page. Each item
+// shows a bold label plus a muted description line (two consequential,
+// different paths — not a plain single-line nav shortcut).
+function NewProjectMenu({ sources }: { sources: NewProjectSource[] }) {
+  const [open, setOpen] = useState(false)
+  const containerRef = useRef<HTMLDivElement>(null)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+  const position = useFloatingPosition(open, containerRef, 'right')
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (containerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return
+      setOpen(false)
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  return (
+    <div ref={containerRef} className="relative">
+      <Button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+        + New project
+      </Button>
+      {open &&
+        position &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            role="menu"
+            aria-label="New project"
+            style={{ top: position.top, right: position.right }}
+            className="fixed z-50 w-72 rounded-md border bg-card p-1.5 shadow-lg"
+          >
+            {sources.map((source) => {
+              const Icon = source.icon
+              return (
+                <button
+                  key={source.key}
+                  type="button"
+                  role="menuitem"
+                  className="flex w-full items-start gap-2.5 rounded-md p-2.5 text-left hover:bg-accent"
+                  onClick={() => {
+                    setOpen(false)
+                    source.onSelect()
+                  }}
+                >
+                  <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span>
+                    <span className="block text-sm font-semibold text-foreground">{source.label}</span>
+                    <span className="block text-xs text-muted-foreground">{source.description}</span>
+                  </span>
+                </button>
+              )
+            })}
           </div>,
           document.body,
         )}

@@ -46,3 +46,11 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- define "testpulse.jiraConnectorSecretName" -}}
 {{- default (printf "%s-jira-connector" (include "testpulse.fullname" .)) .Values.jiraConnector.existingSecret -}}
 {{- end -}}
+
+{{- define "testpulse.importConnectorImage" -}}
+{{- printf "%s:%s" .Values.importConnector.image.repository (default .Chart.AppVersion .Values.importConnector.image.tag) -}}
+{{- end -}}
+
+{{- define "testpulse.importConnectorSecretName" -}}
+{{- default (printf "%s-import-connector" (include "testpulse.fullname" .)) .Values.importConnector.existingSecret -}}
+{{- end -}}

@@ -300,6 +300,10 @@ func (s *Service) ProjectIDForRequirement(ctx context.Context, requirementID str
 	return s.store.Requirements.ProjectID(ctx, requirementID)
 }
 
+func (s *Service) ProjectIDForImportJob(ctx context.Context, jobID string) (string, error) {
+	return s.store.ImportJobs.ProjectID(ctx, jobID)
+}
+
 // --- Human-readable key resolution (add-human-readable-keys D4) ---
 // Resolves a client-supplied key to its internal id, once, at the API
 // boundary — everything below this point (RBAC resolvers, other service

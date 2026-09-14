@@ -1181,6 +1181,89 @@ paths:
               schema: { $ref: "#/components/schemas/ImportResult" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/import-jobs:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: createImportJob
+      summary: >-
+        Start a structural import job (cases/folders) from an external
+        source such as TestRail — requires the manageProject permission.
+        Deliberately a distinct resource from POST .../imports (synchronous
+        JUnit-XML result import): add-testrail-importer design.md D3
+        correction, found before implementing, since that path was already
+        taken.
+      tags: [importJobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewImportJob" }
+      responses:
+        "201":
+          description: Job created, pending an importer to claim it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/import-jobs/{jobId}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+      - { name: jobId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getImportJob
+      summary: Poll a structural import job's status/progress/report — requires the manageProject permission
+      tags: [importJobs]
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/import-jobs:
+    get:
+      operationId: claimPendingImportJob
+      summary: >-
+        Importer-facing: claim the oldest pending job for the caller's
+        scoped project and source. Requires a per-project-scoped agent
+        token (add-testrail-importer design.md D4) — a human session or an
+        unscoped token is rejected.
+      tags: [importJobs]
+      parameters:
+        - { name: status, in: query, required: true, schema: { type: string, enum: [pending] } }
+        - { name: source, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: A job was claimed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClaimedImportJob" }
+        "204": { description: Nothing pending for this project/source }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/import-jobs/{jobId}:
+    parameters:
+      - { name: jobId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: patchImportJob
+      summary: >-
+        Importer-facing: report progress and/or terminal completion.
+        Requires the manageProject permission, which a scoped agent token
+        confined to the job's own project satisfies (design.md D3).
+      tags: [importJobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportJobPatch" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/runs/{runKey}:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -3468,6 +3551,98 @@ components:
       properties:
         caseKey: { type: string }
         verdict: { $ref: "#/components/schemas/Verdict" }
+    ImportJobMode:
+      type: string
+      enum: [dry_run, real]
+    ImportJobStatus:
+      type: string
+      enum: [pending, running, succeeded, failed]
+    ImportJobReport:
+      type: object
+      required: [counts, unmapped]
+      description: >-
+        Per-entity created counts plus individually-named unmapped fields
+        (add-testrail-importer design.md D7 — never collapsed into a "+N
+        more" summary).
+      properties:
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        unmapped:
+          type: array
+          items: { type: string }
+    ImportJob:
+      type: object
+      required:
+        [
+          id,
+          projectId,
+          source,
+          mode,
+          status,
+          progressCurrent,
+          progressTotal,
+          createdBy,
+          createdAt,
+          updatedAt,
+        ]
+      description: >-
+        A structural import job (cases/folders from an external test-
+        management tool) — distinct from ImportRequest/ImportResult, which
+        cover synchronous JUnit-XML result import. Never carries connection
+        credentials; add-testrail-importer design.md D2's structural
+        guarantee.
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        source:
+          type: string
+          description: Opaque connector identifier, e.g. "testrail".
+        mode: { $ref: "#/components/schemas/ImportJobMode" }
+        status: { $ref: "#/components/schemas/ImportJobStatus" }
+        report: { $ref: "#/components/schemas/ImportJobReport" }
+        progressCurrent: { type: integer }
+        progressTotal: { type: integer }
+        error: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+    NewImportJob:
+      type: object
+      required: [source, mode, credentials]
+      properties:
+        source: { type: string }
+        mode: { $ref: "#/components/schemas/ImportJobMode" }
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+          description: Connector-specific connection secrets, encrypted at rest and never echoed back.
+    ClaimedImportJob:
+      type: object
+      required: [job, credentials]
+      description: >-
+        Agent-facing only — pairs a claimed job with its decrypted
+        credentials. Never returned to a browser-facing caller.
+      properties:
+        job: { $ref: "#/components/schemas/ImportJob" }
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+    ImportJobPatch:
+      type: object
+      description: >-
+        PATCH body an importer sends to report progress and/or terminal
+        completion. A progress-only patch sets progressCurrent/
+        progressTotal; a completion patch sets status (plus report or
+        error).
+      properties:
+        progressCurrent: { type: integer }
+        progressTotal: { type: integer }
+        status: { $ref: "#/components/schemas/ImportJobStatus" }
+        report: { $ref: "#/components/schemas/ImportJobReport" }
+        error: { type: string }
     ItemStatusUpdate:
       type: object
       description: >-

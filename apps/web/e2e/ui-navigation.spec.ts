@@ -9,6 +9,7 @@ async function createProject(page: Page, label: string) {
   const name = unique(label)
   await page.goto('/')
   await page.getByRole('button', { name: /new project/i }).click()
+  await page.getByRole('menuitem', { name: /start from scratch/i }).click()
   await page.getByLabel('Name').fill(name)
   await page.getByRole('button', { name: /^create$/i }).click()
   await page.waitForURL(/\/projects\//)
@@ -866,6 +867,7 @@ test.describe('Requirement: Project list with permission-ready create action', (
     const name = unique('Tagged Project')
     await page.goto('/')
     await page.getByRole('button', { name: /new project/i }).click()
+    await page.getByRole('menuitem', { name: /start from scratch/i }).click()
     await page.getByLabel('Name').fill(name)
     await page.getByPlaceholder(/add a tag/i).fill('mobile')
     await page.getByPlaceholder(/add a tag/i).press('Enter')
@@ -886,6 +888,7 @@ test.describe('Requirement: Project list with permission-ready create action', (
 
     await page.goto('/')
     await page.getByRole('button', { name: /new project/i }).click()
+    await page.getByRole('menuitem', { name: /start from scratch/i }).click()
     await page.getByLabel('Name').fill(tagged)
     await page.getByPlaceholder(/add a tag/i).fill('backend')
     await page.getByPlaceholder(/add a tag/i).press('Enter')

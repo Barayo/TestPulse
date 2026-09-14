@@ -956,6 +956,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/import-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a structural import job (cases/folders) from an external source such as TestRail — requires the manageProject permission. Deliberately a distinct resource from POST .../imports (synchronous JUnit-XML result import): add-testrail-importer design.md D3 correction, found before implementing, since that path was already taken. */
+        post: operations["createImportJob"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/import-jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        /** Poll a structural import job's status/progress/report — requires the manageProject permission */
+        get: operations["getImportJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-jobs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Importer-facing: claim the oldest pending job for the caller's scoped project and source. Requires a per-project-scoped agent token (add-testrail-importer design.md D4) — a human session or an unscoped token is rejected. */
+        get: operations["claimPendingImportJob"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/import-jobs/{jobId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Importer-facing: report progress and/or terminal completion. Requires the manageProject permission, which a scoped agent token confined to the job's own project satisfies (design.md D3). */
+        patch: operations["patchImportJob"];
+        trace?: never;
+    };
     "/api/v1/runs/{runKey}": {
         parameters: {
             query?: never;
@@ -2751,6 +2826,62 @@ export interface components {
         UnmatchedTest: {
             caseKey: string;
             verdict: components["schemas"]["Verdict"];
+        };
+        /** @enum {string} */
+        ImportJobMode: "dry_run" | "real";
+        /** @enum {string} */
+        ImportJobStatus: "pending" | "running" | "succeeded" | "failed";
+        /** @description Per-entity created counts plus individually-named unmapped fields (add-testrail-importer design.md D7 — never collapsed into a "+N more" summary). */
+        ImportJobReport: {
+            counts: {
+                [key: string]: number;
+            };
+            unmapped: string[];
+        };
+        /** @description A structural import job (cases/folders from an external test- management tool) — distinct from ImportRequest/ImportResult, which cover synchronous JUnit-XML result import. Never carries connection credentials; add-testrail-importer design.md D2's structural guarantee. */
+        ImportJob: {
+            id: string;
+            projectId: string;
+            /** @description Opaque connector identifier, e.g. "testrail". */
+            source: string;
+            mode: components["schemas"]["ImportJobMode"];
+            status: components["schemas"]["ImportJobStatus"];
+            report?: components["schemas"]["ImportJobReport"];
+            progressCurrent: number;
+            progressTotal: number;
+            error?: string;
+            createdBy: string;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            startedAt?: string;
+            /** Format: date-time */
+            finishedAt?: string;
+        };
+        NewImportJob: {
+            source: string;
+            mode: components["schemas"]["ImportJobMode"];
+            /** @description Connector-specific connection secrets, encrypted at rest and never echoed back. */
+            credentials: {
+                [key: string]: string;
+            };
+        };
+        /** @description Agent-facing only — pairs a claimed job with its decrypted credentials. Never returned to a browser-facing caller. */
+        ClaimedImportJob: {
+            job: components["schemas"]["ImportJob"];
+            credentials: {
+                [key: string]: string;
+            };
+        };
+        /** @description PATCH body an importer sends to report progress and/or terminal completion. A progress-only patch sets progressCurrent/ progressTotal; a completion patch sets status (plus report or error). */
+        ImportJobPatch: {
+            progressCurrent?: number;
+            progressTotal?: number;
+            status?: components["schemas"]["ImportJobStatus"];
+            report?: components["schemas"]["ImportJobReport"];
+            error?: string;
         };
         /** @description assigneeUserId and assigneeTeamId are mutually exclusive (link-run-item-assignee-to-identity) — assignment must reference a real project member, free text is no longer accepted. */
         ItemStatusUpdate: {
@@ -5199,6 +5330,118 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    createImportJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NewImportJob"];
+            };
+        };
+        responses: {
+            /** @description Job created, pending an importer to claim it */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJob"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getImportJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The job */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJob"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    claimPendingImportJob: {
+        parameters: {
+            query: {
+                status: "pending";
+                source: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A job was claimed */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClaimedImportJob"];
+                };
+            };
+            /** @description Nothing pending for this project/source */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    patchImportJob: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                jobId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ImportJobPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
         };
     };
