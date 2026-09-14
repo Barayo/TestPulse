@@ -1,7 +1,17 @@
-## ADDED Requirements
+# testrail-import
+
+## Purpose
+
+Importing an existing TestRail project's structure (suites, sections,
+cases, and custom fields) into a new TestPulse project, via a standalone
+`tools/import-connector` process (never in-process code in `apps/api`) that
+crawls TestRail and authors the resulting content through TestPulse's own
+public API as a project-scoped agent actor.
+
+## Requirements
 
 ### Requirement: A user with manageProject permission can create an import job for a project
-The system SHALL let a user with `manageProject` permission on a project create an import job (`POST /projects/{projectKey}/imports`) naming a `source` (e.g. `testrail`), a `mode` (`dry_run` or `real`), and source-specific credentials. The job is created with status `pending`. A user without `manageProject` on the target project SHALL be rejected with `403`.
+The system SHALL let a user with `manageProject` permission on a project create an import job (`POST /projects/{projectKey}/import-jobs`) naming a `source` (e.g. `testrail`), a `mode` (`dry_run` or `real`), and source-specific credentials. The job is created with status `pending`. A user without `manageProject` on the target project SHALL be rejected with `403`.
 
 #### Scenario: A project admin creates a dry-run import job
 - **WHEN** a user with `manageProject` permission on a project submits TestRail credentials with mode `dry_run`
@@ -12,7 +22,7 @@ The system SHALL let a user with `manageProject` permission on a project create 
 - **THEN** the request is rejected with `403`
 
 ### Requirement: An import job's status and progress are pollable
-The system SHALL let a user with `manageProject` permission on the job's project poll an import job's status (`GET /projects/{projectKey}/imports/{jobId}`), including `status` (`pending`/`running`/`succeeded`/`failed`), `progress` (current/total counts), and, once available, a `report` (counts per entity type and a named list of anything that did not survive the mapping).
+The system SHALL let a user with `manageProject` permission on the job's project poll an import job's status (`GET /projects/{projectKey}/import-jobs/{jobId}`), including `status` (`pending`/`running`/`succeeded`/`failed`), `progress` (current/total counts), and, once available, a `report` (counts per entity type and a named list of anything that did not survive the mapping). A user without `manageProject` on the job's actual project SHALL be rejected with `403`, even if they can guess or enumerate another project's job id.
 
 #### Scenario: Polling a running job reflects live progress
 - **WHEN** an import job is `running` and has processed 187 of 340 cases
@@ -21,6 +31,10 @@ The system SHALL let a user with `manageProject` permission on the job's project
 #### Scenario: Polling a completed job returns its report
 - **WHEN** an import job has finished successfully
 - **THEN** polling the job returns `status: succeeded` and a report naming counts per entity type created
+
+#### Scenario: A user cannot poll another project's job by guessing its id
+- **WHEN** a user with `manageProject` on project A requests the status of an import job that belongs to project B
+- **THEN** the request is rejected with `403`, regardless of the `{projectKey}` segment used in the request
 
 ### Requirement: A dry-run import job writes nothing
 The system SHALL guarantee that an import job with `mode: dry_run` never creates, modifies, or deletes any project content — folders, cases, custom fields, or otherwise — regardless of what its report indicates would happen in a real run.
@@ -37,14 +51,14 @@ The system SHALL store an import job's source credentials encrypted at rest, and
 - **THEN** its stored credentials are cleared and are not retrievable via the job's status endpoint
 
 ### Requirement: An import worker claims and reports on jobs via scoped agent authentication
-The system SHALL let an agent actor with a valid API token list pending import jobs scoped to its token's project (`GET /imports?status=pending`) and report progress/completion on a claimed job (`PATCH /imports/{jobId}`). A token scoped to one project SHALL only see and update jobs for that project.
+The system SHALL let an agent actor with a valid API token list pending import jobs scoped to its token's project (`GET /import-jobs?status=pending`) and report progress/completion on a claimed job (`PATCH /import-jobs/{jobId}`). A token scoped to one project SHALL only see and update jobs for that project.
 
 #### Scenario: A scoped agent token only sees its own project's pending jobs
 - **WHEN** an agent authenticates with a token scoped to project A and lists pending import jobs
 - **THEN** only project A's pending jobs are returned, never another project's
 
 #### Scenario: An agent reports progress on a claimed job
-- **WHEN** an agent claims a pending job and reports progress via `PATCH /imports/{jobId}`
+- **WHEN** an agent claims a pending job and reports progress via `PATCH /import-jobs/{jobId}`
 - **THEN** subsequent status polls for that job reflect the reported progress
 
 ### Requirement: A TestRail import maps suites and sections to a folder hierarchy, not to TestPulse Suites
