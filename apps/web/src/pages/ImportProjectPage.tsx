@@ -25,9 +25,36 @@ type TargetMode = 'new' | 'existing'
 // Sources with a dedicated Connect-form field set. Every other value (an
 // unknown/mistyped :source segment) falls through to the "Unknown import
 // source" guard below.
-type Source = 'testrail' | 'qase'
+type Source = 'testrail' | 'qase' | 'csv'
 
-const SOURCE_LABEL: Record<Source, string> = { testrail: 'TestRail', qase: 'Qase' }
+const SOURCE_LABEL: Record<Source, string> = { testrail: 'TestRail', qase: 'Qase', csv: 'CSV' }
+
+// The exact column set/order internal/csvcases.FixedColumns recognizes on
+// import (add-csv-import-export design.md D4/D5) — mirrored here so the
+// downloadable template and the real backend contract can never drift
+// silently apart.
+const CSV_FIXED_COLUMNS = [
+  'Title',
+  'Description',
+  'Expected Result',
+  'Priority',
+  'Tags',
+  'Platform',
+  'Test Type',
+  'Automated',
+]
+
+type CsvImportResult = { created: number; newFields: string[]; problems: { row: number; reason: string }[] }
+
+function downloadCSVTemplate() {
+  const blob = new Blob([CSV_FIXED_COLUMNS.join(',') + '\n'], { type: 'text/csv' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'testpulse-cases-template.csv'
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 // One Card per stage, appended top-to-bottom as the user progresses — no
 // wizard/stepper primitive exists in this codebase, and one importer
@@ -85,6 +112,8 @@ export default function ImportProjectPage() {
   const [projectCode, setProjectCode] = useState('')
   const [qaseBaseUrl, setQaseBaseUrl] = useState('')
   const [qaseAdvancedOpen, setQaseAdvancedOpen] = useState(false)
+  const [csvFile, setCsvFile] = useState<File | null>(null)
+  const [csvResult, setCsvResult] = useState<CsvImportResult>()
   const [targetMode, setTargetMode] = useState<TargetMode>('new')
   const [newProjectName, setNewProjectName] = useState('')
   const [existingProjectKey, setExistingProjectKey] = useState('')
@@ -149,7 +178,7 @@ export default function ImportProjectPage() {
   if (!user?.isTenantAdmin) {
     return <p className="text-sm text-muted-foreground">You don&apos;t have permission to create a project.</p>
   }
-  if (source !== 'testrail' && source !== 'qase') {
+  if (source !== 'testrail' && source !== 'qase' && source !== 'csv') {
     return <p className="text-sm text-muted-foreground">Unknown import source &ldquo;{source}&rdquo;.</p>
   }
 
@@ -161,7 +190,9 @@ export default function ImportProjectPage() {
         apiKey.length > 0 &&
         testRailProjectId.trim().length > 0 &&
         targetChosen
-      : apiToken.length > 0 && projectCode.trim().length > 0 && targetChosen
+      : source === 'qase'
+        ? apiToken.length > 0 && projectCode.trim().length > 0 && targetChosen
+        : csvFile !== null && targetChosen
 
   function credentialsBody(): Record<string, string> {
     if (source === 'testrail') {
@@ -179,30 +210,36 @@ export default function ImportProjectPage() {
     }
   }
 
+  // Shared by every source's Connect submit: create (or select) the target
+  // project. Returns undefined and sets connectError itself on failure, so
+  // callers can just early-return on an undefined result.
+  async function resolveTargetProject(): Promise<{ key: string; name: string } | undefined> {
+    if (targetMode === 'new') {
+      const { data, error, response } = await api.POST('/api/v1/projects', {
+        body: { name: newProjectName.trim() },
+      })
+      if (!response.ok || !data) {
+        setConnectError((error as { error?: string } | undefined)?.error ?? 'Could not create the target project.')
+        return undefined
+      }
+      return { key: data.key, name: data.name }
+    }
+    const existing = emptyProjects.find((p) => p.id === existingProjectKey)
+    if (!existing) {
+      setConnectError('Choose an existing empty project.')
+      return undefined
+    }
+    return { key: existing.id, name: existing.name }
+  }
+
   async function handleConnectSubmit(e: FormEvent) {
     e.preventDefault()
     if (!canSubmitConnect) return
     setConnectError(undefined)
     setConnecting(true)
     try {
-      let project: { key: string; name: string } | undefined
-      if (targetMode === 'new') {
-        const { data, error, response } = await api.POST('/api/v1/projects', {
-          body: { name: newProjectName.trim() },
-        })
-        if (!response.ok || !data) {
-          setConnectError((error as { error?: string } | undefined)?.error ?? 'Could not create the target project.')
-          return
-        }
-        project = { key: data.key, name: data.name }
-      } else {
-        const existing = emptyProjects.find((p) => p.id === existingProjectKey)
-        if (!existing) {
-          setConnectError('Choose an existing empty project.')
-          return
-        }
-        project = { key: existing.id, name: existing.name }
-      }
+      const project = await resolveTargetProject()
+      if (!project) return
       setTargetProject(project)
 
       // TS can't carry the top-level `source` narrowing into a separately
@@ -229,6 +266,52 @@ export default function ImportProjectPage() {
     }
   }
 
+  // CSV has no dry run (design.md D1 — the whole operation is a local
+  // parse plus a handful of writes, not a remote crawl worth previewing
+  // asynchronously) — Connect submits straight into the real, synchronous
+  // import and goes directly to Result, skipping scanning/preview
+  // entirely. Uses fetch directly, not api.POST: openapi-fetch's generated
+  // body type expects the schema's object shape, not a FormData instance
+  // (same reasoning as ProfilePage.tsx's avatar upload).
+  async function handleCsvConnectSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!canSubmitConnect || !csvFile) return
+    setConnectError(undefined)
+    setConnecting(true)
+    try {
+      const project = await resolveTargetProject()
+      if (!project) return
+      setTargetProject(project)
+
+      const { data: folders } = await api.GET('/api/v1/projects/{projectKey}/folders', {
+        params: { path: { projectKey: project.key } },
+      })
+      const root = folders?.items.find((f) => !f.parentFolderId)
+      if (!root) {
+        setConnectError('Could not resolve the target project’s root folder.')
+        return
+      }
+
+      const formData = new FormData()
+      formData.append('file', csvFile)
+      formData.append('folderId', root.id)
+      const res = await fetch(`/api/v1/projects/${project.key}/cases/import-csv`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        setConnectError(body?.error ?? 'Could not import this CSV file.')
+        return
+      }
+      setCsvResult(body as CsvImportResult)
+      setPhase('result')
+    } finally {
+      setConnecting(false)
+    }
+  }
+
   function handleStartOver() {
     setPhase('connect')
     setSiteUrl('')
@@ -239,6 +322,8 @@ export default function ImportProjectPage() {
     setProjectCode('')
     setQaseBaseUrl('')
     setQaseAdvancedOpen(false)
+    setCsvFile(null)
+    setCsvResult(undefined)
     setTargetMode('new')
     setNewProjectName('')
     setExistingProjectKey('')
@@ -290,7 +375,9 @@ export default function ImportProjectPage() {
       ? `${siteUrl.replace(/^https?:\/\//, '')} · project ${testRailProjectId} · ${email} → ${
           targetMode === 'new' ? 'creating' : 'into'
         } ${targetProject.name}`
-      : `Qase project ${projectCode} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
+      : source === 'qase'
+        ? `Qase project ${projectCode} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+        : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
 
   return (
     <div className="space-y-6">
@@ -305,11 +392,16 @@ export default function ImportProjectPage() {
               doesn&apos;t touch TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this
               version — see the note below.
             </>
-          ) : (
+          ) : source === 'qase' ? (
             <>
               Recreates Qase suites as nested folders, and Qase cases inside them — doesn&apos;t touch
               TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this version — see the note
               below.
+            </>
+          ) : (
+            <>
+              Creates one case per row in your CSV, in the folder you choose. Works with an export from any tool —
+              no account or credentials needed. Steps and run/result history aren&apos;t part of this version.
             </>
           )}
         </p>
@@ -321,7 +413,7 @@ export default function ImportProjectPage() {
         </CardHeader>
         <CardContent>
           {phase === 'connect' ? (
-            <form onSubmit={handleConnectSubmit} className="space-y-4">
+            <form onSubmit={source === 'csv' ? handleCsvConnectSubmit : handleConnectSubmit} className="space-y-4">
               {source === 'testrail' ? (
                 <>
                   <p className="text-sm text-muted-foreground">
@@ -378,7 +470,7 @@ export default function ImportProjectPage() {
                     Inc. TestRail is a trademark of Idera, Inc.
                   </p>
                 </>
-              ) : (
+              ) : source === 'qase' ? (
                 <>
                   <p className="text-sm text-muted-foreground">
                     TestPulse reads your Qase project over its REST API using an API token — nothing is written
@@ -439,6 +531,36 @@ export default function ImportProjectPage() {
                   <p className="text-xs text-muted-foreground">
                     Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Qase
                     Ltd. Qase is a trademark of Qase Ltd.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    TestPulse reads cases straight from your CSV file — nothing is uploaded anywhere else.
+                  </p>
+
+                  <div className="max-w-sm space-y-1">
+                    <Label htmlFor="csv-file">CSV file</Label>
+                    <Input
+                      id="csv-file"
+                      type="file"
+                      accept=".csv,text/csv"
+                      onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                    />
+                    {csvFile && <p className="text-xs text-muted-foreground">{csvFile.name}</p>}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={downloadCSVTemplate}
+                    className="text-xs font-semibold text-primary hover:underline"
+                  >
+                    Download CSV template
+                  </button>
+
+                  <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
+                    Expected columns: <code className="font-mono">{CSV_FIXED_COLUMNS.join(', ')}</code>. Any other
+                    column becomes a new custom field on the target project.
                   </p>
                 </>
               )}
@@ -504,7 +626,13 @@ export default function ImportProjectPage() {
                   <Link to="/">Cancel</Link>
                 </Button>
                 <Button type="submit" disabled={!canSubmitConnect || connecting}>
-                  {connecting ? 'Starting scan…' : 'Preview import'}
+                  {source === 'csv'
+                    ? connecting
+                      ? 'Importing…'
+                      : 'Import cases'
+                    : connecting
+                      ? 'Starting scan…'
+                      : 'Preview import'}
                 </Button>
               </div>
             </form>
@@ -608,7 +736,60 @@ export default function ImportProjectPage() {
         </Card>
       )}
 
-      {phase === 'result' && realJob && targetProject && (
+      {phase === 'result' && source === 'csv' && csvResult && targetProject && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="tp-heading flex items-center gap-2">
+              <CheckCircle2Icon className="size-5 text-primary" aria-hidden="true" />
+              Import complete
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-3">
+              <StatTile
+                value={csvResult.created}
+                label="cases"
+                href={`/projects/${targetProject.key}/library`}
+              />
+            </div>
+
+            {csvResult.newFields.length > 0 && (
+              <p className="text-sm text-muted-foreground">
+                {csvResult.newFields.length} new custom field{csvResult.newFields.length === 1 ? '' : 's'} created:{' '}
+                <strong className="font-semibold text-foreground">{csvResult.newFields.join(', ')}</strong>.
+              </p>
+            )}
+
+            {csvResult.problems.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-secondary/30 bg-secondary/10 p-3">
+                <div className="flex items-start gap-2">
+                  <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
+                  <p className="text-sm font-medium">
+                    {csvResult.problems.length} row{csvResult.problems.length === 1 ? '' : 's'} couldn&apos;t be
+                    imported
+                  </p>
+                </div>
+                <ul className="ml-1 max-h-64 space-y-1 overflow-y-auto text-sm">
+                  {csvResult.problems.map((p) => (
+                    <li key={p.row} className="flex gap-2">
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">Row {p.row}</span>
+                      <span>{p.reason}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            <div className="flex justify-end border-t pt-4">
+              <Button asChild>
+                <Link to={`/projects/${targetProject.key}`}>Open {targetProject.name} →</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {phase === 'result' && source !== 'csv' && realJob && targetProject && (
         <Card>
           <CardHeader>
             <CardTitle className="tp-heading flex items-center gap-2">

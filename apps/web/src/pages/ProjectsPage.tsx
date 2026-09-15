@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, Navigate, useNavigate } from 'react-router'
-import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon, PlusIcon, DatabaseIcon, type LucideIcon } from 'lucide-react'
+import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon, PlusIcon, DatabaseIcon, UploadIcon, type LucideIcon } from 'lucide-react'
 import { TagChipsEditor } from '@/components/TagChipsEditor'
 import { useTagVocabulary } from '@/lib/useTagVocabulary'
 import { useFloatingPosition } from '@/lib/useFloatingPosition'
@@ -141,6 +141,13 @@ export default function ProjectsPage() {
       description: 'Bring in suites and cases from an existing Qase project.',
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/qase'),
+    },
+    {
+      key: 'csv',
+      label: 'Import from CSV',
+      description: 'Bring in cases from a spreadsheet export — works with any tool, no account needed.',
+      icon: UploadIcon,
+      onSelect: () => navigate('/projects/import/csv'),
     },
   ]
 

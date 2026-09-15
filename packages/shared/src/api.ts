@@ -219,6 +219,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/cases/import-csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Bulk-create cases from an uploaded CSV file (add-csv-import-export). A CSV column not matching a fixed core header is created as a text-type project custom field on first encounter. A row that fails validation is skipped and named in the response, never silently dropped — the rest of the file still imports. */
+        post: operations["importCasesCSV"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/cases/export-csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** Export cases as CSV, in the same column shape import accepts (add-csv-import-export) — the whole project, or one folder when folderId is given. */
+        get: operations["exportCasesCSV"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/folders": {
         parameters: {
             query?: never;
@@ -2449,6 +2487,18 @@ export interface components {
             /** @description Defaults to the project's root folder when omitted. */
             folderId?: string;
         };
+        CsvImportResult: {
+            /** @description Number of rows successfully imported as new cases. */
+            created: number;
+            /** @description Names of any project custom fields auto-created by this import (a CSV column not matching an existing fixed or custom-field column, add-csv-import-export design.md D2) — surfaced so the UI can show this real, otherwise-invisible side effect rather than requiring a before/after diff of the field list. */
+            newFields: string[];
+            /** @description Every row that failed to import, named individually — never truncated or collapsed into a count (add-csv-import-export). */
+            problems: {
+                /** @description The row number a spreadsheet tool itself would show — the header is row 1, so the first data row is row 2. */
+                row: number;
+                reason: string;
+            }[];
+        };
         Folder: {
             id: string;
             projectId: string;
@@ -3853,6 +3903,64 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    importCasesCSV: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                    /** @description Required — the target folder every imported case is created in. */
+                    folderId: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Import result */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CsvImportResult"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    exportCasesCSV: {
+        parameters: {
+            query?: {
+                folderId?: string;
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description CSV file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
             404: components["responses"]["NotFound"];
         };
     };

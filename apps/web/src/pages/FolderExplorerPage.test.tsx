@@ -2010,3 +2010,80 @@ describe('FolderExplorerPage', () => {
     })
   })
 })
+
+// add-csv-import-export tasks.md 6.5, Pepe mock: a Library toolbar Import
+// dialog (folder implied by the current view, no target picker) and an
+// Export menu (folder vs. whole project, two distinct clicks so a
+// mis-click can't silently balloon into a full-project download).
+describe('FolderExplorerPage — CSV import/export toolbar (add-csv-import-export tasks.md 6.5)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('shows the Import action when caseCreate is permitted', async () => {
+    mockExplorerAPI()
+    renderExplorer()
+    await screen.findByText('Daily transfer limit')
+    expect(screen.getByRole('button', { name: /^import$/i })).toBeInTheDocument()
+  })
+
+  it('hides the Import action when caseCreate is not permitted', async () => {
+    mockExplorerAPI({ permissions: { ...allPermissions, caseCreate: false } })
+    renderExplorer()
+    await screen.findByText('Daily transfer limit')
+    expect(screen.queryByRole('button', { name: /^import$/i })).not.toBeInTheDocument()
+  })
+
+  it('opens the Import dialog scoped to the current folder, with no target-folder picker', async () => {
+    mockExplorerAPI()
+    renderExplorer()
+    await screen.findByText('Daily transfer limit')
+    await userEvent.click(screen.getByRole('button', { name: /^import$/i }))
+
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText(/transferencias/i)).toBeInTheDocument()
+    expect(within(dialog).queryByLabelText(/folder/i)).not.toBeInTheDocument()
+    expect(document.querySelector('input[type="file"]')).toBeInTheDocument()
+  })
+
+  it('submitting posts a multipart request scoped to the current folder and closes on success', async () => {
+    mockExplorerAPI()
+    vi.stubGlobal('fetch', vi.fn())
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ created: 1, newFields: [], problems: [] }),
+    } as Response)
+    renderExplorer()
+    await screen.findByText('Daily transfer limit')
+    await userEvent.click(screen.getByRole('button', { name: /^import$/i }))
+    const dialog = await screen.findByRole('dialog')
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, new File(['Title\nCase A\n'], 'cases.csv', { type: 'text/csv' }))
+    await userEvent.click(within(dialog).getByRole('button', { name: /^import cases$/i }))
+
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/projects/p1/cases/import-csv',
+        expect.objectContaining({ method: 'POST', credentials: 'include' }),
+      )
+    })
+    const [, options] = vi.mocked(fetch).mock.calls[0]
+    const body = options?.body as FormData
+    expect(body.get('folderId')).toBe('transferencias')
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    })
+  })
+
+  it('offers an Export menu naming the current folder and the whole project as distinct choices', async () => {
+    mockExplorerAPI()
+    renderExplorer()
+    await screen.findByText('Daily transfer limit')
+    await userEvent.click(screen.getByRole('button', { name: /^export$/i }))
+
+    const menu = screen.getByRole('menu', { name: /export/i })
+    expect(within(menu).getByRole('menuitem', { name: /transferencias/i })).toBeInTheDocument()
+    expect(within(menu).getByRole('menuitem', { name: /entire project/i })).toBeInTheDocument()
+  })
+})

@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type DragEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
+import { createPortal } from 'react-dom'
 import { Link, useNavigate, useParams } from 'react-router'
-import { FolderIcon, FileTextIcon, FolderInputIcon, Trash2Icon } from 'lucide-react'
+import { FolderIcon, FileTextIcon, FolderInputIcon, Trash2Icon, UploadIcon, DownloadIcon } from 'lucide-react'
+import { useFloatingPosition } from '@/lib/useFloatingPosition'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
@@ -479,6 +481,77 @@ export default function FolderExplorerPage() {
   const folderNotFound = Boolean(root) && folders.length > 0 && !resolution
   const selectedFolderId = resolution?.folder.id
   const selectedFolder = folders.find((f) => f.id === selectedFolderId)
+
+  // CSV import/export toolbar (add-csv-import-export, Pepe mock): Import
+  // opens a Dialog scoped to the folder already on screen — no target
+  // picker, since the folder is implied by where the user is standing.
+  // Export opens a small anchored menu (the same useFloatingPosition
+  // idiom ProjectsPage.tsx's NewProjectMenu already establishes) naming
+  // the current folder and the whole project as two distinct choices, so
+  // a mis-click can never silently balloon into a full-project download.
+  const [importDialogOpen, setImportDialogOpen] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importSubmitting, setImportSubmitting] = useState(false)
+  const [importError, setImportError] = useState<string>()
+  const [exportMenuOpen, setExportMenuOpen] = useState(false)
+  const exportContainerRef = useRef<HTMLDivElement>(null)
+  const exportMenuRef = useRef<HTMLDivElement>(null)
+  const exportMenuPosition = useFloatingPosition(exportMenuOpen, exportContainerRef, 'right')
+
+  useEffect(() => {
+    if (!exportMenuOpen) return
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target as Node
+      if (exportContainerRef.current?.contains(target) || exportMenuRef.current?.contains(target)) return
+      setExportMenuOpen(false)
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setExportMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [exportMenuOpen])
+
+  async function handleImportSubmit(e: FormEvent) {
+    e.preventDefault()
+    if (!importFile || !selectedFolderId || !projectKey) return
+    setImportError(undefined)
+    setImportSubmitting(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', importFile)
+      formData.append('folderId', selectedFolderId)
+      const res = await fetch(`/api/v1/projects/${projectKey}/cases/import-csv`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      const body = await res.json()
+      if (!res.ok) {
+        setImportError(body?.error ?? 'Could not import this CSV file.')
+        return
+      }
+      setImportDialogOpen(false)
+      setImportFile(null)
+      bumpLanding()
+      void load()
+    } finally {
+      setImportSubmitting(false)
+    }
+  }
+
+  function triggerExport(folderId?: string) {
+    setExportMenuOpen(false)
+    if (!projectKey) return
+    const url = folderId
+      ? `/api/v1/projects/${projectKey}/cases/export-csv?folderId=${folderId}`
+      : `/api/v1/projects/${projectKey}/cases/export-csv`
+    window.location.href = url
+  }
 
   function libraryUrl(folder: Folder): string {
     const path = buildSlugPath(folder, folders)
@@ -1042,7 +1115,103 @@ export default function FolderExplorerPage() {
                 <Link to={`/projects/${projectKey}/cases/new?folderId=${selectedFolderId}`}>+ New test case</Link>
               </Button>
             )}
+            {/* Desktop only for now — a 375px toolbar has no room left
+                alongside "Browse sections" (mobile's own critical nav
+                affordance) even with icon-only buttons; a real mobile
+                treatment (e.g. folded into a menu) is a stated follow-up,
+                not designed here. */}
+            {isDesktop && permissions?.caseCreate && (
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                title="Import"
+                aria-label="Import"
+                onClick={() => {
+                  setImportFile(null)
+                  setImportError(undefined)
+                  setImportDialogOpen(true)
+                }}
+              >
+                <UploadIcon className="size-4" aria-hidden="true" />
+              </Button>
+            )}
+            {isDesktop && (
+              <div ref={exportContainerRef} className="relative">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  title="Export"
+                  aria-label="Export"
+                  aria-haspopup="menu"
+                  aria-expanded={exportMenuOpen}
+                  onClick={() => setExportMenuOpen((o) => !o)}
+                >
+                  <DownloadIcon className="size-4" aria-hidden="true" />
+                </Button>
+              {exportMenuOpen &&
+                exportMenuPosition &&
+                createPortal(
+                  <div
+                    ref={exportMenuRef}
+                    role="menu"
+                    aria-label="Export cases as CSV"
+                    style={{ top: exportMenuPosition.top, right: exportMenuPosition.right }}
+                    className="fixed z-50 w-64 rounded-md border bg-card p-1.5 shadow-lg"
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full rounded-md p-2.5 text-left text-sm hover:bg-accent"
+                      onClick={() => triggerExport(selectedFolderId)}
+                    >
+                      Export {displayFolderName(selectedFolder, root?.id ?? '')}
+                    </button>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="w-full rounded-md p-2.5 text-left text-sm hover:bg-accent"
+                      onClick={() => triggerExport()}
+                    >
+                      Export entire project
+                    </button>
+                  </div>,
+                  document.body,
+                )}
+              </div>
+            )}
           </div>
+
+          <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogTitle>Import cases from CSV</DialogTitle>
+              <DialogDescription>
+                Importing into {displayFolderName(selectedFolder, root?.id ?? '')}. Any column that isn&apos;t a
+                fixed field becomes a new custom field on this project.
+              </DialogDescription>
+              <form onSubmit={(e) => void handleImportSubmit(e)} className="space-y-4">
+                <div className="space-y-1">
+                  <Label htmlFor="library-import-file">CSV file</Label>
+                  <Input
+                    id="library-import-file"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(e) => setImportFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+                {importError && <p className="text-sm text-destructive">{importError}</p>}
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={!importFile || importSubmitting}>
+                    {importSubmitting ? 'Importing…' : 'Import cases'}
+                  </Button>
+                </DialogFooter>
+              </form>
+            </DialogContent>
+          </Dialog>
 
           <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
             <input

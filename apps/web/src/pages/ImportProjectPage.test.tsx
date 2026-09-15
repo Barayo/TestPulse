@@ -353,6 +353,170 @@ describe('ImportProjectPage — Qase Connect stage (add-qase-importer tasks.md 3
   })
 })
 
+describe('ImportProjectPage — CSV Connect/Result flow (add-csv-import-export tasks.md 6.3, Pepe mock)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('renders a file picker, template link, and help block — no trademark disclaimer (CSV has no vendor)', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/csv')
+    await screen.findByText('Connect to CSV')
+
+    expect(document.querySelector('input[type="file"]')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /download csv template/i })).toBeInTheDocument()
+    expect(screen.queryByText(/not affiliated with/i)).not.toBeInTheDocument()
+  })
+
+  it('"Import cases" stays disabled until a file and target project name are chosen', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/csv')
+    await screen.findByText('Connect to CSV')
+    const submit = screen.getByRole('button', { name: /import cases/i })
+    expect(submit).toBeDisabled()
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['Title\nCase A\n'], 'cases.csv', { type: 'text/csv' })
+    await userEvent.upload(input, file)
+    expect(submit).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    expect(submit).toBeEnabled()
+  })
+
+  it('submitting creates the target project, resolves its root folder, and posts a multipart import request', async () => {
+    mockBaseAPI()
+    vi.stubGlobal('fetch', vi.fn())
+    mockPOST.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: ME_TENANT_ADMIN, response: { ok: true } })
+      if (path === '/api/v1/projects') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/summaries') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/folders')
+        return Promise.resolve({
+          data: { items: [{ id: 'root1', parentFolderId: undefined }] },
+          response: { ok: true },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ created: 1, newFields: [], problems: [] }),
+    } as Response)
+
+    renderImportPage('/projects/import/csv')
+    await screen.findByText('Connect to CSV')
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['Title\nCase A\n'], 'cases.csv', { type: 'text/csv' })
+    await userEvent.upload(input, file)
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /import cases/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith('/api/v1/projects', expect.objectContaining({ body: { name: 'QA Platform' } }))
+    })
+    await waitFor(() => {
+      expect(fetch).toHaveBeenCalledWith(
+        '/api/v1/projects/QAP/cases/import-csv',
+        expect.objectContaining({ method: 'POST', credentials: 'include' }),
+      )
+    })
+    const [, options] = vi.mocked(fetch).mock.calls[0]
+    const body = options?.body as FormData
+    expect(body.get('folderId')).toBe('root1')
+    expect(body.get('file')).toBeInstanceOf(File)
+  })
+
+  it('shows the created count, new fields, and every problem row with no truncation on the Result stage', async () => {
+    mockBaseAPI()
+    vi.stubGlobal('fetch', vi.fn())
+    mockPOST.mockImplementation((path: string) =>
+      path === '/api/v1/projects'
+        ? Promise.resolve({
+            data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+            response: { ok: true },
+          })
+        : Promise.resolve({ data: undefined, response: { ok: false } }),
+    )
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: ME_TENANT_ADMIN, response: { ok: true } })
+      if (path === '/api/v1/projects') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/summaries') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/folders')
+        return Promise.resolve({ data: { items: [{ id: 'root1', parentFolderId: undefined }] }, response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      json: () =>
+        Promise.resolve({
+          created: 2,
+          newFields: ['Browser'],
+          problems: [
+            { row: 3, reason: 'title is required' },
+            { row: 5, reason: 'invalid priority "urgent"' },
+          ],
+        }),
+    } as Response)
+
+    renderImportPage('/projects/import/csv')
+    await screen.findByText('Connect to CSV')
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, new File(['Title\nCase A\n'], 'cases.csv', { type: 'text/csv' }))
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /import cases/i }))
+
+    expect(await screen.findByText('Import complete')).toBeInTheDocument()
+    expect(screen.getByText(/Browser/)).toBeInTheDocument()
+    expect(screen.getByText(/row 3/i)).toBeInTheDocument()
+    expect(screen.getByText(/title is required/i)).toBeInTheDocument()
+    expect(screen.getByText(/row 5/i)).toBeInTheDocument()
+    expect(screen.getByText(/invalid priority "urgent"/i)).toBeInTheDocument()
+  })
+
+  it('a whole-file failure shows an inline error and stays on the editable Connect stage', async () => {
+    mockBaseAPI()
+    vi.stubGlobal('fetch', vi.fn())
+    mockPOST.mockImplementation((path: string) =>
+      path === '/api/v1/projects'
+        ? Promise.resolve({
+            data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+            response: { ok: true },
+          })
+        : Promise.resolve({ data: undefined, response: { ok: false } }),
+    )
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: ME_TENANT_ADMIN, response: { ok: true } })
+      if (path === '/api/v1/projects') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/summaries') return Promise.resolve({ data: [], response: { ok: true } })
+      if (path === '/api/v1/projects/{projectKey}/folders')
+        return Promise.resolve({ data: { items: [{ id: 'root1', parentFolderId: undefined }] }, response: { ok: true } })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    vi.mocked(fetch).mockResolvedValue({
+      ok: false,
+      json: () => Promise.resolve({ error: 'missing file field' }),
+    } as Response)
+
+    renderImportPage('/projects/import/csv')
+    await screen.findByText('Connect to CSV')
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    await userEvent.upload(input, new File(['not a csv'], 'cases.csv', { type: 'text/csv' }))
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /import cases/i }))
+
+    expect(await screen.findByText(/missing file field/i)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /import cases/i })).toBeInTheDocument()
+  })
+})
+
 describe('ImportProjectPage — Preview stage (tasks.md 7.4)', () => {
   async function reachPreview(report: { counts: Record<string, number>; unmapped: string[] }) {
     mockBaseAPI()

@@ -279,6 +279,59 @@ paths:
               schema: { $ref: "#/components/schemas/TestCase" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/cases/import-csv:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: importCasesCSV
+      summary: >-
+        Bulk-create cases from an uploaded CSV file (add-csv-import-export).
+        A CSV column not matching a fixed core header is created as a
+        text-type project custom field on first encounter. A row that fails
+        validation is skipped and named in the response, never silently
+        dropped — the rest of the file still imports.
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                folderId:
+                  type: string
+                  description: Required — the target folder every imported case is created in.
+              required: [file, folderId]
+      responses:
+        "201":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CsvImportResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/cases/export-csv:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: exportCasesCSV
+      summary: >-
+        Export cases as CSV, in the same column shape import accepts
+        (add-csv-import-export) — the whole project, or one folder when
+        folderId is given.
+      tags: [cases]
+      parameters:
+        - name: folderId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/projects/{projectKey}/folders:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -2926,6 +2979,37 @@ components:
             folderId:
               type: string
               description: Defaults to the project's root folder when omitted.
+    CsvImportResult:
+      type: object
+      required: [created, problems, newFields]
+      properties:
+        created:
+          type: integer
+          description: Number of rows successfully imported as new cases.
+        newFields:
+          type: array
+          description: >-
+            Names of any project custom fields auto-created by this import
+            (a CSV column not matching an existing fixed or custom-field
+            column, add-csv-import-export design.md D2) — surfaced so the
+            UI can show this real, otherwise-invisible side effect rather
+            than requiring a before/after diff of the field list.
+          items: { type: string }
+        problems:
+          type: array
+          description: >-
+            Every row that failed to import, named individually — never
+            truncated or collapsed into a count (add-csv-import-export).
+          items:
+            type: object
+            required: [row, reason]
+            properties:
+              row:
+                type: integer
+                description: >-
+                  The row number a spreadsheet tool itself would show —
+                  the header is row 1, so the first data row is row 2.
+              reason: { type: string }
     Folder:
       type: object
       required: [id, projectId, name, slug, createdAt]

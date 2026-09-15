@@ -40,6 +40,8 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/tags/{tagName}", h.removeProjectTag)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/cases", h.listCases)
 			r.With(h.requirePermission(domain.PermCaseCreate, projectIDParam)).Post("/cases", h.createCase)
+			r.With(h.requirePermission(domain.PermCaseCreate, projectIDParam)).Post("/cases/import-csv", h.importCasesCSV)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/cases/export-csv", h.exportCasesCSV)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/folders", h.listFolders)
 			r.With(h.requirePermission(domain.PermSectionCreate, projectIDParam)).Post("/folders", h.createFolder)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/flaky-cases", h.flakyCases)
