@@ -25,9 +25,14 @@ type TargetMode = 'new' | 'existing'
 // Sources with a dedicated Connect-form field set. Every other value (an
 // unknown/mistyped :source segment) falls through to the "Unknown import
 // source" guard below.
-type Source = 'testrail' | 'qase' | 'csv'
+type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'csv'
 
-const SOURCE_LABEL: Record<Source, string> = { testrail: 'TestRail', qase: 'Qase', csv: 'CSV' }
+const SOURCE_LABEL: Record<Source, string> = {
+  testrail: 'TestRail',
+  qase: 'Qase',
+  'zephyr-scale': 'Zephyr Scale',
+  csv: 'CSV',
+}
 
 // The exact column set/order internal/csvcases.FixedColumns recognizes on
 // import (add-csv-import-export design.md D4/D5) — mirrored here so the
@@ -112,6 +117,7 @@ export default function ImportProjectPage() {
   const [projectCode, setProjectCode] = useState('')
   const [qaseBaseUrl, setQaseBaseUrl] = useState('')
   const [qaseAdvancedOpen, setQaseAdvancedOpen] = useState(false)
+  const [zephyrScaleProjectKey, setZephyrScaleProjectKey] = useState('')
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvResult, setCsvResult] = useState<CsvImportResult>()
   const [targetMode, setTargetMode] = useState<TargetMode>('new')
@@ -147,7 +153,7 @@ export default function ImportProjectPage() {
           setDryRunJob(data)
           setPhase('preview')
         } else if (data.status === 'failed') {
-          setConnectError(data.error ?? `Could not scan this ${source === 'qase' ? 'Qase' : 'TestRail'} project.`)
+          setConnectError(data.error ?? `Could not scan this ${SOURCE_LABEL[source as Source]} project.`)
           setPhase('connect')
         } else {
           setDryRunJob(data)
@@ -178,7 +184,7 @@ export default function ImportProjectPage() {
   if (!user?.isTenantAdmin) {
     return <p className="text-sm text-muted-foreground">You don&apos;t have permission to create a project.</p>
   }
-  if (source !== 'testrail' && source !== 'qase' && source !== 'csv') {
+  if (source !== 'testrail' && source !== 'qase' && source !== 'zephyr-scale' && source !== 'csv') {
     return <p className="text-sm text-muted-foreground">Unknown import source &ldquo;{source}&rdquo;.</p>
   }
 
@@ -192,7 +198,9 @@ export default function ImportProjectPage() {
         targetChosen
       : source === 'qase'
         ? apiToken.length > 0 && projectCode.trim().length > 0 && targetChosen
-        : csvFile !== null && targetChosen
+        : source === 'zephyr-scale'
+          ? apiToken.length > 0 && zephyrScaleProjectKey.trim().length > 0 && targetChosen
+          : csvFile !== null && targetChosen
 
   function credentialsBody(): Record<string, string> {
     if (source === 'testrail') {
@@ -202,6 +210,9 @@ export default function ImportProjectPage() {
         apiKey,
         testRailProjectId: testRailProjectId.trim(),
       }
+    }
+    if (source === 'zephyr-scale') {
+      return { apiToken, projectKey: zephyrScaleProjectKey.trim() }
     }
     return {
       apiToken,
@@ -322,6 +333,7 @@ export default function ImportProjectPage() {
     setProjectCode('')
     setQaseBaseUrl('')
     setQaseAdvancedOpen(false)
+    setZephyrScaleProjectKey('')
     setCsvFile(null)
     setCsvResult(undefined)
     setTargetMode('new')
@@ -377,7 +389,9 @@ export default function ImportProjectPage() {
         } ${targetProject.name}`
       : source === 'qase'
         ? `Qase project ${projectCode} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
-        : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
+        : source === 'zephyr-scale'
+          ? `Zephyr Scale project ${zephyrScaleProjectKey} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+          : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
 
   return (
     <div className="space-y-6">
@@ -397,6 +411,12 @@ export default function ImportProjectPage() {
               Recreates Qase suites as nested folders, and Qase cases inside them — doesn&apos;t touch
               TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this version — see the note
               below.
+            </>
+          ) : source === 'zephyr-scale' ? (
+            <>
+              Recreates Zephyr Scale folders as nested TestPulse folders, and Zephyr Scale cases inside them —
+              doesn&apos;t touch TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this
+              version — see the note below.
             </>
           ) : (
             <>
@@ -531,6 +551,45 @@ export default function ImportProjectPage() {
                   <p className="text-xs text-muted-foreground">
                     Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Qase
                     Ltd. Qase is a trademark of Qase Ltd.
+                  </p>
+                </>
+              ) : source === 'zephyr-scale' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    TestPulse reads your Zephyr Scale Cloud project over its REST API using an API access token —
+                    nothing is written back to Zephyr Scale.
+                  </p>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="zephyr-scale-api-token">Zephyr Scale API token</Label>
+                      <Input
+                        id="zephyr-scale-api-token"
+                        type="password"
+                        value={apiToken}
+                        onChange={(e) => setApiToken(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="zephyr-scale-project-key">Zephyr Scale project key</Label>
+                      <Input
+                        id="zephyr-scale-project-key"
+                        value={zephyrScaleProjectKey}
+                        onChange={(e) => setZephyrScaleProjectKey(e.target.value)}
+                        placeholder="e.g. PROJ"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Need a token? In Jira:{' '}
+                    <strong className="font-semibold">Profile → Zephyr Scale API Access Tokens</strong>. Zephyr
+                    Scale Server/Data Center isn&apos;t supported — Cloud only.
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by
+                    SmartBear Software. Zephyr Scale is a trademark of SmartBear Software.
                   </p>
                 </>
               ) : (

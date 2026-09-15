@@ -128,9 +128,14 @@ type Step struct {
 
 // NewCase is the request body for creating a case — CustomFields is keyed
 // by TestPulse custom field id (not TestRail's field name), matching
-// design.md D7's mapped-field values.
+// design.md D7's mapped-field values. Description is empty for TestRail
+// and Qase (design.md D6/D-Q3 map to Steps only); Zephyr Scale's
+// importer populates it for a script-only case with no step-by-step
+// steps, preserving its plain-text/BDD procedure as prose instead of
+// dropping it (add-zephyr-scale-importer design.md D-Z3).
 type NewCase struct {
 	Title        string            `json:"title"`
+	Description  string            `json:"description,omitempty"`
 	FolderID     string            `json:"folderId"`
 	Steps        []Step            `json:"steps,omitempty"`
 	CustomFields map[string]string `json:"customFields,omitempty"`

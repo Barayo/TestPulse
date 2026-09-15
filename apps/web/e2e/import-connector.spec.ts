@@ -3,21 +3,23 @@ import { test, expect } from '@playwright/test'
 // BDD E2E for add-testrail-importer, mapped to
 // openspec/changes/add-testrail-importer/specs/testrail-import/spec.md's
 // "The web app offers importing a TestRail project as a project-creation
-// entry point" requirement. add-qase-importer's own scenarios (below) mirror
-// the same coverage for openspec/specs/qase-import/spec.md's equivalent
-// requirement, reusing this file rather than forking a sibling spec — the
-// two connectors share the exact same entry-point/Connect-screen shape.
+// entry point" requirement. add-qase-importer's and
+// add-zephyr-scale-importer's own scenarios (below) mirror the same
+// coverage for openspec/specs/qase-import/spec.md's and
+// openspec/specs/zephyr-scale-import/spec.md's equivalent requirements,
+// reusing this file rather than forking sibling specs — all three
+// connectors share the exact same entry-point/Connect-screen shape.
 // GIVEN: the compose stack is up (make e2e), with a fresh database, and the
 // default authenticated page (global-setup.ts) is the Tenant Admin.
 //
-// A full crawl-and-import run against a live/mocked TestRail or Qase
-// instance is out of scope here — no test double for either vendor exists
-// in this repo's E2E suite. That's covered instead by
+// A full crawl-and-import run against a live/mocked TestRail, Qase, or
+// Zephyr Scale instance is out of scope here — no test double for any of
+// these vendors exists in this repo's E2E suite. That's covered instead by
 // tools/import-connector's own Go tests (internal/testrailclient /
-// internal/qaseclient, internal/importer, internal/poller) against fake
-// HTTP servers. This file covers only what's reachable without a live
-// connection: the entry point and each Connect screen's client-side
-// validation.
+// internal/qaseclient / internal/zephyrscaleclient, internal/importer,
+// internal/poller) against fake HTTP servers. This file covers only what's
+// reachable without a live connection: the entry point and each Connect
+// screen's client-side validation.
 
 test.describe('Requirement: The web app offers importing a TestRail project as a project-creation entry point', () => {
   test('Scenario: A user can reach the TestRail import flow from project creation', async ({ page }) => {
@@ -106,5 +108,48 @@ test.describe('Requirement: The web app offers importing a Qase project as a pro
 
     await page.goto('/projects/import/qase')
     await expect(page.getByText(/not affiliated with.*qase/i)).toBeVisible()
+  })
+})
+
+test.describe('Requirement: The web app offers importing a Zephyr Scale project as a project-creation entry point', () => {
+  test('Scenario: A user can reach the Zephyr Scale import flow from project creation', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-158' })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: /new project/i }).click()
+
+    const menu = page.getByRole('menu', { name: /new project/i })
+    await expect(menu.getByRole('menuitem', { name: /start from scratch/i })).toBeVisible()
+    const importItem = menu.getByRole('menuitem', { name: /import from zephyr scale/i })
+    await expect(importItem).toBeVisible()
+
+    await importItem.click()
+    await page.waitForURL(/\/projects\/import\/zephyr-scale/)
+    await expect(page.getByRole('heading', { name: /import from zephyr scale/i })).toBeVisible()
+  })
+
+  test('Scenario: The Connect screen requires every field before previewing an import', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-159' })
+
+    await page.goto('/projects/import/zephyr-scale')
+    const submit = page.getByRole('button', { name: /preview import/i })
+    await expect(submit).toBeDisabled()
+
+    await page.getByLabel('Zephyr Scale API token').fill('a-real-token')
+    await expect(submit).toBeDisabled()
+    await page.getByLabel('Zephyr Scale project key').fill('PROJ')
+    await expect(submit).toBeDisabled()
+
+    // "New project" is the default target mode — the name field is the
+    // last missing piece.
+    await page.getByLabel('New project name').fill('QA Platform (E2E)')
+    await expect(submit).toBeEnabled()
+  })
+
+  test('Scenario: The Connect screen discloses this is an unofficial, unaffiliated integration', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-160' })
+
+    await page.goto('/projects/import/zephyr-scale')
+    await expect(page.getByText(/not affiliated with.*smartbear/i)).toBeVisible()
   })
 })

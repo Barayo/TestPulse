@@ -353,6 +353,73 @@ describe('ImportProjectPage — Qase Connect stage (add-qase-importer tasks.md 3
   })
 })
 
+describe('ImportProjectPage — Zephyr Scale Connect stage (add-zephyr-scale-importer tasks.md 4.3)', () => {
+  it('renders Zephyr Scale-specific connection fields, not TestRail/Qase\'s, plus the trademark disclaimer (design.md D-Z7)', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/zephyr-scale')
+    await screen.findByText('Connect to Zephyr Scale')
+
+    expect(screen.getByLabelText(/zephyr scale api token/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/zephyr scale project key/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/testrail site url/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/qase api token/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument()
+
+    expect(screen.getByText(/not affiliated with, endorsed by, or sponsored by SmartBear/i)).toBeInTheDocument()
+    expect(screen.getByText(/Zephyr Scale is a trademark of SmartBear/i)).toBeInTheDocument()
+  })
+
+  it('"Preview import" stays disabled until the required fields are filled', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/zephyr-scale')
+    await screen.findByText('Connect to Zephyr Scale')
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/zephyr scale api token/i), 'token-123')
+    await userEvent.type(screen.getByLabelText(/zephyr scale project key/i), 'PROJ')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeEnabled()
+  })
+
+  it('submitting posts source "zephyr-scale" with apiToken/projectKey credentials', async () => {
+    mockBaseAPI()
+    mockPOST.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/import-jobs')
+        return Promise.resolve({
+          data: importJob({ id: 'job1', source: 'zephyr-scale', status: 'pending' }),
+          response: { ok: true, status: 201 },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderImportPage('/projects/import/zephyr-scale')
+    await screen.findByText('Connect to Zephyr Scale')
+    await userEvent.type(screen.getByLabelText(/zephyr scale api token/i), 'token-123')
+    await userEvent.type(screen.getByLabelText(/zephyr scale project key/i), 'PROJ')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /preview import/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/import-jobs',
+        expect.objectContaining({
+          params: { path: { projectKey: 'QAP' } },
+          body: {
+            source: 'zephyr-scale',
+            mode: 'dry_run',
+            credentials: { apiToken: 'token-123', projectKey: 'PROJ' },
+          },
+        }),
+      )
+    })
+  })
+})
+
 describe('ImportProjectPage — CSV Connect/Result flow (add-csv-import-export tasks.md 6.3, Pepe mock)', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

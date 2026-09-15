@@ -3,11 +3,13 @@ package importer
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
 
 func intPtr(n int) *int { return &n }
@@ -587,6 +589,311 @@ func TestRunQaseDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
 	report, err := RunQase(context.Background(), qr, tp, "QA", "PRJ", true, nil)
 	if err != nil {
 		t.Fatalf("RunQase: %v", err)
+	}
+	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
+		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)
+	}
+	if len(tp.createdFolders) != 0 || len(tp.createdCases) != 0 {
+		t.Errorf("dry run made TestPulse writes: folders=%+v cases=%+v", tp.createdFolders, tp.createdCases)
+	}
+}
+
+// --- Zephyr Scale (add-zephyr-scale-importer) ---
+
+// fakeZephyrScale serves a fixed folder/case/step/script fixture, keyed
+// exactly like the real client's own method signatures so it satisfies
+// ZephyrScaleReader structurally.
+type fakeZephyrScale struct {
+	folders []zephyrscaleclient.Folder
+	cases   []zephyrscaleclient.Case
+	steps   map[string][]zephyrscaleclient.TestStep
+	scripts map[string]*zephyrscaleclient.TestScript
+}
+
+func (f *fakeZephyrScale) ListFolders(context.Context, string) ([]zephyrscaleclient.Folder, error) {
+	return f.folders, nil
+}
+func (f *fakeZephyrScale) ListTestCases(context.Context, string) ([]zephyrscaleclient.Case, error) {
+	return f.cases, nil
+}
+func (f *fakeZephyrScale) ListTestSteps(_ context.Context, testCaseKey string) ([]zephyrscaleclient.TestStep, error) {
+	return f.steps[testCaseKey], nil
+}
+func (f *fakeZephyrScale) GetTestScript(_ context.Context, testCaseKey string) (*zephyrscaleclient.TestScript, error) {
+	return f.scripts[testCaseKey], nil
+}
+
+func TestBuildZephyrScalePlanMapsNestedFolderTree(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{
+			{ID: 1, Name: "Auth", ParentID: nil},
+			{ID: 2, Name: "Login", ParentID: intPtr(1)},
+		},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "Login with valid credentials", FolderID: intPtr(2)},
+		},
+	}
+
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	if len(plan.Suites) != 1 || plan.Suites[0].Name != "Auth" {
+		t.Fatalf("plan.Suites = %+v, want one top-level Auth folder", plan.Suites)
+	}
+	authFolder := plan.Suites[0]
+	if len(authFolder.Children) != 1 || authFolder.Children[0].Name != "Login" {
+		t.Fatalf("Auth's children = %+v, want one nested Login folder", authFolder.Children)
+	}
+	loginFolder := authFolder.Children[0]
+	if len(loginFolder.Cases) != 1 || loginFolder.Cases[0].Title != "Login with valid credentials" {
+		t.Fatalf("Login's cases = %+v, want the one case placed there", loginFolder.Cases)
+	}
+}
+
+func TestBuildZephyrScalePlanRootFolderWithNoParentIsTopLevel(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{
+			{ID: 1, Name: "Smoke", ParentID: nil},
+			{ID: 2, Name: "Regression", ParentID: nil},
+		},
+	}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	if len(plan.Suites) != 2 {
+		t.Fatalf("plan.Suites = %+v, want 2 top-level folders (both roots)", plan.Suites)
+	}
+}
+
+func TestBuildZephyrScalePlanCaseWithNoFolderGoesToProjectRoot(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Auth", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "No folder case", FolderID: nil},
+		},
+	}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	if len(plan.RootCases) != 1 || plan.RootCases[0].Title != "No folder case" {
+		t.Fatalf("plan.RootCases = %+v, want the folderless case", plan.RootCases)
+	}
+	if len(plan.Suites) != 1 || len(plan.Suites[0].Cases) != 0 {
+		t.Fatalf("plan.Suites = %+v, the folderless case must not land inside Auth", plan.Suites)
+	}
+
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdCases) != 1 || tp.createdCases[0].FolderID != "root" {
+		t.Fatalf("created cases = %+v, want the case created directly under the project root folder", tp.createdCases)
+	}
+}
+
+func TestZephyrScaleStepByStepStepsImportWithTestDataAppended(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Auth", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "Login", FolderID: intPtr(1)},
+		},
+		steps: map[string][]zephyrscaleclient.TestStep{
+			"PROJ-T1": {
+				{Description: "Enter username/password", TestData: "user=admin", ExpectedResult: "Logged in"},
+				{Description: "Click submit", ExpectedResult: "Redirects to dashboard"},
+			},
+		},
+	}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	steps := plan.Suites[0].Cases[0].Steps
+	if len(steps) != 2 {
+		t.Fatalf("steps = %+v, want 2", steps)
+	}
+	if steps[0].Action != "Enter username/password\n\nTest data: user=admin" {
+		t.Errorf("steps[0].Action = %q, want description + appended test data", steps[0].Action)
+	}
+	if steps[0].Expected != "Logged in" {
+		t.Errorf("steps[0].Expected = %q, want %q", steps[0].Expected, "Logged in")
+	}
+	if steps[1].Action != "Click submit" {
+		t.Errorf("steps[1].Action = %q, want unmodified description (no test data to append)", steps[1].Action)
+	}
+}
+
+func TestZephyrScaleDelegateStepIsSkippedWithoutAbortingTheCase(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Auth", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "Login", FolderID: intPtr(1)},
+		},
+		steps: map[string][]zephyrscaleclient.TestStep{
+			"PROJ-T1": {
+				{Description: "Enter username/password", ExpectedResult: "Logged in"},
+				{IsDelegate: true},
+				{Description: "Click submit", ExpectedResult: "Redirects to dashboard"},
+			},
+		},
+	}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	steps := plan.Suites[0].Cases[0].Steps
+	if len(steps) != 2 {
+		t.Fatalf("steps = %+v, want 2 (the delegate step skipped, not aborting the case)", steps)
+	}
+	if steps[0].Action != "Enter username/password" || steps[1].Action != "Click submit" {
+		t.Fatalf("steps = %+v, want the two non-delegate steps in order", steps)
+	}
+}
+
+func TestZephyrScaleScriptOnlyCaseProcedurePreservedInDescription(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Auth", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "BDD case", FolderID: intPtr(1), HasTestScript: true},
+		},
+		scripts: map[string]*zephyrscaleclient.TestScript{
+			"PROJ-T1": {Type: "bdd", Text: "Given a user\nWhen they log in\nThen they see the dashboard"},
+		},
+	}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	cp := plan.Suites[0].Cases[0]
+	if len(cp.Steps) != 0 {
+		t.Errorf("Steps = %+v, want none for a script-only case", cp.Steps)
+	}
+	if !strings.Contains(cp.Description, "BDD") || !strings.Contains(cp.Description, "Given a user") {
+		t.Errorf("Description = %q, want the BDD script text preserved and identified as BDD", cp.Description)
+	}
+}
+
+func TestZephyrScaleCaseWithNeitherStepsNorScriptImportsWithEmptyStepsAndDescription(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Auth", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "Bare case", FolderID: intPtr(1)},
+		},
+	}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	cp := plan.Suites[0].Cases[0]
+	if len(cp.Steps) != 0 {
+		t.Errorf("Steps = %+v, want none", cp.Steps)
+	}
+	if cp.Description != "" {
+		t.Errorf("Description = %q, want empty", cp.Description)
+	}
+}
+
+func TestZephyrScaleNativePriorityAndStatusAreNeverAppliedToAnyField(t *testing.T) {
+	// design.md D-Z4: matches the established TestRail/Qase precedent of
+	// not mapping vendor-native priority/status at all — there is no field
+	// on zephyrscaleclient.Case for either, structurally, so there is
+	// nothing here to apply. This test guards against a future change
+	// accidentally reintroducing a priority/status mapping as "scope
+	// creep" without a deliberate design decision to do so: casePlan (and
+	// therefore testpulseclient.NewCase) carries no priority/status value
+	// derived from Zephyr Scale at all.
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Auth", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "Critical case", FolderID: intPtr(1)},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdCases) != 1 {
+		t.Fatalf("created cases = %+v, want 1", tp.createdCases)
+	}
+	// NewCase has no Priority field at all — Validate()'s default applies
+	// server-side, exactly like every other imported case in this project.
+}
+
+func TestZephyrScaleStringCustomFieldMappedToText(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Master", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "Case A", FolderID: intPtr(1), CustomFields: map[string]any{"Automation Type": "Manual"}},
+			{Key: "PROJ-T2", Name: "Case B", FolderID: intPtr(1), CustomFields: map[string]any{"Automation Type": "Manual"}},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdFields) != 1 {
+		t.Fatalf("created fields = %+v, want exactly 1 (reused across both cases)", tp.createdFields)
+	}
+	if tp.createdFields[0].Name != "Automation Type" {
+		t.Errorf("field name = %q, want Automation Type", tp.createdFields[0].Name)
+	}
+	for _, c := range tp.createdCases {
+		if len(c.CustomFields) != 1 {
+			t.Errorf("case %+v, want exactly 1 custom field value set", c)
+		}
+	}
+}
+
+func TestZephyrScaleNonStringCustomFieldNamedInReportOnce(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Master", ParentID: nil}},
+		cases: []zephyrscaleclient.Case{
+			{Key: "PROJ-T1", Name: "Case A", FolderID: intPtr(1), CustomFields: map[string]any{"Story Points": float64(3)}},
+			{Key: "PROJ-T2", Name: "Case B", FolderID: intPtr(1), CustomFields: map[string]any{"Story Points": float64(5)}},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	plan, err := BuildZephyrScalePlan(context.Background(), zr, "PROJ")
+	if err != nil {
+		t.Fatalf("BuildZephyrScalePlan: %v", err)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0] != "Story Points" {
+		t.Fatalf("plan.Unmapped = %+v, want [\"Story Points\"] named once despite 2 cases using it", plan.Unmapped)
+	}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdFields) != 0 {
+		t.Errorf("created fields = %+v, want none — Story Points is not a plain string value", tp.createdFields)
+	}
+	for _, c := range tp.createdCases {
+		if len(c.CustomFields) != 0 {
+			t.Errorf("case %+v should have no custom fields — its only field is unmappable", c)
+		}
+	}
+}
+
+func TestRunZephyrScaleDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
+	zr := &fakeZephyrScale{
+		folders: []zephyrscaleclient.Folder{{ID: 1, Name: "Master", ParentID: nil}},
+		cases:   []zephyrscaleclient.Case{{Key: "PROJ-T1", Name: "Case A", FolderID: intPtr(1)}},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root", failOnAnyMethod: true}
+
+	report, err := RunZephyrScale(context.Background(), zr, tp, "QA", "PROJ", true, nil)
+	if err != nil {
+		t.Fatalf("RunZephyrScale: %v", err)
 	}
 	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
 		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)

@@ -20,6 +20,7 @@ import (
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
 
 // TestRail custom field type ids (get_case_fields' type_id) that map onto
@@ -75,6 +76,15 @@ type QaseReader interface {
 	ListCaseFields(ctx context.Context) ([]qaseclient.CustomField, error)
 }
 
+// ZephyrScaleReader is the read-only subset of *zephyrscaleclient.Client
+// this package needs — satisfied structurally, so tests can supply a fake.
+type ZephyrScaleReader interface {
+	ListFolders(ctx context.Context, projectKey string) ([]zephyrscaleclient.Folder, error)
+	ListTestCases(ctx context.Context, projectKey string) ([]zephyrscaleclient.Case, error)
+	ListTestSteps(ctx context.Context, testCaseKey string) ([]zephyrscaleclient.TestStep, error)
+	GetTestScript(ctx context.Context, testCaseKey string) (*zephyrscaleclient.TestScript, error)
+}
+
 // TestPulseWriter is the write subset of *testpulseclient.Client this
 // package needs — satisfied structurally, so tests can supply a fake that
 // asserts it is never called during a dry run.
@@ -96,9 +106,13 @@ type stepPlan struct {
 // casePlan is a source case pared down to what execute needs: its
 // title/steps, and only the custom field values whose type is mappable
 // (a source-specific field key -> raw source value; TestRail's is the
-// field's system_name, Qase's is the field's numeric id as a string).
+// field's system_name, Qase's is the field's numeric id as a string,
+// Zephyr Scale's is the field's own name). Description is empty for
+// TestRail/Qase (they never populate it); Zephyr Scale populates it for a
+// script-only case with no step-by-step steps (design.md D-Z3).
 type casePlan struct {
 	Title        string
+	Description  string
 	Steps        []stepPlan
 	CustomFields map[string]string
 }
@@ -113,12 +127,16 @@ type folderPlan struct {
 
 // Plan is BuildPlan's read-only result: the folder hierarchy plus the
 // deduped field-mapping metadata Execute needs to create/reuse custom
-// fields as it walks the same hierarchy.
+// fields as it walks the same hierarchy. RootCases holds cases with no
+// folder at all (Zephyr Scale only, design.md D-Z2 — TestRail/Qase never
+// populate it) — created directly under the project's root folder rather
+// than inside any folderPlan node.
 type Plan struct {
 	Suites      []*folderPlan
+	RootCases   []casePlan
 	Unmapped    []string
-	fieldTypes  map[string]string // TestRail system_name -> "text"/"select", mappable only
-	fieldLabels map[string]string // TestRail system_name -> human label
+	fieldTypes  map[string]string // source field key -> "text"/"select", mappable only
+	fieldLabels map[string]string // source field key -> human label
 }
 
 // BuildPlan crawls a TestRail project's full suite/section/case structure
@@ -225,6 +243,7 @@ func countEntities(plan Plan) map[string]int {
 	for _, suite := range plan.Suites {
 		walk(suite)
 	}
+	counts["cases"] += len(plan.RootCases)
 	return counts
 }
 
@@ -271,10 +290,62 @@ func execute(ctx context.Context, tp TestPulseWriter, projectKey string, plan Pl
 		return fmt.Errorf("resolving project root folder: %w", err)
 	}
 
-	fieldIDs := map[string]string{}             // TestRail system_name -> TestPulse field id
-	optionIDs := map[string]map[string]string{} // TestPulse field id -> raw TestRail value -> option id
+	fieldIDs := map[string]string{}             // source field key -> TestPulse field id
+	optionIDs := map[string]map[string]string{} // TestPulse field id -> raw source value -> option id
 	total := countEntities(plan)["cases"]
 	current := 0
+
+	createCase := func(folderID string, cp casePlan) error {
+		customFields := map[string]string{}
+		for systemName, rawValue := range cp.CustomFields {
+			fieldID, ok := fieldIDs[systemName]
+			if !ok {
+				label := plan.fieldLabels[systemName]
+				if label == "" {
+					label = systemName
+				}
+				created, err := tp.CreateCustomField(ctx, projectKey, label, plan.fieldTypes[systemName])
+				if err != nil {
+					return fmt.Errorf("creating custom field %q: %w", label, err)
+				}
+				fieldID = created.ID
+				fieldIDs[systemName] = fieldID
+			}
+
+			value := rawValue
+			if plan.fieldTypes[systemName] == "select" {
+				if optionIDs[fieldID] == nil {
+					optionIDs[fieldID] = map[string]string{}
+				}
+				optionID, ok := optionIDs[fieldID][rawValue]
+				if !ok {
+					createdOpt, err := tp.AddCustomFieldOption(ctx, fieldID, rawValue)
+					if err != nil {
+						return fmt.Errorf("adding custom field option %q: %w", rawValue, err)
+					}
+					optionID = createdOpt.ID
+					optionIDs[fieldID][rawValue] = optionID
+				}
+				value = optionID
+			}
+			customFields[fieldID] = value
+		}
+
+		if _, err := tp.CreateCase(ctx, projectKey, testpulseclient.NewCase{
+			Title:        cp.Title,
+			Description:  cp.Description,
+			FolderID:     folderID,
+			Steps:        toTestPulseSteps(cp.Steps),
+			CustomFields: customFields,
+		}); err != nil {
+			return fmt.Errorf("creating case %q: %w", cp.Title, err)
+		}
+		current++
+		if progress != nil {
+			progress(current, total)
+		}
+		return nil
+	}
 
 	var walk func(fp *folderPlan, parentFolderID string) error
 	walk = func(fp *folderPlan, parentFolderID string) error {
@@ -284,52 +355,8 @@ func execute(ctx context.Context, tp TestPulseWriter, projectKey string, plan Pl
 		}
 
 		for _, cp := range fp.Cases {
-			customFields := map[string]string{}
-			for systemName, rawValue := range cp.CustomFields {
-				fieldID, ok := fieldIDs[systemName]
-				if !ok {
-					label := plan.fieldLabels[systemName]
-					if label == "" {
-						label = systemName
-					}
-					created, err := tp.CreateCustomField(ctx, projectKey, label, plan.fieldTypes[systemName])
-					if err != nil {
-						return fmt.Errorf("creating custom field %q: %w", label, err)
-					}
-					fieldID = created.ID
-					fieldIDs[systemName] = fieldID
-				}
-
-				value := rawValue
-				if plan.fieldTypes[systemName] == "select" {
-					if optionIDs[fieldID] == nil {
-						optionIDs[fieldID] = map[string]string{}
-					}
-					optionID, ok := optionIDs[fieldID][rawValue]
-					if !ok {
-						createdOpt, err := tp.AddCustomFieldOption(ctx, fieldID, rawValue)
-						if err != nil {
-							return fmt.Errorf("adding custom field option %q: %w", rawValue, err)
-						}
-						optionID = createdOpt.ID
-						optionIDs[fieldID][rawValue] = optionID
-					}
-					value = optionID
-				}
-				customFields[fieldID] = value
-			}
-
-			if _, err := tp.CreateCase(ctx, projectKey, testpulseclient.NewCase{
-				Title:        cp.Title,
-				FolderID:     folder.ID,
-				Steps:        toTestPulseSteps(cp.Steps),
-				CustomFields: customFields,
-			}); err != nil {
-				return fmt.Errorf("creating case %q: %w", cp.Title, err)
-			}
-			current++
-			if progress != nil {
-				progress(current, total)
+			if err := createCase(folder.ID, cp); err != nil {
+				return err
 			}
 		}
 
@@ -343,6 +370,11 @@ func execute(ctx context.Context, tp TestPulseWriter, projectKey string, plan Pl
 
 	for _, suiteFolder := range plan.Suites {
 		if err := walk(suiteFolder, rootFolderID); err != nil {
+			return err
+		}
+	}
+	for _, cp := range plan.RootCases {
+		if err := createCase(rootFolderID, cp); err != nil {
 			return err
 		}
 	}
@@ -467,6 +499,172 @@ func BuildQasePlan(ctx context.Context, qr QaseReader, projectCode string) (Plan
 // execute/Report/dry-run-never-writes machinery.
 func RunQase(ctx context.Context, qr QaseReader, tp TestPulseWriter, projectKey, projectCode string, dryRun bool, progress func(current, total int)) (Report, error) {
 	plan, err := BuildQasePlan(ctx, qr, projectCode)
+	if err != nil {
+		return Report{}, err
+	}
+	report := Report{Counts: countEntities(plan), Unmapped: plan.Unmapped}
+	if dryRun {
+		return report, nil
+	}
+	if err := execute(ctx, tp, projectKey, plan, progress); err != nil {
+		return report, err
+	}
+	return report, nil
+}
+
+// zephyrScaleScriptLabel identifies which of Zephyr Scale's two freeform
+// script types (design.md D-Z3) a case's preserved procedure text came
+// from, since neither reads clearly as a "step" on its own.
+func zephyrScaleScriptLabel(scriptType string) string {
+	if scriptType == "bdd" {
+		return "Zephyr Scale BDD script"
+	}
+	return "Zephyr Scale test script"
+}
+
+// toZephyrScaleCasePlan resolves one Zephyr Scale case's steps/script and
+// custom fields into a casePlan (design.md D-Z3/D-Z5): step-by-step steps
+// map directly (test data appended to the action text, delegate/"call to
+// test" steps skipped); absent those, a plain-text or BDD script's text is
+// preserved in Description instead of being dropped; a custom field whose
+// raw value is a JSON string maps to TestPulse text, anything else is
+// dropped and named in plan.Unmapped (deduped across cases by the caller's
+// unmappedSeen set).
+func toZephyrScaleCasePlan(ctx context.Context, zr ZephyrScaleReader, c zephyrscaleclient.Case, plan *Plan, unmappedSeen map[string]bool) (casePlan, error) {
+	cp := casePlan{Title: c.Name, CustomFields: map[string]string{}}
+
+	steps, err := zr.ListTestSteps(ctx, c.Key)
+	if err != nil {
+		return casePlan{}, fmt.Errorf("listing steps for case %s: %w", c.Key, err)
+	}
+	for _, s := range steps {
+		if s.IsDelegate {
+			continue
+		}
+		action := s.Description
+		if s.TestData != "" {
+			action += "\n\nTest data: " + s.TestData
+		}
+		cp.Steps = append(cp.Steps, stepPlan{Action: action, Expected: s.ExpectedResult})
+	}
+
+	if len(cp.Steps) == 0 && c.HasTestScript {
+		script, err := zr.GetTestScript(ctx, c.Key)
+		if err != nil {
+			return casePlan{}, fmt.Errorf("fetching test script for case %s: %w", c.Key, err)
+		}
+		if script != nil {
+			cp.Description = zephyrScaleScriptLabel(script.Type) + ":\n\n" + script.Text
+		}
+	}
+
+	for name, raw := range c.CustomFields {
+		s, ok := raw.(string)
+		if !ok {
+			if !unmappedSeen[name] {
+				unmappedSeen[name] = true
+				plan.Unmapped = append(plan.Unmapped, name)
+			}
+			continue
+		}
+		plan.fieldTypes[name] = "text"
+		plan.fieldLabels[name] = name
+		cp.CustomFields[name] = s
+	}
+
+	return cp, nil
+}
+
+// BuildZephyrScalePlan crawls a Zephyr Scale project's TEST_CASE-type
+// folder tree and its cases, producing the folder hierarchy design.md D-Z2
+// describes plus the unmapped-field list D-Z5 requires — purely from
+// Zephyr Scale reads, no TestPulseWriter involved. A folder with a nil
+// ParentID is top-level; every other folder nests beneath its parent's
+// mapped folder, recursively. A case with no folder at all lands in
+// plan.RootCases instead of any folderPlan (design.md D-Z2).
+func BuildZephyrScalePlan(ctx context.Context, zr ZephyrScaleReader, projectKey string) (Plan, error) {
+	folders, err := zr.ListFolders(ctx, projectKey)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Zephyr Scale folders: %w", err)
+	}
+	cases, err := zr.ListTestCases(ctx, projectKey)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Zephyr Scale test cases: %w", err)
+	}
+
+	plan := Plan{
+		Unmapped:    []string{},
+		fieldTypes:  map[string]string{},
+		fieldLabels: map[string]string{},
+	}
+
+	childrenByParent := map[int][]zephyrscaleclient.Folder{}
+	var roots []zephyrscaleclient.Folder
+	for _, f := range folders {
+		if f.ParentID == nil {
+			roots = append(roots, f)
+			continue
+		}
+		childrenByParent[*f.ParentID] = append(childrenByParent[*f.ParentID], f)
+	}
+
+	casesByFolder := map[int][]zephyrscaleclient.Case{}
+	var rootCasesSrc []zephyrscaleclient.Case
+	for _, c := range cases {
+		if c.FolderID == nil {
+			rootCasesSrc = append(rootCasesSrc, c)
+			continue
+		}
+		casesByFolder[*c.FolderID] = append(casesByFolder[*c.FolderID], c)
+	}
+
+	unmappedSeen := map[string]bool{}
+	var buildFolder func(f zephyrscaleclient.Folder) (*folderPlan, error)
+	buildFolder = func(f zephyrscaleclient.Folder) (*folderPlan, error) {
+		fp := &folderPlan{Name: f.Name}
+		for _, c := range casesByFolder[f.ID] {
+			cp, err := toZephyrScaleCasePlan(ctx, zr, c, &plan, unmappedSeen)
+			if err != nil {
+				return nil, err
+			}
+			fp.Cases = append(fp.Cases, cp)
+		}
+		for _, child := range childrenByParent[f.ID] {
+			childPlan, err := buildFolder(child)
+			if err != nil {
+				return nil, err
+			}
+			fp.Children = append(fp.Children, childPlan)
+		}
+		return fp, nil
+	}
+
+	for _, root := range roots {
+		fp, err := buildFolder(root)
+		if err != nil {
+			return Plan{}, err
+		}
+		plan.Suites = append(plan.Suites, fp)
+	}
+
+	for _, c := range rootCasesSrc {
+		cp, err := toZephyrScaleCasePlan(ctx, zr, c, &plan, unmappedSeen)
+		if err != nil {
+			return Plan{}, err
+		}
+		plan.RootCases = append(plan.RootCases, cp)
+	}
+
+	return plan, nil
+}
+
+// RunZephyrScale crawls a Zephyr Scale project (zephyrScaleProjectKey) via
+// zr and, unless dryRun, writes the resulting folder/case structure into
+// TestPulse project projectKey via tp — the Zephyr Scale counterpart to
+// Run/RunQase, sharing the same execute/Report/dry-run-never-writes
+// machinery.
+func RunZephyrScale(ctx context.Context, zr ZephyrScaleReader, tp TestPulseWriter, projectKey, zephyrScaleProjectKey string, dryRun bool, progress func(current, total int)) (Report, error) {
+	plan, err := BuildZephyrScalePlan(ctx, zr, zephyrScaleProjectKey)
 	if err != nil {
 		return Report{}, err
 	}

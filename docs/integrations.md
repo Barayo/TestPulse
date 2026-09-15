@@ -199,3 +199,77 @@ docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
 
 **Helm**: the same `importConnector.enabled: true` chart values, setting
 `importConnector.source: qase` in place of the default `testrail`.
+
+## Zephyr Scale importer
+
+> Independent, unofficial integration — not affiliated with, endorsed by,
+> or sponsored by SmartBear Software. "Zephyr Scale" is a trademark of
+> SmartBear Software. No Zephyr Scale/SmartBear logo is used anywhere in
+> TestPulse's docs or UI.
+
+The Zephyr Scale importer (`add-zephyr-scale-importer`) is the same
+`tools/import-connector` tool as the TestRail and Qase importers above,
+with `--source=zephyr-scale` — the job/route/report contract, poll-not-push
+control direction, and Connect → Preview → Result flow are all identical
+and unchanged; only the source-specific client and mapping logic differ.
+**Zephyr Scale Cloud only** — Zephyr Scale Server/Data Center exposes a
+structurally different, self-hosted API and isn't supported.
+
+### What it does and doesn't import
+
+- **Imports**: Zephyr Scale's `TEST_CASE`-type folders, mapped directly to
+  a TestPulse Folder tree — a root folder (no parent) becomes a top-level
+  Folder, a nested folder becomes a nested Folder, preserving Zephyr
+  Scale's own folder hierarchy exactly. Like Qase, and unlike TestRail,
+  there's no separate "suite vs. section" split. Cases are created in
+  their folder's mapped Folder, or the project's root folder if the case
+  has no folder. A case's step-by-step steps import directly, with any
+  test data appended to the step's action text (TestPulse's `Step` type has
+  no separate test-data field). A case authored as freeform plain-text or
+  BDD instead of step-by-step has that script's text preserved in the
+  case's description, identified by its type, rather than dropped — it
+  imports with no steps. TestPulse's own `Suite` construct is never
+  created, modified, or otherwise touched by this import.
+- **Does not import**: run/result history, Zephyr Scale's own native
+  priority/status (every imported case gets TestPulse's default, matching
+  the same non-mapping the TestRail and Qase importers already apply to
+  their own vendor's priority/status), "call to test" steps that delegate
+  execution to another case (skipped, without aborting the rest of that
+  case's steps). **Custom fields**: only a field whose value is plain text
+  maps to a TestPulse `text` custom field — every other value shape is
+  dropped, but always named individually in the job's report, never
+  silently or collapsed into a summary count. Unlike TestRail/Qase, no
+  Zephyr Scale field maps to TestPulse's `select` type in this version: the
+  public API surface this importer could verify access to doesn't expose
+  the field-type metadata needed to tell a genuine single-choice field
+  apart from free text, so guessing was avoided rather than risking a wrong
+  mapping. Structure and cases only, the same permanent v1 boundary as the
+  other importers.
+- Every import starts as a **dry run**, identical in shape to the other
+  importers'.
+
+### Auth: an API access token and project key, no site URL required
+
+Zephyr Scale Cloud's API is a fixed, vendor-hosted endpoint
+(`api.zephyrscale.smartbear.com`) — unlike TestRail's required site URL,
+there's no per-customer hostname to configure. The importer's credentials
+are just a Zephyr Scale **API access token** (generated from a user's Jira
+profile → Zephyr Scale API Access Tokens page) and the target **project
+key** (the Jira project's own key, e.g. `PROJ`) — entered once in the
+browser (the Connect screen at **+ New project → Import from Zephyr
+Scale**), stored encrypted at rest exactly like the other importers'
+credentials, and handed to the importer only at claim time. The importer's
+own TestPulse identity uses the same per-project-scoped agent token model
+as the other importers.
+
+**Docker Compose**: the same `import-connector` profile, with
+`--source=zephyr-scale`:
+
+```sh
+TESTPULSE_AGENT_TOKEN=... \
+docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
+  run import-connector --source=zephyr-scale
+```
+
+**Helm**: the same `importConnector.enabled: true` chart values, setting
+`importConnector.source: zephyr-scale` in place of the default `testrail`.

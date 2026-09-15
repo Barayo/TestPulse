@@ -143,6 +143,13 @@ export default function ProjectsPage() {
       onSelect: () => navigate('/projects/import/qase'),
     },
     {
+      key: 'zephyr-scale',
+      label: 'Import from Zephyr Scale',
+      description: 'Bring in folders and cases from an existing Zephyr Scale Cloud project.',
+      icon: DatabaseIcon,
+      onSelect: () => navigate('/projects/import/zephyr-scale'),
+    },
+    {
       key: 'csv',
       label: 'Import from CSV',
       description: 'Bring in cases from a spreadsheet export — works with any tool, no account needed.',

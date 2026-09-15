@@ -37,11 +37,17 @@ type NewTestRailClient func(siteURL, email, apiKey string) importer.TestRailRead
 // this is qaseclient.New.
 type NewQaseClient func(baseURL, token string) importer.QaseReader
 
+// NewZephyrScaleClient constructs a ZephyrScaleReader from a claimed job's
+// decrypted credentials — the Zephyr Scale counterpart to
+// NewTestRailClient/NewQaseClient. In production this is
+// zephyrscaleclient.New.
+type NewZephyrScaleClient func(baseURL, token string) importer.ZephyrScaleReader
+
 // Once claims and runs at most one pending job for source. Returns true
 // when a job was claimed (whether it ultimately succeeded or failed) and
 // false when nothing was pending — the ordinary steady-state case, not an
 // error.
-func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, source string, logger *slog.Logger) bool {
+func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, source string, logger *slog.Logger) bool {
 	claimed, err := tp.ClaimPendingJob(ctx, source)
 	if err != nil {
 		logger.Error("claiming pending job", "source", source, "error", err)
@@ -52,7 +58,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	}
 	logger.Info("claimed import job", "jobId", claimed.Job.ID, "mode", claimed.Job.Mode)
 
-	if err := runClaimedJob(ctx, tp, newTestRail, newQase, source, claimed, logger); err != nil {
+	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, source, claimed, logger); err != nil {
 		logger.Error("running import job", "jobId", claimed.Job.ID, "error", err)
 		msg := err.Error()
 		if cerr := tp.CompleteJob(ctx, claimed.Job.ID, "failed", nil, &msg); cerr != nil {
@@ -62,7 +68,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	return true
 }
 
-func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
+func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
 	projectKey, err := resolveProjectKey(ctx, tp, claimed.Job.ProjectID)
 	if err != nil {
 		return err
@@ -75,6 +81,8 @@ func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestR
 		report, err = runTestRailJob(ctx, tp, newTestRail, claimed, projectKey, dryRun, logger)
 	case "qase":
 		report, err = runQaseJob(ctx, tp, newQase, claimed, projectKey, dryRun, logger)
+	case "zephyr-scale":
+		report, err = runZephyrScaleJob(ctx, tp, newZephyrScale, claimed, projectKey, dryRun, logger)
 	default:
 		return fmt.Errorf("job %s has unsupported source %q", claimed.Job.ID, source)
 	}
@@ -118,6 +126,21 @@ func runQaseJob(ctx context.Context, tp TestPulseClient, newQase NewQaseClient, 
 
 	qr := newQase(baseURL, apiToken)
 	return importer.RunQase(ctx, qr, tp, projectKey, projectCode, dryRun, func(current, total int) {
+		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
+			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
+		}
+	})
+}
+
+func runZephyrScaleJob(ctx context.Context, tp TestPulseClient, newZephyrScale NewZephyrScaleClient, claimed *testpulseclient.ClaimedJob, projectKey string, dryRun bool, logger *slog.Logger) (importer.Report, error) {
+	apiToken := claimed.Credentials["apiToken"]
+	zephyrScaleProjectKey := claimed.Credentials["projectKey"]
+	if apiToken == "" || zephyrScaleProjectKey == "" {
+		return importer.Report{}, fmt.Errorf("job %s is missing Zephyr Scale credentials (apiToken/projectKey)", claimed.Job.ID)
+	}
+
+	zr := newZephyrScale("", apiToken)
+	return importer.RunZephyrScale(ctx, zr, tp, projectKey, zephyrScaleProjectKey, dryRun, func(current, total int) {
 		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
 			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
 		}
