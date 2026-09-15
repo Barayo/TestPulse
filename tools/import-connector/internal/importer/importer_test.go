@@ -276,6 +276,138 @@ func TestUnmappableCustomFieldNamedInReportOnce(t *testing.T) {
 	}
 }
 
+// TestRail's own documented get_case_fields type_id values (design.md D7's
+// full list) — every one exercised here on a single case with several
+// fields of each mappable type, so the test proves both "String and Text
+// both map to text" and "two distinct fields of the same mappable type
+// don't collide," not just one representative field per type.
+const (
+	trTypeString      = 1  // maps to TestPulse text
+	trTypeInteger     = 2  // no equivalent — dropped
+	trTypeText        = 3  // maps to TestPulse text
+	trTypeURL         = 4  // no equivalent — dropped
+	trTypeCheckbox    = 5  // no equivalent — dropped
+	trTypeDropdown    = 6  // maps to TestPulse select
+	trTypeUser        = 7  // no equivalent — dropped
+	trTypeDate        = 8  // no equivalent — dropped
+	trTypeMultiSelect = 12 // no equivalent — dropped
+)
+
+func TestBuildPlanAndExecuteHandleEveryTestRailCustomFieldType(t *testing.T) {
+	tr := &fakeTestRail{
+		suites:   []testrailclient.Suite{{ID: 1, Name: "Master"}},
+		sections: map[int][]testrailclient.Section{1: {{ID: 10, Name: "Login", ParentID: nil}}},
+		cases: map[int][]testrailclient.Case{1: {
+			{ID: 100, SectionID: 10, Title: "Case A", CustomFields: map[string]string{
+				"custom_notes":          "First run notes", // String
+				"custom_precondition":   "Second string field",
+				"custom_summary":        "A longer text blob", // Text
+				"custom_description":    "Second text field",
+				"custom_priority_level": "High",                // Dropdown
+				"custom_environment":    "Staging",             // second Dropdown
+				"custom_estimate":       "5",                   // Integer — dropped
+				"custom_is_smoke":       "true",                // Checkbox — dropped
+				"custom_reference_url":  "https://example.com", // URL — dropped
+				"custom_owner":          "42",                  // User — dropped
+				"custom_due_date":       "2026-12-01",          // Date — dropped
+				"custom_platforms":      "ios,android",         // Multi-select — dropped
+			}},
+		}},
+		fields: []testrailclient.CaseField{
+			{SystemName: "custom_notes", Label: "Notes", TypeID: trTypeString},
+			{SystemName: "custom_precondition", Label: "Precondition", TypeID: trTypeString},
+			{SystemName: "custom_summary", Label: "Summary", TypeID: trTypeText},
+			{SystemName: "custom_description", Label: "Description", TypeID: trTypeText},
+			{SystemName: "custom_priority_level", Label: "Priority Level", TypeID: trTypeDropdown},
+			{SystemName: "custom_environment", Label: "Environment", TypeID: trTypeDropdown},
+			{SystemName: "custom_estimate", Label: "Estimate", TypeID: trTypeInteger},
+			{SystemName: "custom_is_smoke", Label: "Is Smoke", TypeID: trTypeCheckbox},
+			{SystemName: "custom_reference_url", Label: "Reference URL", TypeID: trTypeURL},
+			{SystemName: "custom_owner", Label: "Owner", TypeID: trTypeUser},
+			{SystemName: "custom_due_date", Label: "Due Date", TypeID: trTypeDate},
+			{SystemName: "custom_platforms", Label: "Platforms", TypeID: trTypeMultiSelect},
+		},
+	}
+
+	plan, err := BuildPlan(context.Background(), tr, 1)
+	if err != nil {
+		t.Fatalf("BuildPlan: %v", err)
+	}
+
+	// The 6 unmappable fields are each named individually, by label — never
+	// silently dropped, never collapsed into a count.
+	wantUnmapped := []string{"Estimate", "Is Smoke", "Reference URL", "Owner", "Due Date", "Platforms"}
+	if len(plan.Unmapped) != len(wantUnmapped) {
+		t.Fatalf("plan.Unmapped = %+v, want %d entries: %v", plan.Unmapped, len(wantUnmapped), wantUnmapped)
+	}
+	for _, name := range wantUnmapped {
+		found := false
+		for _, u := range plan.Unmapped {
+			if u == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("plan.Unmapped = %+v, missing %q", plan.Unmapped, name)
+		}
+	}
+
+	// The 6 mappable fields (2 String, 2 Text, 2 Dropdown) survive into the
+	// case plan, keyed by system_name, values untouched.
+	if len(plan.Suites) != 1 || len(plan.Suites[0].Children) != 1 {
+		t.Fatalf("unexpected plan shape: %+v", plan.Suites)
+	}
+	caseFields := plan.Suites[0].Children[0].Cases[0].CustomFields
+	wantMapped := map[string]string{
+		"custom_notes":          "First run notes",
+		"custom_precondition":   "Second string field",
+		"custom_summary":        "A longer text blob",
+		"custom_description":    "Second text field",
+		"custom_priority_level": "High",
+		"custom_environment":    "Staging",
+	}
+	if len(caseFields) != len(wantMapped) {
+		t.Fatalf("case CustomFields = %+v, want %d mapped entries: %+v", caseFields, len(wantMapped), wantMapped)
+	}
+	for k, want := range wantMapped {
+		if got := caseFields[k]; got != want {
+			t.Errorf("case CustomFields[%q] = %q, want %q", k, got, want)
+		}
+	}
+
+	// execute: exactly 4 text-type fields (2 String + 2 Text) and 2
+	// select-type fields (2 Dropdown) get created — one each, never one
+	// shared field across distinct TestRail fields of the same type.
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdFields) != 6 {
+		t.Fatalf("created fields = %+v, want 6 (2 String + 2 Text + 2 Dropdown, one each)", tp.createdFields)
+	}
+	wantFieldNames := []string{"Notes", "Precondition", "Summary", "Description", "Priority Level", "Environment"}
+	for _, name := range wantFieldNames {
+		found := false
+		for _, f := range tp.createdFields {
+			if f.Name == name {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("createdFields = %+v, missing %q", tp.createdFields, name)
+		}
+	}
+	// One option per Dropdown field's single value in this one-case fixture.
+	if len(tp.createdOptions) != 2 {
+		t.Fatalf("created options = %+v, want 2 (one per Dropdown field)", tp.createdOptions)
+	}
+	if len(tp.createdCases) != 1 || len(tp.createdCases[0].CustomFields) != 6 {
+		t.Fatalf("created case = %+v, want exactly 6 populated custom fields (the unmappable ones absent)", tp.createdCases)
+	}
+}
+
 func TestRunDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
 	tr := fixtureTwoSuitesWithIdenticalSectionNames()
 	tp := &fakeTestPulse{rootFolderID: "root", failOnAnyMethod: true}
