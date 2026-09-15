@@ -5,6 +5,8 @@ import { UserMenu } from '@/components/UserMenu'
 import { HealthBadge } from '@/components/HealthBadge'
 import { useActiveProjectId } from '@/lib/useActiveProject'
 import { useProjectSummaries } from '@/lib/useProjectSummaries'
+import { useProjectReadAccess } from '@/lib/useProjectPermissions'
+import { usePublicProjectSummary } from '@/lib/usePublicProjectSummary'
 import { ProjectSwitcherProvider } from '@/lib/useProjectSwitcher'
 import { useAuth } from '@/lib/useAuth'
 
@@ -18,8 +20,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const navigate = useNavigate()
   const location = useLocation()
   const activeProjectId = useActiveProjectId()
-  const projects = useProjectSummaries()
+  const summaries = useProjectSummaries()
   const { user, loading, logout } = useAuth()
+  // useProjectSummaries() has no public fallback of its own (deliberately —
+  // its 3 other call sites are authenticated-only and shouldn't change
+  // behavior for this). A non-member visitor (anonymous, or signed-in but
+  // not a project member, design.md D11) to a public project gets `[]`
+  // from it, which would otherwise leave the header's ProjectSwitcher
+  // unable to resolve the active project's name at all past the landing
+  // page. usePublicProjectSummary fills just that one gap.
+  const access = useProjectReadAccess(activeProjectId, user, loading)
+  const publicSummary = usePublicProjectSummary(activeProjectId, access)
+  const projects = summaries.length > 0 ? summaries : publicSummary ? [publicSummary] : []
   // The switcher exists to jump between projects while inside one — it only
   // makes sense on a route that is actually about a specific project
   // (checked by route shape, not by whether resolution succeeded: a run

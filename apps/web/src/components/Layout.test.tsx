@@ -57,6 +57,39 @@ describe('Layout', () => {
     expect(screen.queryByRole('link', { name: /log in/i })).not.toBeInTheDocument()
   })
 
+  it('shows the real project name, not "Select project", for an anonymous visitor navigating off the project landing page into a sub-page', async () => {
+    mockGET.mockImplementation((path: string, options?: { params?: { path?: { projectKey?: string } } }) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/meta') return Promise.resolve({ data: { name: 'TestPulse', version: '0.0.1' }, response: { ok: true } })
+      if (path === '/api/v1/projects') return Promise.resolve({ data: undefined, response: { ok: false, status: 401 } })
+      if (path === '/api/v1/projects/summaries') return Promise.resolve({ data: undefined, response: { ok: false, status: 401 } })
+      if (path === '/api/v1/projects/{projectKey}/permissions')
+        return Promise.resolve({ data: undefined, response: { ok: false, status: 403 } })
+      if (path === '/api/v1/public/projects/{projectKey}' && options?.params?.path?.projectKey === 'QA') {
+        return Promise.resolve({
+          data: {
+            id: 'p1',
+            key: 'QA',
+            name: 'Quality Assurance',
+            archived: false,
+            description: '',
+            isSample: false,
+            publicAccess: true,
+            autoArchiveExempt: false,
+            assigneeRestrictedRecording: false,
+            createdAt: '2026-01-01T00:00:00Z',
+          },
+          response: { ok: true },
+        })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderLayout('/projects/QA/library')
+
+    expect(await screen.findByRole('link', { name: 'Quality Assurance' })).toBeInTheDocument()
+    expect(screen.queryByText('Select project')).not.toBeInTheDocument()
+  })
+
   // add-color-theme-customization follow-up: the wordmark icon's gradient
   // previously hardcoded Teal's own hex values, so it stayed teal on every
   // other palette — the one piece of brand chrome that didn't follow the
