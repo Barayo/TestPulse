@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/kiwitcmsclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
@@ -83,6 +84,15 @@ type ZephyrScaleReader interface {
 	ListTestCases(ctx context.Context, projectKey string) ([]zephyrscaleclient.Case, error)
 	ListTestSteps(ctx context.Context, testCaseKey string) ([]zephyrscaleclient.TestStep, error)
 	GetTestScript(ctx context.Context, testCaseKey string) (*zephyrscaleclient.TestScript, error)
+}
+
+// KiwiTCMSReader is the read-only subset of *kiwitcmsclient.Client this
+// package needs — satisfied structurally, so tests can supply a fake.
+type KiwiTCMSReader interface {
+	FindProduct(ctx context.Context, name string) (kiwitcmsclient.Product, error)
+	ListTestPlans(ctx context.Context, productID int) ([]kiwitcmsclient.TestPlan, error)
+	ListTestCases(ctx context.Context, planID int) ([]kiwitcmsclient.TestCase, error)
+	ListProperties(ctx context.Context, caseID int) ([]kiwitcmsclient.Property, error)
 }
 
 // TestPulseWriter is the write subset of *testpulseclient.Client this
@@ -665,6 +675,129 @@ func BuildZephyrScalePlan(ctx context.Context, zr ZephyrScaleReader, projectKey 
 // machinery.
 func RunZephyrScale(ctx context.Context, zr ZephyrScaleReader, tp TestPulseWriter, projectKey, zephyrScaleProjectKey string, dryRun bool, progress func(current, total int)) (Report, error) {
 	plan, err := BuildZephyrScalePlan(ctx, zr, zephyrScaleProjectKey)
+	if err != nil {
+		return Report{}, err
+	}
+	report := Report{Counts: countEntities(plan), Unmapped: plan.Unmapped}
+	if dryRun {
+		return report, nil
+	}
+	if err := execute(ctx, tp, projectKey, plan, progress); err != nil {
+		return report, err
+	}
+	return report, nil
+}
+
+// toKiwiTCMSCasePlan resolves one Kiwi TCMS case's text and properties
+// into a casePlan (design.md D-K5/D-K6): the case's freeform text (Kiwi
+// TCMS has no structured step concept at all) is preserved in Description
+// rather than force-fit into a fake step; every property maps to a
+// TestPulse text custom field, since Kiwi TCMS properties are untyped
+// name/value pairs with no downgrade-or-drop decision to make.
+func toKiwiTCMSCasePlan(ctx context.Context, kr KiwiTCMSReader, c kiwitcmsclient.TestCase, plan *Plan) (casePlan, error) {
+	cp := casePlan{Title: c.Summary, Description: c.Text, CustomFields: map[string]string{}}
+
+	props, err := kr.ListProperties(ctx, c.ID)
+	if err != nil {
+		return casePlan{}, fmt.Errorf("listing properties for case %d: %w", c.ID, err)
+	}
+	for _, p := range props {
+		plan.fieldTypes[p.Name] = "text"
+		plan.fieldLabels[p.Name] = p.Name
+		cp.CustomFields[p.Name] = p.Value
+	}
+
+	return cp, nil
+}
+
+// BuildKiwiTCMSPlan crawls a Kiwi TCMS product's test plan tree and its
+// cases, producing the folder hierarchy design.md D-K3 describes — purely
+// from Kiwi TCMS reads, no TestPulseWriter involved. A test plan with a
+// nil ParentID is top-level; every other plan nests beneath its parent's
+// mapped folder, recursively. A case linked to more than one plan within
+// the imported scope (a real many-to-many relationship in Kiwi TCMS,
+// unlike every other source) is created once, in the first plan
+// encountered by this depth-first walk — every such case is named
+// individually in plan.Unmapped rather than duplicated or silently
+// deduped (design.md D-K4).
+func BuildKiwiTCMSPlan(ctx context.Context, kr KiwiTCMSReader, productName string) (Plan, error) {
+	product, err := kr.FindProduct(ctx, productName)
+	if err != nil {
+		return Plan{}, fmt.Errorf("finding Kiwi TCMS product %q: %w", productName, err)
+	}
+	allPlans, err := kr.ListTestPlans(ctx, product.ID)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Kiwi TCMS test plans: %w", err)
+	}
+
+	childrenByParent := map[int][]kiwitcmsclient.TestPlan{}
+	var roots []kiwitcmsclient.TestPlan
+	for _, p := range allPlans {
+		if p.ParentID == nil {
+			roots = append(roots, p)
+			continue
+		}
+		childrenByParent[*p.ParentID] = append(childrenByParent[*p.ParentID], p)
+	}
+
+	plan := Plan{
+		Unmapped:    []string{},
+		fieldTypes:  map[string]string{},
+		fieldLabels: map[string]string{},
+	}
+	placedCaseIDs := map[int]bool{}
+	multiPlanNoted := map[int]bool{}
+
+	var buildFolder func(p kiwitcmsclient.TestPlan) (*folderPlan, error)
+	buildFolder = func(p kiwitcmsclient.TestPlan) (*folderPlan, error) {
+		fp := &folderPlan{Name: p.Name}
+		cases, err := kr.ListTestCases(ctx, p.ID)
+		if err != nil {
+			return nil, fmt.Errorf("listing cases for test plan %d: %w", p.ID, err)
+		}
+		for _, c := range cases {
+			if placedCaseIDs[c.ID] {
+				if !multiPlanNoted[c.ID] {
+					multiPlanNoted[c.ID] = true
+					plan.Unmapped = append(plan.Unmapped, fmt.Sprintf("%q (linked to multiple test plans; imported once)", c.Summary))
+				}
+				continue
+			}
+			placedCaseIDs[c.ID] = true
+			cp, err := toKiwiTCMSCasePlan(ctx, kr, c, &plan)
+			if err != nil {
+				return nil, err
+			}
+			fp.Cases = append(fp.Cases, cp)
+		}
+		for _, child := range childrenByParent[p.ID] {
+			childFp, err := buildFolder(child)
+			if err != nil {
+				return nil, err
+			}
+			fp.Children = append(fp.Children, childFp)
+		}
+		return fp, nil
+	}
+
+	for _, root := range roots {
+		fp, err := buildFolder(root)
+		if err != nil {
+			return Plan{}, err
+		}
+		plan.Suites = append(plan.Suites, fp)
+	}
+
+	return plan, nil
+}
+
+// RunKiwiTCMS crawls a Kiwi TCMS product (kiwiProductName) via kr and,
+// unless dryRun, writes the resulting folder/case structure into
+// TestPulse project projectKey via tp — the Kiwi TCMS counterpart to
+// Run/RunQase/RunZephyrScale, sharing the same execute/Report/dry-run-
+// never-writes machinery.
+func RunKiwiTCMS(ctx context.Context, kr KiwiTCMSReader, tp TestPulseWriter, projectKey, kiwiProductName string, dryRun bool, progress func(current, total int)) (Report, error) {
+	plan, err := BuildKiwiTCMSPlan(ctx, kr, kiwiProductName)
 	if err != nil {
 		return Report{}, err
 	}

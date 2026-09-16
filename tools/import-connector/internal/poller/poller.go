@@ -43,11 +43,18 @@ type NewQaseClient func(baseURL, token string) importer.QaseReader
 // zephyrscaleclient.New.
 type NewZephyrScaleClient func(baseURL, token string) importer.ZephyrScaleReader
 
+// NewKiwiTCMSClient constructs a KiwiTCMSReader from a claimed job's
+// decrypted credentials, given a context (unlike the other New*Client
+// types — Kiwi TCMS logs in via a real RPC call at construction time,
+// design.md D-K2, so failure needs a context and can itself fail). In
+// production this is kiwitcmsclient.New.
+type NewKiwiTCMSClient func(ctx context.Context, siteURL, username, password string) (importer.KiwiTCMSReader, error)
+
 // Once claims and runs at most one pending job for source. Returns true
 // when a job was claimed (whether it ultimately succeeded or failed) and
 // false when nothing was pending — the ordinary steady-state case, not an
 // error.
-func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, source string, logger *slog.Logger) bool {
+func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, source string, logger *slog.Logger) bool {
 	claimed, err := tp.ClaimPendingJob(ctx, source)
 	if err != nil {
 		logger.Error("claiming pending job", "source", source, "error", err)
@@ -58,7 +65,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	}
 	logger.Info("claimed import job", "jobId", claimed.Job.ID, "mode", claimed.Job.Mode)
 
-	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, source, claimed, logger); err != nil {
+	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, source, claimed, logger); err != nil {
 		logger.Error("running import job", "jobId", claimed.Job.ID, "error", err)
 		msg := err.Error()
 		if cerr := tp.CompleteJob(ctx, claimed.Job.ID, "failed", nil, &msg); cerr != nil {
@@ -68,7 +75,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	return true
 }
 
-func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
+func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
 	projectKey, err := resolveProjectKey(ctx, tp, claimed.Job.ProjectID)
 	if err != nil {
 		return err
@@ -83,6 +90,8 @@ func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestR
 		report, err = runQaseJob(ctx, tp, newQase, claimed, projectKey, dryRun, logger)
 	case "zephyr-scale":
 		report, err = runZephyrScaleJob(ctx, tp, newZephyrScale, claimed, projectKey, dryRun, logger)
+	case "kiwi-tcms":
+		report, err = runKiwiTCMSJob(ctx, tp, newKiwiTCMS, claimed, projectKey, dryRun, logger)
 	default:
 		return fmt.Errorf("job %s has unsupported source %q", claimed.Job.ID, source)
 	}
@@ -141,6 +150,29 @@ func runZephyrScaleJob(ctx context.Context, tp TestPulseClient, newZephyrScale N
 
 	zr := newZephyrScale("", apiToken)
 	return importer.RunZephyrScale(ctx, zr, tp, projectKey, zephyrScaleProjectKey, dryRun, func(current, total int) {
+		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
+			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
+		}
+	})
+}
+
+func runKiwiTCMSJob(ctx context.Context, tp TestPulseClient, newKiwiTCMS NewKiwiTCMSClient, claimed *testpulseclient.ClaimedJob, projectKey string, dryRun bool, logger *slog.Logger) (importer.Report, error) {
+	siteURL := claimed.Credentials["siteUrl"]
+	username := claimed.Credentials["username"]
+	password := claimed.Credentials["password"]
+	product := claimed.Credentials["product"]
+	if siteURL == "" || username == "" || password == "" || product == "" {
+		return importer.Report{}, fmt.Errorf("job %s is missing Kiwi TCMS credentials (siteUrl/username/password/product)", claimed.Job.ID)
+	}
+
+	// design.md D-K2: a login failure here is a distinct, clearly-wrapped
+	// failure mode from a later data-fetch error — kiwitcmsclient.New
+	// itself performs Auth.login before returning.
+	kr, err := newKiwiTCMS(ctx, siteURL, username, password)
+	if err != nil {
+		return importer.Report{}, fmt.Errorf("job %s could not connect to Kiwi TCMS: %w", claimed.Job.ID, err)
+	}
+	return importer.RunKiwiTCMS(ctx, kr, tp, projectKey, product, dryRun, func(current, total int) {
 		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
 			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
 		}

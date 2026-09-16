@@ -273,3 +273,72 @@ docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
 
 **Helm**: the same `importConnector.enabled: true` chart values, setting
 `importConnector.source: zephyr-scale` in place of the default `testrail`.
+
+## Kiwi TCMS importer
+
+> Independent, unofficial integration — not affiliated with, endorsed by,
+> or sponsored by Kiwi TCMS. No Kiwi TCMS logo is used anywhere in
+> TestPulse's docs or UI.
+
+The Kiwi TCMS importer (`add-kiwi-tcms-importer`) is the same
+`tools/import-connector` tool as the importers above, with
+`--source=kiwi-tcms` — the job/route/report contract, poll-not-push control
+direction, and Connect → Preview → Result flow are all identical and
+unchanged. Unlike the other three importers, Kiwi TCMS exposes an
+**XML-RPC** API, not REST — `internal/kiwitcmsclient` includes its own
+minimal, hand-rolled XML-RPC codec rather than reusing a JSON client
+pattern (no third-party XML-RPC dependency; the best-known Go library,
+`kolo/xmlrpc`, is unmaintained). Kiwi TCMS is a self-hosted, open-source
+product, so — like TestRail, and unlike Qase/Zephyr Scale Cloud — the
+Connect screen requires a site URL.
+
+### What it does and doesn't import
+
+- **Imports**: a Kiwi TCMS **product**'s test plan tree, mapped directly to
+  a TestPulse Folder tree — a root test plan (no parent) becomes a
+  top-level Folder, a nested test plan becomes a nested Folder, preserving
+  the product's own plan hierarchy exactly (no "suite vs. section" split,
+  same shape as the Qase/Zephyr Scale importers). Cases are created in
+  their test plan's mapped Folder. A case's freeform `text` field (Kiwi
+  TCMS has no structured step concept at all) is preserved in the case's
+  description rather than force-fit into fake steps. Every one of a case's
+  properties maps to a TestPulse `text` custom field — Kiwi TCMS properties
+  are untyped name/value pairs, so unlike the other three importers there's
+  no downgrade-or-drop decision to make; nothing is ever reported as
+  unmappable. TestPulse's own `Suite` construct is never created, modified,
+  or otherwise touched by this import.
+- **A case linked to more than one test plan is imported once, not once per
+  plan.** Kiwi TCMS genuinely allows a case to belong to multiple test
+  plans (a many-to-many relationship); TestPulse has no equivalent
+  case-sharing concept. Such a case is created in whichever linked plan is
+  encountered first while walking the product's tree, and is named
+  individually in the import's report — never silently deduplicated without
+  disclosure, and never duplicated into more than one TestPulse case.
+- **Does not import**: run/result history, and — same permanent v1 boundary
+  as the other importers — Kiwi TCMS's own case edit/version history (an
+  imported case starts at version 1).
+- Every import starts as a **dry run**, identical in shape to the other
+  importers'.
+
+### Auth: a site URL, username, and password — session-based, not a token
+
+Kiwi TCMS authenticates through Django's own session auth (`Auth.login`),
+not a bearer token or API key like the other three importers — the
+Connect screen at **+ New project → Import from Kiwi TCMS** collects a
+**site URL**, **username**, **password**, and the target **product** name,
+stored encrypted at rest exactly like the other importers' credentials and
+handed to the importer only at claim time. The importer's own TestPulse
+identity uses the same per-project-scoped agent token model as the other
+importers.
+
+**Docker Compose**: the same `import-connector` profile, with
+`--source=kiwi-tcms`:
+
+```sh
+TESTPULSE_AGENT_TOKEN=... \
+docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
+  run import-connector --source=kiwi-tcms
+```
+
+**Helm**: the same `importConnector.enabled: true` chart values, setting
+`importConnector.source: kiwi-tcms` in place of the default `testrail`.

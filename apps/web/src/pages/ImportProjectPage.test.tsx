@@ -420,6 +420,84 @@ describe('ImportProjectPage — Zephyr Scale Connect stage (add-zephyr-scale-imp
   })
 })
 
+describe('ImportProjectPage — Kiwi TCMS Connect stage (add-kiwi-tcms-importer tasks.md 4.3)', () => {
+  it('renders Kiwi TCMS-specific connection fields, not the other sources\', plus the trademark disclaimer (design.md D-K8)', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/kiwi-tcms')
+    await screen.findByText('Connect to Kiwi TCMS')
+
+    expect(screen.getByLabelText(/kiwi tcms site url/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/kiwi tcms username/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/kiwi tcms password/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/kiwi tcms product/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/testrail site url/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/qase api token/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/zephyr scale api token/i)).not.toBeInTheDocument()
+
+    expect(screen.getByText(/not affiliated with, endorsed by, or sponsored by Kiwi TCMS/i)).toBeInTheDocument()
+  })
+
+  it('"Preview import" stays disabled until the required fields are filled', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/kiwi-tcms')
+    await screen.findByText('Connect to Kiwi TCMS')
+    const submit = screen.getByRole('button', { name: /preview import/i })
+    expect(submit).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/kiwi tcms site url/i), 'https://kiwi.example.com')
+    await userEvent.type(screen.getByLabelText(/kiwi tcms username/i), 'admin')
+    await userEvent.type(screen.getByLabelText(/kiwi tcms password/i), 's3cr3t')
+    await userEvent.type(screen.getByLabelText(/kiwi tcms product/i), 'Acme')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeEnabled()
+  })
+
+  it('submitting posts source "kiwi-tcms" with siteUrl/username/password/product credentials', async () => {
+    mockBaseAPI()
+    mockPOST.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/import-jobs')
+        return Promise.resolve({
+          data: importJob({ id: 'job1', source: 'kiwi-tcms', status: 'pending' }),
+          response: { ok: true, status: 201 },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderImportPage('/projects/import/kiwi-tcms')
+    await screen.findByText('Connect to Kiwi TCMS')
+    await userEvent.type(screen.getByLabelText(/kiwi tcms site url/i), 'https://kiwi.example.com')
+    await userEvent.type(screen.getByLabelText(/kiwi tcms username/i), 'admin')
+    await userEvent.type(screen.getByLabelText(/kiwi tcms password/i), 's3cr3t')
+    await userEvent.type(screen.getByLabelText(/kiwi tcms product/i), 'Acme')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /preview import/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/import-jobs',
+        expect.objectContaining({
+          params: { path: { projectKey: 'QAP' } },
+          body: {
+            source: 'kiwi-tcms',
+            mode: 'dry_run',
+            credentials: {
+              siteUrl: 'https://kiwi.example.com',
+              username: 'admin',
+              password: 's3cr3t',
+              product: 'Acme',
+            },
+          },
+        }),
+      )
+    })
+  })
+})
+
 describe('ImportProjectPage — CSV Connect/Result flow (add-csv-import-export tasks.md 6.3, Pepe mock)', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

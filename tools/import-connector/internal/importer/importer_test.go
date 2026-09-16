@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/kiwitcmsclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
@@ -894,6 +895,192 @@ func TestRunZephyrScaleDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
 	report, err := RunZephyrScale(context.Background(), zr, tp, "QA", "PROJ", true, nil)
 	if err != nil {
 		t.Fatalf("RunZephyrScale: %v", err)
+	}
+	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
+		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)
+	}
+	if len(tp.createdFolders) != 0 || len(tp.createdCases) != 0 {
+		t.Errorf("dry run made TestPulse writes: folders=%+v cases=%+v", tp.createdFolders, tp.createdCases)
+	}
+}
+
+// --- Kiwi TCMS (add-kiwi-tcms-importer) ---
+
+// fakeKiwiTCMS serves a fixed product/plan/case/property fixture, keyed
+// exactly like the real client's own method signatures so it satisfies
+// KiwiTCMSReader structurally.
+type fakeKiwiTCMS struct {
+	product     kiwitcmsclient.Product
+	findErr     error
+	plans       []kiwitcmsclient.TestPlan
+	casesByPlan map[int][]kiwitcmsclient.TestCase
+	propsByCase map[int][]kiwitcmsclient.Property
+}
+
+func (f *fakeKiwiTCMS) FindProduct(context.Context, string) (kiwitcmsclient.Product, error) {
+	if f.findErr != nil {
+		return kiwitcmsclient.Product{}, f.findErr
+	}
+	return f.product, nil
+}
+func (f *fakeKiwiTCMS) ListTestPlans(context.Context, int) ([]kiwitcmsclient.TestPlan, error) {
+	return f.plans, nil
+}
+func (f *fakeKiwiTCMS) ListTestCases(_ context.Context, planID int) ([]kiwitcmsclient.TestCase, error) {
+	return f.casesByPlan[planID], nil
+}
+func (f *fakeKiwiTCMS) ListProperties(_ context.Context, caseID int) ([]kiwitcmsclient.Property, error) {
+	return f.propsByCase[caseID], nil
+}
+
+func TestBuildKiwiTCMSPlanMapsNestedTestPlanTree(t *testing.T) {
+	kr := &fakeKiwiTCMS{
+		product: kiwitcmsclient.Product{ID: 61, Name: "Acme"},
+		plans: []kiwitcmsclient.TestPlan{
+			{ID: 1, Name: "Master", ParentID: nil},
+			{ID: 2, Name: "Login", ParentID: intPtr(1)},
+		},
+		casesByPlan: map[int][]kiwitcmsclient.TestCase{
+			2: {{ID: 500, Summary: "Login with valid credentials"}},
+		},
+	}
+
+	plan, err := BuildKiwiTCMSPlan(context.Background(), kr, "Acme")
+	if err != nil {
+		t.Fatalf("BuildKiwiTCMSPlan: %v", err)
+	}
+	if len(plan.Suites) != 1 || plan.Suites[0].Name != "Master" {
+		t.Fatalf("plan.Suites = %+v, want one top-level Master folder", plan.Suites)
+	}
+	masterFolder := plan.Suites[0]
+	if len(masterFolder.Children) != 1 || masterFolder.Children[0].Name != "Login" {
+		t.Fatalf("Master's children = %+v, want one nested Login folder", masterFolder.Children)
+	}
+	loginFolder := masterFolder.Children[0]
+	if len(loginFolder.Cases) != 1 || loginFolder.Cases[0].Title != "Login with valid credentials" {
+		t.Fatalf("Login's cases = %+v, want the one case placed there", loginFolder.Cases)
+	}
+}
+
+func TestBuildKiwiTCMSPlanRootPlanWithNoParentIsTopLevel(t *testing.T) {
+	kr := &fakeKiwiTCMS{
+		product: kiwitcmsclient.Product{ID: 61, Name: "Acme"},
+		plans: []kiwitcmsclient.TestPlan{
+			{ID: 1, Name: "Smoke", ParentID: nil},
+			{ID: 2, Name: "Regression", ParentID: nil},
+		},
+	}
+	plan, err := BuildKiwiTCMSPlan(context.Background(), kr, "Acme")
+	if err != nil {
+		t.Fatalf("BuildKiwiTCMSPlan: %v", err)
+	}
+	if len(plan.Suites) != 2 {
+		t.Fatalf("plan.Suites = %+v, want 2 top-level folders (both roots)", plan.Suites)
+	}
+}
+
+func TestKiwiTCMSCaseLinkedToMultiplePlansImportsOnceAndIsNamedInReport(t *testing.T) {
+	kr := &fakeKiwiTCMS{
+		product: kiwitcmsclient.Product{ID: 61, Name: "Acme"},
+		plans: []kiwitcmsclient.TestPlan{
+			{ID: 1, Name: "Smoke", ParentID: nil},
+			{ID: 2, Name: "Regression", ParentID: nil},
+		},
+		casesByPlan: map[int][]kiwitcmsclient.TestCase{
+			1: {{ID: 500, Summary: "Shared case"}},
+			2: {{ID: 500, Summary: "Shared case"}},
+		},
+	}
+
+	plan, err := BuildKiwiTCMSPlan(context.Background(), kr, "Acme")
+	if err != nil {
+		t.Fatalf("BuildKiwiTCMSPlan: %v", err)
+	}
+	total := len(plan.Suites[0].Cases) + len(plan.Suites[1].Cases)
+	if total != 1 {
+		t.Fatalf("total cases across both folders = %d, want 1 (imported once, not duplicated)", total)
+	}
+	if len(plan.Unmapped) != 1 || !strings.Contains(plan.Unmapped[0], "Shared case") {
+		t.Fatalf("plan.Unmapped = %+v, want one entry naming the multi-plan case", plan.Unmapped)
+	}
+
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdCases) != 1 {
+		t.Fatalf("created cases = %+v, want exactly 1", tp.createdCases)
+	}
+}
+
+func TestKiwiTCMSCaseTextBecomesDescriptionWithNoSteps(t *testing.T) {
+	kr := &fakeKiwiTCMS{
+		product: kiwitcmsclient.Product{ID: 61, Name: "Acme"},
+		plans:   []kiwitcmsclient.TestPlan{{ID: 1, Name: "Master", ParentID: nil}},
+		casesByPlan: map[int][]kiwitcmsclient.TestCase{
+			1: {{ID: 500, Summary: "Case A", Text: "Enter username and password, submit."}},
+		},
+	}
+	plan, err := BuildKiwiTCMSPlan(context.Background(), kr, "Acme")
+	if err != nil {
+		t.Fatalf("BuildKiwiTCMSPlan: %v", err)
+	}
+	cp := plan.Suites[0].Cases[0]
+	if cp.Description != "Enter username and password, submit." {
+		t.Errorf("Description = %q, want the case's text", cp.Description)
+	}
+	if len(cp.Steps) != 0 {
+		t.Errorf("Steps = %+v, want none (Kiwi TCMS has no structured steps)", cp.Steps)
+	}
+}
+
+func TestKiwiTCMSPropertiesMapToTextCustomFieldsReusedAcrossCases(t *testing.T) {
+	kr := &fakeKiwiTCMS{
+		product: kiwitcmsclient.Product{ID: 61, Name: "Acme"},
+		plans:   []kiwitcmsclient.TestPlan{{ID: 1, Name: "Master", ParentID: nil}},
+		casesByPlan: map[int][]kiwitcmsclient.TestCase{
+			1: {
+				{ID: 500, Summary: "Case A"},
+				{ID: 501, Summary: "Case B"},
+			},
+		},
+		propsByCase: map[int][]kiwitcmsclient.Property{
+			500: {{Name: "Automation", Value: "Manual"}},
+			501: {{Name: "Automation", Value: "Automated"}},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	plan, err := BuildKiwiTCMSPlan(context.Background(), kr, "Acme")
+	if err != nil {
+		t.Fatalf("BuildKiwiTCMSPlan: %v", err)
+	}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdFields) != 1 {
+		t.Fatalf("created fields = %+v, want exactly 1 (reused across both cases)", tp.createdFields)
+	}
+	if tp.createdFields[0].Name != "Automation" {
+		t.Errorf("field name = %q, want Automation", tp.createdFields[0].Name)
+	}
+	if len(plan.Unmapped) != 0 {
+		t.Errorf("plan.Unmapped = %+v, want none — every property maps to text", plan.Unmapped)
+	}
+}
+
+func TestRunKiwiTCMSDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
+	kr := &fakeKiwiTCMS{
+		product: kiwitcmsclient.Product{ID: 61, Name: "Acme"},
+		plans:   []kiwitcmsclient.TestPlan{{ID: 1, Name: "Master", ParentID: nil}},
+		casesByPlan: map[int][]kiwitcmsclient.TestCase{
+			1: {{ID: 500, Summary: "Case A"}},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root", failOnAnyMethod: true}
+
+	report, err := RunKiwiTCMS(context.Background(), kr, tp, "QA", "Acme", true, nil)
+	if err != nil {
+		t.Fatalf("RunKiwiTCMS: %v", err)
 	}
 	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
 		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)

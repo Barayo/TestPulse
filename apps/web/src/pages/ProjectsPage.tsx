@@ -150,6 +150,13 @@ export default function ProjectsPage() {
       onSelect: () => navigate('/projects/import/zephyr-scale'),
     },
     {
+      key: 'kiwi-tcms',
+      label: 'Import from Kiwi TCMS',
+      description: 'Bring in a test plan tree and cases from an existing Kiwi TCMS product.',
+      icon: DatabaseIcon,
+      onSelect: () => navigate('/projects/import/kiwi-tcms'),
+    },
+    {
       key: 'csv',
       label: 'Import from CSV',
       description: 'Bring in cases from a spreadsheet export — works with any tool, no account needed.',

@@ -25,12 +25,13 @@ type TargetMode = 'new' | 'existing'
 // Sources with a dedicated Connect-form field set. Every other value (an
 // unknown/mistyped :source segment) falls through to the "Unknown import
 // source" guard below.
-type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'csv'
+type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'kiwi-tcms' | 'csv'
 
 const SOURCE_LABEL: Record<Source, string> = {
   testrail: 'TestRail',
   qase: 'Qase',
   'zephyr-scale': 'Zephyr Scale',
+  'kiwi-tcms': 'Kiwi TCMS',
   csv: 'CSV',
 }
 
@@ -118,6 +119,10 @@ export default function ImportProjectPage() {
   const [qaseBaseUrl, setQaseBaseUrl] = useState('')
   const [qaseAdvancedOpen, setQaseAdvancedOpen] = useState(false)
   const [zephyrScaleProjectKey, setZephyrScaleProjectKey] = useState('')
+  const [kiwiSiteUrl, setKiwiSiteUrl] = useState('')
+  const [kiwiUsername, setKiwiUsername] = useState('')
+  const [kiwiPassword, setKiwiPassword] = useState('')
+  const [kiwiProduct, setKiwiProduct] = useState('')
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvResult, setCsvResult] = useState<CsvImportResult>()
   const [targetMode, setTargetMode] = useState<TargetMode>('new')
@@ -184,7 +189,13 @@ export default function ImportProjectPage() {
   if (!user?.isTenantAdmin) {
     return <p className="text-sm text-muted-foreground">You don&apos;t have permission to create a project.</p>
   }
-  if (source !== 'testrail' && source !== 'qase' && source !== 'zephyr-scale' && source !== 'csv') {
+  if (
+    source !== 'testrail' &&
+    source !== 'qase' &&
+    source !== 'zephyr-scale' &&
+    source !== 'kiwi-tcms' &&
+    source !== 'csv'
+  ) {
     return <p className="text-sm text-muted-foreground">Unknown import source &ldquo;{source}&rdquo;.</p>
   }
 
@@ -200,7 +211,13 @@ export default function ImportProjectPage() {
         ? apiToken.length > 0 && projectCode.trim().length > 0 && targetChosen
         : source === 'zephyr-scale'
           ? apiToken.length > 0 && zephyrScaleProjectKey.trim().length > 0 && targetChosen
-          : csvFile !== null && targetChosen
+          : source === 'kiwi-tcms'
+            ? kiwiSiteUrl.trim().length > 0 &&
+              kiwiUsername.trim().length > 0 &&
+              kiwiPassword.length > 0 &&
+              kiwiProduct.trim().length > 0 &&
+              targetChosen
+            : csvFile !== null && targetChosen
 
   function credentialsBody(): Record<string, string> {
     if (source === 'testrail') {
@@ -213,6 +230,14 @@ export default function ImportProjectPage() {
     }
     if (source === 'zephyr-scale') {
       return { apiToken, projectKey: zephyrScaleProjectKey.trim() }
+    }
+    if (source === 'kiwi-tcms') {
+      return {
+        siteUrl: kiwiSiteUrl.trim(),
+        username: kiwiUsername.trim(),
+        password: kiwiPassword,
+        product: kiwiProduct.trim(),
+      }
     }
     return {
       apiToken,
@@ -334,6 +359,10 @@ export default function ImportProjectPage() {
     setQaseBaseUrl('')
     setQaseAdvancedOpen(false)
     setZephyrScaleProjectKey('')
+    setKiwiSiteUrl('')
+    setKiwiUsername('')
+    setKiwiPassword('')
+    setKiwiProduct('')
     setCsvFile(null)
     setCsvResult(undefined)
     setTargetMode('new')
@@ -391,7 +420,9 @@ export default function ImportProjectPage() {
         ? `Qase project ${projectCode} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
         : source === 'zephyr-scale'
           ? `Zephyr Scale project ${zephyrScaleProjectKey} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
-          : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
+          : source === 'kiwi-tcms'
+            ? `${kiwiSiteUrl.replace(/^https?:\/\//, '')} · product ${kiwiProduct} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+            : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
 
   return (
     <div className="space-y-6">
@@ -417,6 +448,13 @@ export default function ImportProjectPage() {
               Recreates Zephyr Scale folders as nested TestPulse folders, and Zephyr Scale cases inside them —
               doesn&apos;t touch TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this
               version — see the note below.
+            </>
+          ) : source === 'kiwi-tcms' ? (
+            <>
+              Recreates a Kiwi TCMS product&apos;s test plan tree as nested TestPulse folders, and its cases inside
+              them — doesn&apos;t touch TestPulse&apos;s own Suite feature. A case linked to more than one test plan
+              imports once, not once per plan. Run/result history isn&apos;t part of this version — see the note
+              below.
             </>
           ) : (
             <>
@@ -590,6 +628,52 @@ export default function ImportProjectPage() {
                   <p className="text-xs text-muted-foreground">
                     Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by
                     SmartBear Software. Zephyr Scale is a trademark of SmartBear Software.
+                  </p>
+                </>
+              ) : source === 'kiwi-tcms' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    TestPulse reads your self-hosted Kiwi TCMS instance over its XML-RPC API using a username and
+                    password — nothing is written back to Kiwi TCMS.
+                  </p>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label htmlFor="kiwi-site-url">Kiwi TCMS site URL</Label>
+                      <Input
+                        id="kiwi-site-url"
+                        value={kiwiSiteUrl}
+                        onChange={(e) => setKiwiSiteUrl(e.target.value)}
+                        placeholder="https://kiwi.example.com"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="kiwi-username">Kiwi TCMS username</Label>
+                      <Input id="kiwi-username" value={kiwiUsername} onChange={(e) => setKiwiUsername(e.target.value)} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="kiwi-password">Kiwi TCMS password</Label>
+                      <Input
+                        id="kiwi-password"
+                        type="password"
+                        value={kiwiPassword}
+                        onChange={(e) => setKiwiPassword(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label htmlFor="kiwi-product">Kiwi TCMS product</Label>
+                      <Input
+                        id="kiwi-product"
+                        value={kiwiProduct}
+                        onChange={(e) => setKiwiProduct(e.target.value)}
+                        placeholder="e.g. Acme"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Kiwi
+                    TCMS.
                   </p>
                 </>
               ) : (
