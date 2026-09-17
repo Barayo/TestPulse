@@ -164,6 +164,13 @@ export default function ProjectsPage() {
       onSelect: () => navigate('/projects/import/xray'),
     },
     {
+      key: 'tuskr',
+      label: 'Import from Tuskr',
+      description: 'Bring in test suites, sections, and cases from an existing Tuskr project.',
+      icon: DatabaseIcon,
+      onSelect: () => navigate('/projects/import/tuskr'),
+    },
+    {
       key: 'csv',
       label: 'Import from CSV',
       description: 'Bring in cases from a spreadsheet export — works with any tool, no account needed.',

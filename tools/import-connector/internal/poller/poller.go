@@ -62,11 +62,16 @@ type NewXrayCloudClient func(ctx context.Context, baseHost, clientID, clientSecr
 // production this wraps xrayclient.NewServer.
 type NewXrayServerClient func(ctx context.Context, siteURL, personalAccessToken, projectKey string) (importer.XrayReader, error)
 
+// NewTuskrClient constructs a TuskrReader from a claimed job's decrypted
+// credentials — a seam so tests can substitute a fake without a real
+// Tuskr account. In production this is tuskrclient.New.
+type NewTuskrClient func(baseURL, tenantID, token string) importer.TuskrReader
+
 // Once claims and runs at most one pending job for source. Returns true
 // when a job was claimed (whether it ultimately succeeded or failed) and
 // false when nothing was pending — the ordinary steady-state case, not an
 // error.
-func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, newXrayCloud NewXrayCloudClient, newXrayServer NewXrayServerClient, source string, logger *slog.Logger) bool {
+func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, newXrayCloud NewXrayCloudClient, newXrayServer NewXrayServerClient, newTuskr NewTuskrClient, source string, logger *slog.Logger) bool {
 	claimed, err := tp.ClaimPendingJob(ctx, source)
 	if err != nil {
 		logger.Error("claiming pending job", "source", source, "error", err)
@@ -77,7 +82,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	}
 	logger.Info("claimed import job", "jobId", claimed.Job.ID, "mode", claimed.Job.Mode)
 
-	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, newXrayCloud, newXrayServer, source, claimed, logger); err != nil {
+	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, newXrayCloud, newXrayServer, newTuskr, source, claimed, logger); err != nil {
 		logger.Error("running import job", "jobId", claimed.Job.ID, "error", err)
 		msg := err.Error()
 		if cerr := tp.CompleteJob(ctx, claimed.Job.ID, "failed", nil, &msg); cerr != nil {
@@ -87,7 +92,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	return true
 }
 
-func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, newXrayCloud NewXrayCloudClient, newXrayServer NewXrayServerClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
+func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, newXrayCloud NewXrayCloudClient, newXrayServer NewXrayServerClient, newTuskr NewTuskrClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
 	projectKey, err := resolveProjectKey(ctx, tp, claimed.Job.ProjectID)
 	if err != nil {
 		return err
@@ -106,6 +111,8 @@ func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestR
 		report, err = runKiwiTCMSJob(ctx, tp, newKiwiTCMS, claimed, projectKey, dryRun, logger)
 	case "xray":
 		report, err = runXrayJob(ctx, tp, newXrayCloud, newXrayServer, claimed, projectKey, dryRun, logger)
+	case "tuskr":
+		report, err = runTuskrJob(ctx, tp, newTuskr, claimed, projectKey, dryRun, logger)
 	default:
 		return fmt.Errorf("job %s has unsupported source %q", claimed.Job.ID, source)
 	}
@@ -232,6 +239,22 @@ func runXrayJob(ctx context.Context, tp TestPulseClient, newXrayCloud NewXrayClo
 	}
 
 	return importer.RunXray(ctx, xr, tp, projectKey, dryRun, func(current, total int) {
+		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
+			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
+		}
+	})
+}
+
+func runTuskrJob(ctx context.Context, tp TestPulseClient, newTuskr NewTuskrClient, claimed *testpulseclient.ClaimedJob, projectKey string, dryRun bool, logger *slog.Logger) (importer.Report, error) {
+	tenantID := claimed.Credentials["tenantId"]
+	pat := claimed.Credentials["personalAccessToken"]
+	tuskrProjectID := claimed.Credentials["projectId"]
+	if tenantID == "" || pat == "" || tuskrProjectID == "" {
+		return importer.Report{}, fmt.Errorf("job %s is missing Tuskr credentials (tenantId/personalAccessToken/projectId)", claimed.Job.ID)
+	}
+
+	tr := newTuskr("", tenantID, pat)
+	return importer.RunTuskr(ctx, tr, tp, projectKey, tuskrProjectID, dryRun, func(current, total int) {
 		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
 			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
 		}

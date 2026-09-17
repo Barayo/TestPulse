@@ -12,7 +12,7 @@ updated in the same change that alters the behavior it describes.
 | [Test management](test-management.md) | Using TestPulse: projects, versioned test cases, suites, runs, the execution board |
 | [Importing results](importing-results.md) | Bulk-importing JUnit XML reports from CI, the match-only contract, the `pytest-testpulse`/`testpulse-maven-plugin`/`testpulse-jest`/`testpulse-gradle-plugin`/`testpulse-go`/`testpulse-dotnet`/`testpulse-gtest`/`testpulse-jasmine`/`testpulse-mocha`/`testpulse-vitest` plugins, and the no-install `conftest.py` fallback |
 | [Deployment](deployment.md) | Configuration reference, Helm values, production notes |
-| [Integrations](integrations.md) | The Jira connector, and structural project importers (TestRail, Qase, Zephyr Scale, Kiwi TCMS, Xray): what each does, deploying it, and its config reference |
+| [Integrations](integrations.md) | The Jira connector, and structural project importers (TestRail, Qase, Zephyr Scale, Kiwi TCMS, Xray, Tuskr): what each does, deploying it, and its config reference |
 | [API](api.md) | The REST API, OpenAPI contract, and health endpoints |
 | [MCP server](mcp-server.md) | Connecting an AI agent over the Model Context Protocol: tokens, the `/mcp` endpoint, the tool reference |
 | [Database](database.md) | Schema reference and entity relationships |

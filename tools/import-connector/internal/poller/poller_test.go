@@ -12,6 +12,7 @@ import (
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/tuskrclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/xrayclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
@@ -159,6 +160,17 @@ func newFakeXrayServer(context.Context, string, string, string) (importer.XrayRe
 	return fakeXray{}, nil
 }
 
+type fakeTuskr struct{}
+
+func (fakeTuskr) ListTestSuites(context.Context, string) ([]tuskrclient.TestSuite, error) {
+	return []tuskrclient.TestSuite{{ID: "s1", Name: "Login", Sections: []tuskrclient.Section{{ID: "sec1", Name: "Happy Path"}}}}, nil
+}
+func (fakeTuskr) ListTestCases(context.Context, string) ([]tuskrclient.Case, error) {
+	return []tuskrclient.Case{{ID: "c1", Name: "Login case", SuiteID: "s1", SectionID: "sec1"}}, nil
+}
+
+func newFakeTuskr(_, _, _ string) importer.TuskrReader { return fakeTuskr{} }
+
 func claimedJob(mode string) *testpulseclient.ClaimedJob {
 	return &testpulseclient.ClaimedJob{
 		Job: testpulseclient.ImportJob{ID: "job-1", ProjectID: "proj-1", Mode: mode},
@@ -210,9 +222,18 @@ func claimedXrayServerJob(mode string) *testpulseclient.ClaimedJob {
 	}
 }
 
+func claimedTuskrJob(mode string) *testpulseclient.ClaimedJob {
+	return &testpulseclient.ClaimedJob{
+		Job: testpulseclient.ImportJob{ID: "job-7", ProjectID: "proj-1", Mode: mode},
+		Credentials: map[string]string{
+			"tenantId": "acme-tenant", "personalAccessToken": "pat-123", "projectId": "proj-42",
+		},
+	}
+}
+
 func TestOnceReturnsFalseWhenNothingPending(t *testing.T) {
 	tp := &fakeTestPulse{}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "testrail", discardLogger())
 	if ran {
 		t.Error("Once returned true with nothing pending")
 	}
@@ -223,7 +244,7 @@ func TestOnceReturnsFalseWhenNothingPending(t *testing.T) {
 
 func TestOnceCompletesDryRunJobWithoutTestPulseWrites(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed)")
 	}
@@ -240,7 +261,7 @@ func TestOnceCompletesDryRunJobWithoutTestPulseWrites(t *testing.T) {
 
 func TestOnceRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -261,7 +282,7 @@ func TestOnceReportsFailureWhenProjectUnresolvable(t *testing.T) {
 	// fail loudly (job marked failed) rather than silently import into
 	// the wrong project or panic.
 	tp := &fakeTestPulse{claimed: claimedJob("real"), projects: nil}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed, even though it failed)")
 	}
@@ -280,7 +301,7 @@ func TestOnceReportsFailureWhenCredentialsMissing(t *testing.T) {
 	claimed := claimedJob("real")
 	claimed.Credentials = map[string]string{"siteUrl": "https://x.testrail.io"} // missing email/apiKey/projectId
 	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "testrail", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "testrail", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -291,7 +312,7 @@ func TestOnceReportsFailureWhenCredentialsMissing(t *testing.T) {
 
 func TestOnceCompletesQaseDryRunJobWithoutTestPulseWrites(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedQaseJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "qase", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "qase", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed)")
 	}
@@ -308,7 +329,7 @@ func TestOnceCompletesQaseDryRunJobWithoutTestPulseWrites(t *testing.T) {
 
 func TestOnceQaseRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedQaseJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "qase", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "qase", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -327,7 +348,7 @@ func TestOnceQaseReportsFailureWhenCredentialsMissing(t *testing.T) {
 	claimed := claimedQaseJob("real")
 	claimed.Credentials = map[string]string{"apiToken": "token-123"} // missing projectCode
 	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "qase", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "qase", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -341,7 +362,7 @@ func TestOnceQaseReportsFailureWhenCredentialsMissing(t *testing.T) {
 
 func TestOnceCompletesZephyrScaleDryRunJobWithoutTestPulseWrites(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedZephyrScaleJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "zephyr-scale", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "zephyr-scale", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed)")
 	}
@@ -358,7 +379,7 @@ func TestOnceCompletesZephyrScaleDryRunJobWithoutTestPulseWrites(t *testing.T) {
 
 func TestOnceZephyrScaleRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedZephyrScaleJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "zephyr-scale", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "zephyr-scale", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -377,7 +398,7 @@ func TestOnceZephyrScaleReportsFailureWhenCredentialsMissing(t *testing.T) {
 	claimed := claimedZephyrScaleJob("real")
 	claimed.Credentials = map[string]string{"apiToken": "token-123"} // missing projectKey
 	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "zephyr-scale", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "zephyr-scale", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -391,7 +412,7 @@ func TestOnceZephyrScaleReportsFailureWhenCredentialsMissing(t *testing.T) {
 
 func TestOnceCompletesKiwiTCMSDryRunJobWithoutTestPulseWrites(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedKiwiTCMSJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "kiwi-tcms", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "kiwi-tcms", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed)")
 	}
@@ -408,7 +429,7 @@ func TestOnceCompletesKiwiTCMSDryRunJobWithoutTestPulseWrites(t *testing.T) {
 
 func TestOnceKiwiTCMSRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedKiwiTCMSJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "kiwi-tcms", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "kiwi-tcms", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -427,7 +448,7 @@ func TestOnceKiwiTCMSReportsFailureWhenCredentialsMissing(t *testing.T) {
 	claimed := claimedKiwiTCMSJob("real")
 	claimed.Credentials = map[string]string{"siteUrl": "https://kiwi.example.com"} // missing username/password/product
 	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "kiwi-tcms", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "kiwi-tcms", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -444,7 +465,7 @@ func TestOnceKiwiTCMSReportsFailureWhenLoginFails(t *testing.T) {
 		return nil, fmt.Errorf("login failed: invalid credentials")
 	}
 	tp := &fakeTestPulse{claimed: claimedKiwiTCMSJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, failingNewKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "kiwi-tcms", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, failingNewKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "kiwi-tcms", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -458,7 +479,7 @@ func TestOnceKiwiTCMSReportsFailureWhenLoginFails(t *testing.T) {
 
 func TestOnceCompletesXrayCloudDryRunJobWithoutTestPulseWrites(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedXrayCloudJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "xray", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "xray", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed)")
 	}
@@ -475,7 +496,7 @@ func TestOnceCompletesXrayCloudDryRunJobWithoutTestPulseWrites(t *testing.T) {
 
 func TestOnceXrayCloudRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedXrayCloudJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "xray", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "xray", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -492,7 +513,7 @@ func TestOnceXrayCloudRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
 
 func TestOnceCompletesXrayServerDryRunJobWithoutTestPulseWrites(t *testing.T) {
 	tp := &fakeTestPulse{claimed: claimedXrayServerJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "xray", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "xray", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true (a job was claimed)")
 	}
@@ -508,7 +529,7 @@ func TestOnceXrayReportsFailureWhenCredentialsMissing(t *testing.T) {
 	claimed := claimedXrayCloudJob("real")
 	claimed.Credentials = map[string]string{"mode": "cloud"} // missing clientId/clientSecret/projectId
 	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "xray", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "xray", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -524,7 +545,7 @@ func TestOnceXrayReportsFailureWhenModeMissing(t *testing.T) {
 	claimed := claimedXrayCloudJob("real")
 	delete(claimed.Credentials, "mode")
 	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, "xray", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "xray", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -538,7 +559,7 @@ func TestOnceXrayReportsFailureWhenConnectFails(t *testing.T) {
 		return nil, fmt.Errorf("xray cloud authenticate returned 401 Unauthorized")
 	}
 	tp := &fakeTestPulse{claimed: claimedXrayCloudJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
-	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, failingNewXrayCloud, newFakeXrayServer, "xray", discardLogger())
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, failingNewXrayCloud, newFakeXrayServer, newFakeTuskr, "xray", discardLogger())
 	if !ran {
 		t.Fatal("Once returned false, want true")
 	}
@@ -548,4 +569,78 @@ func TestOnceXrayReportsFailureWhenConnectFails(t *testing.T) {
 	if tp.completedWith.errMsg == nil || !strings.Contains(*tp.completedWith.errMsg, "401") {
 		t.Errorf("errMsg = %v, want it to surface the connect failure clearly", tp.completedWith.errMsg)
 	}
+}
+
+func TestOnceCompletesTuskrDryRunJobWithoutTestPulseWrites(t *testing.T) {
+	tp := &fakeTestPulse{claimed: claimedTuskrJob("dry_run"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "tuskr", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true (a job was claimed)")
+	}
+	if tp.createdFolders != 0 || tp.createdCases != 0 {
+		t.Errorf("dry run made TestPulse writes: folders=%d cases=%d", tp.createdFolders, tp.createdCases)
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "succeeded" {
+		t.Fatalf("completedWith = %+v, want succeeded", tp.completedWith)
+	}
+	if tp.completedWith.report.Counts["cases"] != 1 {
+		t.Errorf("report = %+v, want 1 case counted", tp.completedWith.report)
+	}
+}
+
+func TestOnceTuskrRealRunCreatesEntitiesAndReportsProgress(t *testing.T) {
+	tp := &fakeTestPulse{claimed: claimedTuskrJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "tuskr", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true")
+	}
+	if tp.createdCases != 1 {
+		t.Errorf("createdCases = %d, want 1", tp.createdCases)
+	}
+	if len(tp.reportedCalls) == 0 {
+		t.Error("ReportProgress was never called during a real run")
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "succeeded" {
+		t.Fatalf("completedWith = %+v, want succeeded", tp.completedWith)
+	}
+}
+
+func TestOnceTuskrReportsFailureWhenCredentialsMissing(t *testing.T) {
+	claimed := claimedTuskrJob("real")
+	claimed.Credentials = map[string]string{"tenantId": "acme-tenant"} // missing personalAccessToken/projectId
+	tp := &fakeTestPulse{claimed: claimed, projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "tuskr", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true")
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "failed" {
+		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
+	}
+	if tp.createdCases != 0 {
+		t.Errorf("createdCases = %d, want 0 (never got as far as writing)", tp.createdCases)
+	}
+}
+
+func TestOnceTuskrReportsFailureWhenListingFails(t *testing.T) {
+	failingNewTuskr := func(_, _, _ string) importer.TuskrReader { return failingTuskr{} }
+	tp := &fakeTestPulse{claimed: claimedTuskrJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, newFakeKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, failingNewTuskr, "tuskr", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true")
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "failed" {
+		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
+	}
+	if tp.completedWith.errMsg == nil || !strings.Contains(*tp.completedWith.errMsg, "tuskr returned 401") {
+		t.Errorf("errMsg = %v, want it to surface the listing failure clearly", tp.completedWith.errMsg)
+	}
+}
+
+type failingTuskr struct{}
+
+func (failingTuskr) ListTestSuites(context.Context, string) ([]tuskrclient.TestSuite, error) {
+	return nil, fmt.Errorf("tuskr returned 401 Unauthorized")
+}
+func (failingTuskr) ListTestCases(context.Context, string) ([]tuskrclient.Case, error) {
+	return nil, fmt.Errorf("tuskr returned 401 Unauthorized")
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/tuskrclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/xrayclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
@@ -104,6 +105,13 @@ type XrayReader interface {
 	ListFolders(ctx context.Context) ([]xrayclient.Folder, error)
 	ListTests(ctx context.Context, folderID string) ([]xrayclient.Test, error)
 	GetTestSteps(ctx context.Context, testKey string) ([]xrayclient.TestStep, error)
+}
+
+// TuskrReader is the read-only subset of *tuskrclient.Client this
+// package needs — satisfied structurally, so tests can supply a fake.
+type TuskrReader interface {
+	ListTestSuites(ctx context.Context, projectID string) ([]tuskrclient.TestSuite, error)
+	ListTestCases(ctx context.Context, projectID string) ([]tuskrclient.Case, error)
 }
 
 // TestPulseWriter is the write subset of *testpulseclient.Client this
@@ -938,6 +946,142 @@ func BuildXrayPlan(ctx context.Context, xr XrayReader) (Plan, error) {
 	}
 
 	return plan, nil
+}
+
+// detectTuskrSteps scans a Tuskr case's custom fields for one shaped
+// like a Steps-type field (design.md D-T3): a JSON array whose every
+// entry is an object carrying at least a "step" string. There is no
+// field-definitions endpoint to look up which field is configured as
+// Steps ahead of time, so this is a structural, not a name-based,
+// detection. Returns the matched field's key (to exclude it from the
+// generic custom-field loop) and its steps in order; ok is false when no
+// field has this shape.
+func detectTuskrSteps(customFields map[string]any) (fieldKey string, steps []stepPlan, ok bool) {
+	for key, raw := range customFields {
+		arr, isArray := raw.([]any)
+		if !isArray || len(arr) == 0 {
+			continue
+		}
+		candidate := make([]stepPlan, 0, len(arr))
+		valid := true
+		for _, entry := range arr {
+			m, isMap := entry.(map[string]any)
+			if !isMap {
+				valid = false
+				break
+			}
+			step, hasStep := m["step"].(string)
+			if !hasStep {
+				valid = false
+				break
+			}
+			expected, _ := m["expectedResult"].(string)
+			candidate = append(candidate, stepPlan{Action: step, Expected: expected})
+		}
+		if valid {
+			return key, candidate, true
+		}
+	}
+	return "", nil, false
+}
+
+// toTuskrCasePlan resolves one Tuskr case's steps and custom fields into
+// a casePlan (design.md D-T3/D-T5): a Steps-shaped custom field (if any)
+// maps to structured steps and is excluded from the generic loop; every
+// other custom field whose raw value is a string maps to TestPulse text,
+// anything else is dropped and named in plan.Unmapped.
+func toTuskrCasePlan(c tuskrclient.Case, plan *Plan, unmappedSeen map[string]bool) casePlan {
+	cp := casePlan{Title: c.Name, CustomFields: map[string]string{}}
+
+	stepsKey, steps, found := detectTuskrSteps(c.CustomFields)
+	if found {
+		cp.Steps = steps
+	}
+
+	for name, raw := range c.CustomFields {
+		if found && name == stepsKey {
+			continue
+		}
+		s, ok := raw.(string)
+		if !ok {
+			if !unmappedSeen[name] {
+				unmappedSeen[name] = true
+				plan.Unmapped = append(plan.Unmapped, name)
+			}
+			continue
+		}
+		plan.fieldTypes[name] = "text"
+		plan.fieldLabels[name] = name
+		cp.CustomFields[name] = s
+	}
+
+	return cp
+}
+
+// BuildTuskrPlan crawls a Tuskr project's Test Suite/Section tree and
+// its cases, producing the folder hierarchy design.md D-T2 describes —
+// purely from Tuskr reads, no TestPulseWriter involved. Unlike every
+// prior importer's recursive folder walk, Tuskr's own API already
+// returns the full two-level tree in one ListTestSuites call (design.md
+// D-T2), so no recursion is needed; cases are grouped by section
+// locally from one ListTestCases call rather than fetched per section,
+// keeping this importer's own request volume low against Tuskr's
+// rate limit (design.md D-T4).
+func BuildTuskrPlan(ctx context.Context, tr TuskrReader, projectID string) (Plan, error) {
+	suites, err := tr.ListTestSuites(ctx, projectID)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Tuskr test suites: %w", err)
+	}
+	cases, err := tr.ListTestCases(ctx, projectID)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Tuskr test cases: %w", err)
+	}
+
+	casesBySection := map[string][]tuskrclient.Case{}
+	for _, c := range cases {
+		casesBySection[c.SectionID] = append(casesBySection[c.SectionID], c)
+	}
+
+	plan := Plan{
+		Unmapped:    []string{},
+		fieldTypes:  map[string]string{},
+		fieldLabels: map[string]string{},
+	}
+	unmappedSeen := map[string]bool{}
+
+	for _, suite := range suites {
+		suiteFolder := &folderPlan{Name: suite.Name}
+		for _, sec := range suite.Sections {
+			secFolder := &folderPlan{Name: sec.Name}
+			for _, c := range casesBySection[sec.ID] {
+				secFolder.Cases = append(secFolder.Cases, toTuskrCasePlan(c, &plan, unmappedSeen))
+			}
+			suiteFolder.Children = append(suiteFolder.Children, secFolder)
+		}
+		plan.Suites = append(plan.Suites, suiteFolder)
+	}
+
+	return plan, nil
+}
+
+// RunTuskr crawls a Tuskr project (tuskrProjectID) via tr and, unless
+// dryRun, writes the resulting folder/case structure into TestPulse
+// project projectKey via tp — the Tuskr counterpart to
+// Run/RunQase/RunZephyrScale/RunKiwiTCMS/RunXray, sharing the same
+// execute/Report/dry-run-never-writes machinery.
+func RunTuskr(ctx context.Context, tr TuskrReader, tp TestPulseWriter, projectKey, tuskrProjectID string, dryRun bool, progress func(current, total int)) (Report, error) {
+	plan, err := BuildTuskrPlan(ctx, tr, tuskrProjectID)
+	if err != nil {
+		return Report{}, err
+	}
+	report := Report{Counts: countEntities(plan), Unmapped: plan.Unmapped}
+	if dryRun {
+		return report, nil
+	}
+	if err := execute(ctx, tp, projectKey, plan, progress); err != nil {
+		return report, err
+	}
+	return report, nil
 }
 
 // RunXray crawls an Xray project via xr and, unless dryRun, writes the

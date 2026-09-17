@@ -649,6 +649,79 @@ describe('ImportProjectPage — Xray Connect stage (add-xray-importer tasks.md 5
   })
 })
 
+describe('ImportProjectPage — Tuskr Connect stage (add-tuskr-importer tasks.md 4.3)', () => {
+  it('renders Tuskr-specific connection fields, not the other sources\', plus the trademark disclaimer', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/tuskr')
+    await screen.findByText('Connect to Tuskr')
+
+    expect(screen.getByLabelText(/tuskr tenant id/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/tuskr personal access token/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/tuskr project id/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/testrail site url/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/xray client id/i)).not.toBeInTheDocument()
+
+    expect(screen.getByText(/not affiliated with, endorsed by, or sponsored by tuskr/i)).toBeInTheDocument()
+  })
+
+  it('"Preview import" stays disabled until the required fields are filled', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/tuskr')
+    await screen.findByText('Connect to Tuskr')
+    const submit = screen.getByRole('button', { name: /preview import/i })
+    expect(submit).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/tuskr tenant id/i), 'acme-tenant')
+    await userEvent.type(screen.getByLabelText(/tuskr personal access token/i), 'pat-123')
+    await userEvent.type(screen.getByLabelText(/tuskr project id/i), 'proj-42')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeEnabled()
+  })
+
+  it('submitting posts source "tuskr" with tenantId/personalAccessToken/projectId credentials', async () => {
+    mockBaseAPI()
+    mockPOST.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/import-jobs')
+        return Promise.resolve({
+          data: importJob({ id: 'job1', source: 'tuskr', status: 'pending' }),
+          response: { ok: true, status: 201 },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderImportPage('/projects/import/tuskr')
+    await screen.findByText('Connect to Tuskr')
+    await userEvent.type(screen.getByLabelText(/tuskr tenant id/i), 'acme-tenant')
+    await userEvent.type(screen.getByLabelText(/tuskr personal access token/i), 'pat-123')
+    await userEvent.type(screen.getByLabelText(/tuskr project id/i), 'proj-42')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /preview import/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/import-jobs',
+        expect.objectContaining({
+          params: { path: { projectKey: 'QAP' } },
+          body: {
+            source: 'tuskr',
+            mode: 'dry_run',
+            credentials: {
+              tenantId: 'acme-tenant',
+              personalAccessToken: 'pat-123',
+              projectId: 'proj-42',
+            },
+          },
+        }),
+      )
+    })
+  })
+})
+
 describe('ImportProjectPage — CSV Connect/Result flow (add-csv-import-export tasks.md 6.3, Pepe mock)', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

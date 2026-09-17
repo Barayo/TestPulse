@@ -107,13 +107,15 @@ services:
   # for Zephyr Scale, an API token/project key; or, for Kiwi TCMS, a site
   # URL/username/password/product; or, for Xray, a mode plus either a
   # Cloud client ID/secret/project ID or a Server/DC site URL/Personal
-  # Access Token/project key) are entered once in the browser
-  # (+ New project → Import from TestRail/Qase/Zephyr Scale/Kiwi TCMS/Xray)
+  # Access Token/project key; or, for Tuskr, a tenant ID/Personal Access
+  # Token/project ID) are entered once in the browser
+  # (+ New project → Import from TestRail/Qase/Zephyr Scale/Kiwi TCMS/Xray/Tuskr)
   # and travel to the importer per-job, encrypted at rest — see
   # docs/integrations.md. `--source=testrail` below is this service's
   # default; override it per run for a different vendor, e.g.
   # `docker compose --profile import-connector run import-connector --source=qase`
-  # or `--source=zephyr-scale` or `--source=kiwi-tcms` or `--source=xray`.
+  # or `--source=zephyr-scale` or `--source=kiwi-tcms` or `--source=xray`
+  # or `--source=tuskr`.
   import-connector:
     profiles: ["import-connector"]
     build:

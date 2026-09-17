@@ -25,7 +25,7 @@ type TargetMode = 'new' | 'existing'
 // Sources with a dedicated Connect-form field set. Every other value (an
 // unknown/mistyped :source segment) falls through to the "Unknown import
 // source" guard below.
-type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'kiwi-tcms' | 'xray' | 'csv'
+type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'kiwi-tcms' | 'xray' | 'tuskr' | 'csv'
 
 const SOURCE_LABEL: Record<Source, string> = {
   testrail: 'TestRail',
@@ -33,6 +33,7 @@ const SOURCE_LABEL: Record<Source, string> = {
   'zephyr-scale': 'Zephyr Scale',
   'kiwi-tcms': 'Kiwi TCMS',
   xray: 'Xray',
+  tuskr: 'Tuskr',
   csv: 'CSV',
 }
 
@@ -136,6 +137,9 @@ export default function ImportProjectPage() {
   const [xraySiteUrl, setXraySiteUrl] = useState('')
   const [xrayPat, setXrayPat] = useState('')
   const [xrayProjectKey, setXrayProjectKey] = useState('')
+  const [tuskrTenantId, setTuskrTenantId] = useState('')
+  const [tuskrToken, setTuskrToken] = useState('')
+  const [tuskrProjectId, setTuskrProjectId] = useState('')
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvResult, setCsvResult] = useState<CsvImportResult>()
   const [targetMode, setTargetMode] = useState<TargetMode>('new')
@@ -208,6 +212,7 @@ export default function ImportProjectPage() {
     source !== 'zephyr-scale' &&
     source !== 'kiwi-tcms' &&
     source !== 'xray' &&
+    source !== 'tuskr' &&
     source !== 'csv'
   ) {
     return <p className="text-sm text-muted-foreground">Unknown import source &ldquo;{source}&rdquo;.</p>
@@ -238,7 +243,12 @@ export default function ImportProjectPage() {
                     xrayProjectId.trim().length > 0
                   : xraySiteUrl.trim().length > 0 && xrayPat.length > 0 && xrayProjectKey.trim().length > 0) &&
                 targetChosen
-              : csvFile !== null && targetChosen
+              : source === 'tuskr'
+                ? tuskrTenantId.trim().length > 0 &&
+                  tuskrToken.length > 0 &&
+                  tuskrProjectId.trim().length > 0 &&
+                  targetChosen
+                : csvFile !== null && targetChosen
 
   function credentialsBody(): Record<string, string> {
     if (source === 'testrail') {
@@ -274,6 +284,13 @@ export default function ImportProjectPage() {
             personalAccessToken: xrayPat,
             projectKey: xrayProjectKey.trim(),
           }
+    }
+    if (source === 'tuskr') {
+      return {
+        tenantId: tuskrTenantId.trim(),
+        personalAccessToken: tuskrToken,
+        projectId: tuskrProjectId.trim(),
+      }
     }
     return {
       apiToken,
@@ -406,6 +423,9 @@ export default function ImportProjectPage() {
     setXraySiteUrl('')
     setXrayPat('')
     setXrayProjectKey('')
+    setTuskrTenantId('')
+    setTuskrToken('')
+    setTuskrProjectId('')
     setCsvFile(null)
     setCsvResult(undefined)
     setTargetMode('new')
@@ -469,7 +489,9 @@ export default function ImportProjectPage() {
               ? xrayMode === 'cloud'
                 ? `Xray Cloud project ${xrayProjectId} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
                 : `${xraySiteUrl.replace(/^https?:\/\//, '')} · project ${xrayProjectKey} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
-              : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
+              : source === 'tuskr'
+                ? `Tuskr project ${tuskrProjectId} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+                : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
 
   return (
     <div className="space-y-6">
@@ -509,6 +531,12 @@ export default function ImportProjectPage() {
               Tests inside them, with structured steps for Manual-type tests — doesn&apos;t touch TestPulse&apos;s
               own Suite feature. Supports both Xray Cloud and Server/Data Center. Test Sets, Test Plans, and
               Preconditions aren&apos;t part of this version — see the note below.
+            </>
+          ) : source === 'tuskr' ? (
+            <>
+              Recreates a Tuskr project&apos;s Test Suites as top-level TestPulse folders and its Sections as
+              nested folders inside them, and Tuskr cases inside those — doesn&apos;t touch TestPulse&apos;s own
+              Suite feature. Run/result history isn&apos;t part of this version — see the note below.
             </>
           ) : (
             <>
@@ -830,6 +858,50 @@ export default function ImportProjectPage() {
                   <p className="text-xs text-muted-foreground">
                     Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Xpand IT.
                     Xray is a trademark of Xpand IT.
+                  </p>
+                </>
+              ) : source === 'tuskr' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    TestPulse reads your Tuskr project over its REST API using a tenant ID and a Personal Access
+                    Token — nothing is written back to Tuskr.
+                  </p>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1 sm:col-span-2">
+                      <Label htmlFor="tuskr-tenant-id">Tuskr tenant ID</Label>
+                      <Input
+                        id="tuskr-tenant-id"
+                        value={tuskrTenantId}
+                        onChange={(e) => setTuskrTenantId(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="tuskr-token">Tuskr Personal Access Token</Label>
+                      <Input
+                        id="tuskr-token"
+                        type="password"
+                        value={tuskrToken}
+                        onChange={(e) => setTuskrToken(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="tuskr-project-id">Tuskr project ID</Label>
+                      <Input
+                        id="tuskr-project-id"
+                        value={tuskrProjectId}
+                        onChange={(e) => setTuskrProjectId(e.target.value)}
+                        placeholder="e.g. proj-42"
+                      />
+                    </div>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Need a tenant ID or token? In Tuskr: <strong className="font-semibold">your profile menu → API</strong>.
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Tuskr.
                   </p>
                 </>
               ) : (

@@ -91,12 +91,12 @@ jiraConnector:
 
 # Optional structural project importer (add-testrail-importer,
 # add-qase-importer, add-zephyr-scale-importer, add-kiwi-tcms-importer,
-# add-xray-importer) — a separate Deployment, per the same standing
-# decision as jiraConnector above. Disabled by default. Unlike
-# jiraConnector, it holds no third-party (TestRail/Qase/Zephyr
-# Scale/Kiwi TCMS/Xray) credentials in its own config at all — those are
-# entered once in the browser and travel to the importer per-job,
-# encrypted at rest; see docs/integrations.md.
+# add-xray-importer, add-tuskr-importer) — a separate Deployment, per the
+# same standing decision as jiraConnector above. Disabled by default.
+# Unlike jiraConnector, it holds no third-party (TestRail/Qase/Zephyr
+# Scale/Kiwi TCMS/Xray/Tuskr) credentials in its own config at all —
+# those are entered once in the browser and travel to the importer
+# per-job, encrypted at rest; see docs/integrations.md.
 importConnector:
   enabled: false
   image:
@@ -104,7 +104,9 @@ importConnector:
     tag: ""              # defaults to the chart appVersion
     pullPolicy: IfNotPresent
   source: testrail        # --source flag value: "testrail", "qase",
-                          # "zephyr-scale", "kiwi-tcms", or "xray" today
+                          # "zephyr-scale", "kiwi-tcms", "xray", or
+                          # "tuskr" today — the last card in the
+                          # structural-importer family
   pollInterval: 5s
   # For evaluation only — prefer existingSecret for a real deployment, since
   # this file may be checked into version control.

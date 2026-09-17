@@ -10,6 +10,7 @@ import (
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/tuskrclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/xrayclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
@@ -1085,6 +1086,166 @@ func TestRunKiwiTCMSDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
 	}
 	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
 		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)
+	}
+	if len(tp.createdFolders) != 0 || len(tp.createdCases) != 0 {
+		t.Errorf("dry run made TestPulse writes: folders=%+v cases=%+v", tp.createdFolders, tp.createdCases)
+	}
+}
+
+// --- Tuskr (add-tuskr-importer) ---
+
+// fakeTuskr serves a fixed suite/case fixture, keyed exactly like the
+// real client's own method signatures so it satisfies TuskrReader
+// structurally.
+type fakeTuskr struct {
+	suites []tuskrclient.TestSuite
+	cases  []tuskrclient.Case
+}
+
+func (f *fakeTuskr) ListTestSuites(context.Context, string) ([]tuskrclient.TestSuite, error) {
+	return f.suites, nil
+}
+func (f *fakeTuskr) ListTestCases(context.Context, string) ([]tuskrclient.Case, error) {
+	return f.cases, nil
+}
+
+func TestBuildTuskrPlanMapsSuiteToSectionOneLevel(t *testing.T) {
+	tr := &fakeTuskr{
+		suites: []tuskrclient.TestSuite{
+			{ID: "s1", Name: "Login", Sections: []tuskrclient.Section{{ID: "sec1", Name: "Happy Path"}}},
+		},
+		cases: []tuskrclient.Case{
+			{ID: "c1", Name: "Login with valid credentials", SuiteID: "s1", SectionID: "sec1"},
+		},
+	}
+
+	plan, err := BuildTuskrPlan(context.Background(), tr, "proj-1")
+	if err != nil {
+		t.Fatalf("BuildTuskrPlan: %v", err)
+	}
+	if len(plan.Suites) != 1 || plan.Suites[0].Name != "Login" {
+		t.Fatalf("plan.Suites = %+v, want one top-level Login folder", plan.Suites)
+	}
+	loginFolder := plan.Suites[0]
+	if len(loginFolder.Children) != 1 || loginFolder.Children[0].Name != "Happy Path" {
+		t.Fatalf("Login's children = %+v, want one Happy Path section", loginFolder.Children)
+	}
+	happyPath := loginFolder.Children[0]
+	if len(happyPath.Cases) != 1 || happyPath.Cases[0].Title != "Login with valid credentials" {
+		t.Fatalf("Happy Path's cases = %+v", happyPath.Cases)
+	}
+	if len(loginFolder.Cases) != 0 {
+		t.Errorf("Login folder itself has cases = %+v, want none (cases live in the Section)", loginFolder.Cases)
+	}
+}
+
+func TestBuildTuskrPlanStepsShapedCustomFieldMapsToOrderedSteps(t *testing.T) {
+	tr := &fakeTuskr{
+		suites: []tuskrclient.TestSuite{
+			{ID: "s1", Name: "Login", Sections: []tuskrclient.Section{{ID: "sec1", Name: "Happy Path"}}},
+		},
+		cases: []tuskrclient.Case{
+			{
+				ID: "c1", Name: "Login test", SuiteID: "s1", SectionID: "sec1",
+				CustomFields: map[string]any{
+					"stepsWithExpectedResults": []any{
+						map[string]any{"step": "Open login page", "expectedResult": "Page loads"},
+						map[string]any{"step": "Enter credentials", "expectedResult": "Logged in"},
+					},
+					"priority": "High",
+				},
+			},
+		},
+	}
+
+	plan, err := BuildTuskrPlan(context.Background(), tr, "proj-1")
+	if err != nil {
+		t.Fatalf("BuildTuskrPlan: %v", err)
+	}
+	cp := plan.Suites[0].Children[0].Cases[0]
+	if len(cp.Steps) != 2 {
+		t.Fatalf("cp.Steps = %+v, want 2", cp.Steps)
+	}
+	if cp.Steps[1].Action != "Enter credentials" || cp.Steps[1].Expected != "Logged in" {
+		t.Errorf("cp.Steps[1] = %+v", cp.Steps[1])
+	}
+	if _, ok := cp.CustomFields["stepsWithExpectedResults"]; ok {
+		t.Errorf("CustomFields = %+v, want the steps field excluded from the generic loop", cp.CustomFields)
+	}
+	if cp.CustomFields["priority"] != "High" {
+		t.Errorf("CustomFields = %+v, want priority=High", cp.CustomFields)
+	}
+}
+
+func TestBuildTuskrPlanCaseWithNoStepsShapedFieldHasEmptySteps(t *testing.T) {
+	tr := &fakeTuskr{
+		suites: []tuskrclient.TestSuite{
+			{ID: "s1", Name: "Login", Sections: []tuskrclient.Section{{ID: "sec1", Name: "Happy Path"}}},
+		},
+		cases: []tuskrclient.Case{
+			{ID: "c1", Name: "No steps case", SuiteID: "s1", SectionID: "sec1", CustomFields: map[string]any{"priority": "Low"}},
+		},
+	}
+
+	plan, err := BuildTuskrPlan(context.Background(), tr, "proj-1")
+	if err != nil {
+		t.Fatalf("BuildTuskrPlan: %v", err)
+	}
+	cp := plan.Suites[0].Children[0].Cases[0]
+	if len(cp.Steps) != 0 {
+		t.Errorf("cp.Steps = %+v, want none", cp.Steps)
+	}
+}
+
+func TestBuildTuskrPlanCustomFieldMapping(t *testing.T) {
+	tr := &fakeTuskr{
+		suites: []tuskrclient.TestSuite{
+			{ID: "s1", Name: "Login", Sections: []tuskrclient.Section{{ID: "sec1", Name: "Happy Path"}}},
+		},
+		cases: []tuskrclient.Case{
+			{ID: "c1", Name: "Case A", SuiteID: "s1", SectionID: "sec1", CustomFields: map[string]any{"priority": "High"}},
+			{ID: "c2", Name: "Case B", SuiteID: "s1", SectionID: "sec1", CustomFields: map[string]any{"points": float64(5)}},
+		},
+	}
+
+	plan, err := BuildTuskrPlan(context.Background(), tr, "proj-1")
+	if err != nil {
+		t.Fatalf("BuildTuskrPlan: %v", err)
+	}
+	section := plan.Suites[0].Children[0]
+	if section.Cases[0].CustomFields["priority"] != "High" {
+		t.Errorf("Cases[0].CustomFields = %+v, want priority=High", section.Cases[0].CustomFields)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0] != "points" {
+		t.Errorf("plan.Unmapped = %+v, want one entry naming the non-string field", plan.Unmapped)
+	}
+
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdFields) != 1 || tp.createdFields[0].Name != "priority" {
+		t.Fatalf("created fields = %+v, want exactly 1 string-valued field", tp.createdFields)
+	}
+}
+
+func TestRunTuskrDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
+	tr := &fakeTuskr{
+		suites: []tuskrclient.TestSuite{
+			{ID: "s1", Name: "Login", Sections: []tuskrclient.Section{{ID: "sec1", Name: "Happy Path"}}},
+		},
+		cases: []tuskrclient.Case{
+			{ID: "c1", Name: "Case A", SuiteID: "s1", SectionID: "sec1"},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root", failOnAnyMethod: true}
+
+	report, err := RunTuskr(context.Background(), tr, tp, "QA", "proj-1", true, nil)
+	if err != nil {
+		t.Fatalf("RunTuskr: %v", err)
+	}
+	if report.Counts["folders"] != 2 || report.Counts["cases"] != 1 {
+		t.Errorf("report.Counts = %+v, want 2 folders (suite+section) + 1 case", report.Counts)
 	}
 	if len(tp.createdFolders) != 0 || len(tp.createdCases) != 0 {
 		t.Errorf("dry run made TestPulse writes: folders=%+v cases=%+v", tp.createdFolders, tp.createdCases)

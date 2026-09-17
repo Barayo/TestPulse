@@ -429,3 +429,76 @@ docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
 
 **Helm**: the same `importConnector.enabled: true` chart values, setting
 `importConnector.source: xray` in place of the default `testrail`.
+
+## Tuskr importer
+
+> Independent, unofficial integration — not affiliated with, endorsed by,
+> or sponsored by Tuskr. No Tuskr logo is used anywhere in TestPulse's
+> docs or UI.
+
+The Tuskr importer (`add-tuskr-importer`) is the same `tools/import-connector`
+tool as the importers above, with `--source=tuskr` — the job/route/report
+contract, poll-not-push control direction, and Connect → Preview → Result
+flow are all identical and unchanged. This is the sixth and final card in
+this structural-importer family — no further vendor-importer cards remain
+planned after this one.
+
+### What it does and doesn't import
+
+- **Imports**: a Tuskr project's Test Suites, mapped to top-level TestPulse
+  folders, and each Suite's Sections, mapped to nested folders inside
+  them — a confirmed, strict two-level hierarchy (Tuskr's own API returns
+  a Suite's Sections nested in the same response; Sections are not
+  themselves nestable). Cases are created inside their Section's mapped
+  folder. TestPulse's own `Suite` construct is never created, modified, or
+  otherwise touched by this import.
+- **A case's Steps-type custom field is detected by shape, not by name.**
+  Tuskr has no API endpoint to look up a project's custom field
+  *definitions* — a case's "Steps" field (its structured procedure) is
+  just one custom-field type among several (Checkbox, Date, Dropdown,
+  Integer, Multi-select, Steps, Text, URL, User), with no way to know its
+  configured field name in advance. This importer instead scans a case's
+  custom fields for one shaped like a steps array (each entry carrying a
+  `step` value) and maps it to structured TestPulse steps; a case with no
+  such field imports with no steps, rather than guessing.
+- **Every other custom field maps by value shape, the same honest fallback
+  as Zephyr Scale and Xray.** A string-valued field maps to a TestPulse
+  `text` custom field; anything else is dropped and named in the report.
+  Without a field-definitions endpoint, this importer cannot distinguish
+  Dropdown from Multi-select from plain Text — a real, disclosed limitation
+  rather than a guessed type table.
+- **Does not import**: run/result history, and — same permanent v1
+  boundary as the other importers — an imported case starts at version 1,
+  not a reconstruction of the case's own Tuskr edit history.
+- Every import starts as a **dry run**, identical in shape to the other
+  importers'.
+
+### Auth: a tenant ID and a Personal Access Token — a single SaaS deployment, no site URL
+
+Tuskr is a single SaaS deployment (no self-hosted mode) — the API host is
+fixed, and a tenant ID (from the account's own settings) is embedded in
+every request's URL path alongside a per-user **Personal Access Token**
+(generated from the profile menu → API). The Connect screen at
+**+ New project → Import from Tuskr** collects a **tenant ID**, a
+**Personal Access Token**, and the **project ID**, stored encrypted at
+rest exactly like every other importer's credentials and handed to the
+importer only at claim time. The importer's own TestPulse identity uses
+the same per-project-scoped agent token model as the other importers.
+
+Tuskr also documents a **10 requests/second account-wide rate limit** —
+tight enough that a real crawl could plausibly hit it, unlike every prior
+importer's rate limits in this family. `internal/tuskrclient` paces every
+outgoing request at least 110ms apart to stay comfortably under it,
+proactively rather than reacting to 429s after the fact.
+
+**Docker Compose**: the same `import-connector` profile, with
+`--source=tuskr`:
+
+```sh
+TESTPULSE_AGENT_TOKEN=... \
+docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
+  run import-connector --source=tuskr
+```
+
+**Helm**: the same `importConnector.enabled: true` chart values, setting
+`importConnector.source: tuskr` in place of the default `testrail`.
