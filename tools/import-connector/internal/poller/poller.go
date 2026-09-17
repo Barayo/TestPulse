@@ -50,11 +50,23 @@ type NewZephyrScaleClient func(baseURL, token string) importer.ZephyrScaleReader
 // production this is kiwitcmsclient.New.
 type NewKiwiTCMSClient func(ctx context.Context, siteURL, username, password string) (importer.KiwiTCMSReader, error)
 
+// NewXrayCloudClient constructs an XrayReader from a claimed job's
+// decrypted Cloud credentials — a seam so tests can substitute a fake
+// without a real Xray Cloud account. In production this wraps
+// xrayclient.NewCloud.
+type NewXrayCloudClient func(ctx context.Context, baseHost, clientID, clientSecret, projectID string) (importer.XrayReader, error)
+
+// NewXrayServerClient constructs an XrayReader from a claimed job's
+// decrypted Server/Data Center credentials — the Server/DC counterpart
+// to NewXrayCloudClient (design.md D-X1: one interface, two modes). In
+// production this wraps xrayclient.NewServer.
+type NewXrayServerClient func(ctx context.Context, siteURL, personalAccessToken, projectKey string) (importer.XrayReader, error)
+
 // Once claims and runs at most one pending job for source. Returns true
 // when a job was claimed (whether it ultimately succeeded or failed) and
 // false when nothing was pending — the ordinary steady-state case, not an
 // error.
-func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, source string, logger *slog.Logger) bool {
+func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, newXrayCloud NewXrayCloudClient, newXrayServer NewXrayServerClient, source string, logger *slog.Logger) bool {
 	claimed, err := tp.ClaimPendingJob(ctx, source)
 	if err != nil {
 		logger.Error("claiming pending job", "source", source, "error", err)
@@ -65,7 +77,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	}
 	logger.Info("claimed import job", "jobId", claimed.Job.ID, "mode", claimed.Job.Mode)
 
-	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, source, claimed, logger); err != nil {
+	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, newXrayCloud, newXrayServer, source, claimed, logger); err != nil {
 		logger.Error("running import job", "jobId", claimed.Job.ID, "error", err)
 		msg := err.Error()
 		if cerr := tp.CompleteJob(ctx, claimed.Job.ID, "failed", nil, &msg); cerr != nil {
@@ -75,7 +87,7 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	return true
 }
 
-func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
+func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient, newQase NewQaseClient, newZephyrScale NewZephyrScaleClient, newKiwiTCMS NewKiwiTCMSClient, newXrayCloud NewXrayCloudClient, newXrayServer NewXrayServerClient, source string, claimed *testpulseclient.ClaimedJob, logger *slog.Logger) error {
 	projectKey, err := resolveProjectKey(ctx, tp, claimed.Job.ProjectID)
 	if err != nil {
 		return err
@@ -92,6 +104,8 @@ func runClaimedJob(ctx context.Context, tp TestPulseClient, newTestRail NewTestR
 		report, err = runZephyrScaleJob(ctx, tp, newZephyrScale, claimed, projectKey, dryRun, logger)
 	case "kiwi-tcms":
 		report, err = runKiwiTCMSJob(ctx, tp, newKiwiTCMS, claimed, projectKey, dryRun, logger)
+	case "xray":
+		report, err = runXrayJob(ctx, tp, newXrayCloud, newXrayServer, claimed, projectKey, dryRun, logger)
 	default:
 		return fmt.Errorf("job %s has unsupported source %q", claimed.Job.ID, source)
 	}
@@ -173,6 +187,51 @@ func runKiwiTCMSJob(ctx context.Context, tp TestPulseClient, newKiwiTCMS NewKiwi
 		return importer.Report{}, fmt.Errorf("job %s could not connect to Kiwi TCMS: %w", claimed.Job.ID, err)
 	}
 	return importer.RunKiwiTCMS(ctx, kr, tp, projectKey, product, dryRun, func(current, total int) {
+		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
+			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
+		}
+	})
+}
+
+// runXrayJob dispatches to Cloud or Server/DC based on the claimed job's
+// "mode" credential (design.md D-X7 — the only branching point in the
+// whole pipeline; everything downstream of client construction is
+// mode-agnostic, design.md D-X1).
+func runXrayJob(ctx context.Context, tp TestPulseClient, newXrayCloud NewXrayCloudClient, newXrayServer NewXrayServerClient, claimed *testpulseclient.ClaimedJob, projectKey string, dryRun bool, logger *slog.Logger) (importer.Report, error) {
+	mode := claimed.Credentials["mode"]
+	var xr importer.XrayReader
+	var err error
+
+	switch mode {
+	case "cloud":
+		clientID := claimed.Credentials["clientId"]
+		clientSecret := claimed.Credentials["clientSecret"]
+		projectID := claimed.Credentials["projectId"]
+		if clientID == "" || clientSecret == "" || projectID == "" {
+			return importer.Report{}, fmt.Errorf("job %s is missing Xray Cloud credentials (clientId/clientSecret/projectId)", claimed.Job.ID)
+		}
+		// design.md D-X2: a failed authenticate call here is a distinct,
+		// clearly-wrapped failure mode from a later data-fetch error.
+		xr, err = newXrayCloud(ctx, "", clientID, clientSecret, projectID)
+		if err != nil {
+			return importer.Report{}, fmt.Errorf("job %s could not connect to Xray Cloud: %w", claimed.Job.ID, err)
+		}
+	case "server":
+		siteURL := claimed.Credentials["siteUrl"]
+		pat := claimed.Credentials["personalAccessToken"]
+		projectKeyXray := claimed.Credentials["projectKey"]
+		if siteURL == "" || pat == "" || projectKeyXray == "" {
+			return importer.Report{}, fmt.Errorf("job %s is missing Xray Server/DC credentials (siteUrl/personalAccessToken/projectKey)", claimed.Job.ID)
+		}
+		xr, err = newXrayServer(ctx, siteURL, pat, projectKeyXray)
+		if err != nil {
+			return importer.Report{}, fmt.Errorf("job %s could not connect to Xray Server/DC: %w", claimed.Job.ID, err)
+		}
+	default:
+		return importer.Report{}, fmt.Errorf("job %s has an invalid Xray mode %q (want \"cloud\" or \"server\")", claimed.Job.ID, mode)
+	}
+
+	return importer.RunXray(ctx, xr, tp, projectKey, dryRun, func(current, total int) {
 		if err := tp.ReportProgress(ctx, claimed.Job.ID, current, total); err != nil {
 			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
 		}

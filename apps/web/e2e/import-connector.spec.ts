@@ -4,21 +4,23 @@ import { test, expect } from '@playwright/test'
 // openspec/changes/add-testrail-importer/specs/testrail-import/spec.md's
 // "The web app offers importing a TestRail project as a project-creation
 // entry point" requirement. add-qase-importer's, add-zephyr-scale-importer's,
-// and add-kiwi-tcms-importer's own scenarios (below) mirror the same
-// coverage for their own equivalent requirements, reusing this file rather
-// than forking sibling specs — all four connectors share the exact same
-// entry-point/Connect-screen shape.
+// add-kiwi-tcms-importer's, and add-xray-importer's own scenarios (below)
+// mirror the same coverage for their own equivalent requirements, reusing
+// this file rather than forking sibling specs — all five connectors share
+// the exact same entry-point/Connect-screen shape (Xray adds a Cloud/Server
+// mode toggle on top of it, design.md D-X9).
 // GIVEN: the compose stack is up (make e2e), with a fresh database, and the
 // default authenticated page (global-setup.ts) is the Tenant Admin.
 //
 // A full crawl-and-import run against a live/mocked TestRail, Qase, Zephyr
-// Scale, or Kiwi TCMS instance is out of scope here — no test double for any
-// of these vendors exists in this repo's E2E suite. That's covered instead
-// by tools/import-connector's own Go tests (internal/testrailclient /
-// internal/qaseclient / internal/zephyrscaleclient / internal/kiwitcmsclient,
-// internal/importer, internal/poller) against fake HTTP servers. This file
-// covers only what's reachable without a live connection: the entry point
-// and each Connect screen's client-side validation.
+// Scale, Kiwi TCMS, or Xray instance is out of scope here — no test double
+// for any of these vendors exists in this repo's E2E suite. That's covered
+// instead by tools/import-connector's own Go tests (internal/testrailclient /
+// internal/qaseclient / internal/zephyrscaleclient / internal/kiwitcmsclient /
+// internal/xrayclient, internal/importer, internal/poller) against fake
+// HTTP servers. This file covers only what's reachable without a live
+// connection: the entry point and each Connect screen's client-side
+// validation.
 
 test.describe('Requirement: The web app offers importing a TestRail project as a project-creation entry point', () => {
   test('Scenario: A user can reach the TestRail import flow from project creation', async ({ page }) => {
@@ -197,5 +199,86 @@ test.describe('Requirement: The web app offers importing a Kiwi TCMS product as 
 
     await page.goto('/projects/import/kiwi-tcms')
     await expect(page.getByText(/not affiliated with.*kiwi tcms/i)).toBeVisible()
+  })
+})
+
+test.describe('Requirement: The web app offers importing an Xray project as a project-creation entry point', () => {
+  test('Scenario: A user can reach the Xray import flow from project creation', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-164' })
+
+    await page.goto('/')
+    await page.getByRole('button', { name: /new project/i }).click()
+
+    const menu = page.getByRole('menu', { name: /new project/i })
+    await expect(menu.getByRole('menuitem', { name: /start from scratch/i })).toBeVisible()
+    const importItem = menu.getByRole('menuitem', { name: /import from xray/i })
+    await expect(importItem).toBeVisible()
+
+    await importItem.click()
+    await page.waitForURL(/\/projects\/import\/xray/)
+    await expect(page.getByRole('heading', { name: /import from xray/i })).toBeVisible()
+  })
+
+  test('Scenario: The Connect screen defaults to Cloud mode, and switching to Server/Data Center swaps the credential fields', async ({
+    page,
+  }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-165' })
+
+    await page.goto('/projects/import/xray')
+    await expect(page.getByRole('button', { name: /^cloud$/i })).toHaveAttribute('aria-pressed', 'true')
+    await expect(page.getByLabel('Xray Client ID')).toBeVisible()
+    await expect(page.getByLabel('Xray site URL')).not.toBeVisible()
+
+    await page.getByRole('button', { name: /server.*data center/i }).click()
+    await expect(page.getByLabel('Xray site URL')).toBeVisible()
+    await expect(page.getByLabel('Xray Client ID')).not.toBeVisible()
+  })
+
+  test('Scenario: The Cloud Connect screen requires every field before previewing an import', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-166' })
+
+    await page.goto('/projects/import/xray')
+    const submit = page.getByRole('button', { name: /preview import/i })
+    await expect(submit).toBeDisabled()
+
+    await page.getByLabel('Xray Client ID').fill('cid-123')
+    await expect(submit).toBeDisabled()
+    await page.getByLabel('Xray Client Secret').fill('csecret-123')
+    await expect(submit).toBeDisabled()
+    await page.getByLabel('Xray project ID').fill('10000')
+    await expect(submit).toBeDisabled()
+
+    // "New project" is the default target mode — the name field is the
+    // last missing piece.
+    await page.getByLabel('New project name').fill('QA Platform (E2E)')
+    await expect(submit).toBeEnabled()
+  })
+
+  test('Scenario: The Server/Data Center Connect screen requires every field before previewing an import', async ({
+    page,
+  }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-167' })
+
+    await page.goto('/projects/import/xray')
+    await page.getByRole('button', { name: /server.*data center/i }).click()
+    const submit = page.getByRole('button', { name: /preview import/i })
+    await expect(submit).toBeDisabled()
+
+    await page.getByLabel('Xray site URL').fill('https://jira.example.com')
+    await expect(submit).toBeDisabled()
+    await page.getByLabel('Xray Personal Access Token').fill('pat-123')
+    await expect(submit).toBeDisabled()
+    await page.getByLabel('Xray project key').fill('XRAY')
+    await expect(submit).toBeDisabled()
+
+    await page.getByLabel('New project name').fill('QA Platform (E2E)')
+    await expect(submit).toBeEnabled()
+  })
+
+  test('Scenario: The Connect screen discloses this is an unofficial, unaffiliated integration', async ({ page }) => {
+    test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-168' })
+
+    await page.goto('/projects/import/xray')
+    await expect(page.getByText(/not affiliated with.*xpand it/i)).toBeVisible()
   })
 })

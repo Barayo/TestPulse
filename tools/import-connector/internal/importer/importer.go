@@ -21,6 +21,7 @@ import (
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/xrayclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
 
@@ -93,6 +94,16 @@ type KiwiTCMSReader interface {
 	ListTestPlans(ctx context.Context, productID int) ([]kiwitcmsclient.TestPlan, error)
 	ListTestCases(ctx context.Context, planID int) ([]kiwitcmsclient.TestCase, error)
 	ListProperties(ctx context.Context, caseID int) ([]kiwitcmsclient.Property, error)
+}
+
+// XrayReader is the read-only subset of xrayclient.Client this package
+// needs — satisfied structurally by both the Cloud and Server/Data
+// Center implementations (design.md D-X1), so tests can supply a single
+// fake regardless of which mode is being simulated.
+type XrayReader interface {
+	ListFolders(ctx context.Context) ([]xrayclient.Folder, error)
+	ListTests(ctx context.Context, folderID string) ([]xrayclient.Test, error)
+	GetTestSteps(ctx context.Context, testKey string) ([]xrayclient.TestStep, error)
 }
 
 // TestPulseWriter is the write subset of *testpulseclient.Client this
@@ -798,6 +809,146 @@ func BuildKiwiTCMSPlan(ctx context.Context, kr KiwiTCMSReader, productName strin
 // never-writes machinery.
 func RunKiwiTCMS(ctx context.Context, kr KiwiTCMSReader, tp TestPulseWriter, projectKey, kiwiProductName string, dryRun bool, progress func(current, total int)) (Report, error) {
 	plan, err := BuildKiwiTCMSPlan(ctx, kr, kiwiProductName)
+	if err != nil {
+		return Report{}, err
+	}
+	report := Report{Counts: countEntities(plan), Unmapped: plan.Unmapped}
+	if dryRun {
+		return report, nil
+	}
+	if err := execute(ctx, tp, projectKey, plan, progress); err != nil {
+		return report, err
+	}
+	return report, nil
+}
+
+// toXrayCasePlan resolves one Xray Test's steps/definition and custom
+// fields into a casePlan (design.md D-X5/D-X6): rather than trust a
+// TestType string that couldn't be independently verified for
+// Server/DC, the mapping decision is driven by whether GetTestSteps
+// actually returns any steps — behaviorally equivalent, since Xray's own
+// data model only ever populates steps for Manual tests. A step's test
+// data (Data) is appended to its action text, mirroring how Zephyr
+// Scale's steps carry test data alongside the action rather than as a
+// separate TestPulse field. A custom field whose raw value is a JSON
+// string maps to TestPulse text; anything else (including Xray-native
+// execution-metadata fields, which are typically structured objects, not
+// plain strings) is dropped and named in plan.Unmapped.
+func toXrayCasePlan(ctx context.Context, xr XrayReader, t xrayclient.Test, plan *Plan, unmappedSeen map[string]bool) (casePlan, error) {
+	cp := casePlan{Title: t.Summary, Description: t.Description, CustomFields: map[string]string{}}
+
+	steps, err := xr.GetTestSteps(ctx, t.Key)
+	if err != nil {
+		return casePlan{}, fmt.Errorf("fetching steps for Xray test %s: %w", t.Key, err)
+	}
+	for _, s := range steps {
+		action := s.Action
+		if s.Data != "" {
+			action += "\n\nTest data: " + s.Data
+		}
+		cp.Steps = append(cp.Steps, stepPlan{Action: action, Expected: s.Result})
+	}
+
+	if len(cp.Steps) == 0 && t.Definition != "" {
+		if cp.Description != "" {
+			cp.Description += "\n\n" + t.Definition
+		} else {
+			cp.Description = t.Definition
+		}
+	}
+
+	for name, raw := range t.CustomFields {
+		s, ok := raw.(string)
+		if !ok {
+			if !unmappedSeen[name] {
+				unmappedSeen[name] = true
+				plan.Unmapped = append(plan.Unmapped, name)
+			}
+			continue
+		}
+		plan.fieldTypes[name] = "text"
+		plan.fieldLabels[name] = name
+		cp.CustomFields[name] = s
+	}
+
+	return cp, nil
+}
+
+// BuildXrayPlan crawls an Xray project's Test Repository folder tree and
+// the Test issues within each folder, producing the folder hierarchy
+// design.md D-X4 describes plus the unmapped-field list D-X6 requires —
+// purely from Xray reads, no TestPulseWriter involved. A folder with a
+// nil ParentID is top-level; every other folder nests beneath its
+// parent's mapped folder, recursively — the client's own ListFolders
+// never returns the Test Repository's own root as an entry (design.md
+// D-X4), so every folder in the list is a real, named folder.
+func BuildXrayPlan(ctx context.Context, xr XrayReader) (Plan, error) {
+	folders, err := xr.ListFolders(ctx)
+	if err != nil {
+		return Plan{}, fmt.Errorf("listing Xray Test Repository folders: %w", err)
+	}
+
+	plan := Plan{
+		Unmapped:    []string{},
+		fieldTypes:  map[string]string{},
+		fieldLabels: map[string]string{},
+	}
+
+	childrenByParent := map[string][]xrayclient.Folder{}
+	var roots []xrayclient.Folder
+	for _, f := range folders {
+		if f.ParentID == nil {
+			roots = append(roots, f)
+			continue
+		}
+		childrenByParent[*f.ParentID] = append(childrenByParent[*f.ParentID], f)
+	}
+
+	unmappedSeen := map[string]bool{}
+	var buildFolder func(f xrayclient.Folder) (*folderPlan, error)
+	buildFolder = func(f xrayclient.Folder) (*folderPlan, error) {
+		fp := &folderPlan{Name: f.Name}
+		tests, err := xr.ListTests(ctx, f.ID)
+		if err != nil {
+			return nil, fmt.Errorf("listing tests in folder %q: %w", f.Name, err)
+		}
+		for _, t := range tests {
+			cp, err := toXrayCasePlan(ctx, xr, t, &plan, unmappedSeen)
+			if err != nil {
+				return nil, err
+			}
+			fp.Cases = append(fp.Cases, cp)
+		}
+		for _, child := range childrenByParent[f.ID] {
+			childFp, err := buildFolder(child)
+			if err != nil {
+				return nil, err
+			}
+			fp.Children = append(fp.Children, childFp)
+		}
+		return fp, nil
+	}
+
+	for _, root := range roots {
+		fp, err := buildFolder(root)
+		if err != nil {
+			return Plan{}, err
+		}
+		plan.Suites = append(plan.Suites, fp)
+	}
+
+	return plan, nil
+}
+
+// RunXray crawls an Xray project via xr and, unless dryRun, writes the
+// resulting folder/case structure into TestPulse project projectKey via
+// tp — the Xray counterpart to Run/RunQase/RunZephyrScale/RunKiwiTCMS,
+// sharing the same execute/Report/dry-run-never-writes machinery. Unlike
+// the other Run* functions, there is no separate source-project
+// identifier parameter: an xrayclient.Client is already scoped to one
+// Xray project at construction time (design.md D-X2).
+func RunXray(ctx context.Context, xr XrayReader, tp TestPulseWriter, projectKey string, dryRun bool, progress func(current, total int)) (Report, error) {
+	plan, err := BuildXrayPlan(ctx, xr)
 	if err != nil {
 		return Report{}, err
 	}

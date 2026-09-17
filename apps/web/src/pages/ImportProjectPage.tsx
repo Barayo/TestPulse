@@ -25,15 +25,21 @@ type TargetMode = 'new' | 'existing'
 // Sources with a dedicated Connect-form field set. Every other value (an
 // unknown/mistyped :source segment) falls through to the "Unknown import
 // source" guard below.
-type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'kiwi-tcms' | 'csv'
+type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'kiwi-tcms' | 'xray' | 'csv'
 
 const SOURCE_LABEL: Record<Source, string> = {
   testrail: 'TestRail',
   qase: 'Qase',
   'zephyr-scale': 'Zephyr Scale',
   'kiwi-tcms': 'Kiwi TCMS',
+  xray: 'Xray',
   csv: 'CSV',
 }
+
+// Xray Cloud and Server/Data Center have genuinely different auth and
+// credential fields (design.md D-X2) — the only source in this family
+// needing a mode toggle at all.
+type XrayMode = 'cloud' | 'server'
 
 // The exact column set/order internal/csvcases.FixedColumns recognizes on
 // import (add-csv-import-export design.md D4/D5) — mirrored here so the
@@ -123,6 +129,13 @@ export default function ImportProjectPage() {
   const [kiwiUsername, setKiwiUsername] = useState('')
   const [kiwiPassword, setKiwiPassword] = useState('')
   const [kiwiProduct, setKiwiProduct] = useState('')
+  const [xrayMode, setXrayMode] = useState<XrayMode>('cloud')
+  const [xrayClientId, setXrayClientId] = useState('')
+  const [xrayClientSecret, setXrayClientSecret] = useState('')
+  const [xrayProjectId, setXrayProjectId] = useState('')
+  const [xraySiteUrl, setXraySiteUrl] = useState('')
+  const [xrayPat, setXrayPat] = useState('')
+  const [xrayProjectKey, setXrayProjectKey] = useState('')
   const [csvFile, setCsvFile] = useState<File | null>(null)
   const [csvResult, setCsvResult] = useState<CsvImportResult>()
   const [targetMode, setTargetMode] = useState<TargetMode>('new')
@@ -194,6 +207,7 @@ export default function ImportProjectPage() {
     source !== 'qase' &&
     source !== 'zephyr-scale' &&
     source !== 'kiwi-tcms' &&
+    source !== 'xray' &&
     source !== 'csv'
   ) {
     return <p className="text-sm text-muted-foreground">Unknown import source &ldquo;{source}&rdquo;.</p>
@@ -217,7 +231,14 @@ export default function ImportProjectPage() {
               kiwiPassword.length > 0 &&
               kiwiProduct.trim().length > 0 &&
               targetChosen
-            : csvFile !== null && targetChosen
+            : source === 'xray'
+              ? (xrayMode === 'cloud'
+                  ? xrayClientId.trim().length > 0 &&
+                    xrayClientSecret.length > 0 &&
+                    xrayProjectId.trim().length > 0
+                  : xraySiteUrl.trim().length > 0 && xrayPat.length > 0 && xrayProjectKey.trim().length > 0) &&
+                targetChosen
+              : csvFile !== null && targetChosen
 
   function credentialsBody(): Record<string, string> {
     if (source === 'testrail') {
@@ -238,6 +259,21 @@ export default function ImportProjectPage() {
         password: kiwiPassword,
         product: kiwiProduct.trim(),
       }
+    }
+    if (source === 'xray') {
+      return xrayMode === 'cloud'
+        ? {
+            mode: 'cloud',
+            clientId: xrayClientId.trim(),
+            clientSecret: xrayClientSecret,
+            projectId: xrayProjectId.trim(),
+          }
+        : {
+            mode: 'server',
+            siteUrl: xraySiteUrl.trim(),
+            personalAccessToken: xrayPat,
+            projectKey: xrayProjectKey.trim(),
+          }
     }
     return {
       apiToken,
@@ -363,6 +399,13 @@ export default function ImportProjectPage() {
     setKiwiUsername('')
     setKiwiPassword('')
     setKiwiProduct('')
+    setXrayMode('cloud')
+    setXrayClientId('')
+    setXrayClientSecret('')
+    setXrayProjectId('')
+    setXraySiteUrl('')
+    setXrayPat('')
+    setXrayProjectKey('')
     setCsvFile(null)
     setCsvResult(undefined)
     setTargetMode('new')
@@ -422,7 +465,11 @@ export default function ImportProjectPage() {
           ? `Zephyr Scale project ${zephyrScaleProjectKey} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
           : source === 'kiwi-tcms'
             ? `${kiwiSiteUrl.replace(/^https?:\/\//, '')} · product ${kiwiProduct} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
-            : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
+            : source === 'xray'
+              ? xrayMode === 'cloud'
+                ? `Xray Cloud project ${xrayProjectId} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+                : `${xraySiteUrl.replace(/^https?:\/\//, '')} · project ${xrayProjectKey} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+              : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
 
   return (
     <div className="space-y-6">
@@ -455,6 +502,13 @@ export default function ImportProjectPage() {
               them — doesn&apos;t touch TestPulse&apos;s own Suite feature. A case linked to more than one test plan
               imports once, not once per plan. Run/result history isn&apos;t part of this version — see the note
               below.
+            </>
+          ) : source === 'xray' ? (
+            <>
+              Recreates an Xray project&apos;s Test Repository folder tree as nested TestPulse folders, and its
+              Tests inside them, with structured steps for Manual-type tests — doesn&apos;t touch TestPulse&apos;s
+              own Suite feature. Supports both Xray Cloud and Server/Data Center. Test Sets, Test Plans, and
+              Preconditions aren&apos;t part of this version — see the note below.
             </>
           ) : (
             <>
@@ -674,6 +728,108 @@ export default function ImportProjectPage() {
                   <p className="text-xs text-muted-foreground">
                     Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Kiwi
                     TCMS.
+                  </p>
+                </>
+              ) : source === 'xray' ? (
+                <>
+                  <p className="text-sm text-muted-foreground">
+                    TestPulse reads your Xray project over its API — Cloud via a client ID/secret exchanged for a
+                    token, Server/Data Center via a Jira Personal Access Token — nothing is written back to Xray.
+                  </p>
+
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      variant={xrayMode === 'cloud' ? 'default' : 'outline'}
+                      aria-pressed={xrayMode === 'cloud'}
+                      onClick={() => setXrayMode('cloud')}
+                    >
+                      Cloud
+                    </Button>
+                    <Button
+                      type="button"
+                      variant={xrayMode === 'server' ? 'default' : 'outline'}
+                      aria-pressed={xrayMode === 'server'}
+                      onClick={() => setXrayMode('server')}
+                    >
+                      Server / Data Center
+                    </Button>
+                  </div>
+
+                  {xrayMode === 'cloud' ? (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1">
+                        <Label htmlFor="xray-client-id">Xray Client ID</Label>
+                        <Input
+                          id="xray-client-id"
+                          value={xrayClientId}
+                          onChange={(e) => setXrayClientId(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="xray-client-secret">Xray Client Secret</Label>
+                        <Input
+                          id="xray-client-secret"
+                          type="password"
+                          value={xrayClientSecret}
+                          onChange={(e) => setXrayClientSecret(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label htmlFor="xray-project-id">Xray project ID</Label>
+                        <Input
+                          id="xray-project-id"
+                          value={xrayProjectId}
+                          onChange={(e) => setXrayProjectId(e.target.value)}
+                          placeholder="e.g. 10000"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          The numeric Jira project id, not the project key — find it in Jira&apos;s own project
+                          settings URL.
+                        </p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1 sm:col-span-2">
+                        <Label htmlFor="xray-site-url">Xray site URL</Label>
+                        <Input
+                          id="xray-site-url"
+                          value={xraySiteUrl}
+                          onChange={(e) => setXraySiteUrl(e.target.value)}
+                          placeholder="https://jira.example.com"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="xray-pat">Xray Personal Access Token</Label>
+                        <Input
+                          id="xray-pat"
+                          type="password"
+                          value={xrayPat}
+                          onChange={(e) => setXrayPat(e.target.value)}
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label htmlFor="xray-project-key">Xray project key</Label>
+                        <Input
+                          id="xray-project-key"
+                          value={xrayProjectKey}
+                          onChange={(e) => setXrayProjectKey(e.target.value)}
+                          placeholder="e.g. XRAY"
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-xs text-muted-foreground">
+                    Need a Client ID/Secret? In Jira: <strong className="font-semibold">Xray Global Settings → API
+                    Keys</strong>. A Personal Access Token comes from your own Jira profile settings (requires Jira
+                    8.14+) — a username and password aren&apos;t accepted.
+                  </p>
+
+                  <p className="text-xs text-muted-foreground">
+                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Xpand IT.
+                    Xray is a trademark of Xpand IT.
                   </p>
                 </>
               ) : (

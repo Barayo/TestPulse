@@ -157,6 +157,13 @@ export default function ProjectsPage() {
       onSelect: () => navigate('/projects/import/kiwi-tcms'),
     },
     {
+      key: 'xray',
+      label: 'Import from Xray',
+      description: 'Bring in a Test Repository and tests from an existing Xray Cloud or Server/Data Center project.',
+      icon: DatabaseIcon,
+      onSelect: () => navigate('/projects/import/xray'),
+    },
+    {
       key: 'csv',
       label: 'Import from CSV',
       description: 'Bring in cases from a spreadsheet export — works with any tool, no account needed.',

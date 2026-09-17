@@ -10,6 +10,7 @@ import (
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/xrayclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
 
@@ -1081,6 +1082,166 @@ func TestRunKiwiTCMSDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
 	report, err := RunKiwiTCMS(context.Background(), kr, tp, "QA", "Acme", true, nil)
 	if err != nil {
 		t.Fatalf("RunKiwiTCMS: %v", err)
+	}
+	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
+		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)
+	}
+	if len(tp.createdFolders) != 0 || len(tp.createdCases) != 0 {
+		t.Errorf("dry run made TestPulse writes: folders=%+v cases=%+v", tp.createdFolders, tp.createdCases)
+	}
+}
+
+// --- Xray (add-xray-importer) ---
+
+// fakeXray serves a fixed folder/test/step fixture, keyed exactly like
+// the real client's own method signatures so it satisfies XrayReader
+// structurally — one fake stands in for both Cloud and Server/DC, since
+// design.md D-X1 keeps internal/importer's mapping logic mode-agnostic.
+type fakeXray struct {
+	folders       []xrayclient.Folder
+	testsByFolder map[string][]xrayclient.Test
+	stepsByKey    map[string][]xrayclient.TestStep
+}
+
+func (f *fakeXray) ListFolders(context.Context) ([]xrayclient.Folder, error) {
+	return f.folders, nil
+}
+func (f *fakeXray) ListTests(_ context.Context, folderID string) ([]xrayclient.Test, error) {
+	return f.testsByFolder[folderID], nil
+}
+func (f *fakeXray) GetTestSteps(_ context.Context, testKey string) ([]xrayclient.TestStep, error) {
+	return f.stepsByKey[testKey], nil
+}
+
+func strPtr(s string) *string { return &s }
+
+func TestBuildXrayPlanMapsNestedTestRepositoryFolderTree(t *testing.T) {
+	xr := &fakeXray{
+		folders: []xrayclient.Folder{
+			{ID: "/Login", ParentID: nil, Name: "Login"},
+			{ID: "/Login/Happy Path", ParentID: strPtr("/Login"), Name: "Happy Path"},
+			{ID: "/Checkout", ParentID: nil, Name: "Checkout"},
+		},
+		testsByFolder: map[string][]xrayclient.Test{
+			"/Login/Happy Path": {{Key: "XRAY-1", Summary: "Login with valid credentials", TestType: "Manual"}},
+		},
+	}
+
+	plan, err := BuildXrayPlan(context.Background(), xr)
+	if err != nil {
+		t.Fatalf("BuildXrayPlan: %v", err)
+	}
+	if len(plan.Suites) != 2 {
+		t.Fatalf("plan.Suites = %+v, want 2 top-level folders", plan.Suites)
+	}
+	byName := map[string]*folderPlan{}
+	for _, s := range plan.Suites {
+		byName[s.Name] = s
+	}
+	login := byName["Login"]
+	if login == nil || len(login.Children) != 1 || login.Children[0].Name != "Happy Path" {
+		t.Fatalf("Login folder = %+v, want one Happy Path child", login)
+	}
+	if len(login.Children[0].Cases) != 1 || login.Children[0].Cases[0].Title != "Login with valid credentials" {
+		t.Fatalf("Happy Path cases = %+v", login.Children[0].Cases)
+	}
+}
+
+func TestBuildXrayPlanManualStepsMapInOrder(t *testing.T) {
+	xr := &fakeXray{
+		folders: []xrayclient.Folder{{ID: "/Login", ParentID: nil, Name: "Login"}},
+		testsByFolder: map[string][]xrayclient.Test{
+			"/Login": {{Key: "XRAY-1", Summary: "Login test", Description: "Jira description", TestType: "Manual"}},
+		},
+		stepsByKey: map[string][]xrayclient.TestStep{
+			"XRAY-1": {
+				{Action: "Open login page", Data: "", Result: "Page loads"},
+				{Action: "Enter credentials", Data: "user/pass", Result: "Logged in"},
+			},
+		},
+	}
+
+	plan, err := BuildXrayPlan(context.Background(), xr)
+	if err != nil {
+		t.Fatalf("BuildXrayPlan: %v", err)
+	}
+	cp := plan.Suites[0].Cases[0]
+	if len(cp.Steps) != 2 {
+		t.Fatalf("cp.Steps = %+v, want 2", cp.Steps)
+	}
+	if cp.Steps[1].Action != "Enter credentials\n\nTest data: user/pass" || cp.Steps[1].Expected != "Logged in" {
+		t.Errorf("cp.Steps[1] = %+v", cp.Steps[1])
+	}
+	if cp.Description != "Jira description" {
+		t.Errorf("Description = %q, want the Jira description unchanged", cp.Description)
+	}
+}
+
+func TestBuildXrayPlanNonManualDefinitionBecomesDescriptionWithNoSteps(t *testing.T) {
+	xr := &fakeXray{
+		folders: []xrayclient.Folder{{ID: "/Login", ParentID: nil, Name: "Login"}},
+		testsByFolder: map[string][]xrayclient.Test{
+			"/Login": {{Key: "XRAY-2", Summary: "Cucumber login test", TestType: "Cucumber", Definition: "Scenario: Login\n  Given ...\n  Then ..."}},
+		},
+	}
+
+	plan, err := BuildXrayPlan(context.Background(), xr)
+	if err != nil {
+		t.Fatalf("BuildXrayPlan: %v", err)
+	}
+	cp := plan.Suites[0].Cases[0]
+	if len(cp.Steps) != 0 {
+		t.Errorf("cp.Steps = %+v, want none (no structured steps)", cp.Steps)
+	}
+	if !strings.Contains(cp.Description, "Scenario: Login") {
+		t.Errorf("Description = %q, want it to include the Gherkin scenario", cp.Description)
+	}
+}
+
+func TestBuildXrayPlanCustomFieldMapping(t *testing.T) {
+	xr := &fakeXray{
+		folders: []xrayclient.Folder{{ID: "/Login", ParentID: nil, Name: "Login"}},
+		testsByFolder: map[string][]xrayclient.Test{
+			"/Login": {
+				{Key: "XRAY-1", Summary: "Case A", CustomFields: map[string]any{"customfield_10010": "High"}},
+				{Key: "XRAY-2", Summary: "Case B", CustomFields: map[string]any{"customfield_10020": map[string]any{"value": "Manual"}}},
+			},
+		},
+	}
+
+	plan, err := BuildXrayPlan(context.Background(), xr)
+	if err != nil {
+		t.Fatalf("BuildXrayPlan: %v", err)
+	}
+	caseA := plan.Suites[0].Cases[0]
+	if caseA.CustomFields["customfield_10010"] != "High" {
+		t.Errorf("caseA.CustomFields = %+v, want customfield_10010=High", caseA.CustomFields)
+	}
+	if len(plan.Unmapped) != 1 || plan.Unmapped[0] != "customfield_10020" {
+		t.Errorf("plan.Unmapped = %+v, want one entry naming the non-string field", plan.Unmapped)
+	}
+
+	tp := &fakeTestPulse{rootFolderID: "root"}
+	if err := execute(context.Background(), tp, "QA", plan, nil); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if len(tp.createdFields) != 1 || tp.createdFields[0].Name != "customfield_10010" {
+		t.Fatalf("created fields = %+v, want exactly 1 string-valued field", tp.createdFields)
+	}
+}
+
+func TestRunXrayDryRunMakesZeroTestPulseWriteCalls(t *testing.T) {
+	xr := &fakeXray{
+		folders: []xrayclient.Folder{{ID: "/Login", ParentID: nil, Name: "Login"}},
+		testsByFolder: map[string][]xrayclient.Test{
+			"/Login": {{Key: "XRAY-1", Summary: "Case A"}},
+		},
+	}
+	tp := &fakeTestPulse{rootFolderID: "root", failOnAnyMethod: true}
+
+	report, err := RunXray(context.Background(), xr, tp, "QA", true, nil)
+	if err != nil {
+		t.Fatalf("RunXray: %v", err)
 	}
 	if report.Counts["folders"] != 1 || report.Counts["cases"] != 1 {
 		t.Errorf("report.Counts = %+v, want 1 folder + 1 case", report.Counts)

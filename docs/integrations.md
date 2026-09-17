@@ -342,3 +342,90 @@ docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
 
 **Helm**: the same `importConnector.enabled: true` chart values, setting
 `importConnector.source: kiwi-tcms` in place of the default `testrail`.
+
+## Xray importer
+
+> Independent, unofficial integration — not affiliated with, endorsed by,
+> or sponsored by Xpand IT. No Xray logo is used anywhere in TestPulse's
+> docs or UI.
+
+The Xray importer (`add-xray-importer`) is the same `tools/import-connector`
+tool as the importers above, with `--source=xray` — the job/route/report
+contract, poll-not-push control direction, and Connect → Preview → Result
+flow are all identical and unchanged. Unlike every other importer in this
+family, it supports **two deployment modes in one connector**: Xray Cloud
+(GraphQL, its own client ID/secret exchanged for a bearer token) and Xray
+Server/Data Center (REST, a Jira Personal Access Token) — the Connect
+screen's Cloud/Server toggle picks which credential set to collect, and the
+importer picks the matching client at claim time; the mapping logic itself
+never branches on which mode created the connection.
+
+### What it does and doesn't import
+
+- **Imports**: an Xray project's **Test Repository** folder tree, mapped
+  directly to a TestPulse Folder tree — a root folder becomes a top-level
+  Folder, a nested folder becomes a nested Folder, preserving Xray's own
+  structure exactly (no "suite vs. section" split, the cleanest structural
+  match of any importer in this family). Each folder's **Test** issues are
+  created as cases inside it. A **Manual**-type Test's structured steps
+  (action/data/expected result) map directly to TestPulse steps, in order —
+  the first importer with real structured step fidelity end to end. A
+  **Cucumber** or **Generic**-type Test has no structured steps at all; its
+  Gherkin scenario or freeform definition is appended to the case's
+  description instead. TestPulse's own `Suite` construct is never created,
+  modified, or otherwise touched by this import.
+- **Custom fields — Cloud and Server/Data Center differ.** Server/DC reads a
+  Test issue's Jira custom fields directly (full REST access via the
+  Personal Access Token): a string-valued field maps to a TestPulse `text`
+  custom field, anything else is dropped and named in the report. **Cloud
+  does not import Jira custom fields in v1 at all** — Xray Cloud's GraphQL
+  API requires every Jira field to be named explicitly in the query, and no
+  way to discover a project's actual custom field ids ahead of time was
+  found; rather than guess at a field list that would miss real customers'
+  actual fields, Cloud mode only imports each Test's summary/description.
+  Xray's own execution/automation metadata (Test Type, Manual Steps Count,
+  and similar) has no TestPulse equivalent and is never imported for either
+  mode.
+- **Does not import**: run/result history, Test Sets, Test Plans (Xray's,
+  distinct from TestPulse's own `Plan`), Preconditions, or — same permanent
+  v1 boundary as the other importers — an imported case starts at version 1,
+  not a reconstruction of the Test issue's Jira edit history.
+- Every import starts as a **dry run**, identical in shape to the other
+  importers'.
+
+### Auth: Cloud uses its own token exchange; Server/Data Center requires a Personal Access Token, never a password
+
+Xray Cloud authenticates via its own `client_id`/`client_secret` API Key
+(generated in Jira → **Xray Global Settings → API Keys**), exchanged for a
+24-hour bearer token — a genuinely different credential from a normal Jira
+API token or OAuth grant. Xray Server/Data Center has no Xray-specific
+token exchange at all; it rides on Jira's own auth, and this importer
+specifically requires a **Personal Access Token** (Jira 8.14+) rather than
+Basic Auth — TestPulse never asks for, or stores, a real Jira account
+password. The Connect screen at **+ New project → Import from Xray**
+collects, depending on the chosen mode:
+
+- **Cloud**: Client ID, Client Secret, and the numeric Jira **Project ID**
+  (not the project key — Xray Cloud's GraphQL API requires the numeric id,
+  and there's no verified way to resolve a project key to its id without a
+  second, different credential this importer deliberately doesn't collect;
+  find it in Jira's own project settings URL).
+- **Server/Data Center**: the Jira site URL, a Personal Access Token, and
+  the Jira **project key**.
+
+Both are stored encrypted at rest exactly like every other importer's
+credentials, and handed to the importer only at claim time. The importer's
+own TestPulse identity uses the same per-project-scoped agent token model
+as the other importers.
+
+**Docker Compose**: the same `import-connector` profile, with
+`--source=xray`:
+
+```sh
+TESTPULSE_AGENT_TOKEN=... \
+docker compose -f deploy/compose/docker-compose.yml --profile import-connector \
+  run import-connector --source=xray
+```
+
+**Helm**: the same `importConnector.enabled: true` chart values, setting
+`importConnector.source: xray` in place of the default `testrail`.

@@ -498,6 +498,157 @@ describe('ImportProjectPage — Kiwi TCMS Connect stage (add-kiwi-tcms-importer 
   })
 })
 
+describe('ImportProjectPage — Xray Connect stage (add-xray-importer tasks.md 5.3)', () => {
+  it('defaults to Cloud mode, showing Cloud fields and the trademark disclaimer, not the other sources\' fields', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/xray')
+    await screen.findByText('Connect to Xray')
+
+    expect(screen.getByRole('button', { name: /^cloud$/i })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: /server.*data center/i })).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByLabelText(/xray client id/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/xray client secret/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/xray project id/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/xray site url/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/xray personal access token/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/kiwi tcms/i)).not.toBeInTheDocument()
+
+    expect(screen.getByText(/not affiliated with, endorsed by, or sponsored by Xpand IT/i)).toBeInTheDocument()
+  })
+
+  it('switching to Server / Data Center swaps in the Server credential fields', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/xray')
+    await screen.findByText('Connect to Xray')
+
+    await userEvent.click(screen.getByRole('button', { name: /server.*data center/i }))
+
+    expect(screen.getByLabelText(/xray site url/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/xray personal access token/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/xray project key/i)).toBeInTheDocument()
+    expect(screen.queryByLabelText(/xray client id/i)).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/xray client secret/i)).not.toBeInTheDocument()
+  })
+
+  it('"Preview import" stays disabled until every required Cloud field is filled', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/xray')
+    await screen.findByText('Connect to Xray')
+    const submit = screen.getByRole('button', { name: /preview import/i })
+    expect(submit).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/xray client id/i), 'cid-123')
+    await userEvent.type(screen.getByLabelText(/xray client secret/i), 'csecret-123')
+    await userEvent.type(screen.getByLabelText(/xray project id/i), '10000')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeEnabled()
+  })
+
+  it('"Preview import" stays disabled until every required Server field is filled', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/xray')
+    await screen.findByText('Connect to Xray')
+    await userEvent.click(screen.getByRole('button', { name: /server.*data center/i }))
+    const submit = screen.getByRole('button', { name: /preview import/i })
+    expect(submit).toBeDisabled()
+
+    await userEvent.type(screen.getByLabelText(/xray site url/i), 'https://jira.example.com')
+    await userEvent.type(screen.getByLabelText(/xray personal access token/i), 'pat-123')
+    await userEvent.type(screen.getByLabelText(/xray project key/i), 'XRAY')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+
+    expect(screen.getByRole('button', { name: /preview import/i })).toBeEnabled()
+  })
+
+  it('submitting in Cloud mode posts source "xray" with mode/clientId/clientSecret/projectId credentials', async () => {
+    mockBaseAPI()
+    mockPOST.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/import-jobs')
+        return Promise.resolve({
+          data: importJob({ id: 'job1', source: 'xray', status: 'pending' }),
+          response: { ok: true, status: 201 },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderImportPage('/projects/import/xray')
+    await screen.findByText('Connect to Xray')
+    await userEvent.type(screen.getByLabelText(/xray client id/i), 'cid-123')
+    await userEvent.type(screen.getByLabelText(/xray client secret/i), 'csecret-123')
+    await userEvent.type(screen.getByLabelText(/xray project id/i), '10000')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /preview import/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/import-jobs',
+        expect.objectContaining({
+          params: { path: { projectKey: 'QAP' } },
+          body: {
+            source: 'xray',
+            mode: 'dry_run',
+            credentials: {
+              mode: 'cloud',
+              clientId: 'cid-123',
+              clientSecret: 'csecret-123',
+              projectId: '10000',
+            },
+          },
+        }),
+      )
+    })
+  })
+
+  it('submitting in Server mode posts source "xray" with mode/siteUrl/personalAccessToken/projectKey credentials', async () => {
+    mockBaseAPI()
+    mockPOST.mockImplementation((path: string) => {
+      if (path === '/api/v1/projects')
+        return Promise.resolve({
+          data: { id: 'newp', key: 'QAP', name: 'QA Platform', archived: false, description: '', createdAt: '' },
+          response: { ok: true },
+        })
+      if (path === '/api/v1/projects/{projectKey}/import-jobs')
+        return Promise.resolve({
+          data: importJob({ id: 'job1', source: 'xray', status: 'pending' }),
+          response: { ok: true, status: 201 },
+        })
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    renderImportPage('/projects/import/xray')
+    await screen.findByText('Connect to Xray')
+    await userEvent.click(screen.getByRole('button', { name: /server.*data center/i }))
+    await userEvent.type(screen.getByLabelText(/xray site url/i), 'https://jira.example.com')
+    await userEvent.type(screen.getByLabelText(/xray personal access token/i), 'pat-123')
+    await userEvent.type(screen.getByLabelText(/xray project key/i), 'XRAY')
+    await userEvent.type(screen.getByLabelText(/new project name/i), 'QA Platform')
+    await userEvent.click(screen.getByRole('button', { name: /preview import/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/import-jobs',
+        expect.objectContaining({
+          params: { path: { projectKey: 'QAP' } },
+          body: {
+            source: 'xray',
+            mode: 'dry_run',
+            credentials: {
+              mode: 'server',
+              siteUrl: 'https://jira.example.com',
+              personalAccessToken: 'pat-123',
+              projectKey: 'XRAY',
+            },
+          },
+        }),
+      )
+    })
+  })
+})
+
 describe('ImportProjectPage — CSV Connect/Result flow (add-csv-import-export tasks.md 6.3, Pepe mock)', () => {
   afterEach(() => {
     vi.unstubAllGlobals()

@@ -934,6 +934,35 @@ describe('ProjectsPage', () => {
       expect(await screen.findByText('Import page stub')).toBeInTheDocument()
     })
 
+    // add-xray-importer tasks.md 5.1: a 6th connector entry, same
+    // data-driven source list.
+    it('also offers "Import from Xray" alongside the other sources', async () => {
+      mockProjectsList([])
+      renderPage()
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+
+      const menu = screen.getByRole('menu', { name: /new project/i })
+      const xray = within(menu).getByRole('menuitem', { name: /import from xray/i })
+      expect(xray).toBeInTheDocument()
+    })
+
+    it('navigates to /projects/import/xray when "Import from Xray" is chosen', async () => {
+      mockProjectsList([])
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <AuthProvider>
+            <Routes>
+              <Route path="/" element={<ProjectsPage />} />
+              <Route path="/projects/import/:source" element={<div>Import page stub</div>} />
+            </Routes>
+          </AuthProvider>
+        </MemoryRouter>,
+      )
+      await userEvent.click(await screen.findByRole('button', { name: /^\+ new project$/i }))
+      await userEvent.click(screen.getByRole('menuitem', { name: /import from xray/i }))
+      expect(await screen.findByText('Import page stub')).toBeInTheDocument()
+    })
+
     it('closes the menu on Escape without navigating or opening the create form', async () => {
       mockProjectsList([])
       renderPage()

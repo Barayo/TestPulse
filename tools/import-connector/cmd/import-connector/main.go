@@ -21,6 +21,7 @@ import (
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/qaseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testpulseclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/testrailclient"
+	"github.com/Barayo/TestPulse/tools/import-connector/internal/xrayclient"
 	"github.com/Barayo/TestPulse/tools/import-connector/internal/zephyrscaleclient"
 )
 
@@ -51,6 +52,12 @@ func run() error {
 	newKiwiTCMS := func(ctx context.Context, siteURL, username, password string) (importer.KiwiTCMSReader, error) {
 		return kiwitcmsclient.New(ctx, siteURL, username, password)
 	}
+	newXrayCloud := func(ctx context.Context, baseHost, clientID, clientSecret, projectID string) (importer.XrayReader, error) {
+		return xrayclient.NewCloud(ctx, baseHost, clientID, clientSecret, projectID)
+	}
+	newXrayServer := func(ctx context.Context, siteURL, personalAccessToken, projectKey string) (importer.XrayReader, error) {
+		return xrayclient.NewServer(ctx, siteURL, personalAccessToken, projectKey)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -60,7 +67,7 @@ func run() error {
 	// Polls once immediately, then on every tick — an operator restarting
 	// the connector shouldn't wait a full interval to see its first poll
 	// (matches tools/jira-connector's main loop shape).
-	poller.Once(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, cfg.Source, logger)
+	poller.Once(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, newXrayCloud, newXrayServer, cfg.Source, logger)
 
 	ticker := time.NewTicker(cfg.PollInterval)
 	defer ticker.Stop()
@@ -71,7 +78,7 @@ func run() error {
 			logger.Info("import-connector shutting down")
 			return nil
 		case <-ticker.C:
-			poller.Once(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, cfg.Source, logger)
+			poller.Once(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, newXrayCloud, newXrayServer, cfg.Source, logger)
 		}
 	}
 }
