@@ -420,6 +420,41 @@ minimum) and needed a dot-local `dark:bg-muted-foreground/60`, since brightening
 `--muted-foreground` token itself would have overshot every other place it's used as
 text.
 
+## `AuthLayout`: a branded two-pane shell for pre-login screens
+
+`AuthLayout` (`apps/web/src/components/AuthLayout.tsx`) is the shared shell
+for the five screens a visitor can reach with no session: `LoginPage`,
+`SetupPage`, `ForgotPasswordPage`, `ResetPasswordPage`,
+`RequiredPasswordChangePage` (`add-auth-split-screen-redesign`). It's
+scoped to that family only — don't reach for it outside the pre-login/auth
+screens; `Layout.tsx` already has its own header for everything else.
+
+On viewports ≥1024px (Tailwind's `lg` breakpoint) it renders two panes: a
+fixed-width brand pane (wordmark via `BrandMark`, a value-proposition
+headline, three proof lines) and a form pane hosting the page's own
+`Card`. Below `lg`, the full brand pane is hidden and a condensed brand
+band renders above the form instead — a CSS-only collapse (`hidden
+lg:flex` / `lg:hidden`), not a JS media-query hook, consistent with the
+rest of this codebase never using one for a purely presentational
+breakpoint.
+
+**The brand pane is always dark, regardless of the visitor's own theme.**
+Its outer container carries a literal `className="dark"` — not a
+Tailwind `dark:` variant, but a second, nested instance of the `.dark`
+selector from `index.css`. Since `--background`/`--primary`/etc. are CSS
+custom properties, and custom properties inherit down the DOM tree
+regardless of which component set them, nesting `.dark` re-scopes every
+token-based class (`bg-background`, `text-foreground`, `text-primary`,
+…) underneath it to the dark palette — independent of whatever the
+`<html>` element's own class is. This is the only place in the codebase
+that nests `.dark` like this; it exists so a visitor's first-ever screen
+reads as a deliberate brand statement rather than following a theme
+preference they haven't formed an opinion about yet. If you need a
+subtree to render as the opposite theme from the rest of the page
+somewhere else, this is the established technique — but check whether
+the surrounding context actually calls for it first, the way it does
+here.
+
 ## What this document doesn't cover yet
 
 It has no enforcement mechanism (no lint rule stops a future page from reaching for a bare

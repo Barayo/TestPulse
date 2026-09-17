@@ -476,6 +476,25 @@
   html {
     @apply font-sans;
     }
+  /* Chrome/WebKit paints a browser-chosen fill on an autofilled input via an
+     internal UA style that author CSS can't override with background-color —
+     the inset box-shadow is the only real workaround. Approximates --card
+     (where Input usually renders — inside a Card) rather than every possible
+     surface an Input might sit on; not pixel-perfect everywhere, but fixes
+     the actual bug: an unstyled, theme-oblivious fill that clashed hardest
+     against a dark surface (surfaced by add-auth-split-screen-redesign's
+     branded dark pane, though the gap itself predates that change — Input
+     never had any :autofill handling in either theme). The long transition
+     delay stops Chrome's own fill-color transition from flashing through
+     before this rule applies. */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover,
+  input:-webkit-autofill:focus,
+  input:-webkit-autofill:active {
+    -webkit-text-fill-color: var(--foreground);
+    box-shadow: 0 0 0 1000px var(--card) inset;
+    transition: background-color 9999s ease-in-out 0s;
+    }
 }
 
 /*
@@ -511,4 +530,26 @@
     font-family: 'Recursive Variable', ui-sans-serif, sans-serif;
     font-variation-settings: 'MONO' 0, 'CASL' 1, 'wght' 470, 'slnt' 0, 'CRSV' 0.4;
   }
+}
+/*
+ * Auth screen family Card elevation (fix-auth-split-screen-dark-mode) —
+ * scoped to .auth-form-pane (AuthLayout.tsx) rather than changing the
+ * shared Card component (card.tsx) everywhere it's used. Card's own
+ * ring-1 ring-foreground/10 is too soft a signal to read as "this is a
+ * floating surface" against this palette's close-value dark tokens —
+ * the same class of problem as the hairline-divider finding above,
+ * confirmed live: in Dark theme the login Card barely separated from
+ * the page behind it even after the brand pane got its own bg-sidebar
+ * fill. A real drop shadow reads reliably regardless of how close two
+ * hex values are, and a fixed low-alpha light rim gives Dark theme a
+ * second, independent edge cue without relying on --border (already
+ * shown elsewhere to be too close to --card to read as a boundary).
+ * The rim is invisible by design in Light theme (white-on-white) — Light
+ * already reads correctly today and doesn't need the extra help.
+ */
+.auth-form-pane [data-slot='card'] {
+  box-shadow:
+    0 24px 48px -20px rgb(0 0 0 / 0.45),
+    0 8px 20px -8px rgb(0 0 0 / 0.3),
+    0 0 0 1.5px rgb(255 255 255 / 0.08);
 }

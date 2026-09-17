@@ -4,7 +4,7 @@ import { LoginForm } from '@/components/LoginForm'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { HealthBadge } from '@/components/HealthBadge'
+import { AuthLayout } from '@/components/AuthLayout'
 import { api } from '@/lib/api'
 
 export default function LoginPage() {
@@ -48,10 +48,7 @@ export default function LoginPage() {
   }, [])
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6">
-      <div className="fixed right-6 top-6">
-        <HealthBadge />
-      </div>
+    <AuthLayout>
       {bannerMessage && (
         <div className="w-full max-w-sm">
           <ConfirmBanner message={bannerMessage} onDismiss={() => setBannerMessage(undefined)} />
@@ -89,6 +86,6 @@ export default function LoginPage() {
           Browse public projects without an account
         </Link>
       )}
-    </div>
+    </AuthLayout>
   )
 }

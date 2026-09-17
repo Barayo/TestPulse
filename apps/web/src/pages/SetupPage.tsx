@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HealthBadge } from '@/components/HealthBadge'
+import { AuthLayout } from '@/components/AuthLayout'
 import { GeneratedPasswordChip } from '@/components/GeneratedPasswordChip'
 import { generateSecurePassword } from '@/lib/generatePassword'
 import { useAuth } from '@/lib/useAuth'
@@ -15,8 +15,8 @@ const NETWORK_ERROR = "Couldn't reach the server — check your connection and t
 // First-run setup (add-first-run-setup): whoever loads a fresh instance
 // (zero users, no env-var bootstrap) creates the Tenant Admin account
 // themselves — their own email and password, chosen directly, not a
-// temporary one. Visually identical to LoginPage/ResetPasswordPage
-// (Card, HealthBadge) rather than a new visual language.
+// temporary one. Shares AuthLayout/Card with LoginPage/ResetPasswordPage
+// (add-auth-split-screen-redesign) rather than a new visual language.
 export default function SetupPage() {
   const navigate = useNavigate()
   const { setup, setupRequired, setupRequiredLoading } = useAuth()
@@ -98,10 +98,7 @@ export default function SetupPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6">
-      <div className="fixed right-6 top-6">
-        <HealthBadge />
-      </div>
+    <AuthLayout>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="tp-heading">Set up TestPulse</CardTitle>
@@ -174,6 +171,6 @@ export default function SetupPage() {
           </form>
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   )
 }

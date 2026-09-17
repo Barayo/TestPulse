@@ -1,5 +1,5 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HealthBadge } from '@/components/HealthBadge'
+import { AuthLayout } from '@/components/AuthLayout'
 import { ChangePasswordForm } from '@/components/ChangePasswordForm'
 
 // Rendered by RequireAuth in place of the requested route (never reachable
@@ -10,10 +10,7 @@ import { ChangePasswordForm } from '@/components/ChangePasswordForm'
 // just used it to log in), so there's nothing to escape to.
 export default function RequiredPasswordChangePage() {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6">
-      <div className="fixed right-6 top-6">
-        <HealthBadge />
-      </div>
+    <AuthLayout>
       <Card className="w-full max-w-sm">
         <CardHeader>
           <CardTitle className="tp-heading">Set a new password</CardTitle>
@@ -32,6 +29,6 @@ export default function RequiredPasswordChangePage() {
           />
         </CardContent>
       </Card>
-    </div>
+    </AuthLayout>
   )
 }

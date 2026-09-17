@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { HealthBadge } from '@/components/HealthBadge'
+import { AuthLayout } from '@/components/AuthLayout'
 import { GeneratedPasswordChip } from '@/components/GeneratedPasswordChip'
 import { generateSecurePassword } from '@/lib/generatePassword'
 import { api } from '@/lib/api'
@@ -80,10 +80,7 @@ export default function ResetPasswordPage() {
   const showDeadLink = !token || tokenDead
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center gap-6">
-      <div className="fixed right-6 top-6">
-        <HealthBadge />
-      </div>
+    <AuthLayout>
       <Card className="w-full max-w-sm">
         {showDeadLink ? (
           <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
@@ -156,6 +153,6 @@ export default function ResetPasswordPage() {
       <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
         Back to log in
       </Link>
-    </div>
+    </AuthLayout>
   )
 }
