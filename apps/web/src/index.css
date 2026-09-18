@@ -585,3 +585,33 @@
   opacity: 0.045;
   pointer-events: none;
 }
+
+/*
+ * Run-strip glow (Pepe design review, restored alongside the bars — see
+ * AuthLayout.tsx): a bar's own opacity can't also carry the glow's blend
+ * mode without dimming the bar itself, so the glow is a separate
+ * ::after layer using mix-blend-mode: screen against the pane's own
+ * surface — needs real plain CSS (box-shadow + blend mode on a
+ * pseudo-element), not expressible as a single Tailwind utility.
+ */
+.auth-run-strip-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 12px 0 currentColor;
+  opacity: 0.62;
+  mix-blend-mode: screen;
+}
+
+@keyframes auth-run-strip-sweep {
+  0% {
+    left: -46px;
+  }
+  60% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
+}

@@ -48,12 +48,19 @@ describe('AuthLayout', () => {
     })
   })
 
-  it('renders no run-count or pass/fail claim in the brand pane', () => {
-    // A specific numeric claim ("14 passed") with no real data behind it,
-    // on a public unauthenticated page, reads as a fabricated stat —
-    // removed entirely, not softened (Pepe design review).
+  it('renders the colored run-strip bars but no run-count or pass/fail claim', () => {
+    // The bars are purely decorative — no text asserts they're real data.
+    // Only the specific numeric caption ("14 passed") was the honesty
+    // problem (a claim with no real data behind it on a public
+    // unauthenticated page); the bars themselves were never that and
+    // stay, since founder feedback confirmed removing them read as
+    // boring, not as fixing anything.
     renderAuthLayout()
-    expect(document.querySelector('[data-slot="run-strip"]')).toBeNull()
+    const strip = document.querySelector('[data-slot="run-strip"]')
+    expect(strip).not.toBeNull()
+    expect(strip).toHaveAttribute('aria-hidden', 'true')
+    const bars = strip?.querySelectorAll('[data-slot="run-strip-bar"]') ?? []
+    expect(bars.length).toBe(16)
     expect(screen.queryByText(/passed/i)).toBeNull()
     expect(screen.queryByText(/last \d+ runs/i)).toBeNull()
   })

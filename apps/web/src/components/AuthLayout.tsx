@@ -78,6 +78,34 @@ const PROOF_LINES: Array<{ lead: string; rest: string; icon: ReactNode }> = [
 const BRANDPANE_BLOB_PATH =
   'M62,150 C18,132 4,72 52,38 C100,4 172,16 196,66 C218,112 190,168 138,182 C96,193 62,178 62,150 Z'
 
+// Decorative run-strip bars (restored — founder feedback: removing them
+// entirely to fix the caption problem below was overcorrecting; the
+// bars themselves were never the honesty issue and read as flat/boring
+// without them). 16 bars, mostly --chart-1 (teal) with two --chart-2 and
+// one --chart-3 flagged beats, matching the semantic hue mapping
+// docs/design-system.md already uses for status bands — purely
+// decorative shape/color, no caption or text asserts these are real
+// numbers (that's the actual fix: the "Last 16 runs / 14 passed" text
+// claim is gone for good, not the bars).
+const RUN_STRIP_BARS: Array<{ heightPct: number; colorClass: string }> = [
+  { heightPct: 38, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 62, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 80, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 48, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 96, colorClass: 'bg-chart-2 text-chart-2' },
+  { heightPct: 55, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 70, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 30, colorClass: 'bg-chart-3 text-chart-3' },
+  { heightPct: 64, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 85, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 44, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 58, colorClass: 'bg-chart-2 text-chart-2' },
+  { heightPct: 74, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 90, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 50, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 68, colorClass: 'bg-chart-1 text-chart-1' },
+]
+
 // Shared shell for the login/setup/forgot-password/reset-password/
 // required-password-change screen family (add-auth-split-screen-redesign).
 // The brand pane's outer div carries className="dark" — not a Tailwind
@@ -145,6 +173,20 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
+        <div data-slot="run-strip" aria-hidden="true" className="relative mt-auto flex h-[34px] items-end gap-1">
+          {/* motion-reduce:hidden: the only animated element on this
+              screen — real prefers-reduced-motion handling, not skipped
+              (this app has no other case needing it yet). */}
+          <div className="animate-[auth-run-strip-sweep_3.2s_ease-in-out_infinite] absolute inset-y-0 w-[46px] bg-gradient-to-r from-transparent via-white/35 to-transparent motion-reduce:hidden" />
+          {RUN_STRIP_BARS.map(({ heightPct, colorClass }, i) => (
+            <span
+              key={i}
+              data-slot="run-strip-bar"
+              className={`auth-run-strip-bar relative flex-1 rounded-[3px] opacity-95 ${colorClass}`}
+              style={{ height: `${heightPct}%` }}
+            />
+          ))}
+        </div>
       </div>
       {/* bg-background is now explicit (previously this pane had no
           background class of its own and just showed body's own
