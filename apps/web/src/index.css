@@ -555,26 +555,32 @@
 }
 
 /*
- * Auth brand pane surface (Pepe design review, fix-auth-brandpane-surface,
- * later corrected in fix-auth-brandpane-blob): the pane's fill was flat
- * `bg-sidebar` (one hex, edge to edge) — read as a solid block in dark
- * mode. A directional gradient was tried first, but the founder's actual
- * ask ("a shape, not a gradient") meant the depth cue should come from a
- * real shape (AuthLayout.tsx's `brandpane-blob`, a blurred solid SVG
- * path), not from this surface layer — so the fill here is flat again,
- * and the blob (rendered as a sibling element, not part of this rule)
- * carries the depth job instead. Grain (feTurbulence, inlined as a
- * data-URI — no extra asset request) stays: it stops the flat fill from
- * banding, and grain is noise, not a gradient, so it was never the part
- * of this that read as "a gradient." Plain CSS, not Tailwind utilities:
- * the inline SVG background-image isn't expressible as a Tailwind
- * arbitrary value without an unreadable class name.
+ * Auth brand pane surface (Pepe design review — history: flat fill ->
+ * directional gradient -> flat fill + bottom-right blurred blob -> this).
+ * The bottom-right blob (a blurred solid SVG shape, previously rendered
+ * as a sibling element in AuthLayout.tsx) bled into the run-strip bars
+ * and hit a hard, ugly clip at the pane's edge (overflow-hidden cutting
+ * a 420px shape offset only 140-160px inward) — founder screenshot
+ * confirmed it live. Replaced with a soft radial corner glow instead,
+ * positioned top-right — the original Direction B mock's own treatment
+ * (apps/web/scratch/pepe-login-redesign.html:136-139), away from the
+ * run-strip entirely so there's no overlap to clip badly. Grain
+ * (feTurbulence, inlined as a data-URI — no extra asset request) stays:
+ * it stops the flat fill from banding.
  */
 .auth-brandpane-surface {
   position: absolute;
   inset: 0;
   z-index: 0;
   background: var(--sidebar);
+}
+.auth-brandpane-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle 300px at 87% 9%, color-mix(in oklch, var(--primary) 26%, transparent), transparent 70%);
+  mix-blend-mode: screen;
+  pointer-events: none;
 }
 .auth-brandpane-surface::after {
   content: '';
@@ -604,14 +610,20 @@
   mix-blend-mode: screen;
 }
 
+/* Travels fully past 100% (150%, not 100%) so the "dwell" phase below
+   sits completely off the clipped pane edge, not half-visible sitting
+   right at it — the previous 100%/100% dwell held a bright gradient
+   statically at the clip boundary for 40% of every cycle, which is
+   exactly what read as an ugly wash/hard-cut artifact in a screenshot
+   (founder report). */
 @keyframes auth-run-strip-sweep {
   0% {
     left: -46px;
   }
   60% {
-    left: 100%;
+    left: 150%;
   }
   100% {
-    left: 100%;
+    left: 150%;
   }
 }

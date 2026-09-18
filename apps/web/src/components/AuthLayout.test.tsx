@@ -65,12 +65,15 @@ describe('AuthLayout', () => {
     expect(screen.queryByText(/last \d+ runs/i)).toBeNull()
   })
 
-  it('renders a decorative blurred blob shape in the brand pane instead of a chart', () => {
+  it('renders no bottom-right blob shape (moved to a top-right corner glow instead)', () => {
+    // The blurred blob bled awkwardly into the run-strip and got an ugly
+    // hard clip at the pane edge (founder screenshot). Replaced with a
+    // corner radial glow (index.css .auth-brandpane-surface::before),
+    // positioned top-right, away from the bars entirely — CSS-only, not
+    // a DOM node this test can assert content on beyond "the old blob
+    // element is gone."
     renderAuthLayout()
-    const blob = document.querySelector('[data-slot="brandpane-blob"]')
-    expect(blob).not.toBeNull()
-    expect(blob).toHaveAttribute('aria-hidden', 'true')
-    expect(blob?.querySelector('path')).not.toBeNull()
+    expect(document.querySelector('[data-slot="brandpane-blob"]')).toBeNull()
   })
 
   it('gives the brand pane a grained surface', () => {

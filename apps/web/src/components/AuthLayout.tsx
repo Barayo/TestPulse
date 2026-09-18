@@ -62,22 +62,6 @@ const PROOF_LINES: Array<{ lead: string; rest: string; icon: ReactNode }> = [
   },
 ]
 
-// Decorative background blob (Pepe design review): replaces the
-// run-strip + "Last 16 runs / 14 passed" caption — a specific numeric
-// claim with no real data behind it on a public, unauthenticated page
-// reads as a fabricated stat, not honest illustrative decoration; there
-// is no safe softer rewording that keeps the specificity, so it's
-// removed entirely rather than reworded. A single solid, asymmetric SVG
-// path (not a circle — a circle blurred is indistinguishable from a
-// radial-gradient glow, which is a different thing this pane already
-// tried and moved away from) filled var(--primary), blurred so its two
-// lobes still read as a form rather than a uniform falloff. Anchored in
-// the pane's own bottom-right dead space — behind zero text, so it can't
-// create a legibility problem — doing the depth job the diagonal
-// gradient used to do, now that the surface itself is flat again.
-const BRANDPANE_BLOB_PATH =
-  'M62,150 C18,132 4,72 52,38 C100,4 172,16 196,66 C218,112 190,168 138,182 C96,193 62,178 62,150 Z'
-
 // Decorative run-strip bars (restored — founder feedback: removing them
 // entirely to fix the caption problem below was overcorrecting; the
 // bars themselves were never the honesty issue and read as flat/boring
@@ -145,14 +129,6 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       </div>
       <div className="dark relative hidden w-full shrink-0 flex-col justify-center gap-8 overflow-hidden px-12 py-12 text-sidebar-foreground lg:flex lg:w-[44%]">
         <div className="auth-brandpane-surface" aria-hidden="true" />
-        <svg
-          data-slot="brandpane-blob"
-          aria-hidden="true"
-          viewBox="0 0 220 220"
-          className="absolute -right-[140px] -bottom-[160px] h-[420px] w-[420px] text-primary opacity-[0.16] blur-[42px]"
-        >
-          <path d={BRANDPANE_BLOB_PATH} fill="currentColor" />
-        </svg>
         <Link to="/" className="relative flex items-center gap-1.5 text-[24px] leading-none">
           <BrandMark />
         </Link>
