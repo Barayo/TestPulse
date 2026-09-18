@@ -62,19 +62,33 @@ const PROOF_LINES: Array<{ lead: string; rest: string; icon: ReactNode }> = [
   },
 ]
 
-// Decorative cardiogram strip — replaces the original chart-token
-// run-strip (color dots meant to echo a pass/fail run result) with a
-// repeat of the exact pulse path already drawn in BrandMark.tsx:22-29
-// ("M35,112 L62,112 L78,74 L94,140 L112,112 L122,112 L138,130 L172,64"),
-// per the founder's request to build the brand-pane decoration from the
-// logo's own EKG line instead of an arbitrary color pattern. The tile
-// below is that same path shifted 35 units left so a copy starts at
-// x=0 — no shape change — with one appended straight segment back down
-// to the x=112 baseline at x=200, so three copies placed edge-to-edge
-// (PULSE_TILE_COUNT) tile without a seam, the same way a real cardiogram
-// alternates a beat with a flat run before the next one.
-const PULSE_TILE_PATH = 'M0,112 L27,112 L43,74 L59,140 L77,112 L87,112 L103,130 L137,64 L200,112'
-const PULSE_TILE_COUNT = 3
+// Decorative run-result strip (Pepe design review, round 2 of 2: the
+// pulse-line cardiogram this replaced — see prior git history — was
+// itself a rebuild of this exact idiom under a different guise; going
+// back to it here is a deliberate return, not an oversight). 16 bars,
+// mostly --chart-1 (teal/"passed") with two --chart-2 ("skipped") and
+// one --chart-3 ("failed") flagged beats, matching the semantic hue
+// mapping docs/design-system.md already uses for status bands elsewhere
+// — illustrative, not bound to real run data (this is the pre-login
+// screen; there is no session or project to show real history for).
+const RUN_STRIP_BARS: Array<{ heightPct: number; colorClass: string }> = [
+  { heightPct: 38, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 62, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 80, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 48, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 96, colorClass: 'bg-chart-2 text-chart-2' },
+  { heightPct: 55, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 70, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 30, colorClass: 'bg-chart-3 text-chart-3' },
+  { heightPct: 64, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 85, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 44, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 58, colorClass: 'bg-chart-2 text-chart-2' },
+  { heightPct: 74, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 90, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 50, colorClass: 'bg-chart-1 text-chart-1' },
+  { heightPct: 68, colorClass: 'bg-chart-1 text-chart-1' },
+]
 
 // Shared shell for the login/setup/forgot-password/reset-password/
 // required-password-change screen family (add-auth-split-screen-redesign).
@@ -107,23 +121,25 @@ const PULSE_TILE_COUNT = 3
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <div className="dark bg-sidebar text-sidebar-foreground lg:hidden">
-        <Link to="/" className="flex items-center gap-1.5 px-6 py-6 text-[24px] leading-none">
+      <div className="dark relative text-sidebar-foreground lg:hidden">
+        <div className="auth-brandpane-surface" aria-hidden="true" />
+        <Link to="/" className="relative flex items-center gap-1.5 px-6 py-6 text-[24px] leading-none">
           <BrandMark />
         </Link>
       </div>
-      <div className="dark hidden w-full shrink-0 flex-col justify-center gap-8 bg-sidebar px-12 py-12 text-sidebar-foreground lg:flex lg:w-[44%]">
-        <Link to="/" className="flex items-center gap-1.5 text-[24px] leading-none">
+      <div className="dark relative hidden w-full shrink-0 flex-col justify-center gap-8 px-12 py-12 text-sidebar-foreground lg:flex lg:w-[44%]">
+        <div className="auth-brandpane-surface" aria-hidden="true" />
+        <Link to="/" className="relative flex items-center gap-1.5 text-[24px] leading-none">
           <BrandMark />
         </Link>
-        <h1 className="tp-heading text-2xl font-bold">
+        <h1 className="tp-heading relative text-2xl font-bold">
           The open-source test management platform your AI agents can use as fluently as you do.
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="relative text-sm text-muted-foreground">
           MCP-first, AGPLv3, self-hostable on one Go binary. Humans get a clean UI; agents get a
           first-class seat at the table.
         </p>
-        <ul className="space-y-4 text-sm text-muted-foreground">
+        <ul className="relative space-y-4 text-sm text-muted-foreground">
           {PROOF_LINES.map(({ lead, rest, icon }) => (
             <li key={lead} data-slot="proof-item" className="flex items-start gap-2.5">
               <ProofIcon path={icon} />
@@ -133,40 +149,26 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
-        {/* preserveAspectRatio="none" is what lets a tall, square icon
-            path (BrandMark's own 200x200 viewBox) stretch into a wide,
-            thin strip; vector-effect="non-scaling-stroke" keeps the drawn
-            line a flat ~1.5px regardless of that non-uniform squash, so it
-            reads as one clean trace rather than tapering thick-then-thin.
-            text-primary/25, not text-primary: full-strength primary is
-            already spent on the proof-icons above and the "Pulse"
-            wordmark (BrandMark.tsx:33) — this needs to read as ambient
-            texture, not a second brand mark competing with those
-            (design-system.md's color-restraint rule). Static, not
-            animated: nothing else on this screen moves, and this app has
-            no existing prefers-reduced-motion handling to extend to a new
-            animated element. */}
-        <svg
-          data-slot="pulse-strip"
-          aria-hidden="true"
-          viewBox={`0 0 ${200 * PULSE_TILE_COUNT} 200`}
-          preserveAspectRatio="none"
-          className="h-8 w-full shrink-0 text-primary/25"
-        >
-          {Array.from({ length: PULSE_TILE_COUNT }, (_, i) => (
-            <path
-              key={i}
-              d={PULSE_TILE_PATH}
-              transform={`translate(${i * 200}, 0)`}
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.5}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              vectorEffect="non-scaling-stroke"
-            />
-          ))}
-        </svg>
+        <div className="relative mt-auto">
+          <div data-slot="run-strip" aria-hidden="true" className="relative flex h-[34px] items-end gap-1">
+            {/* motion-reduce:hidden: the only animated element on this
+                screen — real prefers-reduced-motion handling, not skipped
+                (this app has no other case needing it yet). */}
+            <div className="animate-[auth-run-strip-sweep_3.2s_ease-in-out_infinite] absolute inset-y-0 w-[46px] bg-gradient-to-r from-transparent via-white/35 to-transparent motion-reduce:hidden" />
+            {RUN_STRIP_BARS.map(({ heightPct, colorClass }, i) => (
+              <span
+                key={i}
+                data-slot="run-strip-bar"
+                className={`auth-run-strip-bar relative flex-1 rounded-[3px] opacity-95 ${colorClass}`}
+                style={{ height: `${heightPct}%` }}
+              />
+            ))}
+          </div>
+          <div className="mt-2 flex items-center justify-between">
+            <span className="tp-label">Last 16 runs</span>
+            <span className="tp-label text-primary">14 passed</span>
+          </div>
+        </div>
       </div>
       {/* bg-background is now explicit (previously this pane had no
           background class of its own and just showed body's own

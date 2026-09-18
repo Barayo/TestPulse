@@ -48,21 +48,23 @@ describe('AuthLayout', () => {
     })
   })
 
-  it('renders a decorative cardiogram strip built from the brand mark\'s pulse path in the brand pane', () => {
+  it('renders a decorative run-result strip with a "Last 16 runs" caption in the brand pane', () => {
     renderAuthLayout()
-    const strip = document.querySelector('[data-slot="pulse-strip"]')
+    const strip = document.querySelector('[data-slot="run-strip"]')
     expect(strip).not.toBeNull()
-    expect(strip?.tagName.toLowerCase()).toBe('svg')
     expect(strip).toHaveAttribute('aria-hidden', 'true')
-    const beats = strip?.querySelectorAll('path') ?? []
-    // Three repeats of the same pulse motif, so it reads as a repeating
-    // cardiogram trace rather than a single stretched squiggle.
-    expect(beats.length).toBe(3)
-    beats.forEach((beat) => {
-      expect(beat.getAttribute('d')).toBe(
-        'M0,112 L27,112 L43,74 L59,140 L77,112 L87,112 L103,130 L137,64 L200,112',
-      )
-    })
+    const bars = strip?.querySelectorAll('[data-slot="run-strip-bar"]') ?? []
+    expect(bars.length).toBe(16)
+    expect(screen.getByText('Last 16 runs')).toBeInTheDocument()
+    expect(screen.getByText('14 passed')).toBeInTheDocument()
+  })
+
+  it('gives the brand pane a gradient+grain surface instead of a flat fill', () => {
+    renderAuthLayout()
+    const surfaces = document.querySelectorAll('.auth-brandpane-surface')
+    // Both the mobile condensed band and the full desktop pane get the
+    // same surface treatment, not just the desktop one.
+    expect(surfaces.length).toBe(2)
   })
 
   it('renders the brand pane always dark via a nested dark-class container', () => {

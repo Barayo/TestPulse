@@ -553,3 +553,62 @@
     0 8px 20px -8px rgb(0 0 0 / 0.3),
     0 0 0 1.5px rgb(255 255 255 / 0.08);
 }
+
+/*
+ * Auth brand pane surface (Pepe design review, fix-auth-brandpane-surface):
+ * the pane's fill was flat `bg-sidebar` (one hex, edge to edge) — read as
+ * a solid block in dark mode. Replaced with a directional gradient +
+ * grain, the same technique already used by BrandMark.tsx's own two-stop
+ * icon gradient (var(--primary) -> a darker mix), just retargeted from
+ * the small logo mark to the whole fill at a much gentler delta so it
+ * reads as depth, not a second brand gradient competing with the logo.
+ * Grain (feTurbulence, inlined as a data-URI — no extra asset request)
+ * stops the smooth gradient from banding at this size. Plain CSS, not
+ * Tailwind utilities: the color-mix()-in-a-gradient expression and the
+ * inline SVG background-image aren't expressible as Tailwind arbitrary
+ * values without an unreadable class name.
+ */
+.auth-brandpane-surface {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(160deg, var(--sidebar) 0%, color-mix(in oklch, var(--sidebar), black 14%) 100%);
+}
+.auth-brandpane-surface::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  mix-blend-mode: overlay;
+  opacity: 0.045;
+  pointer-events: none;
+}
+
+/*
+ * Run-strip glow (Pepe design review): a bar's own opacity can't also
+ * carry the glow's blend mode without dimming the bar itself, so the
+ * glow is a separate ::after layer using mix-blend-mode: screen against
+ * the pane's own surface — needs real plain CSS (box-shadow + blend mode
+ * on a pseudo-element), not expressible as a single Tailwind utility.
+ */
+.auth-run-strip-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 12px 0 currentColor;
+  opacity: 0.62;
+  mix-blend-mode: screen;
+}
+
+@keyframes auth-run-strip-sweep {
+  0% {
+    left: -46px;
+  }
+  60% {
+    left: 100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
