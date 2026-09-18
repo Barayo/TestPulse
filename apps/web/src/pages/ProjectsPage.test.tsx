@@ -1059,10 +1059,19 @@ describe('anonymous / dual-mode', () => {
     expect(mockGET).not.toHaveBeenCalledWith('/api/v1/public/projects', expect.anything())
   })
 
-  it('shows an empty state, not an error, when no project is public', async () => {
+  // Matches the established empty-state pattern (dashed border + icon,
+  // e.g. CaseStepsList.tsx's "No steps yet") — Pepe design review
+  // (issue #199): this page had skipped the app's own existing convention,
+  // not needed a new one. No action button: an anonymous visitor has
+  // nothing that would fix an empty public-projects list.
+  it('shows a dashed-border empty state with an icon, not an error, when no project is public', async () => {
     mockAnonymousProjectsList([])
     renderPage()
-    expect(await screen.findByText(/no public projects are available/i)).toBeInTheDocument()
+    expect(await screen.findByText('No public projects yet')).toBeInTheDocument()
+    expect(screen.getByText(/doesn't have any projects open to visitors right now/i)).toBeInTheDocument()
+    const container = screen.getByText('No public projects yet').closest('div')
+    expect(container).toHaveClass('border-dashed')
+    expect(container?.querySelector('svg')).not.toBeNull()
   })
 
   it('renders a card per project — name, description, Sample badge — when multiple are public', async () => {

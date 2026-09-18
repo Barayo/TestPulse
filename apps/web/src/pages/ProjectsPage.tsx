@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, Navigate, useNavigate } from 'react-router'
-import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon, PlusIcon, DatabaseIcon, UploadIcon, type LucideIcon } from 'lucide-react'
+import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon, PlusIcon, DatabaseIcon, UploadIcon, GlobeIcon, type LucideIcon } from 'lucide-react'
 import { TagChipsEditor } from '@/components/TagChipsEditor'
 import { useTagVocabulary } from '@/lib/useTagVocabulary'
 import { useFloatingPosition } from '@/lib/useFloatingPosition'
@@ -242,7 +242,13 @@ export default function ProjectsPage() {
       <div className="space-y-6">
         <h1 className="tp-heading text-2xl">Projects</h1>
         {publicProjects && publicProjects.length === 0 && (
-          <p className="text-sm text-muted-foreground">No public projects are available right now.</p>
+          <div className="rounded-2xl border border-dashed p-10 text-center">
+            <GlobeIcon className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
+            <p className="mb-1 text-sm font-medium">No public projects yet</p>
+            <p className="text-sm text-muted-foreground">
+              This instance doesn't have any projects open to visitors right now.
+            </p>
+          </div>
         )}
         {publicProjects && publicProjects.length > 1 && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
