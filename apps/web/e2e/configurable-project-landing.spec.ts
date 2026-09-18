@@ -65,6 +65,8 @@ test.describe('Requirement: Opening a project navigates to its effective landing
 
     await page.goto(`/projects/${projectKey}`)
     await page.waitForURL(new RegExp(`/projects/${projectKey}/runs`))
-    await expect(page.getByRole('heading', { name: /runs/i })).toBeVisible()
+    // RunsPage's title is a CardTitle (ui/card.tsx), a plain div with no
+    // ARIA heading role — getByRole('heading', ...) can never match it.
+    await expect(page.locator('[data-slot="card-title"]', { hasText: 'Runs' })).toBeVisible()
   })
 })
