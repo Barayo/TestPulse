@@ -65,15 +65,17 @@ describe('AuthLayout', () => {
     expect(screen.queryByText(/last \d+ runs/i)).toBeNull()
   })
 
-  it('renders no bottom-right blob shape (moved to a top-right corner glow instead)', () => {
-    // The blurred blob bled awkwardly into the run-strip and got an ugly
-    // hard clip at the pane edge (founder screenshot). Replaced with a
-    // corner radial glow (index.css .auth-brandpane-surface::before),
-    // positioned top-right, away from the bars entirely — CSS-only, not
-    // a DOM node this test can assert content on beyond "the old blob
-    // element is gone."
+  it('renders a real circle shape in the top-right corner, not a gradient falloff', () => {
+    // A radial-gradient glow (no discernible edge) was tried first and
+    // rejected — founder wants an actual circle silhouette. A real
+    // rounded-full element, blurred for softness, positioned top-right,
+    // away from the run-strip bars entirely so it can't clip badly
+    // against them the way the earlier bottom-right blob did.
     renderAuthLayout()
-    expect(document.querySelector('[data-slot="brandpane-blob"]')).toBeNull()
+    const circle = document.querySelector('[data-slot="brandpane-glow"]')
+    expect(circle).not.toBeNull()
+    expect(circle).toHaveAttribute('aria-hidden', 'true')
+    expect(circle).toHaveClass('rounded-full')
   })
 
   it('gives the brand pane a grained surface', () => {

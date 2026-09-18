@@ -556,31 +556,20 @@
 
 /*
  * Auth brand pane surface (Pepe design review — history: flat fill ->
- * directional gradient -> flat fill + bottom-right blurred blob -> this).
- * The bottom-right blob (a blurred solid SVG shape, previously rendered
- * as a sibling element in AuthLayout.tsx) bled into the run-strip bars
- * and hit a hard, ugly clip at the pane's edge (overflow-hidden cutting
- * a 420px shape offset only 140-160px inward) — founder screenshot
- * confirmed it live. Replaced with a soft radial corner glow instead,
- * positioned top-right — the original Direction B mock's own treatment
- * (apps/web/scratch/pepe-login-redesign.html:136-139), away from the
- * run-strip entirely so there's no overlap to clip badly. Grain
- * (feTurbulence, inlined as a data-URI — no extra asset request) stays:
- * it stops the flat fill from banding.
+ * directional gradient -> flat fill + bottom-right blurred blob ->
+ * flat fill + top-right radial-gradient glow -> this). The gradient
+ * glow was rejected too — a radial-gradient falloff has no discernible
+ * edge, and the founder specifically wants a real circle silhouette, not
+ * a gradient. See AuthLayout.tsx's `brandpane-glow` element (a real
+ * blurred, rounded-full div, not a CSS pseudo-element) for the actual
+ * shape. Grain (feTurbulence, inlined as a data-URI — no extra asset
+ * request) stays: it stops the flat fill from banding.
  */
 .auth-brandpane-surface {
   position: absolute;
   inset: 0;
   z-index: 0;
   background: var(--sidebar);
-}
-.auth-brandpane-surface::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle 300px at 87% 9%, color-mix(in oklch, var(--primary) 26%, transparent), transparent 70%);
-  mix-blend-mode: screen;
-  pointer-events: none;
 }
 .auth-brandpane-surface::after {
   content: '';

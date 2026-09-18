@@ -129,6 +129,16 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       </div>
       <div className="dark relative hidden w-full shrink-0 flex-col justify-center gap-8 overflow-hidden px-12 py-12 text-sidebar-foreground lg:flex lg:w-[44%]">
         <div className="auth-brandpane-surface" aria-hidden="true" />
+        {/* A real circle, not a radial-gradient (tried and rejected — a
+            gradient falloff has no discernible edge). blur-3xl softens
+            it without erasing the round silhouette. Top-right, away from
+            the run-strip bars entirely, so it can't clip against them
+            the way the earlier bottom-right blob did. */}
+        <div
+          data-slot="brandpane-glow"
+          aria-hidden="true"
+          className="absolute -top-20 -right-20 h-80 w-80 rounded-full bg-primary opacity-20 blur-3xl"
+        />
         <Link to="/" className="relative flex items-center gap-1.5 text-[24px] leading-none">
           <BrandMark />
         </Link>
