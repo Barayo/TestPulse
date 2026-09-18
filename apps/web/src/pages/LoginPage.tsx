@@ -10,7 +10,6 @@ import { api } from '@/lib/api'
 export default function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
-  const [publicProjectsEnabled, setPublicProjectsEnabled] = useState(false)
   const [passwordResetEnabled, setPasswordResetEnabled] = useState(false)
   const [ssoEnabled, setSsoEnabled] = useState(false)
   const [ssoOnly, setSsoOnly] = useState(false)
@@ -20,7 +19,6 @@ export default function LoginPage() {
       .GET('/api/v1/meta')
       .then(({ data }) => {
         if (data) {
-          setPublicProjectsEnabled(data.publicProjectsEnabled)
           setPasswordResetEnabled(data.passwordResetEnabled)
           setSsoEnabled(data.ssoEnabled)
           setSsoOnly(data.ssoOnly)
@@ -81,11 +79,9 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
-      {publicProjectsEnabled && (
-        <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
-          Browse public projects without an account
-        </Link>
-      )}
+      <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
+        Back to home
+      </Link>
     </AuthLayout>
   )
 }

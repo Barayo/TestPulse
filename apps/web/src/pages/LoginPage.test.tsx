@@ -88,25 +88,20 @@ describe('LoginPage', () => {
     expect(await screen.findByText('library stub')).toBeInTheDocument()
   })
 
-  it('shows a link to browse public projects when publicProjectsEnabled is true', async () => {
-    mockGET.mockImplementation((path: string) => {
-      if (path === '/api/v1/meta') return Promise.resolve({ data: { publicProjectsEnabled: true }, response: { ok: true } })
-      return Promise.resolve({ data: undefined, response: { ok: false } })
-    })
-    renderLogin()
-
-    expect(await screen.findByRole('link', { name: /browse public projects/i })).toHaveAttribute('href', '/')
-  })
-
-  it('hides the browse-public-projects link when publicProjectsEnabled is false', async () => {
+  // Relabeled from "Browse public projects without an account" and always
+  // rendered (Pepe design review, add-auth-split-screen-redesign): both
+  // resolve to the same "/" route, and the login screen was previously the
+  // only page in this family with no way back to the public home — its
+  // siblings (ForgotPasswordPage, ResetPasswordPage) already have an
+  // equivalent "Back to log in" link unconditionally, always shown.
+  it('always shows a "Back to home" link, regardless of publicProjectsEnabled', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/meta') return Promise.resolve({ data: { publicProjectsEnabled: false }, response: { ok: true } })
       return Promise.resolve({ data: undefined, response: { ok: false } })
     })
     renderLogin()
 
-    await screen.findByLabelText(/email/i)
-    expect(screen.queryByRole('link', { name: /browse public projects/i })).not.toBeInTheDocument()
+    expect(await screen.findByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/')
   })
 
   it('shows a "Forgot password?" link when passwordResetEnabled is true', async () => {
