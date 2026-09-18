@@ -65,12 +65,25 @@ describe('AuthLayout', () => {
     expect(screen.queryByText(/last \d+ runs/i)).toBeNull()
   })
 
-  it('gives the brand pane a grained, corner-accented surface', () => {
+  it('gives the brand pane a grained surface', () => {
     renderAuthLayout()
     const surfaces = document.querySelectorAll('.auth-brandpane-surface')
     // Both the mobile condensed band and the full desktop pane get the
     // same surface treatment, not just the desktop one.
     expect(surfaces.length).toBe(2)
+  })
+
+  it('renders a real, sized circle tucked in the top-right corner, not a gradient bleeding across the pane', () => {
+    // A CSS radial-gradient's effective size depends on the container's
+    // aspect ratio (farthest-corner sizing) — on the real tall, narrow
+    // pane it scaled to fill the middle, not stay cornered. A fixed-size
+    // positioned element keeps it genuinely in the corner regardless of
+    // viewport height.
+    renderAuthLayout()
+    const circle = document.querySelector('[data-slot="brandpane-glow"]')
+    expect(circle).not.toBeNull()
+    expect(circle).toHaveAttribute('aria-hidden', 'true')
+    expect(circle).toHaveClass('rounded-full')
   })
 
   it('renders the brand pane always dark via a nested dark-class container', () => {

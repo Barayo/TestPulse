@@ -129,6 +129,26 @@ export function AuthLayout({ children }: { children: ReactNode }) {
       </div>
       <div className="dark relative hidden w-full shrink-0 flex-col justify-center gap-8 overflow-hidden px-12 py-12 text-sidebar-foreground lg:flex lg:w-[44%]">
         <div className="auth-brandpane-surface" aria-hidden="true" />
+        {/* Verbatim copy of the original mock's `.dirB .brandpane::after`
+            rule (apps/web/scratch/pepe-login-redesign.html:136-139) — same
+            420x420px box, same right:-140px/top:-140px offset, same
+            radial-gradient(circle at 30% 30%, ...) center (not a centered
+            circle — the earlier round dropped the "at 30% 30%" offset,
+            which is why it read as flatter/more centered than the
+            reference). The gradient's own farthest-corner falloff (65%
+            stop) is evaluated purely against this 420x420 box, not the
+            pane, so it doesn't need explicit sizing to stay predictable —
+            and rounded-full clips it to a 210px-radius circle before the
+            gradient ever reaches its own transparent stop, which is why
+            the visible edge never looks "fully faded out." color-mix()
+            keeps translucency baked into the gradient itself (var(--primary)
+            at 30%, not a solid color plus separate opacity/blur). */}
+        <div
+          data-slot="brandpane-glow"
+          aria-hidden="true"
+          className="absolute -top-[140px] -right-[140px] h-[420px] w-[420px] rounded-full"
+          style={{ background: 'radial-gradient(circle at 30% 30%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 65%)' }}
+        />
         <Link to="/" className="relative flex items-center gap-1.5 text-[24px] leading-none">
           <BrandMark />
         </Link>

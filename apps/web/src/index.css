@@ -555,45 +555,22 @@
 }
 
 /*
- * Auth brand pane surface (round N of the corner-accent question — the
- * founder kept returning to the same reference screenshot: the original
- * Direction B mock, apps/web/scratch/pepe-login-redesign.html:136-139).
- * Root cause of every prior miss: that original CSS never specified an
- * explicit radial-gradient size —
- *   radial-gradient(circle at 30% 30%, color-mix(...), transparent 65%)
- * — and an unsized radial-gradient defaults to "farthest-corner" (the
- * gradient's outer edge reaches the container's farthest corner from its
- * center point), which on a real pane produces something much larger and
- * more dominant than any of the small fixed-pixel sizes tried in earlier
- * rounds (300px, 320px, 420px) — that mismatch in scale, not
- * gradient-vs-shape, was the actual gap. Reproduces the original's exact
- * position/color-mix/stop values, just using var(--primary) instead of
- * the mock's hardcoded #2DD4BF so it follows the active instance
- * palette, with no explicit size so it scales the same way on any real
- * viewport. Grain (feTurbulence, inlined as a data-URI — no extra asset
- * request) stays: it stops the flat fill from banding.
+ * Auth brand pane surface: base fill + a positioned circle glow on top
+ * (AuthLayout.tsx's `brandpane-glow`). Founder feedback that the circle
+ * alone read as "close, but not as beautiful" as the reference pointed
+ * at a real missing layer: a flat single-color base fill has no depth of
+ * its own, so the circle sits on top of nothing — the reference's richer
+ * look comes from the pane's OWN directional gradient plus the circle
+ * together, not the circle alone. Restoring the diagonal gradient this
+ * surface had earlier in the session (removed during the "shape not
+ * gradient" troubleshooting, when the circle and the base fill were
+ * being debugged as one problem instead of two separate layers).
  */
 .auth-brandpane-surface {
   position: absolute;
   inset: 0;
   z-index: 0;
-  background: var(--sidebar);
-}
-.auth-brandpane-surface::before {
-  /* Plain var(--primary) + element-level opacity, not color-mix() baked
-     into the gradient stop — removes any doubt about color-mix()/oklch
-     support in a specific browser/rendering path being why this read as
-     invisible in one environment even after a hard refresh and an
-     incognito test (which ruled out caching). opacity is a much older,
-     universally-supported property. Also bumped intensity substantially
-     (0.3 -> 0.55) so it reads unmistakably regardless of display/browser
-     differences. */
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(circle at 30% 30%, var(--primary), transparent 65%);
-  opacity: 0.55;
-  pointer-events: none;
+  background: linear-gradient(160deg, var(--sidebar) 0%, color-mix(in oklch, var(--sidebar), black 14%) 100%);
 }
 .auth-brandpane-surface::after {
   content: '';
