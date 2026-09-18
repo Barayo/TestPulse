@@ -256,14 +256,25 @@ test.describe('Requirement: Project list resolves to zero, one, or many public p
 })
 
 test.describe('Requirement: Discovery entry point on the login page', () => {
-  test('Scenario: Link shown when public access is enabled instance-wide, hidden when disabled', async ({
+  // Re-scoped by add-auth-split-screen-redesign (Pepe design review): the
+  // login page previously had no way back to the public home at all, so
+  // this link was relabeled "Back to home" and made unconditional instead
+  // of gating it on publicProjectsEnabled — it's no longer purely a
+  // "browse public projects" discovery affordance (hide it when there's
+  // nothing to discover), it's now the login screen's only wayfinding
+  // control (always let a visitor leave). The destination still degrades
+  // gracefully when public access is off instance-wide: ProjectsPage.tsx
+  // renders its own real empty state ("No public projects yet") rather
+  // than erroring, so there's no dead end to protect against by hiding
+  // the link.
+  test('Scenario: A "Back to home" link is always shown, regardless of public access being enabled instance-wide', async ({
     page,
     browser,
   }) => {
     test.info().annotations.push({ type: 'testpulse_case_key', description: 'TD-30' })
     const anon = await anonymousPage(browser)
     await anon.goto('/login')
-    await expect(anon.getByRole('link', { name: /browse public projects/i })).toHaveAttribute('href', '/')
+    await expect(anon.getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/')
 
     await page.goto('/settings/instance')
     const instanceSwitch = page.getByRole('switch', { name: /public project access, instance-wide/i })
@@ -271,7 +282,7 @@ test.describe('Requirement: Discovery entry point on the login page', () => {
     await instanceSwitch.click()
 
     await anon.goto('/login')
-    await expect(anon.getByRole('link', { name: /browse public projects/i })).toHaveCount(0)
+    await expect(anon.getByRole('link', { name: /back to home/i })).toHaveAttribute('href', '/')
 
     // Restore — subsequent tests (and a normal single-tenant instance)
     // assume this switch defaults to on.
