@@ -65,20 +65,7 @@ describe('AuthLayout', () => {
     expect(screen.queryByText(/last \d+ runs/i)).toBeNull()
   })
 
-  it('renders a real circle shape in the top-right corner, not a gradient falloff', () => {
-    // A radial-gradient glow (no discernible edge) was tried first and
-    // rejected — founder wants an actual circle silhouette. A real
-    // rounded-full element, blurred for softness, positioned top-right,
-    // away from the run-strip bars entirely so it can't clip badly
-    // against them the way the earlier bottom-right blob did.
-    renderAuthLayout()
-    const circle = document.querySelector('[data-slot="brandpane-glow"]')
-    expect(circle).not.toBeNull()
-    expect(circle).toHaveAttribute('aria-hidden', 'true')
-    expect(circle).toHaveClass('rounded-full')
-  })
-
-  it('gives the brand pane a grained surface', () => {
+  it('gives the brand pane a grained, corner-accented surface', () => {
     renderAuthLayout()
     const surfaces = document.querySelectorAll('.auth-brandpane-surface')
     // Both the mobile condensed band and the full desktop pane get the

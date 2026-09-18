@@ -555,14 +555,22 @@
 }
 
 /*
- * Auth brand pane surface (Pepe design review — history: flat fill ->
- * directional gradient -> flat fill + bottom-right blurred blob ->
- * flat fill + top-right radial-gradient glow -> this). The gradient
- * glow was rejected too — a radial-gradient falloff has no discernible
- * edge, and the founder specifically wants a real circle silhouette, not
- * a gradient. See AuthLayout.tsx's `brandpane-glow` element (a real
- * blurred, rounded-full div, not a CSS pseudo-element) for the actual
- * shape. Grain (feTurbulence, inlined as a data-URI — no extra asset
+ * Auth brand pane surface (round N of the corner-accent question — the
+ * founder kept returning to the same reference screenshot: the original
+ * Direction B mock, apps/web/scratch/pepe-login-redesign.html:136-139).
+ * Root cause of every prior miss: that original CSS never specified an
+ * explicit radial-gradient size —
+ *   radial-gradient(circle at 30% 30%, color-mix(...), transparent 65%)
+ * — and an unsized radial-gradient defaults to "farthest-corner" (the
+ * gradient's outer edge reaches the container's farthest corner from its
+ * center point), which on a real pane produces something much larger and
+ * more dominant than any of the small fixed-pixel sizes tried in earlier
+ * rounds (300px, 320px, 420px) — that mismatch in scale, not
+ * gradient-vs-shape, was the actual gap. Reproduces the original's exact
+ * position/color-mix/stop values, just using var(--primary) instead of
+ * the mock's hardcoded #2DD4BF so it follows the active instance
+ * palette, with no explicit size so it scales the same way on any real
+ * viewport. Grain (feTurbulence, inlined as a data-URI — no extra asset
  * request) stays: it stops the flat fill from banding.
  */
 .auth-brandpane-surface {
@@ -570,6 +578,13 @@
   inset: 0;
   z-index: 0;
   background: var(--sidebar);
+}
+.auth-brandpane-surface::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 30% 30%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 65%);
+  pointer-events: none;
 }
 .auth-brandpane-surface::after {
   content: '';
