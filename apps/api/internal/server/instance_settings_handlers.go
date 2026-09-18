@@ -27,6 +27,7 @@ type instanceSettingsUpdateInput struct {
 	DisableSso              *bool                 `json:"disableSso"`
 	JiraSiteURL             *string               `json:"jiraSiteUrl"`
 	SessionTimeoutDays      *int                  `json:"sessionTimeoutDays"`
+	DefaultLandingView      *string               `json:"defaultLandingView"`
 }
 
 func (in instanceSettingsUpdateInput) empty() bool {
@@ -34,7 +35,7 @@ func (in instanceSettingsUpdateInput) empty() bool {
 		in.AutoArchiveInactiveDays == nil && in.ColorTheme == nil && in.CustomPalette == nil &&
 		in.OIDCIssuer == nil && in.OIDCClientID == nil && in.OIDCClientSecret == nil &&
 		in.OIDCGroupClaim == nil && in.OIDCAdminClaimValues == nil && in.OIDCOnly == nil && in.DisableSso == nil &&
-		in.JiraSiteURL == nil && in.SessionTimeoutDays == nil
+		in.JiraSiteURL == nil && in.SessionTimeoutDays == nil && in.DefaultLandingView == nil
 }
 
 // touchesOIDCConnection reports whether this request changes the values an
@@ -139,5 +140,6 @@ func toInstanceSettingsUpdate(in instanceSettingsUpdateInput) domain.InstanceSet
 		OIDCOnly:                in.OIDCOnly,
 		JiraSiteURL:             in.JiraSiteURL,
 		SessionTimeoutDays:      in.SessionTimeoutDays,
+		DefaultLandingView:      in.DefaultLandingView,
 	}
 }

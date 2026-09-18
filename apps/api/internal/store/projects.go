@@ -49,8 +49,8 @@ func (r *ProjectRepo) Create(ctx context.Context, name, description string) (dom
 func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error) {
 	var p domain.Project
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, key, name, archived, description, is_sample, public_access, auto_archive_exempt, assignee_restricted_recording, created_at FROM projects WHERE id = $1`, id,
-	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.AutoArchiveExempt, &p.AssigneeRestrictedRecording, &p.CreatedAt)
+		`SELECT id, key, name, archived, description, is_sample, public_access, auto_archive_exempt, assignee_restricted_recording, landing_view, created_at FROM projects WHERE id = $1`, id,
+	).Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.AutoArchiveExempt, &p.AssigneeRestrictedRecording, &p.LandingView, &p.CreatedAt)
 	if err != nil {
 		return domain.Project{}, ErrNotFound
 	}
@@ -63,6 +63,14 @@ func (r *ProjectRepo) Get(ctx context.Context, id string) (domain.Project, error
 // the service layer, not here.
 func (r *ProjectRepo) SetAutoArchiveExempt(ctx context.Context, id string, exempt bool) error {
 	_, err := r.pool.Exec(ctx, `UPDATE projects SET auto_archive_exempt = $1 WHERE id = $2`, exempt, id)
+	return err
+}
+
+// SetLandingView sets or clears (view == nil) this project's own
+// landing-view override (add-configurable-project-landing design.md D1) —
+// nil reverts it to inheriting the instance-wide default.
+func (r *ProjectRepo) SetLandingView(ctx context.Context, id string, view *string) error {
+	_, err := r.pool.Exec(ctx, `UPDATE projects SET landing_view = $1 WHERE id = $2`, view, id)
 	return err
 }
 

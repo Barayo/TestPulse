@@ -303,11 +303,23 @@ type ProjectUpdate struct {
 	// gates recording results/status changes to an item's assignee. Same
 	// manageProject floor as PublicAccess — no stricter gate needed.
 	AssigneeRestrictedRecording *bool
+	// LandingView sets this project's own landing-view override
+	// (add-configurable-project-landing design.md D5) — same manageProject
+	// floor as PublicAccess, not Tenant-Admin-only like AutoArchiveExempt.
+	// ClearLandingView, when true, reverts it to inheriting the
+	// instance-wide default (design.md's addendum: a dedicated action
+	// rather than a null sentinel, mirroring DisableOIDC).
+	LandingView      *string
+	ClearLandingView *bool
 }
 
 func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdate) (domain.Project, error) {
-	if upd.Name == nil && upd.Description == nil && upd.Archived == nil && upd.PublicAccess == nil && upd.AutoArchiveExempt == nil && upd.AssigneeRestrictedRecording == nil {
-		return domain.Project{}, invalid("nothing to update: provide name, description, archived, publicAccess, autoArchiveExempt, and/or assigneeRestrictedRecording")
+	if upd.Name == nil && upd.Description == nil && upd.Archived == nil && upd.PublicAccess == nil && upd.AutoArchiveExempt == nil &&
+		upd.AssigneeRestrictedRecording == nil && upd.LandingView == nil && upd.ClearLandingView == nil {
+		return domain.Project{}, invalid("nothing to update: provide name, description, archived, publicAccess, autoArchiveExempt, assigneeRestrictedRecording, landingView, and/or clearLandingView")
+	}
+	if upd.LandingView != nil && !validLandingViews[*upd.LandingView] {
+		return domain.Project{}, invalid("landingView must be one of dashboard, library, suites, runs, reports")
 	}
 	if upd.AutoArchiveExempt != nil {
 		actor, ok := domain.ActorFromContext(ctx)
@@ -368,6 +380,17 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 			return domain.Project{}, err
 		}
 		s.audit(ctx, "update_assignee_restricted_recording", "project", id)
+	}
+	if upd.ClearLandingView != nil && *upd.ClearLandingView {
+		if err := s.store.Projects.SetLandingView(ctx, id, nil); err != nil {
+			return domain.Project{}, err
+		}
+		s.audit(ctx, "clear_landing_view", "project", id)
+	} else if upd.LandingView != nil {
+		if err := s.store.Projects.SetLandingView(ctx, id, upd.LandingView); err != nil {
+			return domain.Project{}, err
+		}
+		s.audit(ctx, "update_landing_view", "project", id)
 	}
 	return s.store.Projects.Get(ctx, id)
 }

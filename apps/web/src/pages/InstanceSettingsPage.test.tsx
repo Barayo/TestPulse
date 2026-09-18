@@ -18,6 +18,7 @@ function mockAsTenantAdmin(
   colorTheme = 'teal',
   jiraSiteUrl = '',
   sessionTimeoutDays = 30,
+  defaultLandingView = 'dashboard',
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
@@ -32,6 +33,7 @@ function mockAsTenantAdmin(
           colorTheme,
           jiraSiteUrl,
           sessionTimeoutDays,
+          defaultLandingView,
           updatedAt: '',
         },
         response: { ok: true },
@@ -408,6 +410,35 @@ describe('InstanceSettingsPage', () => {
       // Fresh mount seeded from Ocean (the now-active preset), not the
       // abandoned #123456 draft from before switching away.
       expect(screen.getByLabelText('Primary')).toHaveValue('#1453B8')
+    })
+  })
+
+  describe('Default landing view (add-configurable-project-landing)', () => {
+    it('shows five options with the current default selected', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'library')
+      renderPage()
+      const group = within(await screen.findByRole('group', { name: 'Default landing view' }))
+      for (const label of ['Dashboard', 'Library', 'Suites', 'Runs', 'Reports']) {
+        expect(group.getByRole('button', { name: label })).toBeInTheDocument()
+      }
+      expect(group.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-pressed', 'true')
+      expect(group.getByRole('button', { name: 'Dashboard' })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('selecting a view calls PATCH with defaultLandingView', async () => {
+      mockAsTenantAdmin(true)
+      mockPATCH.mockResolvedValue({
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'teal', sessionTimeoutDays: 30, defaultLandingView: 'reports', updatedAt: '' },
+        response: { ok: true },
+      })
+      renderPage()
+      const group = within(await screen.findByRole('group', { name: 'Default landing view' }))
+      await userEvent.click(group.getByRole('button', { name: 'Reports' }))
+
+      await waitFor(() => {
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', { body: { defaultLandingView: 'reports' } })
+      })
+      expect(group.getByRole('button', { name: 'Reports' })).toHaveAttribute('aria-pressed', 'true')
     })
   })
 

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Link, useNavigate, useParams } from 'react-router'
+import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
@@ -50,7 +50,7 @@ function GettingStartedStep({
 export default function ProjectPage() {
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading, defaultLandingView } = useAuth()
   const permissions = useProjectPermissions(projectKey)
   const access = useProjectReadAccess(projectKey, user, authLoading)
   const { canSwitch, openSwitcher } = useProjectSwitcher()
@@ -155,6 +155,19 @@ export default function ProjectPage() {
         )}
       </p>
     )
+  }
+
+  // Effective landing view (add-configurable-project-landing design.md
+  // D2/D4): the project's own override wins, else the instance-wide
+  // default — both are already fetched by hooks above (the project itself,
+  // and defaultLandingView from useAuth's shared /api/v1/meta fetch), so
+  // no extra request is needed. "dashboard" renders this page's own
+  // existing content unchanged below; every other value redirects
+  // straight to that view's own real route rather than duplicating its
+  // content here.
+  const effectiveLandingView = (project?.landingView as string | null | undefined) ?? defaultLandingView
+  if (project && effectiveLandingView !== 'dashboard') {
+    return <Navigate to={`/projects/${projectKey}/${effectiveLandingView}`} replace />
   }
 
   // Only treat the project as genuinely empty once its landing data has

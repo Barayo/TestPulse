@@ -113,6 +113,46 @@ func TestUpdateInstanceSettingsAppliesColorTheme(t *testing.T) {
 	}
 }
 
+func TestUpdateInstanceSettingsRejectsUnknownDefaultLandingView(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-landing-bad@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	view := "kanban"
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{DefaultLandingView: &view}); err == nil {
+		t.Fatal(`UpdateInstanceSettings(DefaultLandingView: "kanban"): want error, got nil`)
+	}
+}
+
+func TestUpdateInstanceSettingsAppliesDefaultLandingView(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-landing-ok@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	view := "library"
+	got, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{DefaultLandingView: &view})
+	if err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+	if got.DefaultLandingView != "library" {
+		t.Errorf("DefaultLandingView = %q, want \"library\"", got.DefaultLandingView)
+	}
+}
+
+func TestInstanceSettingsDefaultsToDashboardLandingView(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-landing-default@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	got, err := s.InstanceSettings(ctx)
+	if err != nil {
+		t.Fatalf("InstanceSettings: %v", err)
+	}
+	if got.DefaultLandingView != "dashboard" {
+		t.Errorf("DefaultLandingView = %q, want \"dashboard\" (factory default, preserves existing behavior)", got.DefaultLandingView)
+	}
+}
+
 func validCustomPalette() *domain.CustomPalette {
 	side := domain.CustomPaletteMode{
 		Background: "#F8F7FA", Foreground: "#160B2E", Card: "#FFFFFF",

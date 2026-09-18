@@ -13,7 +13,7 @@ const mockDELETE = vi.mocked(api.DELETE)
 
 const project = {
   id: 'p1', key: 'QA', name: 'QA Platform', archived: false, description: '', isSample: false,
-  publicAccess: false, autoArchiveExempt: false, assigneeRestrictedRecording: false, createdAt: '',
+  publicAccess: false, autoArchiveExempt: false, assigneeRestrictedRecording: false, landingView: null, createdAt: '',
 }
 
 function mockAPI({
@@ -25,6 +25,8 @@ function mockAPI({
   autoArchiveExempt = false,
   autoArchiveInactiveDays = 0,
   assigneeRestrictedRecording = false,
+  landingView = null,
+  defaultLandingView = 'dashboard',
   summaries,
 }: {
   manageProject?: boolean
@@ -35,6 +37,8 @@ function mockAPI({
   autoArchiveExempt?: boolean
   autoArchiveInactiveDays?: number
   assigneeRestrictedRecording?: boolean
+  landingView?: string | null
+  defaultLandingView?: string
   summaries?: { projectId: string; suiteCount: number; caseCount: number; passRate: number | null; isFavorite: boolean; archived: boolean }[]
 } = {}) {
   const resolvedSummaries = summaries ?? [{ projectId: 'p1', suiteCount: 3, caseCount: 12, passRate: null, isFavorite: false, archived }]
@@ -43,7 +47,7 @@ function mockAPI({
       return Promise.resolve({ data: { id: 'u1', email: 'admin@example.com', isTenantAdmin }, response: { ok: true } })
     }
     if (path === '/api/v1/projects/{projectKey}') {
-      return Promise.resolve({ data: { ...project, archived, autoArchiveExempt, assigneeRestrictedRecording }, response: { ok: true } })
+      return Promise.resolve({ data: { ...project, archived, autoArchiveExempt, assigneeRestrictedRecording, landingView }, response: { ok: true } })
     }
     if (path === '/api/v1/projects/{projectKey}/permissions') {
       return Promise.resolve({
@@ -56,7 +60,7 @@ function mockAPI({
       })
     }
     if (path === '/api/v1/meta') {
-      return Promise.resolve({ data: { name: 'TestPulse', version: '0.0.1', publicProjectsEnabled }, response: { ok: true } })
+      return Promise.resolve({ data: { name: 'TestPulse', version: '0.0.1', publicProjectsEnabled, defaultLandingView }, response: { ok: true } })
     }
     if (path === '/api/v1/projects/summaries') {
       return Promise.resolve({ data: resolvedSummaries, response: { ok: true } })
@@ -163,6 +167,62 @@ describe('ProjectSettingsPage', () => {
       renderPage()
 
       expect(await screen.findByRole('switch', { name: /restrict.*assignee/i, checked: true })).toBeInTheDocument()
+    })
+  })
+
+  describe('Landing view (add-configurable-project-landing)', () => {
+    it('shows "Use instance default" selected with the resolved default inline, plus the five explicit choices', async () => {
+      mockAPI({ manageProject: true, landingView: null, defaultLandingView: 'library' })
+      renderPage()
+
+      const group = within(await screen.findByRole('group', { name: 'Landing view' }))
+      await waitFor(() => expect(group.getByRole('button', { name: /use instance default/i })).toHaveTextContent(/library/i))
+      const useDefault = group.getByRole('button', { name: /use instance default/i })
+      expect(useDefault).toHaveAttribute('aria-pressed', 'true')
+      for (const label of ['Dashboard', 'Library', 'Suites', 'Runs', 'Reports']) {
+        expect(group.getByRole('button', { name: label })).toBeInTheDocument()
+      }
+    })
+
+    it('shows the override selected when set, not "Use instance default"', async () => {
+      mockAPI({ manageProject: true, landingView: 'suites', defaultLandingView: 'dashboard' })
+      renderPage()
+
+      const group = within(await screen.findByRole('group', { name: 'Landing view' }))
+      await waitFor(() => expect(group.getByRole('button', { name: 'Suites' })).toHaveAttribute('aria-pressed', 'true'))
+      expect(group.getByRole('button', { name: /use instance default/i })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('selecting an explicit view PATCHes landingView', async () => {
+      mockAPI({ manageProject: true, landingView: null, defaultLandingView: 'dashboard' })
+      mockPATCH.mockResolvedValue({ data: { ...project, landingView: 'runs' }, response: { ok: true } })
+      renderPage()
+
+      const group = within(await screen.findByRole('group', { name: 'Landing view' }))
+      await userEvent.click(group.getByRole('button', { name: 'Runs' }))
+
+      await waitFor(() =>
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/projects/{projectKey}', {
+          params: { path: { projectKey: 'QA' } },
+          body: { landingView: 'runs' },
+        }),
+      )
+    })
+
+    it('selecting "Use instance default" PATCHes clearLandingView: true', async () => {
+      mockAPI({ manageProject: true, landingView: 'suites', defaultLandingView: 'dashboard' })
+      mockPATCH.mockResolvedValue({ data: { ...project, landingView: null }, response: { ok: true } })
+      renderPage()
+
+      const group = within(await screen.findByRole('group', { name: 'Landing view' }))
+      await userEvent.click(group.getByRole('button', { name: /use instance default/i }))
+
+      await waitFor(() =>
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/projects/{projectKey}', {
+          params: { path: { projectKey: 'QA' } },
+          body: { clearLandingView: true },
+        }),
+      )
     })
   })
 

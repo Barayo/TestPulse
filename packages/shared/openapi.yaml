@@ -3107,6 +3107,14 @@ components:
             requires the authenticated actor to match the item's assignee
             (or hold manageProject), unless the item is unassigned
             (restrict-run-item-status-to-assignee). False by default.
+        landingView:
+          allOf: [{ $ref: '#/components/schemas/LandingView' }]
+          nullable: true
+          description: >
+            This project's own landing-view override
+            (add-configurable-project-landing). Null means it inherits the
+            instance-wide Meta.defaultLandingView. Settable by a user with
+            manageProject on this project.
         createdAt: { type: string, format: date-time }
     ProjectInput:
       type: object
@@ -3123,6 +3131,15 @@ components:
         publicAccess: { type: boolean }
         autoArchiveExempt: { type: boolean }
         assigneeRestrictedRecording: { type: boolean }
+        landingView:
+          $ref: '#/components/schemas/LandingView'
+        clearLandingView:
+          type: boolean
+          description: >
+            Clears this project's landing-view override, reverting it to
+            inherit the instance-wide default — a dedicated action rather
+            than a null sentinel on landingView (the same reasoning as
+            disableSso on InstanceSettingsUpdate).
     TestCase:
       type: object
       required: [id, key, projectId, folderId, currentVersion, content, createdAt, updatedAt]
@@ -3974,7 +3991,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView]
       properties:
         name:
           type: string
@@ -4031,6 +4048,15 @@ components:
             instance-wide (TESTPULSE_OIDC_ONLY, only takes effect when
             ssoEnabled is also true). The login page renders only the SSO
             action when true, hiding the password form entirely.
+        defaultLandingView:
+          allOf: [{ $ref: '#/components/schemas/LandingView' }]
+          description: >
+            Instance-wide default landing view
+            (add-configurable-project-landing). Read here (not only via the
+            Tenant-Admin-only InstanceSettings) since every visitor,
+            including anonymous ones, needs it to resolve which view a
+            project without its own override opens into — the same
+            reasoning that already put colorTheme here.
     ColorTheme:
       type: string
       enum: [teal, indigo, ocean, forest, custom]
@@ -4039,6 +4065,13 @@ components:
         "teal" is the unchanged default; indigo/ocean/forest are built-in
         presets; "custom" means the Tenant-Admin-authored CustomPalette is
         active.
+    LandingView:
+      type: string
+      enum: [dashboard, library, suites, runs, reports]
+      description: >
+        Which view a project opens into (add-configurable-project-landing).
+        "dashboard" is the original fixed multi-panel view; the others
+        redirect straight to that view's own existing route.
     CustomPaletteMode:
       type: object
       required: [background, foreground, card, primary, primaryForeground, muted, mutedForeground, accent, border, input]
@@ -4065,7 +4098,7 @@ components:
         dark: { $ref: '#/components/schemas/CustomPaletteMode' }
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView]
       properties:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays:
@@ -4130,6 +4163,8 @@ components:
             window in days (add-session-timeout-setting). Default 30.
             Changing it only affects sessions created or extended
             afterward — already-active sessions keep their existing expiry.
+        defaultLandingView:
+          $ref: '#/components/schemas/LandingView'
     InstanceSettingsUpdate:
       type: object
       description: A partial update — every field is optional; omitted fields are left unchanged.
@@ -4167,6 +4202,8 @@ components:
           minimum: 1
           maximum: 90
           description: Sliding session expiry window in days (add-session-timeout-setting), 1-90.
+        defaultLandingView:
+          $ref: '#/components/schemas/LandingView'
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]

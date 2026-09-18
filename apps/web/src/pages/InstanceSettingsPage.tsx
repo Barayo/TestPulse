@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { DatabaseIcon, GlobeIcon, LinkIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
+import { DatabaseIcon, GlobeIcon, LayoutDashboardIcon, LinkIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
+import { Pill } from '@/components/ui/Pill'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 import { AdminShell } from '@/components/AdminShell'
@@ -17,6 +18,16 @@ import type { components } from '@testpulse/shared/api'
 
 type ColorTheme = components['schemas']['ColorTheme']
 type InstanceSettings = components['schemas']['InstanceSettings']
+type LandingView = components['schemas']['LandingView']
+
+const LANDING_VIEW_LABELS: Record<LandingView, string> = {
+  dashboard: 'Dashboard',
+  library: 'Library',
+  suites: 'Suites',
+  runs: 'Runs',
+  reports: 'Reports',
+}
+const LANDING_VIEWS = Object.keys(LANDING_VIEW_LABELS) as LandingView[]
 
 // Tenant-Admin-only instance-wide settings (enable-public-project-access,
 // add-data-retention). Self-gates the same way RolesPage.tsx/PeoplePage.tsx
@@ -38,6 +49,7 @@ export default function InstanceSettingsPage() {
   const [sessionTimeoutInput, setSessionTimeoutInput] = useState('')
   const [savingSessionTimeout, setSavingSessionTimeout] = useState(false)
   const [sessionTimeoutError, setSessionTimeoutError] = useState<string>()
+  const [defaultLandingView, setDefaultLandingView] = useState<LandingView>()
 
   useEffect(() => {
     if (!me?.isTenantAdmin) return
@@ -53,6 +65,7 @@ export default function InstanceSettingsPage() {
       setJiraSiteUrl(data.jiraSiteUrl ?? '')
       setSessionTimeoutDays(data.sessionTimeoutDays)
       setSessionTimeoutInput(String(data.sessionTimeoutDays))
+      setDefaultLandingView(data.defaultLandingView)
     })
   }, [me])
 
@@ -75,6 +88,11 @@ export default function InstanceSettingsPage() {
   async function selectAutoArchive(days: number) {
     const { data } = await api.PATCH('/api/v1/instance-settings', { body: { autoArchiveInactiveDays: days } })
     if (data) setAutoArchiveInactiveDays(data.autoArchiveInactiveDays)
+  }
+
+  async function selectDefaultLandingView(view: LandingView) {
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { defaultLandingView: view } })
+    if (data) setDefaultLandingView(data.defaultLandingView as LandingView)
   }
 
   async function selectColorTheme(theme: ColorTheme) {
@@ -171,6 +189,35 @@ export default function InstanceSettingsPage() {
               on — that project's setting is kept, not cleared, and takes effect again the moment this is switched
               back on.
             </p>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <LayoutDashboardIcon className="size-3.5" aria-hidden="true" />
+          Navigation
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Default landing view</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Which view a project opens into by default. A project can override this with its own landing view,
+              set from that project&apos;s own Settings.
+            </p>
+            <div role="group" aria-label="Default landing view" className="flex flex-wrap gap-2">
+              {LANDING_VIEWS.map((view) => (
+                <Pill
+                  key={view}
+                  active={defaultLandingView === view}
+                  onClick={() => void selectDefaultLandingView(view)}
+                >
+                  {LANDING_VIEW_LABELS[view]}
+                </Pill>
+              ))}
+            </div>
           </CardContent>
         </Card>
       </section>

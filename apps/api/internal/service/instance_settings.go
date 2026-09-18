@@ -14,6 +14,12 @@ var (
 		"teal": true, "indigo": true, "ocean": true, "forest": true, "custom": true,
 	}
 	hexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+	// validLandingViews (add-configurable-project-landing design.md D6) is
+	// shared between UpdateInstanceSettings (DefaultLandingView) and
+	// UpdateProject (LandingView) so the two never drift.
+	validLandingViews = map[string]bool{
+		"dashboard": true, "library": true, "suites": true, "runs": true, "reports": true,
+	}
 )
 
 // validateCustomPalette rejects any field not matching #RRGGBB, naming the
@@ -64,6 +70,9 @@ func (s *Service) UpdateInstanceSettings(ctx context.Context, upd domain.Instanc
 	}
 	if upd.ColorTheme != nil && !validColorThemes[*upd.ColorTheme] {
 		return domain.InstanceSettings{}, invalid("colorTheme must be one of teal, indigo, ocean, forest, custom")
+	}
+	if upd.DefaultLandingView != nil && !validLandingViews[*upd.DefaultLandingView] {
+		return domain.InstanceSettings{}, invalid("defaultLandingView must be one of dashboard, library, suites, runs, reports")
 	}
 	if upd.CustomPalette != nil {
 		if err := validateCustomPalette(upd.CustomPalette); err != nil {

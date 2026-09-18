@@ -23,6 +23,7 @@ const unconfiguredSettings = {
   oidcAdminClaimValues: [] as string[],
   oidcOnly: false,
   sessionTimeoutDays: 30,
+  defaultLandingView: 'dashboard' as const,
 }
 
 beforeEach(() => {

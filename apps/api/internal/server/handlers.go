@@ -270,6 +270,8 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 		PublicAccess                *bool   `json:"publicAccess"`
 		AutoArchiveExempt           *bool   `json:"autoArchiveExempt"`
 		AssigneeRestrictedRecording *bool   `json:"assigneeRestrictedRecording"`
+		LandingView                 *string `json:"landingView"`
+		ClearLandingView            *bool   `json:"clearLandingView"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
@@ -280,6 +282,7 @@ func (h *api) updateProject(w http.ResponseWriter, r *http.Request) {
 			Name: body.Name, Description: body.Description, Archived: body.Archived,
 			PublicAccess: body.PublicAccess, AutoArchiveExempt: body.AutoArchiveExempt,
 			AssigneeRestrictedRecording: body.AssigneeRestrictedRecording,
+			LandingView:                 body.LandingView, ClearLandingView: body.ClearLandingView,
 		})
 	h.respond(w, http.StatusOK, p, err)
 }

@@ -73,6 +73,14 @@ type AuthContextValue = {
   // /api/v1/meta fetch. Empty when a Tenant Admin hasn't configured it —
   // a linked issue key still shows then, just without a working link.
   jiraSiteUrl: string
+  // Instance-wide default landing view (add-configurable-project-landing),
+  // resolved from the same GET /api/v1/meta fetch. Defaults to "dashboard"
+  // — indistinguishable from a fresh instance's real default, same
+  // reasoning as colorTheme's "teal" default above: rendering today's
+  // existing dashboard for a moment before the real value resolves is
+  // never disruptively wrong the way a stale setupRequired redirect would
+  // be.
+  defaultLandingView: string
   login: (email: string, password: string) => Promise<LoginResult>
   // Creates the instance's first admin account and logs it in, in one
   // request (add-first-run-setup) — updates both `user` and `setupRequired`
@@ -104,6 +112,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [colorTheme, setColorTheme] = useState('teal')
   const [customPalette, setCustomPalette] = useState<CustomPalette | null>(null)
   const [jiraSiteUrl, setJiraSiteUrl] = useState('')
+  const [defaultLandingView, setDefaultLandingView] = useState('dashboard')
   const [sessionExpired, setSessionExpired] = useState(false)
   const userRef = useRef<AuthUser | null>(null)
   userRef.current = user
@@ -126,18 +135,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data, response } = await api.GET('/api/v1/meta')
         if (cancelled) return
         const meta = data as
-          | { setupRequired?: boolean; colorTheme?: string; customPalette?: CustomPalette; jiraSiteUrl?: string }
+          | {
+              setupRequired?: boolean
+              colorTheme?: string
+              customPalette?: CustomPalette
+              jiraSiteUrl?: string
+              defaultLandingView?: string
+            }
           | undefined
         setSetupRequired(response.ok && meta ? Boolean(meta.setupRequired) : false)
         setColorTheme(response.ok && meta?.colorTheme ? meta.colorTheme : 'teal')
         setCustomPalette(response.ok && meta?.customPalette ? meta.customPalette : null)
         setJiraSiteUrl(response.ok && meta?.jiraSiteUrl ? meta.jiraSiteUrl : '')
+        setDefaultLandingView(response.ok && meta?.defaultLandingView ? meta.defaultLandingView : 'dashboard')
       } catch {
         if (!cancelled) {
           setSetupRequired(false)
           setColorTheme('teal')
           setCustomPalette(null)
           setJiraSiteUrl('')
+          setDefaultLandingView('dashboard')
         }
       } finally {
         if (!cancelled) setSetupRequiredLoading(false)
@@ -222,6 +239,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         colorTheme,
         customPalette,
         jiraSiteUrl,
+        defaultLandingView,
         refreshColorTheme,
         login,
         setup,

@@ -2545,6 +2545,8 @@ export interface components {
             autoArchiveExempt: boolean;
             /** @description When true, recording a result or changing a run item's status requires the authenticated actor to match the item's assignee (or hold manageProject), unless the item is unassigned (restrict-run-item-status-to-assignee). False by default. */
             assigneeRestrictedRecording: boolean;
+            /** @description This project's own landing-view override (add-configurable-project-landing). Null means it inherits the instance-wide Meta.defaultLandingView. Settable by a user with manageProject on this project. */
+            landingView?: components["schemas"]["LandingView"] | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -2559,6 +2561,8 @@ export interface components {
             publicAccess?: boolean;
             autoArchiveExempt?: boolean;
             assigneeRestrictedRecording?: boolean;
+            /** @description Set to one of LandingView's values, or null to clear the override and inherit the instance default. */
+            landingView?: components["schemas"]["LandingView"] | null;
         };
         TestCase: {
             id: string;
@@ -3105,12 +3109,19 @@ export interface components {
             ssoEnabled: boolean;
             /** @description Password-based login and password recovery are disabled instance-wide (TESTPULSE_OIDC_ONLY, only takes effect when ssoEnabled is also true). The login page renders only the SSO action when true, hiding the password form entirely. */
             ssoOnly: boolean;
+            /** @description Instance-wide default landing view (add-configurable-project-landing). Read here (not only via the Tenant-Admin-only InstanceSettings) since every visitor, including anonymous ones, needs it to resolve which view a project without its own override opens into — the same reasoning that already put colorTheme here. */
+            defaultLandingView: components["schemas"]["LandingView"];
         };
         /**
          * @description The instance-wide color palette (add-color-theme-customization). "teal" is the unchanged default; indigo/ocean/forest are built-in presets; "custom" means the Tenant-Admin-authored CustomPalette is active.
          * @enum {string}
          */
         ColorTheme: "teal" | "indigo" | "ocean" | "forest" | "custom";
+        /**
+         * @description Which view a project opens into (add-configurable-project-landing). "dashboard" is the original fixed multi-panel view; the others redirect straight to that view's own existing route.
+         * @enum {string}
+         */
+        LandingView: "dashboard" | "library" | "suites" | "runs" | "reports";
         /** @description The 10 admin-editable tokens for one light/dark mode of a custom palette — every other CSS custom property is derived from these by copying, matching how every built-in preset is already structured. */
         CustomPaletteMode: {
             /** @example #F8F7FA */
@@ -3164,6 +3175,7 @@ export interface components {
             jiraSiteUrl?: string;
             /** @description Instance-wide, Tenant-Admin-configurable sliding session expiry window in days (add-session-timeout-setting). Default 30. Changing it only affects sessions created or extended afterward — already-active sessions keep their existing expiry. */
             sessionTimeoutDays: number;
+            defaultLandingView: components["schemas"]["LandingView"];
         };
         /** @description A partial update — every field is optional; omitted fields are left unchanged. */
         InstanceSettingsUpdate: {
@@ -3185,6 +3197,7 @@ export interface components {
             jiraSiteUrl?: string;
             /** @description Sliding session expiry window in days (add-session-timeout-setting), 1-90. */
             sessionTimeoutDays?: number;
+            defaultLandingView?: components["schemas"]["LandingView"];
         };
         User: {
             id: string;

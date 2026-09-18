@@ -8,11 +8,24 @@ import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import { Pill } from '@/components/ui/Pill'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { CustomFieldsCard } from '@/components/CustomFieldsCard'
 import { StepGroupsCard } from '@/components/StepGroupsCard'
 import { ReleasesSettingsCard } from '@/components/ReleasesSettingsCard'
 import { RequirementsSettingsCard } from '@/components/RequirementsSettingsCard'
+import type { components } from '@testpulse/shared/api'
+
+type LandingView = components['schemas']['LandingView']
+
+const LANDING_VIEW_LABELS: Record<LandingView, string> = {
+  dashboard: 'Dashboard',
+  library: 'Library',
+  suites: 'Suites',
+  runs: 'Runs',
+  reports: 'Reports',
+}
+const LANDING_VIEWS = Object.keys(LANDING_VIEW_LABELS) as LandingView[]
 
 // Project-level settings (enable-public-project-access) — currently just
 // the "Public access" toggle. Gated on manageProject (broader than
@@ -36,6 +49,8 @@ export default function ProjectSettingsPage() {
   // control itself is Tenant-Admin-only too — a Project Admin sees nothing
   // here rather than a control we can't accurately describe (design.md D9).
   const [autoArchiveInactiveDays, setAutoArchiveInactiveDays] = useState<number>()
+  const [landingView, setLandingView] = useState<LandingView | null>()
+  const [defaultLandingView, setDefaultLandingView] = useState<LandingView>()
   const [copied, setCopied] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteCounts, setDeleteCounts] = useState<{ suiteCount: number; caseCount: number }>()
@@ -50,10 +65,14 @@ export default function ProjectSettingsPage() {
         setArchived(data.archived)
         setAutoArchiveExempt(data.autoArchiveExempt)
         setAssigneeRestrictedRecording(data.assigneeRestrictedRecording)
+        setLandingView((data.landingView as LandingView | null) ?? null)
       }
     })
     void api.GET('/api/v1/meta').then(({ data }) => {
-      if (data) setPublicProjectsEnabled(data.publicProjectsEnabled)
+      if (data) {
+        setPublicProjectsEnabled(data.publicProjectsEnabled)
+        setDefaultLandingView(data.defaultLandingView as LandingView)
+      }
     })
     if (me?.isTenantAdmin) {
       void api.GET('/api/v1/instance-settings').then(({ data }) => {
@@ -104,6 +123,24 @@ export default function ProjectSettingsPage() {
       body: { assigneeRestrictedRecording: next },
     })
     if (data) setAssigneeRestrictedRecording(data.assigneeRestrictedRecording)
+  }
+
+  async function selectLandingView(view: LandingView) {
+    if (!projectKey) return
+    const { data } = await api.PATCH('/api/v1/projects/{projectKey}', {
+      params: { path: { projectKey } },
+      body: { landingView: view },
+    })
+    if (data) setLandingView((data.landingView as LandingView | null) ?? null)
+  }
+
+  async function clearLandingViewOverride() {
+    if (!projectKey) return
+    const { data } = await api.PATCH('/api/v1/projects/{projectKey}', {
+      params: { path: { projectKey } },
+      body: { clearLandingView: true },
+    })
+    if (data) setLandingView((data.landingView as LandingView | null) ?? null)
   }
 
   async function openDeleteDialog() {
@@ -201,6 +238,28 @@ export default function ProjectSettingsPage() {
                 onCheckedChange={() => void toggleAssigneeRestrictedRecording()}
               />
             </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Landing view</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Which view this project opens into. Overrides the instance-wide default set by a Tenant Admin, under
+            Administration → Instance.
+          </p>
+          <div role="group" aria-label="Landing view" className="flex flex-wrap gap-2">
+            <Pill active={landingView == null} onClick={() => void clearLandingViewOverride()}>
+              Use instance default{defaultLandingView ? ` (currently: ${LANDING_VIEW_LABELS[defaultLandingView]})` : ''}
+            </Pill>
+            {LANDING_VIEWS.map((view) => (
+              <Pill key={view} active={landingView === view} onClick={() => void selectLandingView(view)}>
+                {LANDING_VIEW_LABELS[view]}
+              </Pill>
+            ))}
           </div>
         </CardContent>
       </Card>

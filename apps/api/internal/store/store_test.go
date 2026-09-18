@@ -2274,6 +2274,38 @@ func TestSetAutoArchiveExemptPersists(t *testing.T) {
 	}
 }
 
+func TestSetLandingViewPersistsAndClears(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	if p.LandingView != nil {
+		t.Fatalf("LandingView on create = %v, want nil (inherits instance default)", p.LandingView)
+	}
+
+	suites := "suites"
+	if err := s.Projects.SetLandingView(ctx, p.ID, &suites); err != nil {
+		t.Fatalf("SetLandingView: %v", err)
+	}
+	got, err := s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.LandingView == nil || *got.LandingView != "suites" {
+		t.Errorf("LandingView after Set(\"suites\") = %v, want \"suites\"", got.LandingView)
+	}
+
+	if err := s.Projects.SetLandingView(ctx, p.ID, nil); err != nil {
+		t.Fatalf("SetLandingView(nil): %v", err)
+	}
+	got, err = s.Projects.Get(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.LandingView != nil {
+		t.Errorf("LandingView after Set(nil) = %v, want nil", got.LandingView)
+	}
+}
+
 func TestListEligibleForAutoArchiveFiltersByActivityExemptionAndArchived(t *testing.T) {
 	pool := testutil.Pool(t, "store")
 	s := store.New(pool)

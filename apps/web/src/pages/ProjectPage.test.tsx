@@ -130,6 +130,11 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
       return Promise.resolve({ data: overrides.releasePlans ?? [], response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anonymous)
       return Promise.resolve({ data: overrides.permissions ?? fullPermissions, response: { ok: true } })
+    if (path === '/api/v1/meta')
+      return Promise.resolve({
+        data: overrides.meta ?? { name: 'TestPulse', version: '0.0.1', defaultLandingView: 'dashboard' },
+        response: { ok: true },
+      })
     return Promise.resolve({ data: [], response: { ok: true } })
   })
 }
@@ -683,6 +688,35 @@ describe('ProjectPage landing', () => {
       await userEvent.click(await screen.findByText('Small'))
       expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
     })
+  })
+})
+
+describe('Landing view redirect (add-configurable-project-landing)', () => {
+  it('renders the existing dashboard unchanged when the effective view is "dashboard"', async () => {
+    mockProjectAPI({
+      project: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, description: '', landingView: null, createdAt: '' },
+      meta: { name: 'TestPulse', version: '0.0.1', defaultLandingView: 'dashboard' },
+    })
+    renderProject()
+    expect(await screen.findByRole('heading', { name: 'QA Platform' })).toBeInTheDocument()
+  })
+
+  it('redirects to Suites when the project has its own "suites" override', async () => {
+    mockProjectAPI({
+      project: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, description: '', landingView: 'suites', createdAt: '' },
+      meta: { name: 'TestPulse', version: '0.0.1', defaultLandingView: 'dashboard' },
+    })
+    renderWithRoutes(<Route path="/projects/:projectKey/suites" element={<div>suites page stub</div>} />)
+    expect(await screen.findByText('suites page stub')).toBeInTheDocument()
+  })
+
+  it('redirects to Library when the project has no override and the instance default is "library"', async () => {
+    mockProjectAPI({
+      project: { id: 'p1', key: 'p1', name: 'QA Platform', archived: false, description: '', landingView: null, createdAt: '' },
+      meta: { name: 'TestPulse', version: '0.0.1', defaultLandingView: 'library' },
+    })
+    renderWithRoutes(<Route path="/projects/:projectKey/library/*" element={<div>library explorer stub</div>} />)
+    expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
   })
 })
 

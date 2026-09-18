@@ -145,6 +145,7 @@ func handleMeta(svc *service.Service, oidcManager *OIDCManager) http.HandlerFunc
 			"ssoEnabled":            ssoEnabled,
 			"ssoOnly":               ssoEnabled && settings.OIDCOnly,
 			"jiraSiteUrl":           settings.JiraSiteURL,
+			"defaultLandingView":    settings.DefaultLandingView,
 		}
 		if settings.ColorTheme == "custom" && settings.CustomPalette != nil {
 			body["customPalette"] = settings.CustomPalette

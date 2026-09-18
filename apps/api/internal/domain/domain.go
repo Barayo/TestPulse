@@ -512,8 +512,13 @@ type Project struct {
 	// (restrict-run-item-status-to-assignee). Default false preserves
 	// today's behavior where any runRecordResult holder may act on any
 	// item. An unassigned item is unaffected regardless of this setting.
-	AssigneeRestrictedRecording bool      `json:"assigneeRestrictedRecording"`
-	CreatedAt                   time.Time `json:"createdAt"`
+	AssigneeRestrictedRecording bool `json:"assigneeRestrictedRecording"`
+	// LandingView is this project's own landing-view override
+	// (add-configurable-project-landing) — nil means it inherits the
+	// instance-wide InstanceSettings.DefaultLandingView. Settable by a
+	// user with manageProject on this project.
+	LandingView *string   `json:"landingView"`
+	CreatedAt   time.Time `json:"createdAt"`
 }
 
 // InstanceSettings is the single, instance-wide configuration row
@@ -556,7 +561,13 @@ type InstanceSettings struct {
 	// sliding session expiry window in days (add-session-timeout-setting),
 	// bounded 1-90 by the service layer. Default 30 preserves the behavior
 	// of the hardcoded constant this setting replaced.
-	SessionTimeoutDays int       `json:"sessionTimeoutDays"`
+	SessionTimeoutDays int `json:"sessionTimeoutDays"`
+	// DefaultLandingView is a Tenant-Admin-configurable, instance-wide
+	// default for which view a project opens into
+	// (add-configurable-project-landing) — one of "dashboard" (default),
+	// "library", "suites", "runs", "reports". A project's own LandingView
+	// override, when set, wins over this.
+	DefaultLandingView string    `json:"defaultLandingView"`
 	UpdatedAt          time.Time `json:"updatedAt"`
 }
 
@@ -584,6 +595,7 @@ type InstanceSettingsUpdate struct {
 	DisableOIDC          *bool
 	JiraSiteURL          *string
 	SessionTimeoutDays   *int
+	DefaultLandingView   *string
 }
 
 // OIDCTeamMapping maps a single OIDC group-claim value to a Team
