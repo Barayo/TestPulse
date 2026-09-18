@@ -62,20 +62,19 @@ const PROOF_LINES: Array<{ lead: string; rest: string; icon: ReactNode }> = [
   },
 ]
 
-// Decorative run-result strip (Direction B mock) — echoes a real
-// pass/pending/fail run strip using the active palette's actual chart
-// tokens (--chart-1/2/3, index.css), not the mock's hardcoded hex values,
-// so it also follows whichever instance palette is active.
-const RUN_STRIP_COLORS = [
-  'bg-chart-1',
-  'bg-chart-1',
-  'bg-chart-1',
-  'bg-chart-2',
-  'bg-chart-1',
-  'bg-chart-1',
-  'bg-chart-3',
-  'bg-chart-1',
-]
+// Decorative cardiogram strip — replaces the original chart-token
+// run-strip (color dots meant to echo a pass/fail run result) with a
+// repeat of the exact pulse path already drawn in BrandMark.tsx:22-29
+// ("M35,112 L62,112 L78,74 L94,140 L112,112 L122,112 L138,130 L172,64"),
+// per the founder's request to build the brand-pane decoration from the
+// logo's own EKG line instead of an arbitrary color pattern. The tile
+// below is that same path shifted 35 units left so a copy starts at
+// x=0 — no shape change — with one appended straight segment back down
+// to the x=112 baseline at x=200, so three copies placed edge-to-edge
+// (PULSE_TILE_COUNT) tile without a seam, the same way a real cardiogram
+// alternates a beat with a flat run before the next one.
+const PULSE_TILE_PATH = 'M0,112 L27,112 L43,74 L59,140 L77,112 L87,112 L103,130 L137,64 L200,112'
+const PULSE_TILE_COUNT = 3
 
 // Shared shell for the login/setup/forgot-password/reset-password/
 // required-password-change screen family (add-auth-split-screen-redesign).
@@ -134,11 +133,40 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
-        <div data-slot="run-strip" aria-hidden="true" className="flex gap-1">
-          {RUN_STRIP_COLORS.map((colorClass, i) => (
-            <span key={i} className={`h-2 w-2 rounded-full ${colorClass}`} />
+        {/* preserveAspectRatio="none" is what lets a tall, square icon
+            path (BrandMark's own 200x200 viewBox) stretch into a wide,
+            thin strip; vector-effect="non-scaling-stroke" keeps the drawn
+            line a flat ~1.5px regardless of that non-uniform squash, so it
+            reads as one clean trace rather than tapering thick-then-thin.
+            text-primary/25, not text-primary: full-strength primary is
+            already spent on the proof-icons above and the "Pulse"
+            wordmark (BrandMark.tsx:33) — this needs to read as ambient
+            texture, not a second brand mark competing with those
+            (design-system.md's color-restraint rule). Static, not
+            animated: nothing else on this screen moves, and this app has
+            no existing prefers-reduced-motion handling to extend to a new
+            animated element. */}
+        <svg
+          data-slot="pulse-strip"
+          aria-hidden="true"
+          viewBox={`0 0 ${200 * PULSE_TILE_COUNT} 200`}
+          preserveAspectRatio="none"
+          className="h-8 w-full shrink-0 text-primary/25"
+        >
+          {Array.from({ length: PULSE_TILE_COUNT }, (_, i) => (
+            <path
+              key={i}
+              d={PULSE_TILE_PATH}
+              transform={`translate(${i * 200}, 0)`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={1.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              vectorEffect="non-scaling-stroke"
+            />
           ))}
-        </div>
+        </svg>
       </div>
       {/* bg-background is now explicit (previously this pane had no
           background class of its own and just showed body's own
