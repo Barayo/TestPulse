@@ -1,5 +1,4 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router'
 import { MailIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -43,7 +42,7 @@ export default function ForgotPasswordPage() {
   }
 
   return (
-    <AuthLayout>
+    <AuthLayout backLink={{ to: '/login', label: 'Back to log in' }}>
       <Card className="w-full max-w-sm">
         {sentTo ? (
           <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
@@ -92,9 +91,6 @@ export default function ForgotPasswordPage() {
           </>
         )}
       </Card>
-      <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
-        Back to log in
-      </Link>
     </AuthLayout>
   )
 }

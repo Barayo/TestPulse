@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router'
+import { useLocation, useNavigate } from 'react-router'
 import { LoginForm } from '@/components/LoginForm'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -46,7 +46,7 @@ export default function LoginPage() {
   }, [])
 
   return (
-    <AuthLayout>
+    <AuthLayout backLink={{ to: '/', label: 'Back to home' }}>
       {bannerMessage && (
         <div className="w-full max-w-sm">
           <ConfirmBanner message={bannerMessage} onDismiss={() => setBannerMessage(undefined)} />
@@ -79,9 +79,6 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
-      <Link to="/" className="text-sm text-muted-foreground hover:text-foreground">
-        Back to home
-      </Link>
     </AuthLayout>
   )
 }

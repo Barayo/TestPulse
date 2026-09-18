@@ -80,7 +80,7 @@ export default function ResetPasswordPage() {
   const showDeadLink = !token || tokenDead
 
   return (
-    <AuthLayout>
+    <AuthLayout backLink={{ to: '/login', label: 'Back to log in' }}>
       <Card className="w-full max-w-sm">
         {showDeadLink ? (
           <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
@@ -150,9 +150,6 @@ export default function ResetPasswordPage() {
           </>
         )}
       </Card>
-      <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
-        Back to log in
-      </Link>
     </AuthLayout>
   )
 }

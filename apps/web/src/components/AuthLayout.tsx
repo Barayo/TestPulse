@@ -118,7 +118,13 @@ const RUN_STRIP_BARS: Array<{ heightPct: number; colorClass: string }> = [
 // content, i.e. exactly what --sidebar already means elsewhere in this
 // app (AdminShell's nav) — reaching for it here is the correct token, not
 // a workaround borrowed for its color value alone.
-export function AuthLayout({ children }: { children: ReactNode }) {
+export function AuthLayout({
+  children,
+  backLink,
+}: {
+  children: ReactNode
+  backLink?: { to: string; label: string }
+}) {
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       <div className="dark relative overflow-hidden text-sidebar-foreground lg:hidden">
@@ -191,9 +197,24 @@ export function AuthLayout({ children }: { children: ReactNode }) {
           token). auth-form-pane scopes the Card-elevation rule in
           index.css to just this subtree, without changing the shared
           Card component's look on every other page. */}
-      <div className="auth-form-pane flex flex-1 flex-col items-center justify-center gap-6 bg-background px-6 py-12">
-        {children}
-        <HealthBadge />
+      <div className="auth-form-pane flex flex-1 flex-col bg-background px-6 py-12">
+        {/* Exit link lives in its own top-right row, not grouped into the
+            centered card stack below (Pepe design review: bottom-center,
+            grouped with the card, read as "correct weight, wrong
+            position" — this mirrors Layout.tsx's own top-right "Log in"
+            slot so it's visible pre-scroll and reads as page-level
+            navigation rather than part of the form). */}
+        {backLink && (
+          <div data-slot="auth-backlink" className="flex justify-end">
+            <Link to={backLink.to} className="text-sm text-muted-foreground hover:text-foreground">
+              {backLink.label}
+            </Link>
+          </div>
+        )}
+        <div data-slot="auth-content-stack" className="flex flex-1 flex-col items-center justify-center gap-6">
+          {children}
+          <HealthBadge />
+        </div>
       </div>
     </div>
   )

@@ -106,4 +106,34 @@ describe('AuthLayout', () => {
     expect(homeLinks.length).toBeGreaterThan(0)
     homeLinks.forEach((link) => expect(link).toHaveAttribute('href', '/'))
   })
+
+  it('renders no exit link by default, and renders it in a top-right topbar (not the centered card stack) when backLink is given', () => {
+    // Pepe design review: a bottom-center exit link, grouped with the card,
+    // was rejected as "correct weight, wrong position" — it should mirror
+    // Layout.tsx's own top-right "Log in" slot instead, so it's visible
+    // pre-scroll and reads as page-level navigation, not part of the form.
+    const { rerender } = render(
+      <MemoryRouter>
+        <AuthLayout>
+          <div>form content</div>
+        </AuthLayout>
+      </MemoryRouter>,
+    )
+    expect(screen.queryByRole('link', { name: /back to/i })).toBeNull()
+
+    rerender(
+      <MemoryRouter>
+        <AuthLayout backLink={{ to: '/login', label: 'Back to log in' }}>
+          <div>form content</div>
+        </AuthLayout>
+      </MemoryRouter>,
+    )
+    const topbar = document.querySelector('[data-slot="auth-backlink"]')
+    expect(topbar).not.toBeNull()
+    const link = screen.getByRole('link', { name: 'Back to log in' })
+    expect(link).toHaveAttribute('href', '/login')
+    expect(topbar?.contains(link)).toBe(true)
+    // Not inside the centered content stack alongside the card.
+    expect(document.querySelector('[data-slot="auth-content-stack"]')?.contains(link)).toBe(false)
+  })
 })
