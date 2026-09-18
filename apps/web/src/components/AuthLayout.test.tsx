@@ -48,18 +48,25 @@ describe('AuthLayout', () => {
     })
   })
 
-  it('renders a decorative run-result strip with a "Last 16 runs" caption in the brand pane', () => {
+  it('renders no run-count or pass/fail claim in the brand pane', () => {
+    // A specific numeric claim ("14 passed") with no real data behind it,
+    // on a public unauthenticated page, reads as a fabricated stat —
+    // removed entirely, not softened (Pepe design review).
     renderAuthLayout()
-    const strip = document.querySelector('[data-slot="run-strip"]')
-    expect(strip).not.toBeNull()
-    expect(strip).toHaveAttribute('aria-hidden', 'true')
-    const bars = strip?.querySelectorAll('[data-slot="run-strip-bar"]') ?? []
-    expect(bars.length).toBe(16)
-    expect(screen.getByText('Last 16 runs')).toBeInTheDocument()
-    expect(screen.getByText('14 passed')).toBeInTheDocument()
+    expect(document.querySelector('[data-slot="run-strip"]')).toBeNull()
+    expect(screen.queryByText(/passed/i)).toBeNull()
+    expect(screen.queryByText(/last \d+ runs/i)).toBeNull()
   })
 
-  it('gives the brand pane a gradient+grain surface instead of a flat fill', () => {
+  it('renders a decorative blurred blob shape in the brand pane instead of a chart', () => {
+    renderAuthLayout()
+    const blob = document.querySelector('[data-slot="brandpane-blob"]')
+    expect(blob).not.toBeNull()
+    expect(blob).toHaveAttribute('aria-hidden', 'true')
+    expect(blob?.querySelector('path')).not.toBeNull()
+  })
+
+  it('gives the brand pane a grained surface', () => {
     renderAuthLayout()
     const surfaces = document.querySelectorAll('.auth-brandpane-surface')
     // Both the mobile condensed band and the full desktop pane get the

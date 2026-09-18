@@ -62,33 +62,21 @@ const PROOF_LINES: Array<{ lead: string; rest: string; icon: ReactNode }> = [
   },
 ]
 
-// Decorative run-result strip (Pepe design review, round 2 of 2: the
-// pulse-line cardiogram this replaced — see prior git history — was
-// itself a rebuild of this exact idiom under a different guise; going
-// back to it here is a deliberate return, not an oversight). 16 bars,
-// mostly --chart-1 (teal/"passed") with two --chart-2 ("skipped") and
-// one --chart-3 ("failed") flagged beats, matching the semantic hue
-// mapping docs/design-system.md already uses for status bands elsewhere
-// — illustrative, not bound to real run data (this is the pre-login
-// screen; there is no session or project to show real history for).
-const RUN_STRIP_BARS: Array<{ heightPct: number; colorClass: string }> = [
-  { heightPct: 38, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 62, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 80, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 48, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 96, colorClass: 'bg-chart-2 text-chart-2' },
-  { heightPct: 55, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 70, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 30, colorClass: 'bg-chart-3 text-chart-3' },
-  { heightPct: 64, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 85, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 44, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 58, colorClass: 'bg-chart-2 text-chart-2' },
-  { heightPct: 74, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 90, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 50, colorClass: 'bg-chart-1 text-chart-1' },
-  { heightPct: 68, colorClass: 'bg-chart-1 text-chart-1' },
-]
+// Decorative background blob (Pepe design review): replaces the
+// run-strip + "Last 16 runs / 14 passed" caption — a specific numeric
+// claim with no real data behind it on a public, unauthenticated page
+// reads as a fabricated stat, not honest illustrative decoration; there
+// is no safe softer rewording that keeps the specificity, so it's
+// removed entirely rather than reworded. A single solid, asymmetric SVG
+// path (not a circle — a circle blurred is indistinguishable from a
+// radial-gradient glow, which is a different thing this pane already
+// tried and moved away from) filled var(--primary), blurred so its two
+// lobes still read as a form rather than a uniform falloff. Anchored in
+// the pane's own bottom-right dead space — behind zero text, so it can't
+// create a legibility problem — doing the depth job the diagonal
+// gradient used to do, now that the surface itself is flat again.
+const BRANDPANE_BLOB_PATH =
+  'M62,150 C18,132 4,72 52,38 C100,4 172,16 196,66 C218,112 190,168 138,182 C96,193 62,178 62,150 Z'
 
 // Shared shell for the login/setup/forgot-password/reset-password/
 // required-password-change screen family (add-auth-split-screen-redesign).
@@ -121,14 +109,22 @@ const RUN_STRIP_BARS: Array<{ heightPct: number; colorClass: string }> = [
 export function AuthLayout({ children }: { children: ReactNode }) {
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
-      <div className="dark relative text-sidebar-foreground lg:hidden">
+      <div className="dark relative overflow-hidden text-sidebar-foreground lg:hidden">
         <div className="auth-brandpane-surface" aria-hidden="true" />
         <Link to="/" className="relative flex items-center gap-1.5 px-6 py-6 text-[24px] leading-none">
           <BrandMark />
         </Link>
       </div>
-      <div className="dark relative hidden w-full shrink-0 flex-col justify-center gap-8 px-12 py-12 text-sidebar-foreground lg:flex lg:w-[44%]">
+      <div className="dark relative hidden w-full shrink-0 flex-col justify-center gap-8 overflow-hidden px-12 py-12 text-sidebar-foreground lg:flex lg:w-[44%]">
         <div className="auth-brandpane-surface" aria-hidden="true" />
+        <svg
+          data-slot="brandpane-blob"
+          aria-hidden="true"
+          viewBox="0 0 220 220"
+          className="absolute -right-[140px] -bottom-[160px] h-[420px] w-[420px] text-primary opacity-[0.16] blur-[42px]"
+        >
+          <path d={BRANDPANE_BLOB_PATH} fill="currentColor" />
+        </svg>
         <Link to="/" className="relative flex items-center gap-1.5 text-[24px] leading-none">
           <BrandMark />
         </Link>
@@ -149,26 +145,6 @@ export function AuthLayout({ children }: { children: ReactNode }) {
             </li>
           ))}
         </ul>
-        <div className="relative mt-auto">
-          <div data-slot="run-strip" aria-hidden="true" className="relative flex h-[34px] items-end gap-1">
-            {/* motion-reduce:hidden: the only animated element on this
-                screen — real prefers-reduced-motion handling, not skipped
-                (this app has no other case needing it yet). */}
-            <div className="animate-[auth-run-strip-sweep_3.2s_ease-in-out_infinite] absolute inset-y-0 w-[46px] bg-gradient-to-r from-transparent via-white/35 to-transparent motion-reduce:hidden" />
-            {RUN_STRIP_BARS.map(({ heightPct, colorClass }, i) => (
-              <span
-                key={i}
-                data-slot="run-strip-bar"
-                className={`auth-run-strip-bar relative flex-1 rounded-[3px] opacity-95 ${colorClass}`}
-                style={{ height: `${heightPct}%` }}
-              />
-            ))}
-          </div>
-          <div className="mt-2 flex items-center justify-between">
-            <span className="tp-label">Last 16 runs</span>
-            <span className="tp-label text-primary">14 passed</span>
-          </div>
-        </div>
       </div>
       {/* bg-background is now explicit (previously this pane had no
           background class of its own and just showed body's own
