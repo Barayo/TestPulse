@@ -580,10 +580,19 @@
   background: var(--sidebar);
 }
 .auth-brandpane-surface::before {
+  /* Plain var(--primary) + element-level opacity, not color-mix() baked
+     into the gradient stop — removes any doubt about color-mix()/oklch
+     support in a specific browser/rendering path being why this read as
+     invisible in one environment even after a hard refresh and an
+     incognito test (which ruled out caching). opacity is a much older,
+     universally-supported property. Also bumped intensity substantially
+     (0.3 -> 0.55) so it reads unmistakably regardless of display/browser
+     differences. */
   content: '';
   position: absolute;
   inset: 0;
-  background: radial-gradient(circle at 30% 30%, color-mix(in oklch, var(--primary) 30%, transparent), transparent 65%);
+  background: radial-gradient(circle at 30% 30%, var(--primary), transparent 65%);
+  opacity: 0.55;
   pointer-events: none;
 }
 .auth-brandpane-surface::after {
