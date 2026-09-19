@@ -264,6 +264,42 @@ describe('useAuth', () => {
     expect(result.current.jiraSiteUrl).toBe('')
   })
 
+  // The public-landing redirect (ProjectsPage) trusts a `false` value here
+  // to skip rendering entirely, the same class of decision setupRequired's
+  // own redirect makes — so it defaults to `true` (the safe, "don't
+  // wrongly redirect away from a legitimate discovery visit" default,
+  // mirroring setupRequired's own "already-configured instance is the
+  // ordinary case" reasoning) and callers must wait for
+  // setupRequiredLoading before trusting a `false` value.
+  it('resolves publicProjectsEnabled from /api/v1/meta, defaulting to true', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false, colorTheme: 'teal' }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequiredLoading).toBe(false))
+    expect(result.current.publicProjectsEnabled).toBe(true)
+  })
+
+  it('resolves publicProjectsEnabled: false from /api/v1/meta when the instance-wide switch is off', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({
+          data: { setupRequired: false, colorTheme: 'teal', publicProjectsEnabled: false },
+          response: { ok: true },
+        })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequiredLoading).toBe(false))
+    expect(result.current.publicProjectsEnabled).toBe(false)
+  })
+
   it('resolves a configured jiraSiteUrl from /api/v1/meta (add-jira-connector)', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/meta') {

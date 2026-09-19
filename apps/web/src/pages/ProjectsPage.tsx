@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
-import { Link, Navigate, useNavigate } from 'react-router'
+import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon, PlusIcon, DatabaseIcon, UploadIcon, GlobeIcon, type LucideIcon } from 'lucide-react'
 import { TagChipsEditor } from '@/components/TagChipsEditor'
 import { useTagVocabulary } from '@/lib/useTagVocabulary'
@@ -15,6 +15,7 @@ import { StatusPill, ProgressBar, healthLabel, statusBorderClass } from '@/compo
 import { timeAgo } from '@/lib/timeAgo'
 import { useProjectSummaries, type ProjectSummary } from '@/lib/useProjectSummaries'
 import { useAuth } from '@/lib/useAuth'
+import { PRODUCT_HEADLINE, PRODUCT_PROOF_POINTS } from '@/lib/productProofPoints'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useViewModeOverride } from '@/lib/useViewModeOverride'
 import { resolveViewMode } from '@/lib/viewMode'
@@ -61,7 +62,8 @@ function statusOf(p: ProjectSummary): StatusFilter {
 // isTenantAdmin below, with no layout change from the always-shown version.
 export default function ProjectsPage() {
   const navigate = useNavigate()
-  const { user, loading: authLoading } = useAuth()
+  const location = useLocation()
+  const { user, loading: authLoading, publicProjectsEnabled, setupRequiredLoading } = useAuth()
   const projects = useProjectSummaries()
   const tagVocabulary = useTagVocabulary()
   const bump = useBumpDataRevision()
@@ -235,6 +237,18 @@ export default function ProjectsPage() {
   }
 
   if (!user && !authLoading) {
+    // publicProjectsEnabled is the instance-wide kill switch
+    // (enable-public-project-access) — when it's off, /api/v1/public/projects
+    // returns [] forever until an admin flips it back on, so there's
+    // nothing to discover here. Redirecting straight to /login (same
+    // "skip the middleman when the answer is unambiguous" idiom as the
+    // single-public-project redirect below) beats rendering an empty box
+    // with a login button on it. Waits for setupRequiredLoading, same
+    // discipline SetupPage already uses for setupRequired, since
+    // publicProjectsEnabled defaults to true until the real value resolves.
+    if (!setupRequiredLoading && !publicProjectsEnabled) {
+      return <Navigate to="/login" state={{ from: location.pathname }} replace />
+    }
     if (publicProjects && publicProjects.length === 1) {
       return <Navigate to={`/projects/${publicProjects[0].key}`} replace />
     }
@@ -245,9 +259,55 @@ export default function ProjectsPage() {
           <div className="rounded-2xl border border-dashed p-10 text-center">
             <GlobeIcon className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
             <p className="mb-1 text-sm font-medium">No public projects yet</p>
-            <p className="text-sm text-muted-foreground">
+            <p className="mb-4 text-sm text-muted-foreground">
               This instance doesn't have any projects open to visitors right now.
             </p>
+            <Button asChild>
+              <Link to="/login" state={{ from: location.pathname }}>
+                Log in
+              </Link>
+            </Button>
+            {/* Collapsed single-state design (founder + Jose + Pepe,
+                superseding the earlier "State A / State B" split): this
+                reminder shows unconditionally rather than only when
+                private projects are known to exist, since the copy above
+                is already honest either way and distinguishing the two
+                real causes would need a new, unnecessary backend signal.
+                PRODUCT_HEADLINE (founder feedback: describe what TestPulse
+                *is* before its characteristics) replaces a plain "What
+                TestPulse is" label — Pepe's follow-up review: keeping both
+                would say the same thing twice, an assertion immediately
+                preceded by a label announcing one. Reuses AuthLayout's own
+                PRODUCT_PROOF_POINTS verbatim below (lead + icon only, not
+                the fuller `rest` elaboration, which stays exclusive to the
+                login screen this CTA already leads to). */}
+            <div className="mx-auto mt-14 max-w-xl">
+              <p className="mb-5 text-[15px] font-semibold leading-snug text-foreground">{PRODUCT_HEADLINE}</p>
+              <div className="flex flex-col items-center gap-3.5 sm:flex-row sm:justify-center sm:gap-8">
+                {PRODUCT_PROOF_POINTS.map(({ lead, icon }) => (
+                  <span
+                    key={lead}
+                    className="flex items-center gap-1.5 whitespace-nowrap text-[13px] font-medium text-foreground"
+                  >
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className="shrink-0 text-primary"
+                      aria-hidden="true"
+                    >
+                      {icon}
+                    </svg>
+                    {lead}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         )}
         {publicProjects && publicProjects.length > 1 && (

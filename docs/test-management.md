@@ -147,16 +147,21 @@ install (see [Getting Started](getting-started.md)).
 
 A visitor with no direct link finds every public project at the
 **root URL (`/`)** — the same page authenticated users land on after
-login, now also serving as the anonymous discovery surface, reachable
-from the login page's "Browse public projects without an account" link
-(shown only when the instance-wide switch above is on). With exactly one
-public project it redirects straight there; with several it shows a card
-per project (name, description, and a Sample badge where it applies);
-with none, a plain "no public projects" message, indistinguishable from
-the instance-wide switch being off — the same non-disclosure stance every
-individual project's page already takes. Logging in from any project page
-returns the visitor to that same page, now authenticated, instead of
-always landing on the projects root.
+login, now also serving as the anonymous discovery surface. When the
+instance-wide switch above is off, `/` redirects anonymous visitors
+straight to `/login` instead of rendering anything — there's nothing to
+discover until it's switched back on, the same "skip the middleman when
+the answer is unambiguous" idiom the single-public-project case below
+already uses. When the switch is on: with exactly one public project it
+redirects straight there; with several it shows a card per project (name,
+description, and a Sample badge where it applies); with none, a "no
+public projects" message with a "Log in" link and a compact reminder of
+what TestPulse is — the message itself never claims or denies that
+private projects exist, so it's honest whether this instance has real
+private activity behind it or genuinely nothing at all, without needing
+to distinguish the two. Logging in from any project page returns the
+visitor to that same page, now authenticated, instead of always landing
+on the projects root.
 
 ## Color theme
 

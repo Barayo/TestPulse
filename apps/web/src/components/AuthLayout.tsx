@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router'
 import { BrandMark } from '@/components/BrandMark'
 import { HealthBadge } from '@/components/HealthBadge'
+import { PRODUCT_HEADLINE, PRODUCT_PROOF_POINTS } from '@/lib/productProofPoints'
 
 // Icon paths copied from Pepe's approved Direction B mock
 // (apps/web/scratch/pepe-login-redesign.html) for exact visual fidelity —
@@ -27,40 +28,6 @@ function ProofIcon({ path }: { path: ReactNode }) {
     </svg>
   )
 }
-
-const PROOF_LINES: Array<{ lead: string; rest: string; icon: ReactNode }> = [
-  {
-    lead: 'AI-native, not AI-bolted-on',
-    rest: 'agents are real actors in the RBAC model and audit log, and the MCP server is part of the core product, not a plugin.',
-    icon: (
-      <>
-        <rect x="3" y="7" width="18" height="13" rx="2" />
-        <path d="M7 7V5a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v2" />
-        <path d="M9 13h.01M15 13h.01" />
-      </>
-    ),
-  },
-  {
-    lead: 'Genuinely open source',
-    rest: 'AGPLv3, built entirely on open-source technology. The open core includes SSO.',
-    icon: (
-      <>
-        <path d="M12 2 3 7v6c0 5 4 8 9 9 5-1 9-4 9-9V7z" />
-        <path d="m9 12 2 2 4-4" />
-      </>
-    ),
-  },
-  {
-    lead: 'Trivially self-hostable',
-    rest: 'a single Go binary, a PostgreSQL database, multi-arch container images (amd64 + arm64). One docker compose up to evaluate; a Helm chart for production Kubernetes.',
-    icon: (
-      <>
-        <rect x="2" y="4" width="20" height="16" rx="2" />
-        <path d="m6 8 4 4-4 4M14 16h4" />
-      </>
-    ),
-  },
-]
 
 // Decorative run-strip bars (restored — founder feedback: removing them
 // entirely to fix the caption problem below was overcorrecting; the
@@ -158,15 +125,13 @@ export function AuthLayout({
         <Link to="/" className="relative flex items-center gap-1.5 text-[24px] leading-none">
           <BrandMark />
         </Link>
-        <h1 className="tp-heading relative text-2xl font-bold">
-          The open-source test management platform your AI agents can use as fluently as you do.
-        </h1>
+        <h1 className="tp-heading relative text-2xl font-bold">{PRODUCT_HEADLINE}</h1>
         <p className="relative text-sm text-muted-foreground">
           MCP-first, AGPLv3, self-hostable on one Go binary. Humans get a clean UI; agents get a
           first-class seat at the table.
         </p>
         <ul className="relative space-y-4 text-sm text-muted-foreground">
-          {PROOF_LINES.map(({ lead, rest, icon }) => (
+          {PRODUCT_PROOF_POINTS.map(({ lead, rest, icon }) => (
             <li key={lead} data-slot="proof-item" className="flex items-start gap-2.5">
               <ProofIcon path={icon} />
               <p>

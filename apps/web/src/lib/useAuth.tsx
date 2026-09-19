@@ -81,6 +81,16 @@ type AuthContextValue = {
   // never disruptively wrong the way a stale setupRequired redirect would
   // be.
   defaultLandingView: string
+  // Instance-wide "allow public projects" kill switch
+  // (enable-public-project-access), resolved from the same GET
+  // /api/v1/meta fetch. Defaults to true — the safe default for a
+  // redirect-gating value, mirroring setupRequired's own "already-
+  // configured instance is the ordinary case" reasoning: a fetch
+  // failure or the brief loading window should never look like the
+  // switch being off, since ProjectsPage trusts `false` here (once
+  // setupRequiredLoading resolves) to redirect anonymous visitors
+  // straight to /login instead of rendering the discovery page at all.
+  publicProjectsEnabled: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   // Creates the instance's first admin account and logs it in, in one
   // request (add-first-run-setup) — updates both `user` and `setupRequired`
@@ -113,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [customPalette, setCustomPalette] = useState<CustomPalette | null>(null)
   const [jiraSiteUrl, setJiraSiteUrl] = useState('')
   const [defaultLandingView, setDefaultLandingView] = useState('dashboard')
+  const [publicProjectsEnabled, setPublicProjectsEnabled] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
   const userRef = useRef<AuthUser | null>(null)
   userRef.current = user
@@ -141,6 +152,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               customPalette?: CustomPalette
               jiraSiteUrl?: string
               defaultLandingView?: string
+              publicProjectsEnabled?: boolean
             }
           | undefined
         setSetupRequired(response.ok && meta ? Boolean(meta.setupRequired) : false)
@@ -148,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setCustomPalette(response.ok && meta?.customPalette ? meta.customPalette : null)
         setJiraSiteUrl(response.ok && meta?.jiraSiteUrl ? meta.jiraSiteUrl : '')
         setDefaultLandingView(response.ok && meta?.defaultLandingView ? meta.defaultLandingView : 'dashboard')
+        setPublicProjectsEnabled(response.ok && meta ? meta.publicProjectsEnabled !== false : true)
       } catch {
         if (!cancelled) {
           setSetupRequired(false)
@@ -155,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setCustomPalette(null)
           setJiraSiteUrl('')
           setDefaultLandingView('dashboard')
+          setPublicProjectsEnabled(true)
         }
       } finally {
         if (!cancelled) setSetupRequiredLoading(false)
@@ -240,6 +254,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         customPalette,
         jiraSiteUrl,
         defaultLandingView,
+        publicProjectsEnabled,
         refreshColorTheme,
         login,
         setup,

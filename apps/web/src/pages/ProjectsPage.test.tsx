@@ -1030,9 +1030,12 @@ function publicProject(overrides: Record<string, unknown> = {}) {
 // anonymous discovery branch, ported from the now-retired
 // PublicProjectsIndexPage/usePublicProjects (unify-authenticated-and-public-views
 // tasks.md group 11, design.md D6).
-function mockAnonymousProjectsList(publicProjects: unknown[] | undefined) {
+function mockAnonymousProjectsList(publicProjects: unknown[] | undefined, opts: { publicProjectsEnabled?: boolean } = {}) {
+  const publicProjectsEnabled = opts.publicProjectsEnabled ?? true
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+    if (path === '/api/v1/meta')
+      return Promise.resolve({ data: { setupRequired: false, publicProjectsEnabled }, response: { ok: true } })
     if (path === '/api/v1/public/projects')
       return publicProjects === undefined
         ? new Promise(() => {}) // never resolves — simulates still-loading
@@ -1102,5 +1105,72 @@ describe('anonymous / dual-mode', () => {
     renderPage()
     await screen.findByText('Project page stub')
     expect(screen.queryByText('Sample Project')).not.toBeInTheDocument()
+  })
+
+  // Collapsed single-state design (founder + Jose + Pepe, superseding the
+  // earlier "State A / State B" split): the empty state never needs to know
+  // whether any private projects exist — today's existing copy is already
+  // true either way — so it always offers the same "Log in" CTA and the
+  // same compact reminder of what TestPulse is, reusing AuthLayout's own
+  // PRODUCT_PROOF_POINTS verbatim rather than inventing new copy.
+  it('offers a Log in link and a compact reminder of what TestPulse is in the empty state', async () => {
+    mockAnonymousProjectsList([])
+    renderPage()
+    expect(await screen.findByText('No public projects yet')).toBeInTheDocument()
+    const loginLink = screen.getByRole('link', { name: /log in/i })
+    expect(loginLink).toHaveAttribute('href', '/login')
+    // The shared PRODUCT_HEADLINE (also AuthLayout's own h1, founder
+    // feedback: "add something describing what it is before describing
+    // characteristics") replaces the plain "What TestPulse is" label —
+    // Pepe's follow-up review: keeping both would say the same thing
+    // twice, an assertion immediately preceded by a label announcing one.
+    expect(
+      screen.getByText('The open-source test management platform your AI agents can use as fluently as you do.'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('What TestPulse is')).not.toBeInTheDocument()
+    expect(screen.getByText('AI-native, not AI-bolted-on')).toBeInTheDocument()
+    expect(screen.getByText('Genuinely open source')).toBeInTheDocument()
+    expect(screen.getByText('Trivially self-hostable')).toBeInTheDocument()
+  })
+
+  // Instance-wide switch off (enable-public-project-access) means
+  // /api/v1/public/projects will return [] forever until an admin flips it
+  // back on — there's nothing to discover, so sending the visitor straight
+  // to /login (mirroring the existing single-public-project auto-redirect
+  // above) beats showing an empty box with a login button on it.
+  it('redirects anonymous visitors straight to /login when public projects are disabled instance-wide', async () => {
+    mockAnonymousProjectsList([], { publicProjectsEnabled: false })
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<ProjectsPage />} />
+            <Route path="/login" element={<div>Login page stub</div>} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    expect(await screen.findByText('Login page stub')).toBeInTheDocument()
+  })
+
+  it('does not redirect to /login while still loading whether public projects are enabled', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/users/me') return Promise.resolve({ data: undefined, response: { ok: false } })
+      if (path === '/api/v1/meta') return new Promise(() => {}) // never resolves
+      if (path === '/api/v1/public/projects') return new Promise(() => {}) // never resolves
+      return Promise.resolve({ data: [], response: { ok: true } })
+    })
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <AuthProvider>
+          <Routes>
+            <Route path="/" element={<ProjectsPage />} />
+            <Route path="/login" element={<div>Login page stub</div>} />
+          </Routes>
+        </AuthProvider>
+      </MemoryRouter>,
+    )
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(screen.queryByText('Login page stub')).not.toBeInTheDocument()
   })
 })
