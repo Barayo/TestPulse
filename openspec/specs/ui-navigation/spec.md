@@ -89,9 +89,13 @@ runs — each limited to its top items with a "see all" control linking to the f
 rather than the project's entire content at once, and every item row shown SHALL itself
 link directly to that item, not just to the panel's own full-list view. Below those three,
 a fourth, full-width Reports panel SHALL summarize the project's overall status (a status
-breakdown bar and pass rate, plus a flaky-case count) without requiring navigation away
-from the landing page, linking to the full Reports page via a single "Open Reports" action
-rather than a "see all N" control, since it summarizes rather than lists. The Library panel
+breakdown bar and pass rate, a pass-rate trend sparkline, plus a flaky-case count and list)
+without requiring navigation away from the landing page, linking to the full Reports page
+via a single "Open Reports" action rather than a "see all N" control, since it summarizes
+rather than lists. Below Reports, a fifth, full-width Activity panel SHALL show the
+project's 5 most recent audited writes (actor, action, entity, relative time), each row
+distinguishing a human actor from an agent actor, with no "see more" control beyond this
+change's scope. The Library panel
 SHALL include a visible entry for test cases that live directly in the project's root
 section, not only for named subsections, so a case created before any subsection existed
 is never invisible there. Above the panels, the landing SHALL show a summary of the
@@ -157,6 +161,18 @@ bar) reflecting that it is the highest-frequency scan on this page.
 #### Scenario: Reports panel is a fourth, full-width row below the other three
 - **WHEN** a user opens a project's landing page
 - **THEN** the Reports panel spans the full width below Folders, Suites, and Recent runs, rather than sitting alongside them as a fourth same-height column
+
+#### Scenario: Activity panel is a fifth, full-width row below Reports
+- **WHEN** a user opens a project's landing page
+- **THEN** the Activity panel spans the full width below Reports, showing up to 5 recent entries, rather than sitting inside the 3-column grid above
+
+#### Scenario: Activity panel distinguishes human and agent actors
+- **WHEN** the Activity panel shows an entry made by an API-token-authenticated actor alongside one made by a human user
+- **THEN** the two rows are visually distinguishable by actor kind, not just by name
+
+#### Scenario: Activity panel shows an empty state, not an error, for a project with no recent activity
+- **WHEN** a project has had no audited writes since this feature shipped
+- **THEN** the Activity panel shows an empty-state message, consistent with every other panel's own empty-state treatment
 
 ### Requirement: Library with two-pane navigation
 The web UI SHALL provide a library browsing view — labeled "Library" for the project's

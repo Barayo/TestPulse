@@ -12,9 +12,16 @@ entity.
 The system SHALL record an audit entry for every mutating operation
 (create/update/delete across projects, cases, suites, runs, folders, users,
 and tokens), capturing the acting actor (human, agent, or an automated
-system process), the action, the entity type and ID, the timestamp, and
-optional structured detail about what changed. The audit log is
-append-only — no entry is ever edited or deleted.
+system process), the action, the entity type and ID, the owning project
+(when the entity type has one), the timestamp, and optional structured
+detail about what changed. The audit log is append-only — no entry is ever
+edited or deleted. The owning project SHALL be resolved automatically at
+write time from the entity type and ID, using the same resolution logic
+the system already uses to authorize a per-entity audit history request,
+so no individual call site needs to supply it. Resolution failure (e.g.
+for an entity type with no owning project) SHALL NOT block the audit
+entry from being recorded — the entry is still written, with no project
+association.
 
 #### Scenario: A write creates an audit entry
 - **WHEN** an authenticated actor creates, updates, or deletes any domain
@@ -46,6 +53,33 @@ append-only — no entry is ever edited or deleted.
 #### Scenario: Restoring a version records which version was restored
 - **WHEN** a case's content is restored from an old version
 - **THEN** the resulting audit entry's detail records which version was restored from and which new version it produced
+
+#### Scenario: A project-scoped write records its owning project automatically
+- **WHEN** an entry is recorded for an entity type that belongs to a project (e.g. a case, suite, or run)
+- **THEN** the entry's owning project is resolved and stored automatically, without the calling code supplying it
+
+#### Scenario: A tenant-level write records no project association
+- **WHEN** an entry is recorded for an entity type with no owning project (e.g. a user or an API token)
+- **THEN** the entry is still recorded, with no project association, rather than failing or guessing one
+
+### Requirement: Audit history is queryable per project, recency-ordered and limit-capped
+The system SHALL let an actor with read permission on a project retrieve that project's most recent audit entries, newest first, capped to a caller-specified limit, for entries whose entity is scoped to that project. An anonymous visitor to a public project SHALL be able to retrieve the same feed via a public equivalent endpoint, matching the existing public/authenticated pairing used by every other project-scoped read endpoint. Entries for entity types with no owning project (e.g. a user, team, or API token) SHALL never appear in any project's feed.
+
+#### Scenario: List a project's recent activity
+- **WHEN** an actor with read permission on a project requests its recent activity
+- **THEN** the project's audit entries are returned newest first, capped to the requested limit
+
+#### Scenario: Entries only span this project's own entities
+- **WHEN** a project's recent activity is requested
+- **THEN** no audit entry belonging to a different project, or to a tenant-level entity with no owning project, appears in the result
+
+#### Scenario: Public visitor reads the feed for a public project
+- **WHEN** an anonymous visitor requests the recent activity for a project configured for anonymous access
+- **THEN** the same feed is returned via the public endpoint, without requiring authentication
+
+#### Scenario: A project with no recorded activity returns an empty feed
+- **WHEN** a project has had no audited writes since this capability shipped
+- **THEN** the feed returns an empty list, not an error
 
 ### Requirement: Audit history is queryable per entity, scoped by permission on that entity's project
 The system SHALL let an actor retrieve the audit history for a specific
