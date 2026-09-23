@@ -300,6 +300,39 @@ describe('useAuth', () => {
     expect(result.current.publicProjectsEnabled).toBe(false)
   })
 
+  // The MCP admin card (mcp-admin-discoverability-card) trusts this to show
+  // real enabled/disabled state, not a fabricated one — defaults to `true`
+  // since the server itself defaults TESTPULSE_MCP_ENABLED to enabled
+  // (config.go), mirroring publicProjectsEnabled's "ordinary case" default.
+  it('resolves mcpEnabled from /api/v1/meta, defaulting to true', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({ data: { setupRequired: false, colorTheme: 'teal' }, response: { ok: true } })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequiredLoading).toBe(false))
+    expect(result.current.mcpEnabled).toBe(true)
+  })
+
+  it('resolves mcpEnabled: false from /api/v1/meta when TESTPULSE_MCP_ENABLED is off', async () => {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({
+          data: { setupRequired: false, colorTheme: 'teal', mcpEnabled: false },
+          response: { ok: true },
+        })
+      }
+      return Promise.resolve({ data: undefined, response: { ok: false } })
+    })
+    const { result } = renderHook(() => useAuth(), { wrapper })
+
+    await waitFor(() => expect(result.current.setupRequiredLoading).toBe(false))
+    expect(result.current.mcpEnabled).toBe(false)
+  })
+
   it('resolves a configured jiraSiteUrl from /api/v1/meta (add-jira-connector)', async () => {
     mockGET.mockImplementation((path: string) => {
       if (path === '/api/v1/meta') {

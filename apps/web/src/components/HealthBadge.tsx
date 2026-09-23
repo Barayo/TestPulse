@@ -1,12 +1,14 @@
 import { useEffect, useState } from 'react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
+import { useAuth } from '@/lib/useAuth'
 
 type SystemStatus = 'checking' | 'ready' | 'unavailable'
 
 export function HealthBadge() {
   const [status, setStatus] = useState<SystemStatus>('checking')
   const [version, setVersion] = useState<string>()
+  const { mcpEnabled } = useAuth()
 
   useEffect(() => {
     async function check() {
@@ -36,6 +38,14 @@ export function HealthBadge() {
             ? 'Checking…'
             : 'API unavailable'}
       </Badge>
+      {mcpEnabled && (
+        <Badge
+          className="border-transparent bg-primary/10 text-primary"
+          title="This instance exposes an MCP server for AI agents at /mcp."
+        >
+          MCP
+        </Badge>
+      )}
     </div>
   )
 }

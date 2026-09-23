@@ -19,6 +19,7 @@ function mockAsTenantAdmin(
   jiraSiteUrl = '',
   sessionTimeoutDays = 30,
   defaultLandingView = 'dashboard',
+  mcpEnabled = true,
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
@@ -38,6 +39,12 @@ function mockAsTenantAdmin(
         },
         response: { ok: true },
       })
+    }
+    // useAuth's own fetch (mcp-admin-discoverability-card's mcpEnabled) — a
+    // separate call from /api/v1/instance-settings above, same as every
+    // other AuthProvider-sourced field this page reads.
+    if (path === '/api/v1/meta') {
+      return Promise.resolve({ data: { setupRequired: false, colorTheme, mcpEnabled }, response: { ok: true } })
     }
     return Promise.resolve({ data: undefined, response: { ok: false } })
   })
@@ -473,6 +480,44 @@ describe('InstanceSettingsPage', () => {
           body: { jiraSiteUrl: 'https://mycompany.atlassian.net' },
         }),
       )
+    })
+  })
+
+  describe('MCP integration (mcp-admin-discoverability-card)', () => {
+    it('shows an MCP card describing the server and linking to token management', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      const title = await screen.findByText('MCP')
+      const card = title.closest('[data-slot="card"]') as HTMLElement
+      expect(within(card).getByText(/\/mcp/)).toBeInTheDocument()
+      expect(within(card).getByText(/same api tokens/i)).toBeInTheDocument()
+      const link = within(card).getByRole('link', { name: /manage tokens/i })
+      expect(link).toHaveAttribute('href', '/settings/tokens')
+    })
+
+    it('shows no fabricated status indicator or connection count', async () => {
+      mockAsTenantAdmin(true)
+      renderPage()
+      const title = await screen.findByText('MCP')
+      const card = title.closest('[data-slot="card"]') as HTMLElement
+      expect(within(card).queryByText(/connected|online|offline/i)).not.toBeInTheDocument()
+    })
+
+    it('shows Enabled when TESTPULSE_MCP_ENABLED is on', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', true)
+      renderPage()
+      const title = await screen.findByText('MCP')
+      const card = title.closest('[data-slot="card"]') as HTMLElement
+      expect(await within(card).findByText(/enabled/i)).toBeInTheDocument()
+      expect(within(card).queryByText(/disabled/i)).not.toBeInTheDocument()
+    })
+
+    it('shows Disabled when TESTPULSE_MCP_ENABLED is off', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', false)
+      renderPage()
+      const title = await screen.findByText('MCP')
+      const card = title.closest('[data-slot="card"]') as HTMLElement
+      expect(await within(card).findByText(/disabled/i)).toBeInTheDocument()
     })
   })
 

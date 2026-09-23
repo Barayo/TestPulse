@@ -189,6 +189,39 @@ func TestMetaSetupRequiredReflectsInstanceState(t *testing.T) {
 	}
 }
 
+// TestMetaMCPEnabledReflectsServerConfig covers
+// mcp-admin-discoverability-card's GET /api/v1/meta.mcpEnabled field: the
+// admin UI's MCP card needs to know the real TESTPULSE_MCP_ENABLED state
+// (already computed here as the mcpEnabled param, see TestMCPMountedWhenEnabled
+// / TestMCPNotMountedWhenDisabled above) rather than unconditionally
+// claiming the server is available.
+func TestMetaMCPEnabledReflectsServerConfig(t *testing.T) {
+	pool := testutil.Pool(t, "server_meta")
+
+	svc := service.New(store.New(pool))
+	hEnabled := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil, true)
+	rec := httptest.NewRecorder()
+	hEnabled.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	var meta map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decoding meta response: %v", err)
+	}
+	if meta["mcpEnabled"] != true {
+		t.Errorf("mcpEnabled = %v with mcpEnabled=true, want true", meta["mcpEnabled"])
+	}
+
+	hDisabled := New(slog.New(slog.DiscardHandler), stubReadiness{err: nil}, svc, 5, 5, nil, false)
+	rec = httptest.NewRecorder()
+	hDisabled.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/v1/meta", nil))
+	meta = nil
+	if err := json.Unmarshal(rec.Body.Bytes(), &meta); err != nil {
+		t.Fatalf("decoding meta response: %v", err)
+	}
+	if meta["mcpEnabled"] != false {
+		t.Errorf("mcpEnabled = %v with mcpEnabled=false, want false", meta["mcpEnabled"])
+	}
+}
+
 // TestMetaColorThemeDefaultsToTealAndCarriesCustomPaletteWhenActive covers
 // add-color-theme-customization's GET /api/v1/meta.colorTheme/customPalette
 // fields — visible to every visitor, not only Tenant Admins, since a

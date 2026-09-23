@@ -2,6 +2,7 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router'
 import { AuthLayout } from './AuthLayout'
+import { AuthProvider } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 
 vi.mock('@/lib/api', () => ({ api: { GET: vi.fn() } }))
@@ -15,9 +16,11 @@ beforeEach(() => {
 function renderAuthLayout() {
   return render(
     <MemoryRouter>
-      <AuthLayout>
-        <div>form content</div>
-      </AuthLayout>
+      <AuthProvider>
+        <AuthLayout>
+          <div>form content</div>
+        </AuthLayout>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }
@@ -114,18 +117,22 @@ describe('AuthLayout', () => {
     // pre-scroll and reads as page-level navigation, not part of the form.
     const { rerender } = render(
       <MemoryRouter>
-        <AuthLayout>
-          <div>form content</div>
-        </AuthLayout>
+        <AuthProvider>
+          <AuthLayout>
+            <div>form content</div>
+          </AuthLayout>
+        </AuthProvider>
       </MemoryRouter>,
     )
     expect(screen.queryByRole('link', { name: /back to/i })).toBeNull()
 
     rerender(
       <MemoryRouter>
-        <AuthLayout backLink={{ to: '/login', label: 'Back to log in' }}>
-          <div>form content</div>
-        </AuthLayout>
+        <AuthProvider>
+          <AuthLayout backLink={{ to: '/login', label: 'Back to log in' }}>
+            <div>form content</div>
+          </AuthLayout>
+        </AuthProvider>
       </MemoryRouter>,
     )
     const topbar = document.querySelector('[data-slot="auth-backlink"]')

@@ -4030,7 +4030,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView, mcpEnabled]
       properties:
         name:
           type: string
@@ -4096,6 +4096,14 @@ components:
             including anonymous ones, needs it to resolve which view a
             project without its own override opens into — the same
             reasoning that already put colorTheme here.
+        mcpEnabled:
+          type: boolean
+          description: >
+            Whether the MCP server is mounted at /mcp (TESTPULSE_MCP_ENABLED,
+            default true). Read here so the admin UI's MCP integration card
+            (mcp-admin-discoverability-card) can show real enabled/disabled
+            state instead of unconditionally claiming the server is
+            available.
     ColorTheme:
       type: string
       enum: [teal, indigo, ocean, forest, custom]

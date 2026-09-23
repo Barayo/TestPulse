@@ -3,19 +3,24 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router'
 import ForgotPasswordPage from './ForgotPasswordPage'
+import { AuthProvider } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({ api: { POST: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn() } }))
+const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 
 beforeEach(() => {
   vi.resetAllMocks()
+  mockGET.mockResolvedValue({ data: undefined, response: { ok: false } })
 })
 
 function renderPage() {
   return render(
     <MemoryRouter>
-      <ForgotPasswordPage />
+      <AuthProvider>
+        <ForgotPasswordPage />
+      </AuthProvider>
     </MemoryRouter>,
   )
 }

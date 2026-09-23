@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router'
 import { DatabaseIcon, GlobeIcon, LayoutDashboardIcon, LinkIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
 import { Pill } from '@/components/ui/Pill'
 import { useAuth } from '@/lib/useAuth'
@@ -34,7 +35,7 @@ const LANDING_VIEWS = Object.keys(LANDING_VIEW_LABELS) as LandingView[]
 // do — a client-side check, not just the route-level RequireAuth — since a
 // non-admin logged-in user can still navigate here directly.
 export default function InstanceSettingsPage() {
-  const { user: me, refreshColorTheme } = useAuth()
+  const { user: me, refreshColorTheme, mcpEnabled } = useAuth()
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState<boolean>()
   const [runRetentionDays, setRunRetentionDays] = useState<number>()
   const [autoArchiveInactiveDays, setAutoArchiveInactiveDays] = useState<number>()
@@ -428,6 +429,27 @@ export default function InstanceSettingsPage() {
                 {savingJiraSiteUrl ? 'Saving…' : 'Save'}
               </Button>
             </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>MCP</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              TestPulse exposes an MCP server at <code>/mcp</code>, authenticated with the same API tokens as the
+              REST API.{' '}
+              {mcpEnabled ? (
+                'Currently enabled.'
+              ) : (
+                <>
+                  Currently disabled — set <code>TESTPULSE_MCP_ENABLED=true</code> to turn it back on.
+                </>
+              )}
+            </p>
+            <Link to="/settings/tokens" className="text-sm font-medium text-primary hover:underline">
+              Manage tokens
+            </Link>
           </CardContent>
         </Card>
       </section>

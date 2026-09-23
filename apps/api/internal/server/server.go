@@ -50,7 +50,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(maxBodyBytes(defaultMaxBodyBytes))
 
-		r.Get("/meta", handleMeta(svc, sso.Manager))
+		r.Get("/meta", handleMeta(svc, sso.Manager, mcpEnabled))
 		r.With(maxBodyBytes(unauthenticatedMaxBodyBytes)).Post("/setup", h.setupFirstAdmin)
 		mountAuth(r, h, loginRateLimitPerMinute, loginRateLimitBurst)
 		mountPublicAPI(r, h)
@@ -116,8 +116,11 @@ func handleReadiness(logger *slog.Logger, readiness ReadinessChecker) http.Handl
 // (enable-public-project-access) — the instance-wide kill switch, read by
 // both the anonymous public frontend and the authenticated Project Settings
 // page (to decide whether to gray out its own "Public access" toggle).
-// Reveals nothing sensitive.
-func handleMeta(svc *service.Service, oidcManager *OIDCManager) http.HandlerFunc {
+// Reveals nothing sensitive. mcpEnabled (mcp-admin-discoverability-card)
+// mirrors the same param New() already gates the /mcp mount with, so the
+// Instance Settings MCP card can show real enabled/disabled state instead
+// of unconditionally claiming the server is available.
+func handleMeta(svc *service.Service, oidcManager *OIDCManager, mcpEnabled bool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		settings, err := svc.InstanceSettings(r.Context())
 		if err != nil {
@@ -146,6 +149,7 @@ func handleMeta(svc *service.Service, oidcManager *OIDCManager) http.HandlerFunc
 			"ssoOnly":               ssoEnabled && settings.OIDCOnly,
 			"jiraSiteUrl":           settings.JiraSiteURL,
 			"defaultLandingView":    settings.DefaultLandingView,
+			"mcpEnabled":            mcpEnabled,
 		}
 		if settings.ColorTheme == "custom" && settings.CustomPalette != nil {
 			body["customPalette"] = settings.CustomPalette

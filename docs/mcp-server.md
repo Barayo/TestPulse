@@ -29,6 +29,11 @@ the [official Go SDK](https://github.com/modelcontextprotocol/go-sdk).
 Disable the mount entirely with `TESTPULSE_MCP_ENABLED=false` (default
 `true`) — see [Deployment](deployment.md#configuration-reference).
 
+A Tenant Admin can also find this same "point your client at `/mcp`,
+authenticate with an API token" summary right in the product, without
+leaving the app: **Instance Settings → Integrations** carries an MCP card
+alongside Jira's, linking straight to token management.
+
 ## Tools
 
 Twelve coarse-grained, hybrid tools — not a CRUD mirror of every REST

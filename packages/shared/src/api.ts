@@ -3112,6 +3112,8 @@ export interface components {
             ssoOnly: boolean;
             /** @description Instance-wide default landing view (add-configurable-project-landing). Read here (not only via the Tenant-Admin-only InstanceSettings) since every visitor, including anonymous ones, needs it to resolve which view a project without its own override opens into — the same reasoning that already put colorTheme here. */
             defaultLandingView: components["schemas"]["LandingView"];
+            /** @description Whether the MCP server is mounted at /mcp (TESTPULSE_MCP_ENABLED, default true). Read here so the admin UI's MCP integration card (mcp-admin-discoverability-card) can show real enabled/disabled state instead of unconditionally claiming the server is available. */
+            mcpEnabled: boolean;
         };
         /**
          * @description The instance-wide color palette (add-color-theme-customization). "teal" is the unchanged default; indigo/ocean/forest are built-in presets; "custom" means the Tenant-Admin-authored CustomPalette is active.

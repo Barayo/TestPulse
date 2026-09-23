@@ -3,23 +3,28 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router'
 import ResetPasswordPage from './ResetPasswordPage'
+import { AuthProvider } from '@/lib/useAuth'
 import { api } from '@/lib/api'
 
-vi.mock('@/lib/api', () => ({ api: { POST: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { GET: vi.fn(), POST: vi.fn() } }))
+const mockGET = vi.mocked(api.GET)
 const mockPOST = vi.mocked(api.POST)
 
 beforeEach(() => {
   vi.resetAllMocks()
+  mockGET.mockResolvedValue({ data: undefined, response: { ok: false } })
 })
 
 function renderPage(search = '?token=reset-token-123') {
   return render(
     <MemoryRouter initialEntries={[`/reset-password${search}`]}>
-      <Routes>
-        <Route path="/reset-password" element={<ResetPasswordPage />} />
-        <Route path="/login" element={<div>login stub</div>} />
-        <Route path="/forgot-password" element={<div>forgot-password stub</div>} />
-      </Routes>
+      <AuthProvider>
+        <Routes>
+          <Route path="/reset-password" element={<ResetPasswordPage />} />
+          <Route path="/login" element={<div>login stub</div>} />
+          <Route path="/forgot-password" element={<div>forgot-password stub</div>} />
+        </Routes>
+      </AuthProvider>
     </MemoryRouter>,
   )
 }

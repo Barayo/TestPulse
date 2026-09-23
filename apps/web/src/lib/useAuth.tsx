@@ -91,6 +91,13 @@ type AuthContextValue = {
   // setupRequiredLoading resolves) to redirect anonymous visitors
   // straight to /login instead of rendering the discovery page at all.
   publicProjectsEnabled: boolean
+  // Whether the MCP server is mounted at /mcp (TESTPULSE_MCP_ENABLED),
+  // resolved from the same GET /api/v1/meta fetch
+  // (mcp-admin-discoverability-card) — the Instance Settings MCP card
+  // reads this instead of unconditionally claiming the server is
+  // available. Defaults to true, matching the server's own default-enabled
+  // config.go behavior, the ordinary case.
+  mcpEnabled: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   // Creates the instance's first admin account and logs it in, in one
   // request (add-first-run-setup) — updates both `user` and `setupRequired`
@@ -124,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [jiraSiteUrl, setJiraSiteUrl] = useState('')
   const [defaultLandingView, setDefaultLandingView] = useState('dashboard')
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState(true)
+  const [mcpEnabled, setMcpEnabled] = useState(true)
   const [sessionExpired, setSessionExpired] = useState(false)
   const userRef = useRef<AuthUser | null>(null)
   userRef.current = user
@@ -153,6 +161,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               jiraSiteUrl?: string
               defaultLandingView?: string
               publicProjectsEnabled?: boolean
+              mcpEnabled?: boolean
             }
           | undefined
         setSetupRequired(response.ok && meta ? Boolean(meta.setupRequired) : false)
@@ -161,6 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setJiraSiteUrl(response.ok && meta?.jiraSiteUrl ? meta.jiraSiteUrl : '')
         setDefaultLandingView(response.ok && meta?.defaultLandingView ? meta.defaultLandingView : 'dashboard')
         setPublicProjectsEnabled(response.ok && meta ? meta.publicProjectsEnabled !== false : true)
+        setMcpEnabled(response.ok && meta ? meta.mcpEnabled !== false : true)
       } catch {
         if (!cancelled) {
           setSetupRequired(false)
@@ -169,6 +179,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setJiraSiteUrl('')
           setDefaultLandingView('dashboard')
           setPublicProjectsEnabled(true)
+          setMcpEnabled(true)
         }
       } finally {
         if (!cancelled) setSetupRequiredLoading(false)
@@ -255,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         jiraSiteUrl,
         defaultLandingView,
         publicProjectsEnabled,
+        mcpEnabled,
         refreshColorTheme,
         login,
         setup,
