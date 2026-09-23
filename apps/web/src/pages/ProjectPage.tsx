@@ -7,6 +7,7 @@ import { FoldersPanel, SuitesPanel, RunsPanel, ReportsPanel, ReleasesPanel, type
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
 import { useProjectReportsTeaser } from '@/lib/useProjectReportsTeaser'
+import { useRunPassRateHistory } from '@/lib/useRunPassRateHistory'
 import { useProjectSummaries, type ProjectSummary } from '@/lib/useProjectSummaries'
 import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
 import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
@@ -58,6 +59,7 @@ export default function ProjectPage() {
   const [notFound, setNotFound] = useState(false)
   const landing = useProjectLanding(projectKey, access === 'member', access === 'loading')
   const reportsTeaser = useProjectReportsTeaser(projectKey, access === 'member', access === 'loading')
+  const passRateHistory = useRunPassRateHistory(projectKey, access === 'member', access === 'loading')
   const summaries = useProjectSummaries()
   // No public equivalent exists for the batched /api/v1/projects/summaries
   // aggregate (unify-authenticated-and-public-views design.md D2), so a
@@ -352,6 +354,7 @@ export default function ProjectPage() {
             total={reportsTeaser.total}
             counts={reportsTeaser.counts}
             flakyCases={reportsTeaser.flakyCases}
+            passRateHistory={passRateHistory.points}
             onOpenReports={() => navigate(`/projects/${projectKey}/reports`)}
             onSelectFlakyCase={(caseKey) => navigate(`/projects/${projectKey}/cases/${caseKey}`)}
           />

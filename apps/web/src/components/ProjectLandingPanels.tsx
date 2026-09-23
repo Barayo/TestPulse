@@ -385,12 +385,14 @@ export function ReportsPanel({
   total,
   counts,
   flakyCases,
+  passRateHistory,
   onOpenReports,
   onSelectFlakyCase,
 }: {
   total: number
   counts: Partial<Record<Status, number>>
   flakyCases: FlakyCase[]
+  passRateHistory: { passRate: number | null; createdAt: string }[]
   onOpenReports: () => void
   onSelectFlakyCase: (caseKey: string) => void
 }) {
@@ -434,6 +436,17 @@ export function ReportsPanel({
               </span>
               <span className="text-xs text-muted-foreground">pass · {total} items</span>
             </div>
+            {passRateHistory.length > 0 && (
+              <div aria-label="Pass rate trend" className="flex h-6 items-end gap-0.5">
+                {passRateHistory.map((point, i) => (
+                  <span
+                    key={i}
+                    className="w-1.5 min-h-0.5 rounded-sm"
+                    style={{ height: `${point.passRate ?? 0}%`, background: 'var(--chart-1)' }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
         {flakyCount > 0 && (

@@ -542,6 +542,42 @@ describe('ProjectPage landing', () => {
     expect(screen.queryByRole('button', { name: /see (all|more)/i })).not.toBeInTheDocument()
   })
 
+  it('shows a 10-bar pass-rate sparkline for a project with 10 or more runs', async () => {
+    const tenRuns = Array.from({ length: 10 }, (_, i) => ({
+      id: `r${i + 1}`,
+      key: `p1-R${i + 1}`,
+      projectId: 'p1',
+      name: `Run ${i + 1}`,
+      createdAt: `2026-01-${String(i + 1).padStart(2, '0')}T00:00:00Z`,
+      passRate: (i + 1) * 10,
+    }))
+    mockProjectAPI({ runs: tenRuns })
+    renderProject()
+    await screen.findByText('Reports')
+    const sparkline = await screen.findByLabelText('Pass rate trend')
+    expect(sparkline.children).toHaveLength(10)
+  })
+
+  it('shows fewer bars, not padded, for a project with fewer than 10 runs', async () => {
+    const threeRuns = [
+      { id: 'r1', key: 'p1-R1', projectId: 'p1', name: 'Run 1', createdAt: '2026-01-01T00:00:00Z', passRate: 50 },
+      { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Run 2', createdAt: '2026-01-02T00:00:00Z', passRate: 60 },
+      { id: 'r3', key: 'p1-R3', projectId: 'p1', name: 'Run 3', createdAt: '2026-01-03T00:00:00Z', passRate: 70 },
+    ]
+    mockProjectAPI({ runs: threeRuns })
+    renderProject()
+    await screen.findByText('Reports')
+    const sparkline = await screen.findByLabelText('Pass rate trend')
+    expect(sparkline.children).toHaveLength(3)
+  })
+
+  it('shows no sparkline for a project with zero runs', async () => {
+    mockProjectAPI({ runs: [], statusSummary: { total: 0, counts: {} } })
+    renderProject()
+    await screen.findByText('Reports')
+    expect(screen.queryByLabelText('Pass rate trend')).not.toBeInTheDocument()
+  })
+
   it('the Reports panel links to the full Reports page, not "see all N"', async () => {
     mockProjectAPI()
     renderWithRoutes(<Route path="/projects/:projectKey/reports" element={<div>reports page stub</div>} />)
