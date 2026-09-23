@@ -38,6 +38,11 @@ func adminActorCtx(t *testing.T, svc *service.Service) context.Context {
 	})
 }
 
+// TestSeedCreatesExactlyOneSampleProject covers the one always-public
+// showroom project (isSample) — updated for enforce-archived-project-readonly,
+// which adds a second, non-sample "Archived Example" project alongside it,
+// so this asserts exactly one project is flagged IsSample rather than
+// exactly one project total.
 func TestSeedCreatesExactlyOneSampleProject(t *testing.T) {
 	svc := seededService(t)
 	ctx := context.Background()
@@ -51,18 +56,21 @@ func TestSeedCreatesExactlyOneSampleProject(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListProjects: %v", err)
 	}
-	if len(projects) != 1 {
-		t.Fatalf("projects = %d, want 1", len(projects))
+	var sampleProjects []domain.Project
+	for _, p := range projects {
+		if p.IsSample {
+			sampleProjects = append(sampleProjects, p)
+		}
 	}
-	p := projects[0]
-	if !p.IsSample {
-		t.Error("seeded project IsSample = false, want true")
+	if len(sampleProjects) != 1 {
+		t.Fatalf("projects flagged IsSample = %d, want 1 (total projects = %d)", len(sampleProjects), len(projects))
 	}
+	p := sampleProjects[0]
 	if p.Name != "Sample Project" {
-		t.Errorf("seeded project Name = %q, want %q", p.Name, "Sample Project")
+		t.Errorf("seeded sample project Name = %q, want %q", p.Name, "Sample Project")
 	}
 	if !p.PublicAccess {
-		t.Error("seeded project PublicAccess = false, want true (enable-public-project-access showcase)")
+		t.Error("seeded sample project PublicAccess = false, want true (enable-public-project-access showcase)")
 	}
 }
 
@@ -1974,5 +1982,57 @@ func TestSeedContentDemonstratesParameterizedCases(t *testing.T) {
 	}
 	if locked.TestDataRow["username"] != "locked.user@example.com" {
 		t.Errorf("locked-account item TestDataRow = %+v, want username locked.user@example.com", locked.TestDataRow)
+	}
+}
+
+// TestSeedContentDemonstratesArchivedReadOnly covers
+// enforce-archived-project-readonly's Sample-Project-showcase task: a
+// second, already-archived, private project so a Tenant Admin sees a real
+// example of the read-only behavior without archiving something themselves.
+func TestSeedContentDemonstratesArchivedReadOnly(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+
+	projects, err := svc.ListProjects(actorCtx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	var archived *domain.Project
+	for i := range projects {
+		if projects[i].Name == "Archived Example" {
+			archived = &projects[i]
+		}
+	}
+	if archived == nil {
+		t.Fatal(`no project named "Archived Example" found — want a second seeded showcase project`)
+	}
+	if !archived.Archived {
+		t.Error("Archived Example project should already be archived")
+	}
+	if archived.PublicAccess {
+		t.Error("Archived Example project should not be public — unlike the Sample Project, nothing here needs pre-login reachability")
+	}
+	if archived.IsSample {
+		t.Error("Archived Example should not be flagged isSample — that's reserved for the one always-public Sample Project")
+	}
+
+	cases, err := svc.ListCases(actorCtx, archived.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	if len(cases) == 0 {
+		t.Error("Archived Example should have at least one case, to make the read-only behavior concretely demonstrable")
+	}
+
+	// The whole point: writing to it is rejected.
+	newName := "Attempted Rename"
+	_, err = svc.UpdateProject(actorCtx, archived.ID, service.ProjectUpdate{Name: &newName})
+	var conflictErr *service.ConflictError
+	if !errors.As(err, &conflictErr) {
+		t.Errorf("UpdateProject(archived showcase project) = %v, want ConflictError", err)
 	}
 }

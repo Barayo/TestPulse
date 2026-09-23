@@ -2561,8 +2561,9 @@ export interface components {
             publicAccess?: boolean;
             autoArchiveExempt?: boolean;
             assigneeRestrictedRecording?: boolean;
-            /** @description Set to one of LandingView's values, or null to clear the override and inherit the instance default. */
-            landingView?: components["schemas"]["LandingView"] | null;
+            landingView?: components["schemas"]["LandingView"];
+            /** @description Clears this project's landing-view override, reverting it to inherit the instance-wide default — a dedicated action rather than a null sentinel on landingView (the same reasoning as disableSso on InstanceSettingsUpdate). */
+            clearLandingView?: boolean;
         };
         TestCase: {
             id: string;
@@ -3770,6 +3771,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     starProject: {
@@ -3917,6 +3919,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     importCasesCSV: {
@@ -3950,6 +3953,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     exportCasesCSV: {
@@ -4029,6 +4033,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     moveFolder: {
@@ -4061,6 +4066,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     deleteFolder: {
@@ -4085,6 +4091,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     folderDeletePreview: {
@@ -4138,6 +4145,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     setCaseJiraLink: {
@@ -4167,6 +4175,7 @@ export interface operations {
                 };
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     setCaseJiraSync: {
@@ -4249,6 +4258,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     deleteCase: {
@@ -4272,6 +4282,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listCaseVersions: {
@@ -4321,6 +4332,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listCaseExecutions: {
@@ -4425,6 +4437,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     addCaseToSuite: {
@@ -4447,6 +4460,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     removeCaseFromSuite: {
@@ -4468,6 +4482,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["Conflict"];
         };
     };
     listRuns: {
@@ -4523,6 +4538,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listReleases: {
@@ -4574,6 +4590,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     getRelease: {
@@ -4625,6 +4642,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     deleteRelease: {
@@ -4746,6 +4764,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     getRequirement: {
@@ -4797,6 +4816,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     deleteRequirement: {
@@ -4848,6 +4868,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     unlinkRequirementCase: {
@@ -4869,6 +4890,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["Conflict"];
         };
     };
     listTestPlansByProject: {
@@ -4940,6 +4962,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     getTestPlan: {
@@ -4991,6 +5014,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     deleteTestPlan: {
@@ -5134,6 +5158,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     reorderCustomFields: {
@@ -5158,6 +5183,7 @@ export interface operations {
                 };
                 content?: never;
             };
+            409: components["responses"]["Conflict"];
         };
     };
     deleteCustomField: {
@@ -5346,6 +5372,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+            409: components["responses"]["Conflict"];
         };
     };
     getStepGroup: {
@@ -5452,6 +5479,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     createImportJob: {
@@ -5481,6 +5509,7 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getImportJob: {
@@ -5564,6 +5593,7 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getRun: {
@@ -5610,6 +5640,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     closeRun: {
@@ -5631,6 +5662,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     reopenRun: {
@@ -5653,6 +5685,7 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     listRunItems: {
@@ -5967,6 +6000,7 @@ export interface operations {
             };
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     updateItemStatus: {
@@ -6154,6 +6188,7 @@ export interface operations {
             };
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     deleteSuite: {
@@ -6175,6 +6210,7 @@ export interface operations {
                 content?: never;
             };
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     getSuiteTrend: {
@@ -7781,6 +7817,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     removeProjectMember: {
@@ -7805,6 +7842,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     setProjectTeamRole: {
@@ -7834,6 +7872,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
     removeProjectTeamRole: {
@@ -7858,6 +7897,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
         };
     };
 }

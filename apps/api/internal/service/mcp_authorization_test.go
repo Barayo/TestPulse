@@ -16,10 +16,19 @@ import (
 
 func TestAuthorizeTenantAdminBypasses(t *testing.T) {
 	s := testService(t)
+	authCtx := context.Background()
 	admin := actorFor(mustCreateUser(t, s, "admin-authz@example.com", "correcthorse", true))
-	ctx := domain.WithActor(context.Background(), admin)
+	ctx := domain.WithActor(authCtx, admin)
+	// A real project, not a fake id: the bypass is scoped to skipping the
+	// permission/membership check, not to skipping the archived-project
+	// lookup (enforce-archived-project-readonly design.md Decision 7 — no
+	// Tenant Admin bypass for that check specifically).
+	project, err := s.CreateProject(authCtx, service.ProjectInput{Name: "Admin Bypass Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
-	if err := s.Authorize(ctx, domain.PermManageProject, "nonexistent-project-id"); err != nil {
+	if err := s.Authorize(ctx, domain.PermManageProject, project.ID); err != nil {
 		t.Errorf("Authorize for tenant admin = %v, want nil (bypass)", err)
 	}
 }
@@ -125,5 +134,58 @@ func TestAccessibleProjectsTenantAdminSeesEverything(t *testing.T) {
 	}
 	if len(projects) < 2 {
 		t.Fatalf("AccessibleProjects = %+v, want at least the 2 just created", projects)
+	}
+}
+
+// --- Archived-project read-only enforcement (enforce-archived-project-readonly) ---
+
+func mustArchiveProjectForAuthorize(t *testing.T, s *service.Service, projectID string) {
+	t.Helper()
+	archived := true
+	if _, err := s.UpdateProject(context.Background(), projectID, service.ProjectUpdate{Archived: &archived}); err != nil {
+		t.Fatalf("archive project: %v", err)
+	}
+}
+
+func TestAuthorizeRejectsWriteOnArchivedProject(t *testing.T) {
+	s := testService(t)
+	project, _, scopedActor := setUpScopedActor(t, s)
+	mustArchiveProjectForAuthorize(t, s, project.ID)
+	authCtx := domain.WithActor(context.Background(), scopedActor)
+
+	var conflictErr *service.ConflictError
+	if err := s.Authorize(authCtx, domain.PermCaseCreate, project.ID); !errors.As(err, &conflictErr) {
+		t.Errorf("Authorize(write, archived) = %v, want ConflictError", err)
+	}
+}
+
+func TestAuthorizeAllowsReadOnArchivedProject(t *testing.T) {
+	s := testService(t)
+	project, _, scopedActor := setUpScopedActor(t, s)
+	mustArchiveProjectForAuthorize(t, s, project.ID)
+	authCtx := domain.WithActor(context.Background(), scopedActor)
+
+	if err := s.Authorize(authCtx, domain.PermRead, project.ID); err != nil {
+		t.Errorf("Authorize(read, archived) = %v, want nil", err)
+	}
+}
+
+func TestAuthorizeTenantAdminHasNoBypassForArchivedProject(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-authz-archived@example.com", "correcthorse", true))
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Admin Archived Authorize Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	mustArchiveProjectForAuthorize(t, s, project.ID)
+	authCtx := domain.WithActor(ctx, admin)
+
+	var conflictErr *service.ConflictError
+	if err := s.Authorize(authCtx, domain.PermManageProject, project.ID); !errors.As(err, &conflictErr) {
+		t.Errorf("Authorize(write, archived, tenant admin) = %v, want ConflictError — no admin bypass", err)
+	}
+	if err := s.Authorize(authCtx, domain.PermRead, project.ID); err != nil {
+		t.Errorf("Authorize(read, archived, tenant admin) = %v, want nil", err)
 	}
 }

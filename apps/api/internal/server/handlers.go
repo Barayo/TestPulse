@@ -32,8 +32,8 @@ func mountAPI(r chi.Router, h *api) {
 		r.Route("/{projectKey}", func(r chi.Router) {
 			r.Use(h.resolveKey("projectKey", h.svc.ProjectIDByKey))
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/", h.getProject)
-			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Patch("/", h.updateProject)
-			r.With(h.requirePermission(domain.PermProjectDelete, projectIDParam)).Delete("/", h.deleteProject)
+			r.With(h.requirePermissionEvenIfArchived(domain.PermManageProject, projectIDParam)).Patch("/", h.updateProject)
+			r.With(h.requirePermissionEvenIfArchived(domain.PermProjectDelete, projectIDParam)).Delete("/", h.deleteProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Post("/favorite", h.starProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Delete("/favorite", h.unstarProject)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Put("/tags/{tagName}", h.assignProjectTag)
@@ -62,7 +62,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/step-groups", h.createStepGroup)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/imports", h.importResults)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/import-jobs", h.createImportJob)
-			r.With(h.requirePermission(domain.PermManageProject, projectIDFromImportJob)).Get("/import-jobs/{jobId}", h.getImportJob)
+			r.With(h.requirePermissionEvenIfArchived(domain.PermManageProject, projectIDFromImportJob)).Get("/import-jobs/{jobId}", h.getImportJob)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/members", h.getProjectMembership)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/permissions", h.myPermissions)
 			r.With(requireTenantAdmin).Put("/members/{userID}", h.setProjectMember)
@@ -91,7 +91,7 @@ func mountAPI(r chi.Router, h *api) {
 	})
 	r.With(h.requirePermission(domain.PermSectionEdit, projectIDFromFolder)).Put("/folders/{folderID}", h.moveFolder)
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
-	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Get("/folders/{folderID}/delete-preview", h.folderDeletePreview)
+	r.With(h.requirePermissionEvenIfArchived(domain.PermSectionDelete, projectIDFromFolder)).Get("/folders/{folderID}/delete-preview", h.folderDeletePreview)
 	r.Route("/suites/{suiteKey}/cases/{caseKey}", func(r chi.Router) {
 		r.Use(h.resolveKey("suiteKey", h.svc.SuiteIDByKey), h.resolveKey("caseKey", h.svc.CaseIDByKey))
 		r.With(h.requirePermission(domain.PermSuiteEditMembership, projectIDFromSuite)).Put("/", h.addCaseToSuite)

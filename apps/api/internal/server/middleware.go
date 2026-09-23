@@ -331,6 +331,22 @@ func (h *api) requirePublicProject(resolve projectIDResolver) func(http.Handler)
 // custom, there was no fixed reference role left to rank against, so
 // enforcement checks a named permission flag instead of an ordinal.
 func (h *api) requirePermission(perm domain.Permission, resolve projectIDResolver) func(http.Handler) http.Handler {
+	return h.requirePermissionOpt(perm, resolve, true)
+}
+
+// requirePermissionEvenIfArchived is requirePermission without the
+// archived-project write gate (enforce-archived-project-readonly) —
+// reserved for routes that must stay reachable ON an archived project: its
+// own lifecycle endpoints (updateProject, to allow unarchiving it;
+// deleteProject, which already requires archived == true as its own
+// precondition), and two pure reads gated at a stricter-than-read bar for
+// unrelated reasons (getImportJob, folderDeletePreview) that would
+// otherwise be incorrectly rejected by the gate.
+func (h *api) requirePermissionEvenIfArchived(perm domain.Permission, resolve projectIDResolver) func(http.Handler) http.Handler {
+	return h.requirePermissionOpt(perm, resolve, false)
+}
+
+func (h *api) requirePermissionOpt(perm domain.Permission, resolve projectIDResolver, blockArchived bool) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			actor, ok := domain.ActorFromContext(r.Context())
@@ -338,7 +354,14 @@ func (h *api) requirePermission(perm domain.Permission, resolve projectIDResolve
 				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
 				return
 			}
-			if actor.IsTenantAdmin {
+			// The archived-project write gate is the only reason a Tenant
+			// Admin now ever needs projectID resolved — every other case
+			// keeps the original bypass (skip resolve entirely) unchanged,
+			// so an admin hitting a read route, or one of the 4 routes
+			// that opted out via requirePermissionEvenIfArchived, sees
+			// zero behavior change (enforce-archived-project-readonly).
+			archivedCheckApplies := blockArchived && perm != domain.PermRead
+			if actor.IsTenantAdmin && !archivedCheckApplies {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -347,22 +370,31 @@ func (h *api) requirePermission(perm domain.Permission, resolve projectIDResolve
 				writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 				return
 			}
-			// A scoped agent token (backlog #117, design.md D3) is
-			// authorized only within its own granted project — never
-			// falls through to EffectivePermissions, which would
-			// resolve the *creator's* broader access instead.
-			if actor.ScopedProjectID != nil {
-				if *actor.ScopedProjectID != projectID || !actor.ScopedPermissions.Has(perm) {
-					writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+			if !actor.IsTenantAdmin {
+				// A scoped agent token (backlog #117, design.md D3) is
+				// authorized only within its own granted project — never
+				// falls through to EffectivePermissions, which would
+				// resolve the *creator's* broader access instead.
+				if actor.ScopedProjectID != nil {
+					if *actor.ScopedProjectID != projectID || !actor.ScopedPermissions.Has(perm) {
+						writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+						return
+					}
+				} else {
+					perms, err := h.svc.EffectivePermissions(r.Context(), actor, projectID)
+					if err != nil || !perms.Has(perm) {
+						writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
+						return
+					}
+				}
+			}
+			// Runs unconditionally, even for a Tenant Admin — no bypass
+			// (enforce-archived-project-readonly design.md Decision 7).
+			if archivedCheckApplies {
+				if err := h.svc.EnsureProjectWritable(r.Context(), projectID); err != nil {
+					h.respond(w, 0, nil, err)
 					return
 				}
-				next.ServeHTTP(w, r)
-				return
-			}
-			perms, err := h.svc.EffectivePermissions(r.Context(), actor, projectID)
-			if err != nil || !perms.Has(perm) {
-				writeJSON(w, http.StatusForbidden, map[string]string{"error": "forbidden"})
-				return
 			}
 			next.ServeHTTP(w, r)
 		})

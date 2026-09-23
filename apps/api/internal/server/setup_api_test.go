@@ -51,6 +51,10 @@ func TestScenario_SetupCreatesAdminAndLogsIn(t *testing.T) {
 // one-shot check, never retries. The always-on Sample Project showroom
 // (CLAUDE.md) must not silently go missing just because an instance took
 // the interactive setup path instead of the env-var one.
+// Updated for enforce-archived-project-readonly, which adds a second,
+// non-sample "Archived Example" project alongside the Sample Project — this
+// asserts exactly one project is flagged isSample rather than exactly one
+// project total.
 func TestScenario_SetupSeedsSampleProject(t *testing.T) {
 	h, _ := bareAPIServer(t)
 
@@ -60,8 +64,14 @@ func TestScenario_SetupSeedsSampleProject(t *testing.T) {
 
 	var projects []jmap
 	callAs(t, h, cookie, "GET", "/api/v1/projects", nil, 200, &projects)
-	if len(projects) != 1 || projects[0]["name"] != "Sample Project" {
-		t.Errorf("projects = %+v, want exactly one Sample Project", projects)
+	var sampleProjects []jmap
+	for _, p := range projects {
+		if p["isSample"] == true {
+			sampleProjects = append(sampleProjects, p)
+		}
+	}
+	if len(sampleProjects) != 1 || sampleProjects[0]["name"] != "Sample Project" {
+		t.Errorf("projects flagged isSample = %+v, want exactly one Sample Project (total projects = %+v)", sampleProjects, projects)
 	}
 }
 

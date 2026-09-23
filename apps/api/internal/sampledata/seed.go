@@ -988,6 +988,48 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	if err := seedArchivedShowcase(ctx, svc); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
+	return nil
+}
+
+// seedArchivedShowcase demonstrates enforce-archived-project-readonly: a
+// second, minimal project, private (not public — unlike the Sample Project,
+// nothing here needs to be reachable pre-login) and created already
+// archived, so a Tenant Admin sees a real example of the read-only
+// behavior on their own project list without needing to archive something
+// themselves first. Deliberately not the Sample Project itself — archiving
+// that would break its "immediately reachable and editable by an evaluator"
+// purpose, the opposite of what this showcase is for.
+func seedArchivedShowcase(ctx context.Context, svc *service.Service) error {
+	p, err := svc.CreateProject(ctx, service.ProjectInput{
+		Name: "Archived Example",
+		Description: "A small, already-archived project — demonstrates that " +
+			"archived projects are read-only (enforce-archived-project-readonly): " +
+			"unarchive it from Settings to make it editable again.",
+	})
+	if err != nil {
+		return fmt.Errorf("creating archived showcase project: %w", err)
+	}
+	root, err := RootFolder(ctx, svc, p.ID)
+	if err != nil {
+		return err
+	}
+	if _, err := svc.CreateCase(ctx, p.ID, root.ID, domain.CaseContent{
+		Title:    "Example case in an archived project",
+		Steps:    []domain.Step{{Action: "Try editing this case", Expected: "The edit is rejected with a 409 while the project stays archived"}},
+		Priority: domain.PriorityLow,
+		Platform: "web",
+		TestType: "functional",
+	}); err != nil {
+		return fmt.Errorf("creating archived showcase case: %w", err)
+	}
+	archived := true
+	if _, err := svc.UpdateProject(ctx, p.ID, service.ProjectUpdate{Archived: &archived}); err != nil {
+		return fmt.Errorf("archiving showcase project: %w", err)
+	}
 	return nil
 }
 

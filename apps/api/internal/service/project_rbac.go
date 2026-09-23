@@ -40,6 +40,25 @@ func scopedProjectPermissions(actor domain.Actor, projectID string) (perms domai
 	return *actor.ScopedPermissions, true
 }
 
+// EnsureProjectWritable rejects with a 409 ConflictError if projectID is
+// archived, unconditionally — there is no Tenant Admin bypass
+// (enforce-archived-project-readonly design.md Decision 7: archiving is
+// already a cheap, reversible, manageProject-gated action, so a silent
+// admin exemption would only reintroduce the ambiguity this check exists
+// to remove). Backed by a cheap existence check
+// (store.Projects.IsArchived), not a full Get, since this runs on every
+// mutating request once wired into Authorize.
+func (s *Service) EnsureProjectWritable(ctx context.Context, projectID string) error {
+	archived, err := s.store.Projects.IsArchived(ctx, projectID)
+	if err != nil {
+		return err
+	}
+	if archived {
+		return conflict("project is archived")
+	}
+	return nil
+}
+
 // Authorize enforces perm on projectID for ctx's Actor, mirroring
 // requirePermission's REST enforcement (server/middleware.go) exactly —
 // Tenant Admin bypass, then a scoped agent token's own
@@ -54,18 +73,24 @@ func (s *Service) Authorize(ctx context.Context, perm domain.Permission, project
 	if !ok {
 		return unauthorized("authentication required")
 	}
-	if actor.IsTenantAdmin {
-		return nil
-	}
-	if perms, ok := scopedProjectPermissions(actor, projectID); ok {
-		if !perms.Has(perm) {
-			return forbidden("insufficient permissions")
+	if !actor.IsTenantAdmin {
+		if perms, scoped := scopedProjectPermissions(actor, projectID); scoped {
+			if !perms.Has(perm) {
+				return forbidden("insufficient permissions")
+			}
+		} else {
+			perms, err := s.EffectivePermissions(ctx, actor, projectID)
+			if err != nil || !perms.Has(perm) {
+				return forbidden("insufficient permissions")
+			}
 		}
-		return nil
 	}
-	perms, err := s.EffectivePermissions(ctx, actor, projectID)
-	if err != nil || !perms.Has(perm) {
-		return forbidden("insufficient permissions")
+	// Runs unconditionally, even for a Tenant Admin — no bypass
+	// (enforce-archived-project-readonly design.md Decision 7).
+	if perm != domain.PermRead {
+		if err := s.EnsureProjectWritable(ctx, projectID); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -455,6 +480,9 @@ func (s *Service) SetProjectMember(ctx context.Context, actor domain.Actor, proj
 	if !actor.IsTenantAdmin {
 		return forbidden("only a Tenant Admin can assign project membership")
 	}
+	if err := s.EnsureProjectWritable(ctx, projectID); err != nil {
+		return err
+	}
 	if _, err := s.store.Roles.Get(ctx, roleID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
 			return invalid("roleId does not reference an existing role")
@@ -472,6 +500,9 @@ func (s *Service) RemoveProjectMember(ctx context.Context, actor domain.Actor, p
 	if !actor.IsTenantAdmin {
 		return forbidden("only a Tenant Admin can assign project membership")
 	}
+	if err := s.EnsureProjectWritable(ctx, projectID); err != nil {
+		return err
+	}
 	if err := s.store.ProjectMembers.RemoveMember(ctx, projectID, userID); err != nil {
 		return err
 	}
@@ -482,6 +513,9 @@ func (s *Service) RemoveProjectMember(ctx context.Context, actor domain.Actor, p
 func (s *Service) SetProjectTeamRole(ctx context.Context, actor domain.Actor, projectID, teamID, roleID string) error {
 	if !actor.IsTenantAdmin {
 		return forbidden("only a Tenant Admin can assign project membership")
+	}
+	if err := s.EnsureProjectWritable(ctx, projectID); err != nil {
+		return err
 	}
 	if _, err := s.store.Roles.Get(ctx, roleID); err != nil {
 		if errors.Is(err, store.ErrNotFound) {
@@ -499,6 +533,9 @@ func (s *Service) SetProjectTeamRole(ctx context.Context, actor domain.Actor, pr
 func (s *Service) RemoveProjectTeamRole(ctx context.Context, actor domain.Actor, projectID, teamID string) error {
 	if !actor.IsTenantAdmin {
 		return forbidden("only a Tenant Admin can assign project membership")
+	}
+	if err := s.EnsureProjectWritable(ctx, projectID); err != nil {
+		return err
 	}
 	if err := s.store.ProjectMembers.RemoveTeamRole(ctx, projectID, teamID); err != nil {
 		return err

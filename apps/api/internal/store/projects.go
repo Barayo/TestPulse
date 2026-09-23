@@ -139,6 +139,25 @@ func (r *ProjectRepo) IDByKey(ctx context.Context, key string) (string, error) {
 	return id, err
 }
 
+// IsArchived reports whether a project is archived, via a cheap
+// single-column lookup (mirroring checkRunOpen's style, runs.go) rather
+// than a full Get — this runs on every mutating request in the app once
+// wired into Service.EnsureProjectWritable (enforce-archived-project-readonly).
+// Only a genuine "no such row" collapses to ErrNotFound — any other error
+// (a dropped connection, a cancelled context, pool exhaustion) propagates
+// as itself, since this sits on Authorize, the shared chokepoint for
+// nearly every write in the app: masking real infra failures as 404s
+// would make them invisible to both the caller and respond()'s own
+// error-logging path.
+func (r *ProjectRepo) IsArchived(ctx context.Context, id string) (bool, error) {
+	var archived bool
+	err := r.pool.QueryRow(ctx, `SELECT archived FROM projects WHERE id = $1`, id).Scan(&archived)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return false, ErrNotFound
+	}
+	return archived, err
+}
+
 func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, key, name, archived, description, is_sample, public_access, created_at

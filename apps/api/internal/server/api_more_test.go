@@ -80,8 +80,7 @@ func TestInvalidJSONBodyIs400(t *testing.T) {
 	// Key-addressed routes 404 on an unresolvable key before ever looking at
 	// the body — resolution runs at the API boundary (add-human-readable-keys
 	// D4), ahead of decode — so these cases need a real key to isolate body
-	// validation from key resolution. /api/v1/items/... stays id-addressed
-	// (out of scope), so "x" there still reaches decode() first as before.
+	// validation from key resolution.
 	var p, c, run struct{ Key string }
 	call(t, h, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
 	call(t, h, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", p.Key), jmap{"title": "seed"}, 201, &c)
@@ -95,14 +94,32 @@ func TestInvalidJSONBodyIs400(t *testing.T) {
 		{"POST", fmt.Sprintf("/api/v1/projects/%s/suites", p.Key)},
 		{"POST", fmt.Sprintf("/api/v1/projects/%s/runs", p.Key)},
 		{"POST", fmt.Sprintf("/api/v1/runs/%s/items", run.Key)},
-		{"POST", "/api/v1/items/x/results"},
-		{"PUT", "/api/v1/items/x/status"},
 	} {
 		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader("{not json"))
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
 		if rec.Code != 400 {
 			t.Errorf("%s %s with bad JSON = %d, want 400", tc.method, tc.path, rec.Code)
+		}
+	}
+
+	// /api/v1/items/... is id-addressed (out of scope for D4's key
+	// resolution), but requirePermission's own project-id resolution still
+	// runs ahead of decode for every actor kind, including Tenant Admin
+	// (enforce-archived-project-readonly: the archived-project check needs
+	// a real, resolved project id even for an admin, so resolution can no
+	// longer be skipped for that actor kind the way it used to be) — an
+	// unresolvable item id now 404s before body decode here too, matching
+	// every other route above rather than being the one exception.
+	for _, tc := range []struct{ method, path string }{
+		{"POST", "/api/v1/items/x/results"},
+		{"PUT", "/api/v1/items/x/status"},
+	} {
+		req := httptest.NewRequest(tc.method, tc.path, strings.NewReader("{not json"))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != 404 {
+			t.Errorf("%s %s with bad JSON and an unresolvable item id = %d, want 404", tc.method, tc.path, rec.Code)
 		}
 	}
 }

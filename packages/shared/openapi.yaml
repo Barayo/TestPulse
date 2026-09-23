@@ -180,6 +180,7 @@ paths:
               schema: { $ref: "#/components/schemas/Project" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: deleteProject
       summary: >-
@@ -279,6 +280,7 @@ paths:
               schema: { $ref: "#/components/schemas/TestCase" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/cases/import-csv:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -311,6 +313,7 @@ paths:
               schema: { $ref: "#/components/schemas/CsvImportResult" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/cases/export-csv:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -364,6 +367,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Folder" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/folders/{folderId}:
     parameters:
       - { name: folderId, in: path, required: true, schema: { type: string } }
@@ -395,6 +399,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: deleteFolder
       summary: >-
@@ -409,6 +414,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/folders/{folderId}/delete-preview:
     parameters:
       - { name: folderId, in: path, required: true, schema: { type: string } }
@@ -448,6 +454,7 @@ paths:
         "204": { description: Moved }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/cases/{caseKey}/jira-link:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
@@ -474,6 +481,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TestCase" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/cases/{caseKey}/jira-sync:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
@@ -533,6 +541,7 @@ paths:
               schema: { $ref: "#/components/schemas/TestCase" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: deleteCase
       summary: >-
@@ -544,6 +553,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/cases/{caseKey}/versions:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
@@ -577,6 +587,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/cases/{caseKey}/executions:
     parameters:
       - { name: caseKey, in: path, required: true, schema: { type: string } }
@@ -650,6 +661,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Suite" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/suites/{suiteKey}/cases/{caseKey}:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
@@ -661,12 +673,14 @@ paths:
       responses:
         "204": { description: Added }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: removeCaseFromSuite
       summary: Remove a case from a suite (case itself survives)
       tags: [suites]
       responses:
         "204": { description: Removed }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/runs:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -700,6 +714,7 @@ paths:
               schema: { $ref: "#/components/schemas/Run" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/releases:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -733,6 +748,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Release" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/releases/{releaseKey}:
     parameters:
       - { name: releaseKey, in: path, required: true, schema: { type: string } }
@@ -764,6 +780,7 @@ paths:
               schema: { $ref: "#/components/schemas/Release" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: deleteRelease
       summary: Delete a release (rejected while it still has Test Plans)
@@ -831,6 +848,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/Requirement" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/requirements/{requirementKey}:
     parameters:
       - { name: requirementKey, in: path, required: true, schema: { type: string } }
@@ -862,6 +880,7 @@ paths:
               schema: { $ref: "#/components/schemas/Requirement" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: deleteRequirement
       summary: Delete a requirement (rejected while it still has linked cases)
@@ -882,12 +901,14 @@ paths:
         "204": { description: Linked }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: unlinkRequirementCase
       summary: Unlink a case from a requirement (case and requirement both survive)
       tags: [requirements]
       responses:
         "204": { description: Unlinked }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/plans:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -937,6 +958,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/TestPlan" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/plans/{planKey}:
     parameters:
       - { name: planKey, in: path, required: true, schema: { type: string } }
@@ -968,6 +990,7 @@ paths:
               schema: { $ref: "#/components/schemas/TestPlan" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: deleteTestPlan
       summary: Delete a test plan (rejected while it still has runs)
@@ -1048,6 +1071,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/CustomField" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/custom-fields/order:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -1062,6 +1086,7 @@ paths:
             schema: { $ref: "#/components/schemas/CustomFieldOrderInput" }
       responses:
         "204": { description: Reordered }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/custom-fields/{fieldId}:
     parameters:
       - { name: fieldId, in: path, required: true, schema: { type: string } }
@@ -1172,6 +1197,7 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/StepGroup" }
         "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/step-groups/{groupId}:
     parameters:
       - { name: groupId, in: path, required: true, schema: { type: string } }
@@ -1234,6 +1260,7 @@ paths:
               schema: { $ref: "#/components/schemas/ImportResult" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/import-jobs:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -1261,6 +1288,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/import-jobs/{jobId}:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -1317,6 +1345,7 @@ paths:
         "400": { $ref: "#/components/responses/ValidationError" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/runs/{runKey}:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -1340,6 +1369,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/runs/{runKey}/close:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -1350,6 +1380,7 @@ paths:
       responses:
         "204": { description: Closed }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/runs/{runKey}/reopen:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -1361,6 +1392,7 @@ paths:
         "204": { description: Reopened }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/runs/{runKey}/items:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -1574,6 +1606,7 @@ paths:
         "204": { description: Deleted }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/items/{itemId}/status:
     parameters:
       - { name: itemId, in: path, required: true, schema: { type: string } }
@@ -1709,6 +1742,7 @@ paths:
               schema: { $ref: "#/components/schemas/Suite" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: deleteSuite
       summary: Delete a suite (member cases and past runs are untouched)
@@ -1716,6 +1750,7 @@ paths:
       responses:
         "204": { description: Deleted }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/suites/{suiteKey}/trend:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
@@ -2779,6 +2814,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: removeProjectMember
       summary: Remove a user's direct role assignment on a project (Tenant Admin only)
@@ -2788,6 +2824,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
   /api/v1/projects/{projectKey}/teams/{teamId}:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -2807,6 +2844,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       operationId: removeProjectTeamRole
       summary: Remove a team's role assignment on a project (Tenant Admin only)
@@ -2816,6 +2854,7 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
 components:
   responses:
     ValidationError:

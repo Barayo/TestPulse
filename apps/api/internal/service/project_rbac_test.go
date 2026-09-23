@@ -419,8 +419,15 @@ func TestSetProjectMemberValidatesRole(t *testing.T) {
 	s := testService(t)
 	admin := actorFor(mustCreateUser(t, s, "admin@example.com", "correcthorse", true))
 	ctx := context.Background()
+	// A real project, not a fake id: EnsureProjectWritable now runs before
+	// the role lookup (enforce-archived-project-readonly), so it needs a
+	// real project to check archived status against.
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Set Member Validates Role Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
 
-	err := s.SetProjectMember(ctx, admin, "p1", "u1", "00000000-0000-0000-0000-000000000000")
+	err = s.SetProjectMember(ctx, admin, project.ID, "u1", "00000000-0000-0000-0000-000000000000")
 	var verr *service.ValidationError
 	if err == nil || !errors.As(err, &verr) {
 		t.Fatalf("err = %v, want ValidationError", err)
@@ -538,5 +545,128 @@ func TestMyPermissionsForScopedTokenReportsItsOwnScopeNotCreator(t *testing.T) {
 	}
 	if perms != (domain.Permissions{}) {
 		t.Errorf("scoped token MyPermissions on unscoped project = %+v, want all false", perms)
+	}
+}
+
+// --- Archived-project read-only enforcement (enforce-archived-project-readonly) ---
+
+func mustArchiveProject(t *testing.T, s *service.Service, projectID string) {
+	t.Helper()
+	archived := true
+	if _, err := s.UpdateProject(context.Background(), projectID, service.ProjectUpdate{Archived: &archived}); err != nil {
+		t.Fatalf("archive project: %v", err)
+	}
+}
+
+func TestEnsureProjectWritableRejectsArchivedProject(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Writable Check Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	mustArchiveProject(t, s, project.ID)
+
+	var conflictErr *service.ConflictError
+	if err := s.EnsureProjectWritable(ctx, project.ID); !errors.As(err, &conflictErr) {
+		t.Errorf("EnsureProjectWritable(archived) = %v, want ConflictError", err)
+	}
+}
+
+func TestEnsureProjectWritableAllowsActiveProject(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Writable Active Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	if err := s.EnsureProjectWritable(ctx, project.ID); err != nil {
+		t.Errorf("EnsureProjectWritable(active) = %v, want nil", err)
+	}
+}
+
+func TestScenario_ArchivedProjectRejectsMembershipChanges(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	admin := actorFor(mustCreateUser(t, s, "admin-archived-membership@example.com", "correcthorse", true))
+	member := mustCreateUser(t, s, "member-archived-membership@example.com", "correcthorse", false)
+	team, err := s.CreateTeam(ctx, admin, "Archived Membership Team")
+	if err != nil {
+		t.Fatalf("CreateTeam: %v", err)
+	}
+	role, err := s.CreateRole(ctx, admin, domain.Role{Name: "Archived Membership Role", CanRead: true})
+	if err != nil {
+		t.Fatalf("CreateRole: %v", err)
+	}
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Archived Membership Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	mustArchiveProject(t, s, project.ID)
+
+	var conflictErr *service.ConflictError
+	if err := s.SetProjectMember(ctx, admin, project.ID, member.ID, role.ID); !errors.As(err, &conflictErr) {
+		t.Errorf("SetProjectMember(archived) = %v, want ConflictError", err)
+	}
+	if err := s.RemoveProjectMember(ctx, admin, project.ID, member.ID); !errors.As(err, &conflictErr) {
+		t.Errorf("RemoveProjectMember(archived) = %v, want ConflictError", err)
+	}
+	if err := s.SetProjectTeamRole(ctx, admin, project.ID, team.ID, role.ID); !errors.As(err, &conflictErr) {
+		t.Errorf("SetProjectTeamRole(archived) = %v, want ConflictError", err)
+	}
+	if err := s.RemoveProjectTeamRole(ctx, admin, project.ID, team.ID); !errors.As(err, &conflictErr) {
+		t.Errorf("RemoveProjectTeamRole(archived) = %v, want ConflictError", err)
+	}
+
+	membership, err := s.ProjectMembership(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("ProjectMembership: %v", err)
+	}
+	if len(membership.Users) != 0 || len(membership.Teams) != 0 {
+		t.Errorf("ProjectMembership after rejected writes = %+v, want empty", membership)
+	}
+}
+
+func TestUpdateProjectOnlyBareUnarchiveIsPermittedWhileArchived(t *testing.T) {
+	s := testService(t)
+	ctx := context.Background()
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Unarchive Guard Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	mustArchiveProject(t, s, project.ID)
+
+	var conflictErr *service.ConflictError
+
+	// A non-unarchive update on an archived project is rejected.
+	newName := "Renamed While Archived"
+	if _, err := s.UpdateProject(ctx, project.ID, service.ProjectUpdate{Name: &newName}); !errors.As(err, &conflictErr) {
+		t.Errorf("UpdateProject(rename, archived) = %v, want ConflictError", err)
+	}
+
+	// Bundling unarchive with any other field is rejected.
+	unarchive := false
+	if _, err := s.UpdateProject(ctx, project.ID, service.ProjectUpdate{Archived: &unarchive, Name: &newName}); !errors.As(err, &conflictErr) {
+		t.Errorf("UpdateProject(unarchive+rename, archived) = %v, want ConflictError", err)
+	}
+	got, err := s.GetProject(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if !got.Archived || got.Name == newName {
+		t.Errorf("project after rejected bundled update = %+v, want unchanged (still archived, original name)", got)
+	}
+
+	// A bare unarchive alone succeeds.
+	if _, err := s.UpdateProject(ctx, project.ID, service.ProjectUpdate{Archived: &unarchive}); err != nil {
+		t.Errorf("UpdateProject(bare unarchive) = %v, want nil", err)
+	}
+	got, err = s.GetProject(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("GetProject: %v", err)
+	}
+	if got.Archived {
+		t.Errorf("project after bare unarchive = %+v, want Archived false", got)
 	}
 }

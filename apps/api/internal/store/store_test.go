@@ -381,6 +381,45 @@ func TestListPublicReturnsOnlyPublicNonArchivedProjects(t *testing.T) {
 	}
 }
 
+// TestProjectIsArchived covers enforce-archived-project-readonly's cheap
+// existence check, backing Service.EnsureProjectWritable on the hot,
+// unauthenticated-adjacent write path — deliberately a single-column
+// lookup, not a full Projects.Get.
+func TestProjectIsArchived(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	p := mustProject(t, s)
+	archived, err := s.Projects.IsArchived(ctx, p.ID)
+	if err != nil || archived {
+		t.Fatalf("IsArchived (fresh project) = %v, %v; want false, nil", archived, err)
+	}
+
+	if err := s.Projects.Archive(ctx, p.ID); err != nil {
+		t.Fatalf("archive: %v", err)
+	}
+	archived, err = s.Projects.IsArchived(ctx, p.ID)
+	if err != nil || !archived {
+		t.Errorf("IsArchived (archived project) = %v, %v; want true, nil", archived, err)
+	}
+
+	if _, err := s.Projects.IsArchived(ctx, "00000000-0000-0000-0000-000000000000"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("IsArchived(unknown) = %v, want ErrNotFound", err)
+	}
+
+	// A real infra failure (here: an already-cancelled context) must
+	// propagate as itself, not get masked as ErrNotFound — EnsureProjectWritable
+	// is wired into Authorize, the shared chokepoint for nearly every write
+	// in the app, so collapsing every error into "project not found" would
+	// turn a transient DB/connection failure into a silently-swallowed 404
+	// instead of a logged 500 (found in post-implementation review).
+	cancelledCtx, cancel := context.WithCancel(ctx)
+	cancel()
+	if _, err := s.Projects.IsArchived(cancelledCtx, p.ID); errors.Is(err, store.ErrNotFound) {
+		t.Errorf("IsArchived with a cancelled context = %v, want the real error, not ErrNotFound", err)
+	}
+}
+
 // --- Cases and versioning (task 2.2) ---
 
 func TestCaseCreateStartsAtVersionOne(t *testing.T) {

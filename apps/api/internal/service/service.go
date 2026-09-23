@@ -318,6 +318,24 @@ func (s *Service) UpdateProject(ctx context.Context, id string, upd ProjectUpdat
 		upd.AssigneeRestrictedRecording == nil && upd.LandingView == nil && upd.ClearLandingView == nil {
 		return domain.Project{}, invalid("nothing to update: provide name, description, archived, publicAccess, autoArchiveExempt, assigneeRestrictedRecording, landingView, and/or clearLandingView")
 	}
+	// enforce-archived-project-readonly Decision 6: the only permitted
+	// write on an archived project is unarchiving it, alone — bundling any
+	// other field change into the same request has no clean answer for
+	// which change would apply first, so it's rejected outright rather
+	// than defining an ordering.
+	current, err := s.store.Projects.Get(ctx, id)
+	if err != nil {
+		return domain.Project{}, err
+	}
+	if current.Archived {
+		unarchiving := upd.Archived != nil && !*upd.Archived
+		onlyUnarchiving := unarchiving && upd.Name == nil && upd.Description == nil &&
+			upd.PublicAccess == nil && upd.AutoArchiveExempt == nil &&
+			upd.AssigneeRestrictedRecording == nil && upd.LandingView == nil && upd.ClearLandingView == nil
+		if !onlyUnarchiving {
+			return domain.Project{}, conflict("project is archived; unarchive it before making other changes")
+		}
+	}
 	if upd.LandingView != nil && !validLandingViews[*upd.LandingView] {
 		return domain.Project{}, invalid("landingView must be one of dashboard, library, suites, runs, reports")
 	}
