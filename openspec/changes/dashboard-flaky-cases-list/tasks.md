@@ -1,0 +1,32 @@
+## 1. Hook: expose flaky-case rows, not just a count
+
+- [x] 1.1 Write a failing test in `apps/web/src/lib/useProjectReportsTeaser.test.ts` (create if it doesn't exist — check first) asserting the hook's returned shape includes a `flakyCases: FlakyCase[]` field sorted by `rate` descending, alongside the existing `flakyCount`, `total`, `counts`, `loaded` fields, for both the member and anonymous-visitor fetch paths.
+- [x] 1.2 Run the test, confirm it fails (field doesn't exist yet / not sorted).
+- [x] 1.3 In `apps/web/src/lib/useProjectReportsTeaser.ts`: add `flakyCases: FlakyCase[]` to the `ProjectReportsTeaser` type and the `empty` constant (`[]`); in the `.then` callback, sort `flakyRes.data` by `rate` descending with `.slice().sort((a, b) => b.rate - a.rate)` (same pattern as `ProjectReportsPage.tsx:49`) and set it alongside `flakyCount: flakyRes.data?.length ?? 0`.
+- [x] 1.4 Run the test, confirm it passes. Run the full `useProjectReportsTeaser` test suite plus `ProjectPage.tsx`'s tests to confirm no regression from the new field.
+
+## 2. ReportsPanel: render the top 3 flaky-case rows
+
+- [x] 2.1 Write failing tests in `apps/web/src/pages/ProjectPage.test.tsx` (the existing home for `ReportsPanel` behavior via its `ProjectPage` call site — `ProjectLandingPanels.test.tsx` doesn't cover `ReportsPanel` today) for the three scenarios in the `project-reports` delta spec: (a) 1-3 flaky cases → every one rendered as a row, no "see more"; (b) more than 3 → only the top 3 rendered, plus a "see more" link; (c) 0 flaky cases → no rows, no "see more", unchanged existing empty behavior. Also covers clicking a row navigating to that case's detail page.
+- [x] 2.2 Run the tests, confirm they fail (rows don't exist yet).
+- [x] 2.3 In `apps/web/src/components/ProjectLandingPanels.tsx`: change `ReportsPanel`'s props from `flakyCount: number` to `flakyCases: FlakyCase[]` (import the type from `@testpulse/shared/api`) and add `onSelectFlakyCase: (caseKey: string) => void`; derive `flakyCount` internally as `flakyCases.length`. Deviated from the task's original `Link`/`projectKey` sketch: this file's every other row (`FolderRow`, `SuitesPanel`, `RunsPanel`, `ReleasesPanel`) uses a callback-prop + `<button onClick>` idiom, not `react-router`'s `Link` — followed that established in-file convention instead, letting `ProjectPage.tsx` own the actual `navigate()` call, consistent with `onSelectSuite`/`onSelectRun`/`onSelectRelease`. Render up to 3 rows below the existing pill (title truncated, rate as a destructive-tinted number); when `flakyCases.length > 3`, add a "see more" row reusing the existing `onOpenReports` callback (same destination the header action already uses), styled like the `seeAllLabel` text elsewhere in this file.
+- [x] 2.4 Update the file-level comment at `ProjectLandingPanels.tsx:371-376` ("never 'see all N ›' — this panel summarizes, it doesn't list") to reflect that the flaky-cases sub-section now lists its top rows with a "see more" affordance, while the status-breakdown half remains summary-only.
+- [x] 2.5 Update `ReportsPanel`'s call site in `apps/web/src/pages/ProjectPage.tsx` to pass `flakyCases={reportsTeaser.flakyCases}` and `onSelectFlakyCase={(caseKey) => navigate(...)}` instead of `flakyCount={reportsTeaser.flakyCount}`.
+- [x] 2.6 Run the tests, confirm they pass. Run the full `ProjectLandingPanels`/`ProjectPage` test suites to confirm no regressions. (Also ran the entire web suite: 138 files, 1785 tests, all green.)
+
+## 3. Sample Project showcase
+
+- [x] 3.1 Check the Sample Project's current flaky-case count: ran `TestSeedContentSurfacesAFlakyCase` with temporary logging. Actual count was 3, not the 1-2 the proposal guessed — `checkoutValid` and `login` are *not* actually flaky in the `FlakyCases` query's output, despite seed.go's own comments claiming they are: both get `EditCase`'d later in `Seed()` (custom-field values, seed.go:977/987), which bumps `current_version`, and the flaky query is deliberately scoped to each case's *current* version only (`store/flaky.go:11-13`) — so their pre-edit mixed verdicts no longer count. The actual 3 flaky cases were `checkoutExpired` ("Checkout blocks an expired card"), `notifOptOut` ("Email notification opt-out is respected"), and `passwordReset` ("Password reset email is sent").
+- [x] 3.2 Added a 4th: `timezone` was otherwise consistently passing (Android regression plan, Nightly suite, the CI import) with no other case's showcase narrative depending on it. Extended the existing "Scratch run — safe to delete" run (seed.go:923, already a deliberately low-stakes, non-final, non-release-linked run per its own comment) to also record a `Failed` verdict for `timezone` alongside login's existing `Blocked` — one line changed, no new run, no risk to the final/health-indicator run or any release/requirement coverage narrative.
+- [x] 3.3 Added `TestSeedContentHasMoreThanThreeFlakyCases` in `apps/api/internal/sampledata/seed_test.go`, asserting `len(flaky) > 3`.
+- [x] 3.4 Ran `go test ./internal/sampledata/...` (all cases, `-v`): all green, including the new test and every pre-existing flaky/pass-rate/coverage showcase test.
+
+## 4. Documentation
+
+- [x] 4.1 `docs/test-management.md` (line 48) documented the old count-only teaser and the "never see all N" rule in detail — updated to describe the new top-3 flaky-case rows and the "see all N" row that appears once there are more than 3, while keeping the still-true rule that the status-breakdown half (and its "Open Reports" header action) remains summary-only.
+
+## 5. Full verification
+
+- [x] 5.1 Ran `make lint` (Go + web): exit 0. Also ran a full `go build ./...` + `go test ./...` regression sweep separately: exit 0, all green.
+- [x] 5.2 Ran `make coverage-web`: exit 0, 90.31%/83.44%/88.47%/92.94% (statements/branches/functions/lines), all above the 80% gate.
+- [x] 5.3 Deployed locally (`docker compose down -v` + `up --build -d` for a fresh seed, disposable dev volume). Verified live in a real browser on the Sample Project's dashboard: the Reports panel shows a "4 flaky" pill with the top 3 rows by rate (Change timezone preference 25%, Email notification opt-out is respected 4%, Password reset email is sent 4%, correctly excluding the 4th/lowest-rate Checkout blocks an expired card at 2%), a "see all 4 ›" row below them; clicking a row navigated to `/projects/SP/cases/SP-22` (that case's detail page), and clicking "see all 4" navigated to `/projects/SP/reports`.
