@@ -1,7 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
-import { StarIcon, Grid2x2, Grid3x3, XIcon, TagIcon, PlusIcon, DatabaseIcon, UploadIcon, GlobeIcon, type LucideIcon } from 'lucide-react'
+import {
+  StarIcon,
+  Grid2x2,
+  Grid3x3,
+  XIcon,
+  TagIcon,
+  PlusIcon,
+  DatabaseIcon,
+  UploadIcon,
+  GlobeIcon,
+  ChevronRightIcon,
+  type LucideIcon,
+} from 'lucide-react'
 import { TagChipsEditor } from '@/components/TagChipsEditor'
 import { useTagVocabulary } from '@/lib/useTagVocabulary'
 import { useFloatingPosition } from '@/lib/useFloatingPosition'
@@ -80,6 +92,10 @@ export default function ProjectsPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<StatusFilter | null>(null)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  // Collapsed by default, manual toggle only — no auto-expand on a search
+  // match, the same predictable-state discipline RunComparePage's
+  // "Unchanged · N" section (the idiom this mirrors) already uses.
+  const [archivedExpanded, setArchivedExpanded] = useState(false)
 
   const isTenantAdmin = user?.isTenantAdmin ?? false
   // Design D6: a non-Tenant-Admin who can see exactly one project (now a
@@ -349,8 +365,14 @@ export default function ProjectsPage() {
     for (const t of p.tags) tagCounts.set(t, (tagCounts.get(t) ?? 0) + 1)
   }
 
-  const favorites = viewMode === 'expanded' ? visible.filter((p) => p.isFavorite) : []
-  const rest = viewMode === 'expanded' ? visible.filter((p) => !p.isFavorite) : visible
+  // Archived projects move to their own collapsed section below, out of
+  // the active grid entirely — they still respect the same search/status/
+  // tag filters as everything else (Pepe design review).
+  const activeVisible = visible.filter((p) => !p.archived)
+  const archivedVisible = visible.filter((p) => p.archived)
+
+  const favorites = viewMode === 'expanded' ? activeVisible.filter((p) => p.isFavorite) : []
+  const rest = viewMode === 'expanded' ? activeVisible.filter((p) => !p.isFavorite) : activeVisible
 
   return (
     <div className="space-y-6">
@@ -565,6 +587,45 @@ export default function ProjectsPage() {
               />
             )}
           </div>
+          {archivedVisible.length > 0 && (
+            <section aria-label="Archived projects" className="space-y-3">
+              <button
+                type="button"
+                aria-label={archivedExpanded ? 'Collapse Archived' : 'Expand Archived'}
+                aria-expanded={archivedExpanded}
+                className="flex items-center gap-2 text-muted-foreground"
+                onClick={() => setArchivedExpanded((v) => !v)}
+              >
+                <ChevronRightIcon
+                  className={`size-3.5 transition-transform ${archivedExpanded ? 'rotate-90' : ''}`}
+                  aria-hidden="true"
+                />
+                <span className="tp-label">Archived · {archivedVisible.length}</span>
+              </button>
+              {archivedExpanded &&
+                (viewMode === 'expanded' ? (
+                  <ExpandedGrid
+                    projects={archivedVisible}
+                    onNavigate={(id) => navigate(`/projects/${id}`)}
+                    onToggleFavorite={toggleFavorite}
+                    tagVocabulary={tagVocabulary}
+                    onAddTag={addProjectTag}
+                    onRemoveTag={removeProjectTag}
+                    hideArchivedBadge
+                  />
+                ) : (
+                  <CompactList
+                    projects={archivedVisible}
+                    onNavigate={(id) => navigate(`/projects/${id}`)}
+                    onToggleFavorite={toggleFavorite}
+                    tagVocabulary={tagVocabulary}
+                    onAddTag={addProjectTag}
+                    onRemoveTag={removeProjectTag}
+                    hideArchivedBadge
+                  />
+                ))}
+            </section>
+          )}
         </>
       )}
     </div>
@@ -901,6 +962,7 @@ function ExpandedGrid({
   tagVocabulary,
   onAddTag,
   onRemoveTag,
+  hideArchivedBadge,
 }: {
   projects: ProjectSummary[]
   onNavigate: (id: string) => void
@@ -908,6 +970,10 @@ function ExpandedGrid({
   tagVocabulary: string[]
   onAddTag: (p: ProjectSummary, tag: string) => void
   onRemoveTag: (p: ProjectSummary, tag: string) => void
+  // The Archived section's own header already says "Archived" — repeating
+  // it per-card would be redundant, the same reasoning the Favorites
+  // section already uses to skip its own badge.
+  hideArchivedBadge?: boolean
 }) {
   return (
     <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
@@ -929,7 +995,7 @@ function ExpandedGrid({
                         {p.name}
                       </h2>
                       {p.isSample && <Badge variant="secondary">Sample</Badge>}
-                      {p.archived && <Badge variant="outline">Archived</Badge>}
+                      {p.archived && !hideArchivedBadge && <Badge variant="outline">Archived</Badge>}
                     </span>
                     {p.description && (
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.description}</p>
@@ -1003,6 +1069,7 @@ function CompactList({
   tagVocabulary,
   onAddTag,
   onRemoveTag,
+  hideArchivedBadge,
 }: {
   projects: ProjectSummary[]
   onNavigate: (id: string) => void
@@ -1010,6 +1077,7 @@ function CompactList({
   tagVocabulary: string[]
   onAddTag: (p: ProjectSummary, tag: string) => void
   onRemoveTag: (p: ProjectSummary, tag: string) => void
+  hideArchivedBadge?: boolean
 }) {
   return (
     <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
@@ -1023,7 +1091,7 @@ function CompactList({
                     {p.name}
                   </h2>
                   {p.isSample && <Badge variant="secondary">Sample</Badge>}
-                  {p.archived && <Badge variant="outline">Archived</Badge>}
+                  {p.archived && !hideArchivedBadge && <Badge variant="outline">Archived</Badge>}
                 </span>
                 <span className="flex shrink-0 gap-1.5" aria-hidden="true">
                   <span className="size-4" />

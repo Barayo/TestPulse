@@ -130,14 +130,6 @@ describe('ProjectsPage', () => {
     expect(screen.getByText('Sample')).toBeInTheDocument()
   })
 
-  // add-data-retention design.md D5: same slot/order as the Sample badge.
-  it('shows an "Archived" badge next to an archived project in expanded view', async () => {
-    mockProjectsList([project({ archived: true })])
-    renderPage()
-    await screen.findByText('Banca Móvil')
-    expect(screen.getByText('Archived')).toBeInTheDocument()
-  })
-
   it('shows no "Archived" badge for an active project in expanded view', async () => {
     mockProjectsList([project({ archived: false })])
     renderPage()
@@ -177,14 +169,6 @@ describe('ProjectsPage', () => {
     renderPage()
     await screen.findByText('Banca Móvil')
     expect(screen.getByText('mobile')).toBeInTheDocument()
-  })
-
-  it('shows an "Archived" badge next to an archived project in compact view', async () => {
-    window.localStorage.setItem('testpulse.projectListViewMode', 'compact')
-    mockProjectsList([project({ archived: true })])
-    renderPage()
-    await screen.findByText('Banca Móvil')
-    expect(screen.getByText('Archived')).toBeInTheDocument()
   })
 
   it('renders the project name clearly, not in the heavy page-title weight', async () => {
@@ -450,6 +434,74 @@ describe('ProjectsPage', () => {
       expect(screen.getByText('7 suites · 70 cases')).toBeInTheDocument()
       expect(screen.queryByText('A dense banking project')).not.toBeInTheDocument()
       expect(screen.queryByText(/created \d/i)).not.toBeInTheDocument()
+    })
+  })
+
+  // Pepe design review: archived projects move out of the main grid into
+  // their own collapsed-by-default section at the bottom, rather than
+  // sitting inline distinguished only by a badge (RunComparePage's
+  // "Unchanged · N" collapse idiom, reused verbatim here). The inline
+  // "Archived" badge is dropped for cards inside this section — the
+  // section header already says so, the same reasoning the Favorites
+  // section already uses to skip its own badge.
+  describe('archived projects section', () => {
+    it('excludes archived projects from the main "All projects" grid', async () => {
+      mockProjectsList([project({ id: 'active', name: 'Active One' }), project({ id: 'old', name: 'Old One', archived: true })])
+      renderPage()
+      await screen.findByText('Active One')
+      expect(screen.queryByText('Old One')).not.toBeInTheDocument()
+    })
+
+    it('shows a collapsed "Archived · N" toggle when archived projects exist', async () => {
+      mockProjectsList([project({ archived: true })])
+      renderPage()
+      const toggle = await screen.findByRole('button', { name: /expand archived/i })
+      expect(toggle).toHaveAttribute('aria-expanded', 'false')
+      expect(within(toggle).getByText('Archived · 1')).toBeInTheDocument()
+      // Collapsed: not yet in the DOM, not just visually hidden.
+      expect(screen.queryByText('Banca Móvil')).not.toBeInTheDocument()
+    })
+
+    it('renders no archived toggle when there are no archived projects', async () => {
+      mockProjectsList([project({ archived: false })])
+      renderPage()
+      await screen.findByText('Banca Móvil')
+      expect(screen.queryByRole('button', { name: /archived/i })).not.toBeInTheDocument()
+    })
+
+    it('expanding the toggle reveals archived projects without the inline "Archived" badge', async () => {
+      mockProjectsList([project({ archived: true })])
+      renderPage()
+      const toggle = await screen.findByRole('button', { name: /expand archived/i })
+      await userEvent.click(toggle)
+
+      expect(toggle).toHaveAttribute('aria-expanded', 'true')
+      expect(await screen.findByText('Banca Móvil')).toBeInTheDocument()
+      expect(screen.queryByText('Archived', { selector: 'span' })).not.toBeInTheDocument()
+    })
+
+    it('reuses the same expanded/compact card shape for archived projects', async () => {
+      mockProjectsList([project({ archived: true })], [summary({ suiteCount: 3, caseCount: 12 })])
+      renderPage()
+      await userEvent.click(await screen.findByRole('button', { name: /expand archived/i }))
+      expect(await screen.findByText('3')).toBeInTheDocument()
+      expect(screen.getByText('12')).toBeInTheDocument()
+    })
+
+    it('respects the search/status/tag filters for the archived count and content', async () => {
+      mockProjectsList([
+        project({ id: 'match', name: 'Matches Filter', archived: true }),
+        project({ id: 'nomatch', name: 'Filtered Out', archived: true }),
+      ])
+      renderPage()
+      await screen.findByRole('button', { name: /expand archived/i })
+      await userEvent.type(screen.getByPlaceholderText('Search projects'), 'Matches')
+
+      const toggle = await screen.findByRole('button', { name: /expand archived/i })
+      expect(within(toggle).getByText('Archived · 1')).toBeInTheDocument()
+      await userEvent.click(toggle)
+      expect(await screen.findByText('Matches Filter')).toBeInTheDocument()
+      expect(screen.queryByText('Filtered Out')).not.toBeInTheDocument()
     })
   })
 
