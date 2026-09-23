@@ -14,6 +14,7 @@ import { CustomFieldsCard } from '@/components/CustomFieldsCard'
 import { StepGroupsCard } from '@/components/StepGroupsCard'
 import { ReleasesSettingsCard } from '@/components/ReleasesSettingsCard'
 import { RequirementsSettingsCard } from '@/components/RequirementsSettingsCard'
+import { WebhooksCard } from '@/components/WebhooksCard'
 import type { components } from '@testpulse/shared/api'
 
 type LandingView = components['schemas']['LandingView']
@@ -170,6 +171,7 @@ export default function ProjectSettingsPage() {
       {projectKey && <CustomFieldsCard projectKey={projectKey} />}
       {projectKey && <ReleasesSettingsCard projectKey={projectKey} />}
       {projectKey && <RequirementsSettingsCard projectKey={projectKey} />}
+      {projectKey && <WebhooksCard projectKey={projectKey} />}
 
       <Card>
         <CardHeader>

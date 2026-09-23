@@ -72,6 +72,57 @@ setting stored in TestPulse's own database, not something the connector
 process (which the browser has no access to) can supply. Leaving it empty
 still shows a linked issue's key, just without a clickable link.
 
+## Webhooks
+
+Outbound webhooks (`add-run-notifications`) notify an external system —
+Slack, PagerDuty, or any endpoint you control — the moment a failure needs
+attention, instead of relying on someone checking a run manually.
+
+### Configuring a destination
+
+On a project's Settings page, a user with **Manage Project** permission (or
+a Tenant Admin) can add any number of webhook destinations under
+**Webhooks**, each a plain HTTPS URL. A Slack incoming-webhook URL works
+directly — Slack's own format is already a JSON POST, so there's no
+separate Slack-specific setup.
+
+The URL must be `https://` and may not point to `localhost` or a private,
+loopback, or link-local address (e.g. `127.0.0.0/8`, `10.0.0.0/8`,
+`172.16.0.0/12`, `192.168.0.0/16`, `169.254.0.0/16`) — this is enforced at
+configuration time to prevent the server from being used to reach internal
+infrastructure.
+
+### When it fires, and what it sends
+
+Every configured destination on a project receives every event; there is
+no per-destination event filtering. Two events exist today:
+
+- **`result.failed`** / **`result.blocked`** — a result is recorded with
+  that verdict.
+- **`run.closed`** — a run closes, regardless of its final pass rate.
+
+The JSON body is a small, stable envelope — not a dump of the underlying
+run/result — so it stays predictable even as those internal shapes evolve:
+
+```json
+{
+  "event": "result.failed",
+  "projectKey": "SP",
+  "entityKey": "SP-42",
+  "title": "Checkout completes with a valid card",
+  "timestamp": "2026-09-23T18:04:11Z"
+}
+```
+
+### Delivery is best-effort, not guaranteed
+
+A destination that's unreachable, slow, or returns a non-2xx response
+never blocks or fails the write that triggered it (recording a result,
+closing a run) — delivery uses a short bounded timeout and is simply
+dropped on failure. There is no retry, no backoff, and no delivery
+history/debugging view in this version — if a webhook silently stops
+receiving events, check the destination's own logs, not TestPulse's.
+
 ## TestRail importer
 
 > Independent, unofficial integration — not affiliated with, endorsed by,

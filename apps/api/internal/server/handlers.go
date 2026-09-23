@@ -59,6 +59,8 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/custom-fields", h.listCustomFields)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/custom-fields", h.createCustomField)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Put("/custom-fields/order", h.reorderCustomFields)
+			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Get("/webhooks", h.listWebhookDestinations)
+			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/webhooks", h.addWebhookDestination)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/step-groups", h.listStepGroups)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/step-groups", h.createStepGroup)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/imports", h.importResults)

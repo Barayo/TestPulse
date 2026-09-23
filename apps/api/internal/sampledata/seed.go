@@ -1010,6 +1010,14 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	// A seeded demo has no real externally-reachable destination to
+	// deliver to (add-run-notifications design.md D6) — this URL is a
+	// documented placeholder demonstrating the configuration UI only,
+	// never intended to actually receive a delivery.
+	if _, err := svc.AddWebhookDestination(ctx, p.ID, "https://example.com/webhooks/testpulse-demo"); err != nil {
+		return fmt.Errorf("sampledata: seeding webhook destination: %w", err)
+	}
+
 	if err := seedArchivedShowcase(ctx, svc); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}

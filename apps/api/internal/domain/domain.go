@@ -1711,6 +1711,17 @@ type ImportJob struct {
 	FinishedAt      *time.Time      `json:"finishedAt,omitempty"`
 }
 
+// WebhookDestination is a project-scoped outbound HTTPS URL notified on a
+// failed/blocked result or a run close (add-run-notifications). A project
+// may have any number of destinations; every one receives every event —
+// there is no per-destination event-type filtering in v1.
+type WebhookDestination struct {
+	ID        string    `json:"id"`
+	ProjectID string    `json:"projectId"`
+	URL       string    `json:"url"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // actorContextKey is unexported so only WithActor/ActorFromContext can set
 // or read the request's resolved Actor (design D1: resolved once by auth
 // middleware, threaded through context.Context like other request-scoped

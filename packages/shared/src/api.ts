@@ -859,6 +859,45 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/webhooks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a project's configured webhook destinations (add-run-notifications) */
+        get: operations["listWebhookDestinations"];
+        put?: never;
+        /** Configure a new webhook destination. Fires on a failed/blocked result and on run close; the URL must be https and may not point to a localhost, private, or link-local address. */
+        post: operations["addWebhookDestination"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/webhooks/{webhookId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove a webhook destination */
+        delete: operations["removeWebhookDestination"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/custom-fields/{fieldId}": {
         parameters: {
             query?: never;
@@ -3070,6 +3109,18 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        /** @description A project-scoped outbound webhook (add-run-notifications). Fires on a failed/blocked result or a run close; delivery is fire-and-forget and not retried on failure. */
+        WebhookDestination: {
+            id: string;
+            projectId: string;
+            url: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        WebhookDestinationInput: {
+            /** @description Must be https; may not point to localhost, a private, or a link-local address. */
+            url: string;
+        };
         CustomFieldInput: {
             name: string;
             fieldType: components["schemas"]["CustomFieldType"];
@@ -5257,6 +5308,75 @@ export interface operations {
                 content?: never;
             };
             409: components["responses"]["Conflict"];
+        };
+    };
+    listWebhookDestinations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Webhook destinations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDestination"][];
+                };
+            };
+        };
+    };
+    addWebhookDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WebhookDestinationInput"];
+            };
+        };
+        responses: {
+            /** @description Created destination */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebhookDestination"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+        };
+    };
+    removeWebhookDestination: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                webhookId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Removed */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     deleteCustomField: {

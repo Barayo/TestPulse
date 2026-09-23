@@ -1109,6 +1109,49 @@ paths:
       responses:
         "204": { description: Reordered }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/webhooks:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listWebhookDestinations
+      summary: List a project's configured webhook destinations (add-run-notifications)
+      tags: [webhooks]
+      responses:
+        "200":
+          description: Webhook destinations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WebhookDestination" }
+    post:
+      operationId: addWebhookDestination
+      summary: >-
+        Configure a new webhook destination. Fires on a failed/blocked
+        result and on run close; the URL must be https and may not point
+        to a localhost, private, or link-local address.
+      tags: [webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookDestinationInput" }
+      responses:
+        "201":
+          description: Created destination
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDestination" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/webhooks/{webhookId}:
+    parameters:
+      - { name: webhookId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: removeWebhookDestination
+      summary: Remove a webhook destination
+      tags: [webhooks]
+      responses:
+        "204": { description: Removed }
   /api/v1/custom-fields/{fieldId}:
     parameters:
       - { name: fieldId, in: path, required: true, schema: { type: string } }
@@ -3956,6 +3999,25 @@ components:
           items: { $ref: "#/components/schemas/CustomFieldOption" }
           description: Populated only for a `select` field, ordered by its admin-set position.
         createdAt: { type: string, format: date-time }
+    WebhookDestination:
+      type: object
+      required: [id, projectId, url, createdAt]
+      description: >-
+        A project-scoped outbound webhook (add-run-notifications). Fires
+        on a failed/blocked result or a run close; delivery is
+        fire-and-forget and not retried on failure.
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        url: { type: string }
+        createdAt: { type: string, format: date-time }
+    WebhookDestinationInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: Must be https; may not point to localhost, a private, or a link-local address.
     CustomFieldInput:
       type: object
       required: [name, fieldType]

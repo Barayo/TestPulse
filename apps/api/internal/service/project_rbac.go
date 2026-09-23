@@ -313,6 +313,10 @@ func (s *Service) ProjectIDForCustomField(ctx context.Context, fieldID string) (
 	return s.store.CustomFields.ProjectID(ctx, fieldID)
 }
 
+func (s *Service) ProjectIDForWebhook(ctx context.Context, webhookID string) (string, error) {
+	return s.store.Webhooks.ProjectID(ctx, webhookID)
+}
+
 func (s *Service) ProjectIDForRelease(ctx context.Context, releaseID string) (string, error) {
 	return s.store.Releases.ProjectID(ctx, releaseID)
 }

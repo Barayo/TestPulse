@@ -39,6 +39,7 @@ type Store struct {
 	StepGroups          *StepGroupRepo
 	Requirements        *RequirementRepo
 	ImportJobs          *ImportJobRepo
+	Webhooks            *WebhookRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -68,6 +69,7 @@ func New(pool *pgxpool.Pool) *Store {
 		StepGroups:          &StepGroupRepo{pool: pool},
 		Requirements:        &RequirementRepo{pool: pool},
 		ImportJobs:          &ImportJobRepo{pool: pool},
+		Webhooks:            &WebhookRepo{pool: pool},
 	}
 }
 

@@ -2098,3 +2098,39 @@ func TestSeedContentDemonstratesArchivedReadOnly(t *testing.T) {
 		t.Errorf("UpdateProject(archived showcase project) = %v, want ConflictError", err)
 	}
 }
+
+// TestSeedContentShowcasesWebhookDestinationConfiguration covers
+// add-run-notifications' Sample-Project-showcase task: one webhook
+// destination seeded against a clearly-fake, documented placeholder URL
+// (design.md D6) so the configuration UI is demonstrated on a fresh
+// instance — no claim of live delivery, since a seeded demo has no real
+// externally-reachable destination.
+func TestSeedContentShowcasesWebhookDestinationConfiguration(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	var p *domain.Project
+	for i := range projects {
+		if projects[i].IsSample {
+			p = &projects[i]
+		}
+	}
+	if p == nil {
+		t.Fatal("no sample project found")
+	}
+
+	destinations, err := svc.ListWebhookDestinations(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListWebhookDestinations: %v", err)
+	}
+	if len(destinations) != 1 {
+		t.Fatalf("webhook destinations = %d, want exactly 1", len(destinations))
+	}
+	if destinations[0].URL != "https://example.com/webhooks/testpulse-demo" {
+		t.Errorf("destination URL = %q, want the documented placeholder", destinations[0].URL)
+	}
+}

@@ -1455,6 +1455,17 @@ func (s *Service) CloseRun(ctx context.Context, runID string) error {
 		return err
 	}
 	s.audit(ctx, "close", "run", runID)
+	// Fires regardless of the run's final pass rate (design.md D-open-
+	// questions: resolved as "always fire" — a 100%-pass close is still
+	// useful go/no-go signal).
+	if run, err := s.store.Runs.Get(ctx, runID); err == nil {
+		go s.dispatchWebhooks(context.WithoutCancel(ctx), run.ProjectID, webhookEvent{
+			Event:     "run.closed",
+			EntityKey: run.Key,
+			Title:     run.Name,
+			Timestamp: time.Now(),
+		})
+	}
 	return nil
 }
 
@@ -1611,6 +1622,16 @@ func (s *Service) RecordResult(ctx context.Context, itemID string, res domain.Ne
 		}
 	}
 	s.audit(ctx, "record_result", "run_item", itemID)
+	if result.Verdict == domain.VerdictFailed || result.Verdict == domain.VerdictBlocked {
+		if projectID, caseKey, title, err := s.store.Runs.ItemSummary(ctx, itemID); err == nil {
+			go s.dispatchWebhooks(context.WithoutCancel(ctx), projectID, webhookEvent{
+				Event:     "result." + string(result.Verdict),
+				EntityKey: caseKey,
+				Title:     title,
+				Timestamp: time.Now(),
+			})
+		}
+	}
 	return result, nil
 }
 

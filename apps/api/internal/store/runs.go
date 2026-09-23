@@ -121,6 +121,26 @@ func (r *RunRepo) ItemProjectID(ctx context.Context, itemID string) (string, err
 	return projectID, err
 }
 
+// ItemSummary resolves a run item's project, case key, and title, joined
+// against its pinned case_version (not the case's current version — a
+// result reflects what was pinned at recording time, matching this
+// codebase's versioning philosophy) — used to build a webhook event's
+// entity key/title (add-run-notifications) without a full RunItem fetch.
+func (r *RunRepo) ItemSummary(ctx context.Context, itemID string) (projectID, caseKey, title string, err error) {
+	err = r.pool.QueryRow(ctx,
+		`SELECT tr.project_id, c.key, v.title
+		 FROM test_run_items tri
+		 JOIN test_runs tr ON tr.id = tri.run_id
+		 JOIN test_cases c ON c.id = tri.case_id
+		 JOIN test_case_versions v ON v.case_id = c.id AND v.version = tri.case_version
+		 WHERE tri.id = $1`, itemID,
+	).Scan(&projectID, &caseKey, &title)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return "", "", "", ErrNotFound
+	}
+	return projectID, caseKey, title, err
+}
+
 // ResultProjectID resolves the project a result belongs to, via its item and
 // run — used by requirePermission's per-resource resolver for the
 // /results/{resultId}/attachments routes (add-run-item-screenshot-
