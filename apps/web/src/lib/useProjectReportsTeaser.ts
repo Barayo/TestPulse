@@ -4,15 +4,17 @@ import { useDataRevision } from '@/lib/DataRevision'
 import type { components } from '@testpulse/shared/api'
 
 type Status = components['schemas']['Status']
+type FlakyCase = components['schemas']['FlakyCase']
 
 export type ProjectReportsTeaser = {
   total: number
   counts: Partial<Record<Status, number>>
   flakyCount: number
+  flakyCases: FlakyCase[]
   loaded: boolean
 }
 
-const empty: ProjectReportsTeaser = { total: 0, counts: {}, flakyCount: 0, loaded: false }
+const empty: ProjectReportsTeaser = { total: 0, counts: {}, flakyCount: 0, flakyCases: [], loaded: false }
 
 // The project landing page's Reports panel teaser: just enough data to
 // summarize "how is this project doing" without navigating away
@@ -49,10 +51,12 @@ export function useProjectReportsTeaser(
     )
       .then(([summaryRes, flakyRes]) => {
         if (cancelled) return
+        const flakyCases = (flakyRes.data ?? []).slice().sort((a, b) => b.rate - a.rate)
         setTeaser({
           total: summaryRes.data?.total ?? 0,
           counts: summaryRes.data?.counts ?? {},
-          flakyCount: flakyRes.data?.length ?? 0,
+          flakyCount: flakyCases.length,
+          flakyCases,
           loaded: true,
         })
       })

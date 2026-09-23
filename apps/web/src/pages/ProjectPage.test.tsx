@@ -487,6 +487,61 @@ describe('ProjectPage landing', () => {
     expect(screen.getByText(/2 flaky/i)).toBeInTheDocument()
   })
 
+  it('lists every flaky case when there are 3 or fewer, with no "see more" link', async () => {
+    mockProjectAPI({
+      flakyCases: [
+        { caseKey: 'p1-1', caseTitle: 'Flaky one', currentVersion: 1, rate: 30 },
+        { caseKey: 'p1-2', caseTitle: 'Flaky two', currentVersion: 1, rate: 80 },
+        { caseKey: 'p1-3', caseTitle: 'Flaky three', currentVersion: 1, rate: 50 },
+      ],
+    })
+    renderProject()
+    await screen.findByText('Reports')
+
+    const rows = await screen.findAllByRole('button', { name: /Flaky (one|two|three)/ })
+    expect(rows).toHaveLength(3)
+    expect(rows[0]).toHaveTextContent('Flaky two')
+    expect(rows[0]).toHaveTextContent('80%')
+    expect(rows[1]).toHaveTextContent('Flaky three')
+    expect(rows[2]).toHaveTextContent('Flaky one')
+    expect(screen.queryByRole('button', { name: /see (all|more)/i })).not.toBeInTheDocument()
+  })
+
+  it('truncates to the top 3 flaky cases with a "see more" link when there are more than 3', async () => {
+    mockProjectAPI({
+      flakyCases: [
+        { caseKey: 'p1-1', caseTitle: 'Flaky one', currentVersion: 1, rate: 10 },
+        { caseKey: 'p1-2', caseTitle: 'Flaky two', currentVersion: 1, rate: 90 },
+        { caseKey: 'p1-3', caseTitle: 'Flaky three', currentVersion: 1, rate: 50 },
+        { caseKey: 'p1-4', caseTitle: 'Flaky four', currentVersion: 1, rate: 70 },
+      ],
+    })
+    renderProject()
+    await screen.findByText('Reports')
+
+    const rows = await screen.findAllByRole('button', { name: /Flaky (one|two|three|four)/ })
+    expect(rows).toHaveLength(3)
+    expect(rows.map((r) => r.textContent)).not.toEqual(expect.arrayContaining([expect.stringContaining('Flaky one')]))
+    expect(screen.getByRole('button', { name: 'See all flaky cases' })).toHaveTextContent('see all 4')
+  })
+
+  it('clicking a flaky case row navigates to that case\'s detail page', async () => {
+    mockProjectAPI({
+      flakyCases: [{ caseKey: 'p1-1', caseTitle: 'Flaky one', currentVersion: 1, rate: 30 }],
+    })
+    renderWithRoutes(<Route path="/projects/:projectKey/cases/:caseKey" element={<div>case detail page stub</div>} />)
+    await userEvent.click(await screen.findByRole('button', { name: /Flaky one/ }))
+    expect(await screen.findByText('case detail page stub')).toBeInTheDocument()
+  })
+
+  it('shows no flaky-case rows or "see more" link when there are no flaky cases', async () => {
+    mockProjectAPI({ flakyCases: [] })
+    renderProject()
+    await screen.findByText('Reports')
+    expect(screen.queryByText(/flaky/i)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /see (all|more)/i })).not.toBeInTheDocument()
+  })
+
   it('the Reports panel links to the full Reports page, not "see all N"', async () => {
     mockProjectAPI()
     renderWithRoutes(<Route path="/projects/:projectKey/reports" element={<div>reports page stub</div>} />)

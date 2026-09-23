@@ -391,6 +391,30 @@ func TestSeedContentSurfacesAFlakyCase(t *testing.T) {
 	}
 }
 
+// TestSeedContentHasMoreThanThreeFlakyCases covers dashboard-flaky-cases-
+// list's showcase: the project landing page's Reports panel now truncates
+// its flaky-cases list to the top 3 with a "see more" affordance once
+// there are more than 3 — the Sample Project must have more than 3 to
+// actually demonstrate that truncation path, not just the untruncated one.
+func TestSeedContentHasMoreThanThreeFlakyCases(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	flaky, err := svc.FlakyCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("FlakyCases: %v", err)
+	}
+	if len(flaky) <= 3 {
+		t.Errorf("FlakyCases returned %d for the Sample Project, want more than 3 so the dashboard's \"see more\" truncation path is demonstrated", len(flaky))
+	}
+}
+
 // TestSeedContentShowcasesProjectWideStatusSummary covers
 // add-project-reports-page's showcase: the Sample Project's many seeded
 // runs (closed, open, imported) must aggregate into a real multi-status

@@ -351,8 +351,9 @@ export default function ProjectPage() {
           <ReportsPanel
             total={reportsTeaser.total}
             counts={reportsTeaser.counts}
-            flakyCount={reportsTeaser.flakyCount}
+            flakyCases={reportsTeaser.flakyCases}
             onOpenReports={() => navigate(`/projects/${projectKey}/reports`)}
+            onSelectFlakyCase={(caseKey) => navigate(`/projects/${projectKey}/cases/${caseKey}`)}
           />
         </div>
       )}

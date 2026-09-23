@@ -9,6 +9,9 @@ import type { components } from '@testpulse/shared/api'
 
 type Status = components['schemas']['Status']
 type ReleaseStatus = components['schemas']['ReleaseStatus']
+type FlakyCase = components['schemas']['FlakyCase']
+
+const FLAKY_ROWS_SHOWN = 3
 
 export function PanelShell({
   icon,
@@ -373,19 +376,27 @@ export function ReleasesPanel({
 // into the shared grid, and reuses PanelShell's header chrome directly but
 // not its isEmpty/children list body, which assumes <li> rows (add-project-
 // reports-page design.md D7). The action link always reads "Open Reports",
-// never "see all N ›" — this panel summarizes, it doesn't list.
+// never "see all N ›" — that still holds for the status-breakdown half. The
+// flaky-cases half is the one exception: it lists its top rows (already-
+// fetched data, previously discarded down to a count) with its own
+// "see more" affordance once there are more than it can show
+// (dashboard-flaky-cases-list).
 export function ReportsPanel({
   total,
   counts,
-  flakyCount,
+  flakyCases,
   onOpenReports,
+  onSelectFlakyCase,
 }: {
   total: number
   counts: Partial<Record<Status, number>>
-  flakyCount: number
+  flakyCases: FlakyCase[]
   onOpenReports: () => void
+  onSelectFlakyCase: (caseKey: string) => void
 }) {
   const passRate = total > 0 ? Math.round(((counts.pass ?? 0) / total) * 100) : null
+  const flakyCount = flakyCases.length
+  const visibleFlakyCases = flakyCases.slice(0, FLAKY_ROWS_SHOWN)
 
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
@@ -434,6 +445,34 @@ export function ReportsPanel({
           </span>
         )}
       </div>
+      {flakyCount > 0 && (
+        <ul aria-label="Flaky cases" className="border-t border-border">
+          {visibleFlakyCases.map((c) => (
+            <li key={c.caseKey} className="border-b border-border last:border-b-0">
+              <button
+                type="button"
+                className="flex w-full items-center gap-3 px-4 py-2 text-left text-sm hover:bg-accent"
+                onClick={() => onSelectFlakyCase(c.caseKey)}
+              >
+                <span className="min-w-0 flex-1 truncate font-medium text-foreground">{c.caseTitle}</span>
+                <span className="shrink-0 font-semibold tabular-nums text-destructive">{c.rate}%</span>
+              </button>
+            </li>
+          ))}
+          {flakyCount > FLAKY_ROWS_SHOWN && (
+            <li className="border-b-0">
+              <button
+                type="button"
+                aria-label="See all flaky cases"
+                onClick={onOpenReports}
+                className="w-full px-4 py-2 text-left text-xs font-semibold text-primary hover:underline"
+              >
+                see all {flakyCount} ›
+              </button>
+            </li>
+          )}
+        </ul>
+      )}
     </div>
   )
 }
