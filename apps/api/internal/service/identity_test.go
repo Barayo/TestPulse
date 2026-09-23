@@ -1502,6 +1502,123 @@ func TestDomainWritesRecordAuditEntries(t *testing.T) {
 	}
 }
 
+// TestProjectIDForAuditEntityResolvesEachEntityType covers
+// project-activity-feed's shared resolution helper (promoted from
+// middleware.go's projectIDFromAuditEntity switch, now also used at
+// audit-write time): each project-scoped entity type resolves to its
+// real owning project, "project" resolves to itself, and a tenant-level
+// entity type resolves to ErrNotFound rather than guessing.
+func TestProjectIDForAuditEntityResolvesEachEntityType(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "resolver@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Resolve Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Login", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatal(err)
+	}
+	run, err := s.CreateRun(ctx, project.ID, service.RunInput{Name: "Run 1", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		entityType string
+		entityID   string
+		want       string
+	}{
+		{"project", project.ID, project.ID},
+		{"case", c.ID, project.ID},
+		{"run", run.ID, project.ID},
+	}
+	for _, tc := range cases {
+		got, err := s.ProjectIDForAuditEntity(ctx, tc.entityType, tc.entityID)
+		if err != nil || got != tc.want {
+			t.Errorf("ProjectIDForAuditEntity(%q, %q) = %q, %v; want %q, nil", tc.entityType, tc.entityID, got, err, tc.want)
+		}
+	}
+
+	if _, err := s.ProjectIDForAuditEntity(ctx, "user", admin.ID); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("ProjectIDForAuditEntity(%q, ...) error = %v, want ErrNotFound", "user", err)
+	}
+}
+
+// TestAuditRecordsProjectIDForProjectScopedEntities covers
+// project-activity-feed's write-time project_id population: a write to a
+// project-scoped entity records the right owning project on its audit
+// entry; a write to a tenant-level entity (no owning project) records no
+// project association, rather than failing the write or guessing one.
+func TestAuditRecordsProjectIDForProjectScopedEntities(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "projid@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "ProjectID Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := s.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Login", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err := s.AuditHistory(ctx, "case", c.ID)
+	if err != nil || len(history) != 1 || history[0].ProjectID != project.ID {
+		t.Errorf("case audit history = %+v, %v; want one entry with ProjectID %q", history, err, project.ID)
+	}
+
+	other, err := s.CreateUser(ctx, "tenanttarget@example.com", "correcthorse", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	history, err = s.AuditHistory(ctx, "user", other.ID)
+	if err != nil || len(history) != 1 || history[0].ProjectID != "" {
+		t.Errorf("user audit history = %+v, %v; want one entry with empty ProjectID", history, err)
+	}
+}
+
+// TestProjectActivity covers project-activity-feed's service-layer
+// entry point backing the dashboard Activity panel: only the requested
+// project's entries come back, newest first, capped to the limit.
+func TestProjectActivity(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "activity@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	project, err := s.CreateProject(ctx, service.ProjectInput{Name: "Activity Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	other, err := s.CreateProject(ctx, service.ProjectInput{Name: "Other Project"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := s.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Case", Priority: domain.PriorityMedium}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := s.CreateCase(ctx, other.ID, "", domain.CaseContent{Title: "Other case", Priority: domain.PriorityMedium}); err != nil {
+		t.Fatal(err)
+	}
+
+	entries, err := s.ProjectActivity(ctx, project.ID, 2)
+	if err != nil {
+		t.Fatalf("ProjectActivity: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Fatalf("ProjectActivity returned %d entries, want 2 (capped)", len(entries))
+	}
+	for _, e := range entries {
+		if e.ProjectID != project.ID {
+			t.Errorf("entry %+v belongs to a different project than requested", e)
+		}
+	}
+}
+
 func TestMoveCaseAuditEntryRecordsFromAndTo(t *testing.T) {
 	s := testService(t)
 	admin := mustCreateUser(t, s, "mover@example.com", "correcthorse", true)

@@ -1,0 +1,42 @@
+## Context
+
+The originating GitHub issue (#201) assumed this was "no new concept, just a new query shape, since the data is already fully populated." Verified against the actual code and that assumption is wrong: `audit_log` (migration `00001_baseline.sql`) has no `project_id` column and no index beyond its primary key. `entity_type` spans both project-scoped entities (case, suite, run, run_item, folder, release, test_plan, attachment) and tenant-level ones with no owning project at all (user, team, role, instance_settings, api_token) — so a project feed genuinely needs new schema, not just a new `WHERE` clause.
+
+The existing single-entity `GET /api/v1/audit` endpoint already solves "what project does this entity belong to" at *read* time, via `middleware.go`'s `projectIDFromAuditEntity` — a switch over `entityType` calling per-type `Service.ProjectIDFor*` methods. This design reuses that same resolution logic at *write* time instead (inside `audit()`), and refactors the read-time switch to call the same new shared helper — a de-duplication of logic that currently only exists in the HTTP middleware layer, not a second copy of it.
+
+## Goals / Non-Goals
+
+**Goals:**
+- A project-scoped, recency-ordered, limit-capped audit query, backing a small dashboard teaser panel (5 rows) — not a full activity page.
+- `project_id` populated automatically for every future project-scoped write, no call-site changes needed at any of the 93 existing `s.audit(...)` sites.
+- Sample Project demonstrates both human- and agent-originated entries.
+
+**Non-Goals:**
+- Backfilling `project_id` on existing (pre-migration) audit rows — see Decisions.
+- A full, paginated "Activity" page — only the 5-row dashboard panel, matching Pepe's original scope exactly. A "see more" link to a dedicated page is future scope if ever wanted.
+- Distinguishing MCP-originated writes from REST-originated ones in the feed — a separate, already-identified gap (noted in the `mcp-admin-discoverability-card` change's design.md), not solved here.
+
+## Decisions
+
+**Add a nullable `project_id` column + index, no backfill of historical rows.** `ALTER TABLE audit_log ADD COLUMN project_id text; CREATE INDEX ... ON audit_log (project_id, occurred_at DESC);` — nullable because tenant-level entries (user, team, role, instance_settings, api_token) never get one, by design, not by omission. **Explicitly not backfilling existing rows**: doing so would require, per historical row, re-deriving its owning project via the same per-entity-type lookups this design already does at write time — for *every* row in a potentially real, populated `audit_log` table (including `testpulse.fly.dev`'s), including rows whose referenced entity may since have been deleted (a case's own audit trail outlives the case, by design — D5 in the original audit-log capability). That's real risk (a slow/locking migration on a live table, or asymmetric partial success) for a dashboard teaser feature. Accepted trade-off: the Activity panel's history effectively starts at this change's ship date. Not a silent gap — stated here and in the spec.
+
+**Write-time resolution reuses (not duplicates) the existing `projectIDFromAuditEntity` switch, promoted to a new `Service.ProjectIDForAuditEntity(ctx, entityType, entityID) (string, error)` method.** `audit()` currently lives at `identity.go:795-813`, a service method with no access to the HTTP-layer switch in `middleware.go`. Rather than copy the switch into the service layer (a second copy of the same 8-case logic, the exact kind of avoidable duplication Jose flagged earlier this session for `HealthBadge`'s `mcpEnabled`), the switch moves to the service layer as a proper method, and `middleware.go`'s `projectIDFromAuditEntity` becomes a thin call-through: `return h.svc.ProjectIDForAuditEntity(r.Context(), entityType, entityID)`. Both the write path (`audit()`) and the existing single-entity read endpoint's permission gate now share one implementation.
+
+**`audit()`'s project-ID resolution is best-effort, matching its existing error-swallowing convention.** `audit()` already discards `Append`'s error (`_ = s.store.Audit.Append(...)`) — it must never fail or block the write it's recording. `ProjectIDForAuditEntity` returning `store.ErrNotFound` (tenant-level entity types) or any other error simply leaves `ProjectID` unset (`""`, stored as SQL `NULL`) rather than propagating. This is not a new risk class — `audit()` already tolerates missing actor context the same way (`if !ok { return }`).
+
+**New endpoint mirrors `flaky-cases`'/`runs/status-summary`'s exact dual-mount shape**, not a new pattern: `GET /api/v1/projects/{projectKey}/audit` under `requirePermission(domain.PermRead, projectIDParam)`, `GET /api/v1/public/projects/{projectKey}/audit` under `requirePublicProject(projectIDParam)`, both calling one handler, one `Service.ProjectActivity(ctx, projectID, limit)` method, one `AuditRepo.ListByProject(ctx, projectID, limit)` query (`SELECT ... WHERE project_id = $1 ORDER BY occurred_at DESC LIMIT $2`, using the new index). `limit` is a simple integer query param (not cursor pagination — this is a bounded teaser query, not a paginated list), capped server-side the same way other bounded reads in this codebase clamp their limit (see `clampLimit` used elsewhere in `store/runs.go`).
+
+**Panel placement: own full-width row below Reports**, matching Reports' own established precedent (`ui-navigation` spec's existing "Reports panel is a fourth, full-width row below the other three" scenario) rather than squeezing a fifth item into the existing 3-column grid, which would crowd it and mismatch every panel's current sizing assumptions.
+
+**Row content: actor name + kind, action, relative time — no entity-type-specific verb library.** A generic `"{actorName} {action} {entityType} {entityKey-or-id}"`-shaped line (e.g. "Sam updated case SP-14" / "ci-pipeline imported results") is sufficient for a glanceable teaser; a full human-readable-per-action-type verb mapping (matching `AuditHistory`'s dialog treatment) is real scope creep for a 5-row panel and not attempted here.
+
+**Seed: attribute the JUnit-import write to a new agent actor.** `seed.go` currently has zero `ActorKindAgent` actors; the existing "ci-pipeline" API token (`seed.go:134`) is created but never used to author a write. Constructing an agent `Actor` context for the JUnit-import call (`Import(...)`, already thematically CI-flavored) and using it there demonstrates the human/agent distinction the Activity panel exists to show, without inventing new seed content.
+
+## Risks / Trade-offs
+
+- [Risk] No backfill means the Activity panel looks emptier than the "true" history on any instance upgraded from before this change, for a while. → Mitigation: none needed — the panel already handles "loaded, zero entries" as an ordinary empty state (same as every sibling panel); this is a temporary, self-healing condition as new writes accumulate, not a permanent gap.
+- [Risk] `ProjectIDForAuditEntity` runs one extra query per audited write (to resolve the owning project), on top of the `Append` insert — a real, if small, per-write cost added to 93 call sites. → Mitigation: accepted — every one of those 93 call sites already does at least one write of its own (the mutation being audited) plus the existing unconditional `Append`; one more small lookup is proportionate, and most call sites' entity types are already loaded/known in-memory at the call site in practice (a future optimization could pass a pre-resolved project ID instead of re-deriving it from just `entityType`+`entityID`, but that would touch all 93 call sites — explicitly out of scope for this change).
+
+## Migration Plan
+
+New incremental migration `apps/api/internal/db/migrations/000XX_audit_log_project_id.sql` (goose, `-- +goose Up`/`-- +goose Down`, per this project's permanent incremental-migration policy — never edited once shipped). `Up`: `ALTER TABLE audit_log ADD COLUMN project_id text;` + `CREATE INDEX audit_log_project_id_occurred_at_idx ON audit_log (project_id, occurred_at DESC);`. `Down`: drop the index, drop the column. No data migration, no backfill (see Decisions). Safe on a live table — an additive nullable column plus a new index are both non-blocking, non-breaking changes; existing rows simply read as `project_id IS NULL` until touched by a future write to the same entity, which is a non-issue since audit rows are never updated (append-only, per the existing `audit-log` capability's own invariant).

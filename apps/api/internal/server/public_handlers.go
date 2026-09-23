@@ -50,6 +50,7 @@ func mountPublicAPI(r chi.Router, h *api) {
 			r.With(h.requirePublicProject(projectIDParam)).Get("/suites", h.listSuites)
 			r.With(h.requirePublicProject(projectIDParam)).Get("/runs", h.listRuns)
 			r.With(h.requirePublicProject(projectIDParam)).Get("/runs/status-summary", h.projectStatusSummary)
+			r.With(h.requirePublicProject(projectIDParam)).Get("/audit", h.projectActivity)
 			r.With(h.requirePublicProject(projectIDParam)).Get("/custom-fields", h.listCustomFields)
 		})
 		r.Route("/cases/{caseKey}", func(r chi.Router) {

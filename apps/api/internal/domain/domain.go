@@ -1621,6 +1621,10 @@ type AuditEntry struct {
 	Action     string         `json:"action"`
 	EntityType string         `json:"entityType"`
 	EntityID   string         `json:"entityId"`
+	// ProjectID is the entity's owning project (project-activity-feed),
+	// resolved automatically at write time. Empty for entity types with
+	// no owning project (user, team, role, instance_settings, api_token).
+	ProjectID  string         `json:"projectId,omitempty"`
 	OccurredAt time.Time      `json:"occurredAt"`
 	Detail     map[string]any `json:"detail,omitempty"`
 }

@@ -50,6 +50,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs", h.listRuns)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/runs", h.createRun)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/runs/status-summary", h.projectStatusSummary)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/audit", h.projectActivity)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/releases", h.listReleases)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/releases", h.createRelease)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/plans", h.listTestPlansByProject)
@@ -940,6 +941,15 @@ func (h *api) flakyCases(w http.ResponseWriter, r *http.Request) {
 func (h *api) projectStatusSummary(w http.ResponseWriter, r *http.Request) {
 	sum, err := h.svc.ProjectStatusSummary(r.Context(), resolvedID(r, "projectKey"))
 	h.respond(w, http.StatusOK, sum, err)
+}
+
+// projectActivity backs the dashboard Activity panel (project-activity-feed)
+// — a bounded "last N" teaser, not cursor-paginated, so it only reuses
+// parsePageParams' limit-parsing/clamping half.
+func (h *api) projectActivity(w http.ResponseWriter, r *http.Request) {
+	_, limit := parsePageParams(r)
+	entries, err := h.svc.ProjectActivity(r.Context(), resolvedID(r, "projectKey"), limit)
+	h.respond(w, http.StatusOK, entries, err)
 }
 
 // --- Items ---

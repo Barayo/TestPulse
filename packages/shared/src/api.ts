@@ -476,6 +476,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /**
+         * A project's most recent audited writes, newest first (project-activity-feed)
+         * @description Backs the dashboard Activity panel — a bounded teaser, not a full paginated history. Only entries for entity types with an owning project appear; entries recorded before this endpoint shipped have no project association and never appear here (no backfill).
+         */
+        get: operations["listProjectActivity"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/suites": {
         parameters: {
             query?: never;
@@ -1479,6 +1501,25 @@ export interface paths {
         };
         /** List every currently-flaky case in a public project */
         get: operations["listPublicFlakyCases"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/projects/{projectKey}/audit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** A public project's most recent audited writes, newest first (project-activity-feed) */
+        get: operations["listPublicProjectActivity"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3423,8 +3464,11 @@ export interface components {
             projectId?: string;
             roleId?: string;
         };
-        /** @enum {string} */
-        ActorKind: "user" | "agent";
+        /**
+         * @description "system" attributes an audit entry to an unattended background process (e.g. the automatic run-retention or project-archiving sweep) rather than a resolved request-time actor (project-activity-feed) — the schema previously only listed user/agent even though domain.ActorKindSystem has existed since add-data-retention; fixed here since the Activity panel is the first UI consumer that needs to distinguish it correctly.
+         * @enum {string}
+         */
+        ActorKind: "user" | "agent" | "system";
         AuditEntry: {
             id: string;
             actorKind: components["schemas"]["ActorKind"];
@@ -3433,6 +3477,8 @@ export interface components {
             action: string;
             entityType: string;
             entityId: string;
+            /** @description The entity's owning project, resolved at write time (project-activity-feed). Omitted for entity types with no owning project (user, team, role, instance_settings, api_token), and for entries recorded before this field existed (no backfill). */
+            projectId?: string;
             /** Format: date-time */
             occurredAt: string;
             /** @description Optional structured before/after detail, shape varies by action (e.g. move: {from, to}; restore: {restoredFrom, newVersion}). Omitted when an action carries no extra detail. */
@@ -4383,6 +4429,31 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FlakyCase"][];
+                };
+            };
+        };
+    };
+    listProjectActivity: {
+        parameters: {
+            query?: {
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent audit entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntry"][];
                 };
             };
         };
@@ -6358,6 +6429,32 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["FlakyCase"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listPublicProjectActivity: {
+        parameters: {
+            query?: {
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Recent audit entries */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEntry"][];
                 };
             };
             404: components["responses"]["NotFound"];

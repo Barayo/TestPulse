@@ -66,6 +66,7 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
     ? '/api/v1/public/projects/{projectKey}/runs/status-summary'
     : '/api/v1/projects/{projectKey}/runs/status-summary'
   const flakyCasesPath = anonymous ? '/api/v1/public/projects/{projectKey}/flaky-cases' : '/api/v1/projects/{projectKey}/flaky-cases'
+  const activityPath = anonymous ? '/api/v1/public/projects/{projectKey}/audit' : '/api/v1/projects/{projectKey}/audit'
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me')
       return anonymous
@@ -122,6 +123,8 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
       })
     if (path === flakyCasesPath)
       return Promise.resolve({ data: overrides.flakyCases ?? [], response: { ok: true } })
+    if (path === activityPath)
+      return Promise.resolve({ data: overrides.activity ?? [], response: { ok: true } })
     if (!anonymous && path === '/api/v1/projects/{projectKey}/releases')
       return Promise.resolve({ data: overrides.releases ?? [], response: { ok: true } })
     if (path === '/api/v1/releases/{releaseKey}/rollup')
@@ -576,6 +579,40 @@ describe('ProjectPage landing', () => {
     renderProject()
     await screen.findByText('Reports')
     expect(screen.queryByLabelText('Pass rate trend')).not.toBeInTheDocument()
+  })
+
+  it('shows up to 5 activity entries, actor, action, and relative time', async () => {
+    mockProjectAPI({
+      activity: [
+        { id: 'a1', actorKind: 'user', actorId: 'u1', actorName: 'Sam', action: 'update', entityType: 'case', entityId: 'p1-1', occurredAt: new Date(Date.now() - 8 * 60_000).toISOString() },
+        { id: 'a2', actorKind: 'agent', actorId: 't1', actorName: 'ci-pipeline', action: 'create', entityType: 'run', entityId: 'p1-R1', occurredAt: new Date(Date.now() - 2 * 3600_000).toISOString() },
+      ],
+    })
+    renderProject()
+    const activity = await screen.findByLabelText('Activity')
+    expect(await within(activity).findByText(/Sam/)).toBeInTheDocument()
+    expect(within(activity).getByText(/ci-pipeline/)).toBeInTheDocument()
+    expect(within(activity).getByText(/8 minutes ago/)).toBeInTheDocument()
+  })
+
+  it('visually distinguishes an agent-authored entry from a human-authored one', async () => {
+    mockProjectAPI({
+      activity: [
+        { id: 'a1', actorKind: 'user', actorId: 'u1', actorName: 'Sam', action: 'update', entityType: 'case', entityId: 'p1-1', occurredAt: '2026-01-01T00:00:00Z' },
+        { id: 'a2', actorKind: 'agent', actorId: 't1', actorName: 'ci-pipeline', action: 'create', entityType: 'run', entityId: 'p1-R1', occurredAt: '2026-01-01T00:00:00Z' },
+      ],
+    })
+    renderProject()
+    const activity = await screen.findByLabelText('Activity')
+    expect(await within(activity).findByLabelText('Human')).toBeInTheDocument()
+    expect(within(activity).getByLabelText('Agent')).toBeInTheDocument()
+  })
+
+  it('shows an empty state, not an error, for a project with no recent activity', async () => {
+    mockProjectAPI({ activity: [] })
+    renderProject()
+    const activity = await screen.findByLabelText('Activity')
+    expect(within(activity).getByText(/no recent activity/i)).toBeInTheDocument()
   })
 
   it('the Reports panel links to the full Reports page, not "see all N"', async () => {

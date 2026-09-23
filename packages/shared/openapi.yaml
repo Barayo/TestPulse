@@ -629,6 +629,28 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/FlakyCase" }
+  /api/v1/projects/{projectKey}/audit:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listProjectActivity
+      summary: A project's most recent audited writes, newest first (project-activity-feed)
+      description: >-
+        Backs the dashboard Activity panel — a bounded teaser, not a full
+        paginated history. Only entries for entity types with an owning
+        project appear; entries recorded before this endpoint shipped have
+        no project association and never appear here (no backfill).
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Recent audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
   /api/v1/projects/{projectKey}/suites:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -1850,6 +1872,24 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/FlakyCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/audit:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicProjectActivity
+      summary: A public project's most recent audited writes, newest first (project-activity-feed)
+      tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Recent audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/projects/{projectKey}/suites:
     parameters:
@@ -4625,7 +4665,15 @@ components:
         roleId: { type: string }
     ActorKind:
       type: string
-      enum: [user, agent]
+      enum: [user, agent, system]
+      description: >-
+        "system" attributes an audit entry to an unattended background
+        process (e.g. the automatic run-retention or project-archiving
+        sweep) rather than a resolved request-time actor
+        (project-activity-feed) — the schema previously only listed
+        user/agent even though domain.ActorKindSystem has existed since
+        add-data-retention; fixed here since the Activity panel is the
+        first UI consumer that needs to distinguish it correctly.
     AuditEntry:
       type: object
       required: [id, actorKind, actorId, actorName, action, entityType, entityId, occurredAt]
@@ -4637,6 +4685,14 @@ components:
         action: { type: string }
         entityType: { type: string }
         entityId: { type: string }
+        projectId:
+          type: string
+          description: >-
+            The entity's owning project, resolved at write time
+            (project-activity-feed). Omitted for entity types with no
+            owning project (user, team, role, instance_settings,
+            api_token), and for entries recorded before this field
+            existed (no backfill).
         occurredAt: { type: string, format: date-time }
         detail:
           type: object

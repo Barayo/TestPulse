@@ -801,6 +801,10 @@ func (s *Service) audit(ctx context.Context, action, entityType, entityID string
 	if len(detail) > 0 {
 		d = detail[0]
 	}
+	// Best-effort: a resolution failure (e.g. entityType has no owning
+	// project) must never block the write being audited, matching this
+	// function's existing tolerance for missing actor context above.
+	projectID, _ := s.ProjectIDForAuditEntity(ctx, entityType, entityID)
 	_ = s.store.Audit.Append(ctx, domain.AuditEntry{
 		ActorKind:  actor.Kind,
 		ActorID:    actor.ID,
@@ -808,10 +812,50 @@ func (s *Service) audit(ctx context.Context, action, entityType, entityID string
 		Action:     action,
 		EntityType: entityType,
 		EntityID:   entityID,
+		ProjectID:  projectID,
 		Detail:     d,
 	})
 }
 
 func (s *Service) AuditHistory(ctx context.Context, entityType, entityID string) ([]domain.AuditEntry, error) {
 	return s.store.Audit.ListByEntity(ctx, entityType, entityID)
+}
+
+// ProjectActivity returns a project's most recent audit entries, newest
+// first, capped to limit — backs the dashboard Activity panel
+// (project-activity-feed).
+func (s *Service) ProjectActivity(ctx context.Context, projectID string, limit int) ([]domain.AuditEntry, error) {
+	return s.store.Audit.ListByProject(ctx, projectID, limit)
+}
+
+// ProjectIDForAuditEntity resolves an audit entry's owning project from its
+// entity type and ID (project-activity-feed) — the single source of truth
+// for "what project does this audit entry belong to," reused both to
+// authorize a per-entity audit history request (server/middleware.go) and
+// to populate project_id at write time (audit(), below). Entity types with
+// no owning project (user, team, role, instance_settings, api_token) return
+// store.ErrNotFound.
+func (s *Service) ProjectIDForAuditEntity(ctx context.Context, entityType, entityID string) (string, error) {
+	switch entityType {
+	case "project":
+		return entityID, nil
+	case "case":
+		return s.ProjectIDForCase(ctx, entityID)
+	case "suite":
+		return s.ProjectIDForSuite(ctx, entityID)
+	case "run":
+		return s.ProjectIDForRun(ctx, entityID)
+	case "run_item":
+		return s.ProjectIDForItem(ctx, entityID)
+	case "folder":
+		return s.ProjectIDForFolder(ctx, entityID)
+	case "release":
+		return s.ProjectIDForRelease(ctx, entityID)
+	case "test_plan":
+		return s.ProjectIDForTestPlan(ctx, entityID)
+	case "attachment":
+		return s.ProjectIDForAttachment(ctx, entityID)
+	default:
+		return "", store.ErrNotFound
+	}
 }

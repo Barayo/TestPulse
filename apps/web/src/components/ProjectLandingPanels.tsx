@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { FolderIcon, LayersIcon, CirclePlayIcon, ChevronRightIcon, BarChartIcon, PackageIcon } from 'lucide-react'
+import { FolderIcon, LayersIcon, CirclePlayIcon, ChevronRightIcon, BarChartIcon, PackageIcon, ActivityIcon, BotIcon, UserIcon } from 'lucide-react'
 import type { LandingFolder, LandingSuite, LandingRun } from '@/lib/useProjectLanding'
 import { HealthBar, StatusPill, healthColorVar, statusBorderClass } from '@/components/HealthBar'
 import { ReleaseStatusBadge } from '@/components/ReleaseStatusBadge'
@@ -10,6 +10,7 @@ import type { components } from '@testpulse/shared/api'
 type Status = components['schemas']['Status']
 type ReleaseStatus = components['schemas']['ReleaseStatus']
 type FlakyCase = components['schemas']['FlakyCase']
+type AuditEntry = components['schemas']['AuditEntry']
 
 const FLAKY_ROWS_SHOWN = 3
 
@@ -486,6 +487,51 @@ export function ReportsPanel({
           )}
         </ul>
       )}
+    </div>
+  )
+}
+
+// A fifth, full-width row below Reports (project-activity-feed), same
+// precedent as Reports itself: not squeezed into the 3-column grid. A
+// teaser only — no "see all"/full page yet (out of scope, see design.md).
+export function ActivityPanel({ entries }: { entries: AuditEntry[] }) {
+  return (
+    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+      <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+        <span className="flex items-center gap-2 text-sm font-bold text-foreground">
+          <span className="text-primary">
+            <ActivityIcon className="size-4" aria-hidden="true" />
+          </span>
+          Activity
+        </span>
+      </div>
+      <ul aria-label="Activity">
+        {entries.length === 0 ? (
+          <li className="px-4 py-3 text-sm text-muted-foreground">No recent activity.</li>
+        ) : (
+          entries.map((e) => (
+            <li key={e.id} className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm last:border-b-0">
+              <span
+                className="text-muted-foreground"
+                aria-label={e.actorKind === 'agent' ? 'Agent' : e.actorKind === 'system' ? 'System' : 'Human'}
+              >
+                {e.actorKind === 'agent' ? (
+                  <BotIcon className="size-4" aria-hidden="true" />
+                ) : (
+                  <UserIcon className="size-4" aria-hidden="true" />
+                )}
+              </span>
+              <span className="min-w-0 flex-1 truncate">
+                <span className="font-semibold text-foreground">{e.actorName}</span>{' '}
+                <span className="text-muted-foreground">
+                  {e.action} {e.entityType} {e.entityId}
+                </span>
+              </span>
+              <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(e.occurredAt)}</span>
+            </li>
+          ))
+        )}
+      </ul>
     </div>
   )
 }

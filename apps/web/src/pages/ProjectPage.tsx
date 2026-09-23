@@ -3,11 +3,12 @@ import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import { FoldersPanel, SuitesPanel, RunsPanel, ReportsPanel, ReleasesPanel, type LandingRelease } from '@/components/ProjectLandingPanels'
+import { FoldersPanel, SuitesPanel, RunsPanel, ReportsPanel, ActivityPanel, ReleasesPanel, type LandingRelease } from '@/components/ProjectLandingPanels'
 import { HealthRing, StatusPill } from '@/components/HealthBar'
 import { useProjectLanding } from '@/lib/useProjectLanding'
 import { useProjectReportsTeaser } from '@/lib/useProjectReportsTeaser'
 import { useRunPassRateHistory } from '@/lib/useRunPassRateHistory'
+import { useProjectActivity } from '@/lib/useProjectActivity'
 import { useProjectSummaries, type ProjectSummary } from '@/lib/useProjectSummaries'
 import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
 import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
@@ -60,6 +61,7 @@ export default function ProjectPage() {
   const landing = useProjectLanding(projectKey, access === 'member', access === 'loading')
   const reportsTeaser = useProjectReportsTeaser(projectKey, access === 'member', access === 'loading')
   const passRateHistory = useRunPassRateHistory(projectKey, access === 'member', access === 'loading')
+  const activity = useProjectActivity(projectKey, access === 'member', access === 'loading')
   const summaries = useProjectSummaries()
   // No public equivalent exists for the batched /api/v1/projects/summaries
   // aggregate (unify-authenticated-and-public-views design.md D2), so a
@@ -358,6 +360,7 @@ export default function ProjectPage() {
             onOpenReports={() => navigate(`/projects/${projectKey}/reports`)}
             onSelectFlakyCase={(caseKey) => navigate(`/projects/${projectKey}/cases/${caseKey}`)}
           />
+          <ActivityPanel entries={activity.entries} />
         </div>
       )}
     </div>

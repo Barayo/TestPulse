@@ -415,6 +415,44 @@ func TestSeedContentHasMoreThanThreeFlakyCases(t *testing.T) {
 	}
 }
 
+// TestSeedContentActivityShowsBothHumanAndAgentActors covers
+// project-activity-feed's showcase: the dashboard Activity panel exists to
+// distinguish human- from agent-originated writes, so the Sample Project's
+// recent activity must actually contain both, not just human entries.
+func TestSeedContentActivityShowsBothHumanAndAgentActors(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	// limit 5 matches ActivityPanel's real teaser size (useProjectActivity.ts),
+	// not just some generous window — the showcase must hold within what a
+	// user actually sees.
+	activity, err := svc.ProjectActivity(actorCtx, p.ID, 5)
+	if err != nil {
+		t.Fatalf("ProjectActivity: %v", err)
+	}
+	var hasUser, hasAgent bool
+	for _, e := range activity {
+		if e.ActorKind == domain.ActorKindUser {
+			hasUser = true
+		}
+		if e.ActorKind == domain.ActorKindAgent {
+			hasAgent = true
+		}
+	}
+	if !hasUser {
+		t.Error("Sample Project's recent activity has no human-authored entry")
+	}
+	if !hasAgent {
+		t.Error("Sample Project's recent activity has no agent-authored entry")
+	}
+}
+
 // TestSeedContentShowcasesProjectWideStatusSummary covers
 // add-project-reports-page's showcase: the Sample Project's many seeded
 // runs (closed, open, imported) must aggregate into a real multi-status

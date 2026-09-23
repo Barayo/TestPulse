@@ -868,7 +868,17 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// behavior). Named like CI's dogfood report step names its own imports
 	// (collapse-duplicate-ci-runs) — the run is created closed, demonstrating
 	// the fixed import behavior rather than the old
-	// mislabeled-and-stuck-open bug.
+	// mislabeled-and-stuck-open bug. Attributed to an agent actor, not the
+	// admin (project-activity-feed) — the "ci-pipeline" token already
+	// exists (below) but was never actually used to author a write; this
+	// is the one write in the whole seed script an agent, not a human,
+	// makes, so the dashboard Activity panel has a real agent entry to
+	// show alongside the human ones.
+	agentActor := domain.Actor{
+		ID: "ci-pipeline", Kind: domain.ActorKindAgent, DisplayName: "ci-pipeline",
+		EffectiveUserID: admin.ID, IsTenantAdmin: admin.IsTenantAdmin,
+	}
+	agentCtx := domain.WithActor(ctx, agentActor)
 	report := fmt.Sprintf(`<testsuites><testsuite name="CI pipeline">`+
 		`<testcase name="test_login_valid_credentials" time="0.8">`+
 		`<properties>`+
@@ -897,7 +907,7 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		`</properties>`+
 		`</testcase>`+
 		`</testsuite></testsuites>`, login.Key, checkoutValid.Key, timezone.Key, p.Key)
-	if _, err := svc.Import(ctx, p.ID, service.ImportInput{
+	if _, err := svc.Import(agentCtx, p.ID, service.ImportInput{
 		Format: "junit-xml",
 		Name:   "main @ a1b2c3d — fix(web): recenter the Confucius avatar crop for the circular mask",
 		Report: report,
@@ -920,9 +930,15 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// pass/fail. login was already flaky before this change (mixed
 	// pass/failed on its one and only version), so this doesn't change
 	// that signal — it only adds a color.
+	// timezone is otherwise consistently passing (Android regression plan,
+	// the Nightly suite, the CI import above) — one failure here, on its
+	// one and only version, makes it a fourth flaky case (dashboard-flaky-
+	// cases-list), so the dashboard Reports panel's "see more" truncation
+	// (shown once there are more than 3) is demonstrated on the Sample
+	// Project itself, not just in tests.
 	scratchRunName := "Scratch run — safe to delete"
 	if err := RunWithVerdicts(ctx, svc, p.ID, scratchRunName,
-		[]string{login.ID}, []domain.Verdict{domain.VerdictBlocked}); err != nil {
+		[]string{login.ID, timezone.ID}, []domain.Verdict{domain.VerdictBlocked, domain.VerdictFailed}); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 	scratchRun, err := runByName(ctx, svc, p.ID, scratchRunName)
@@ -984,7 +1000,13 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	}
 	checkoutValidContent := checkoutValid.Content
 	checkoutValidContent.CustomFields = map[string]string{automationOwner.ID: "Marcus Webb", component.ID: checkoutOption.ID}
-	if _, err := svc.EditCase(ctx, checkoutValid.ID, checkoutValidContent); err != nil {
+	// Attributed to the agent actor, not a human: this is the last
+	// project-scoped write in the whole seed script, and the dashboard
+	// Activity panel only teases the 5 most recent entries — the CI import
+	// above (also agent-authored) is long since pushed out by the runs and
+	// edits that follow it, so without this the panel would only ever show
+	// human entries on a fresh seed.
+	if _, err := svc.EditCase(agentCtx, checkoutValid.ID, checkoutValidContent); err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 

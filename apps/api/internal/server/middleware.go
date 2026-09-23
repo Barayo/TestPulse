@@ -236,32 +236,13 @@ func projectIDFromImportJob(h *api, r *http.Request) (string, error) {
 // store.ErrNotFound -- requirePermission already lets a Tenant Admin
 // through before this resolver ever runs, so that's the only actor who can
 // view those entities' history, matching how tenant-level management is
-// gated everywhere else in this file.
+// gated everywhere else in this file. The actual entity-type switch lives
+// in Service.ProjectIDForAuditEntity (project-activity-feed) -- shared with
+// audit()'s own write-time project_id resolution, not duplicated here.
 func projectIDFromAuditEntity(h *api, r *http.Request) (string, error) {
 	entityType := r.URL.Query().Get("entityType")
 	entityID := r.URL.Query().Get("entityId")
-	switch entityType {
-	case "project":
-		return entityID, nil
-	case "case":
-		return h.svc.ProjectIDForCase(r.Context(), entityID)
-	case "suite":
-		return h.svc.ProjectIDForSuite(r.Context(), entityID)
-	case "run":
-		return h.svc.ProjectIDForRun(r.Context(), entityID)
-	case "run_item":
-		return h.svc.ProjectIDForItem(r.Context(), entityID)
-	case "folder":
-		return h.svc.ProjectIDForFolder(r.Context(), entityID)
-	case "release":
-		return h.svc.ProjectIDForRelease(r.Context(), entityID)
-	case "test_plan":
-		return h.svc.ProjectIDForTestPlan(r.Context(), entityID)
-	case "attachment":
-		return h.svc.ProjectIDForAttachment(r.Context(), entityID)
-	default:
-		return "", store.ErrNotFound
-	}
+	return h.svc.ProjectIDForAuditEntity(r.Context(), entityType, entityID)
 }
 
 // --- Human-readable key resolution (add-human-readable-keys D4) ---
