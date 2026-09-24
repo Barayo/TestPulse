@@ -44,10 +44,11 @@
   step shape exactly.
 - [x] 4.2 Add a new `jira-connector` job, identical shape, `working-directory:
   tools/jira-connector`. Verified locally: build+vet+lint+test+govulncheck all pass for both modules in the exact command sequence the CI job runs.
-- [ ] 4.3 (deferred to 7.4, combined with 5.4 in one push) Push a throwaway branch (or open a draft PR) to confirm both new
+- [x] 4.3 Push a throwaway branch (or open a draft PR) to confirm both new
   jobs actually run and pass in real GitHub Actions, not just locally —
   local `golangci-lint`/`go test` runs can behave differently from the
-  pinned `golangci-lint-action` version CI uses.
+  pinned `golangci-lint-action` version CI uses. Confirmed on PR #208:
+  both `import-connector (Go)` and `jira-connector (Go)` pass.
 
 ## 5. CodeQL workflow
 
@@ -85,10 +86,31 @@
   retention) so a finding is still downloadable/inspectable without GHAS —
   mirrors the `secrets` job's own established gitleaks-instead-of-native-
   scanning pattern. Re-pushed; see task 7.4 for the confirmed-green re-run.
-- [ ] 5.5 Re-verify: with D7's fix pushed, confirm both `Analyze (go)` and
+- [x] 5.5 Re-verify: with D7's fix pushed, confirm both `Analyze (go)` and
   `Analyze (javascript-typescript)` pass in the real PR (not just that the
   analysis step ran — that the whole job, including the new SARIF-parsing
-  gate step, is green).
+  gate step, is green). First re-run hit a second, unrelated permission
+  gap (`Resource not accessible by integration` — dropping
+  `security-events: write` also dropped the implicit `actions: read` the
+  job needed for `codeql-action`'s own file-coverage API call); fixed by
+  adding `actions: read` to the workflow-level `permissions:` block. The
+  run after that succeeded end-to-end and the SARIF gate correctly found 3
+  real issues (see 5.6) — fixed those, then a clean re-run confirmed both
+  `Analyze (go)` and `Analyze (javascript-typescript)` genuinely pass,
+  including the SARIF-parsing/upload-artifact steps.
+- [x] 5.6 Fix the 3 real findings CodeQL's analysis surfaced once it could
+  actually run: `apps/api/internal/server/oidc_handlers.go`'s OIDC-state
+  cookie-clearing `Set-Cookie` omitted `Secure`/`HttpOnly`/`SameSite`
+  (`go/cookie-secure-not-set`) — fixed to match the cookie-setting call.
+  `WebhooksCard.test.tsx` and `CaseDetailPage.test.tsx` both interpolated
+  a string into a `RegExp` without escaping every metacharacter
+  (`js/incomplete-hostname-regexp`, `js/incomplete-sanitization`) — the
+  date-string one fixed by escaping properly; the URL one needed a second
+  pass (a hand-rolled escape didn't satisfy CodeQL's sanitizer
+  recognition) — switched to a predicate `name` matcher with no `RegExp`
+  construction from dynamic content at all, which is also simpler code.
+  All confirmed fixed via a clean CodeQL re-run (5.5) plus local
+  `go test`/`vitest`/`tsc -b` green.
 
 ## 6. Documentation
 
@@ -99,15 +121,19 @@
 
 ## 7. Full verification
 
-- [ ] 7.1 Run `go build ./... && go test ./...` in all three Go module
-  directories, confirm 100% pass.
-- [ ] 7.2 Run `make coverage-api`, confirm the ≥80% gate still passes
+- [x] 7.1 Run `go build ./... && go test ./...` in all three Go module
+  directories, confirm 100% pass. Confirmed green (final re-run after all fixes).
+- [x] 7.2 Run `make coverage-api`, confirm the ≥80% gate still passes
   (unaffected by this change, but confirm no regression from the
-  toolchain/dependency bumps).
-- [ ] 7.3 Run `make lint`, confirm clean across `apps/api` (unaffected) and
-  the web app (unaffected) — this change doesn't touch `apps/web` source.
-- [ ] 7.4 Confirm the real CI runs from tasks 4.3 and 5.4 (or a single
+  toolchain/dependency bumps). 82.3%.
+- [x] 7.3 Run `make lint`, confirm clean across `apps/api` (unaffected) and
+  the web app (unaffected) — this change doesn't touch `apps/web` source. Note: this change did end up touching `apps/web` test source (task 5.6's CodeQL fixes) — `make lint` still exit 0.
+- [x] 7.4 Confirm the real CI runs from tasks 4.3 and 5.4 (or a single
   combined draft PR covering both) are green before merging this change's
   actual PR/commit — this change is CI-infrastructure itself, so "does it
   actually pass in GitHub Actions" cannot be fully verified locally the
-  way a normal code change can.
+  way a normal code change can. Confirmed on PR #208's final run: all 11
+  applicable checks pass — API (Go), import-connector (Go), jira-connector
+  (Go), Web (TypeScript), E2E, DCO, Secret scanning, Detect changed paths,
+  Analyze (go), Analyze (javascript-typescript). (Helm chart/Migrations
+  correctly skip — no relevant files changed.)
