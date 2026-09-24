@@ -1,6 +1,6 @@
 module github.com/Barayo/TestPulse/apps/api
 
-go 1.26.5
+go 1.26.6
 
 require (
 	github.com/coreos/go-oidc/v3 v3.20.0
@@ -10,9 +10,9 @@ require (
 	github.com/modelcontextprotocol/go-sdk v1.7.0
 	github.com/pressly/goose/v3 v3.27.3
 	golang.org/x/crypto v0.54.0
-	golang.org/x/image v0.44.0
+	golang.org/x/image v0.45.0
 	golang.org/x/oauth2 v0.36.0
-	golang.org/x/text v0.40.0
+	golang.org/x/text v0.41.0
 	golang.org/x/time v0.15.0
 )
 

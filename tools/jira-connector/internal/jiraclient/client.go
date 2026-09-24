@@ -82,10 +82,10 @@ func (c *Client) SearchIssues(ctx context.Context, keys []string) ([]Issue, erro
 	if err != nil {
 		return nil, fmt.Errorf("calling Jira search: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("Jira search returned %s", resp.Status)
+		return nil, fmt.Errorf("jira search returned %s", resp.Status)
 	}
 
 	var parsed searchResponse
