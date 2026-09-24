@@ -58,13 +58,13 @@ describe('WebhooksCard', () => {
     await screen.findByText(dest.url)
 
     const user = userEvent.setup()
-    // Escaped (not just interpolated raw) so the unescaped '.'s in the URL
-    // can't match more than intended — the actual CodeQL finding
-    // (js/incomplete-hostname-regexp) here, not a security issue in this
-    // test-only usage, but worth fixing properly rather than dropping the
-    // needed case-insensitive match.
-    const escapedURL = dest.url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    await user.click(screen.getByRole('button', { name: new RegExp(`remove ${escapedURL}`, 'i') }))
+    // A predicate, not a string/RegExp `name` matcher: `exact: false` only
+    // normalizes case/whitespace, it doesn't do substring matching, and
+    // building a RegExp out of dest.url is what CodeQL flags
+    // (js/incomplete-hostname-regexp) — this test only ever renders one
+    // destination, so matching on the fixed "remove" prefix alone is
+    // already unambiguous.
+    await user.click(screen.getByRole('button', { name: (name) => name.toLowerCase().startsWith('remove') }))
 
     expect(mockDELETE).toHaveBeenCalledWith('/api/v1/webhooks/{webhookId}', {
       params: { path: { webhookId: dest.id } },
