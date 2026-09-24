@@ -98,7 +98,17 @@ all small, mechanical, low-risk fixes (unchecked-error-return wraps, one
 error-string capitalization, a two-part version bump) directly caused by
 turning the gate on. Filing them separately would just mean merging a
 red/failing gate now and a trivial fix PR five minutes later — no benefit,
-extra process.
+extra process. Once CodeQL itself was actually reachable (after D7's fix),
+it found 3 more, real findings, fixed the same way: `apps/api/internal/
+server/oidc_handlers.go`'s OIDC-state cookie-clearing `Set-Cookie` omitted
+`Secure`/`HttpOnly`/`SameSite` while the cookie-setting call correctly set
+all three (`go/cookie-secure-not-set`) — a real inconsistency, fixed to
+match; and two JS findings in test-only code
+(`js/incomplete-hostname-regexp`, `js/incomplete-sanitization`) — both
+interpolating a string into a `RegExp` without escaping every metacharacter
+(not attacker-reachable, since both inputs are programmer-controlled test
+fixtures, but still worth fixing properly rather than suppressing, since
+partial escaping is genuinely fragile code independent of exploitability).
 
 **D7: No GitHub Advanced Security — CodeQL's own SARIF output is parsed
 directly to fail the job, instead of uploading to Code Scanning.**
