@@ -52,11 +52,24 @@ test first.
 
 ## CI layout
 
-The `CI` workflow runs four jobs in parallel: **API** (build, vet, lint,
-unit + integration tests with the coverage gate, against a Postgres service
-container), **Web** (lint, typecheck, unit tests with coverage thresholds,
-build), **E2E** (compose stack + Playwright, traces uploaded on failure), and
+The `CI` workflow runs several jobs in parallel: **API** (build, vet, lint,
+`govulncheck` vulnerability scan, unit + integration tests with the coverage
+gate, against a Postgres service container), **import-connector** and
+**jira-connector** (build, vet, lint, `govulncheck`, unit tests — the same
+coverage as API, for the two standalone connector tools under `tools/`),
+**Web** (lint, typecheck, unit tests with coverage thresholds, build),
+**E2E** (compose stack + Playwright, traces uploaded on failure), and
 **Helm/DCO** checks.
+
+A separate `CodeQL` workflow analyzes Go (across all three modules) and
+JavaScript/TypeScript (`apps/web`) for code-level vulnerability patterns —
+on every pull request, plus a weekly schedule so a newly-disclosed pattern
+is still caught against code that hasn't otherwise changed. `govulncheck`
+and CodeQL are complementary, not redundant: `govulncheck` flags known
+vulnerabilities in the Go stdlib/dependencies that are actually reachable
+from called code; CodeQL flags vulnerability-*shaped* code (SQL injection,
+XSS, insecure crypto, path traversal) regardless of whether a CVE has ever
+been filed against it.
 
 The E2E job raises `TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE`/`_BURST`
 (see [Deployment](deployment.md#configuration-reference)) when starting the

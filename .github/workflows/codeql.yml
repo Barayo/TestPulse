@@ -1,0 +1,62 @@
+name: CodeQL
+
+on:
+  pull_request:
+  # A pull_request-only trigger would never re-check code that hasn't
+  # changed against a newly-disclosed vulnerability pattern — the weekly
+  # schedule exists specifically for that (add-codeql-and-govulncheck
+  # design.md D5). No push-to-main trigger: a push to main was already
+  # scanned by its own PR (reduce-ci-actions-usage, matching ci.yml's
+  # convention).
+  schedule:
+    - cron: '17 3 * * 1' # every Monday at 03:17 UTC — off-the-hour to avoid the shared top-of-hour spike
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    permissions:
+      # security-events: write is required for CodeQL's analyze step to
+      # upload its SARIF results as Code Scanning alerts.
+      actions: read
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            build-mode: manual
+          - language: javascript-typescript
+            build-mode: none
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          # All three Go modules pin the same version (add-codeql-and-
+          # govulncheck task 1.1) — any one of their go.mod files works.
+          go-version-file: apps/api/go.mod
+
+      - uses: github/codeql-action/init@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+      - if: matrix.language == 'go'
+        name: Build all Go modules
+        # build-mode: manual (design.md D4) — three independent go.mod
+        # files in subdirectories is exactly the shape CodeQL's Go
+        # autobuild handles unreliably, so each module is built explicitly.
+        run: |
+          (cd apps/api && go build ./...)
+          (cd tools/import-connector && go build ./...)
+          (cd tools/jira-connector && go build ./...)
+
+      - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
+        with:
+          category: "/language:${{ matrix.language }}"

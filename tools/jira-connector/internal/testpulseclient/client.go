@@ -59,7 +59,7 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	if err != nil {
 		return fmt.Errorf("calling %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("%s returned %s", path, resp.Status)
@@ -136,7 +136,7 @@ func (c *Client) put(ctx context.Context, path string, body any) error {
 	if err != nil {
 		return fmt.Errorf("calling %s: %w", path, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("%s returned %s", path, resp.Status)
