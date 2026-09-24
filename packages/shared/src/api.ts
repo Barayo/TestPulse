@@ -1064,7 +1064,8 @@ export interface paths {
             };
             cookie?: never;
         };
-        get?: never;
+        /** List every import job ever created for a project, newest first — requires the manageProject permission. The primitive that makes an abandoned or failed import discoverable (fix-import-wizard-orphaned-projects design.md D3). */
+        get: operations["listImportJobs"];
         put?: never;
         /** Start a structural import job (cases/folders) from an external source such as TestRail — requires the manageProject permission. Deliberately a distinct resource from POST .../imports (synchronous JUnit-XML result import): add-testrail-importer design.md D3 correction, found before implementing, since that path was already taken. */
         post: operations["createImportJob"];
@@ -5673,6 +5674,30 @@ export interface operations {
             400: components["responses"]["ValidationError"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listImportJobs: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The project's import jobs, newest first */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImportJob"][];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     createImportJob: {

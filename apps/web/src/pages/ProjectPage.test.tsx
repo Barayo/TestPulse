@@ -125,6 +125,8 @@ function mockProjectAPI(overrides: Partial<Record<string, unknown>> = {}, anonym
       return Promise.resolve({ data: overrides.flakyCases ?? [], response: { ok: true } })
     if (path === activityPath)
       return Promise.resolve({ data: overrides.activity ?? [], response: { ok: true } })
+    if (!anonymous && path === '/api/v1/projects/{projectKey}/import-jobs')
+      return Promise.resolve({ data: overrides.importJobs ?? [], response: { ok: true } })
     if (!anonymous && path === '/api/v1/projects/{projectKey}/releases')
       return Promise.resolve({ data: overrides.releases ?? [], response: { ok: true } })
     if (path === '/api/v1/releases/{releaseKey}/rollup')
@@ -816,6 +818,85 @@ describe('ProjectPage landing', () => {
       await userEvent.click(await screen.findByText('Small'))
       expect(await screen.findByText('library explorer stub')).toBeInTheDocument()
     })
+  })
+})
+
+// fix-import-wizard-orphaned-projects: an empty project that came from an
+// abandoned/failed import wizard run should say so instead of showing the
+// generic getting-started checklist, which gave zero indication of why an
+// otherwise-real project had no content.
+describe('Import history empty-state (fix-import-wizard-orphaned-projects)', () => {
+  it('shows a failed import job\'s source and sanitized error instead of the generic getting-started block', async () => {
+    mockProjectAPI({
+      cases: [],
+      suites: [],
+      runs: [],
+      importJobs: [
+        {
+          id: 'job1',
+          projectId: 'p1',
+          source: 'testrail',
+          mode: 'dry_run',
+          status: 'failed',
+          error: 'Could not reach TestRail. Check the site URL and that it\'s publicly reachable.',
+          progressCurrent: 0,
+          progressTotal: 0,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+    })
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(await screen.findByRole('heading', { name: 'Import didn’t complete' })).toBeInTheDocument()
+    expect(screen.queryByText('Get started')).not.toBeInTheDocument()
+    expect(screen.getByText(/TestRail/)).toBeInTheDocument()
+    expect(screen.getByText(/Could not reach TestRail\. Check the site URL/)).toBeInTheDocument()
+  })
+
+  it('shows an in-progress message for a still-running import job, instead of an error', async () => {
+    mockProjectAPI({
+      cases: [],
+      suites: [],
+      runs: [],
+      importJobs: [
+        {
+          id: 'job1',
+          projectId: 'p1',
+          source: 'qase',
+          mode: 'dry_run',
+          status: 'running',
+          error: null,
+          progressCurrent: 0,
+          progressTotal: 0,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+        },
+      ],
+    })
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(await screen.findByRole('heading', { name: 'Import in progress' })).toBeInTheDocument()
+    expect(screen.queryByText('Get started')).not.toBeInTheDocument()
+    expect(screen.getByText(/Qase/)).toBeInTheDocument()
+  })
+
+  it('shows the plain getting-started block for an empty project with no import history', async () => {
+    mockProjectAPI({ cases: [], suites: [], runs: [], importJobs: [] })
+    renderProject()
+    await screen.findByRole('heading', { name: 'Get started' })
+    expect(screen.getByText(/three steps to get it running/)).toBeInTheDocument()
+  })
+
+  it('never fetches or renders import-job status for a non-empty project', async () => {
+    mockProjectAPI()
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    await screen.findByText('Onboarding')
+    const calledImportJobs = mockGET.mock.calls.some(
+      (call) => call[0] === '/api/v1/projects/{projectKey}/import-jobs',
+    )
+    expect(calledImportJobs).toBe(false)
   })
 })
 

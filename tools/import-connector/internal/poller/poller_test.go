@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"strings"
 	"testing"
 
@@ -460,6 +461,38 @@ func TestOnceKiwiTCMSReportsFailureWhenCredentialsMissing(t *testing.T) {
 	}
 }
 
+// A choke-point proof that Once classifies the final error before
+// persisting it, rather than calling err.Error() directly
+// (fix-import-wizard-orphaned-projects design.md D4) — a deterministic
+// network-shaped underlying error makes the expected classified message
+// exactly predictable, unlike the more free-form errors the other
+// ReportsFailure tests below use.
+func TestOnceClassifiesTheFailureMessageBeforePersisting(t *testing.T) {
+	netErr := &net.OpError{Op: "dial", Net: "tcp", Err: fmt.Errorf("connect: connection refused")}
+	failingNewKiwiTCMS := func(context.Context, string, string, string) (importer.KiwiTCMSReader, error) {
+		return nil, fmt.Errorf("kiwitcmsclient: login failed: %w", netErr)
+	}
+	tp := &fakeTestPulse{claimed: claimedKiwiTCMSJob("real"), projects: []testpulseclient.Project{{ID: "proj-1", Key: "QA"}}}
+	ran := Once(context.Background(), tp, newFakeTestRail, newFakeQase, newFakeZephyrScale, failingNewKiwiTCMS, newFakeXrayCloud, newFakeXrayServer, newFakeTuskr, "kiwi-tcms", discardLogger())
+	if !ran {
+		t.Fatal("Once returned false, want true")
+	}
+	if tp.completedWith == nil || tp.completedWith.status != "failed" {
+		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
+	}
+	// Classification for a network-typed error ignores wrapping text
+	// entirely (errors.As finds netErr regardless of how many fmt.Errorf
+	// layers wrap it), so the expected message only depends on netErr
+	// itself, not poller.go's exact wrapping prefix.
+	want := importer.ClassifyImportError("Kiwi TCMS", netErr)
+	if tp.completedWith.errMsg == nil || *tp.completedWith.errMsg != want {
+		t.Errorf("errMsg = %v, want the classified message %q, not the raw error chain", tp.completedWith.errMsg, want)
+	}
+	if tp.completedWith.errMsg != nil && strings.Contains(*tp.completedWith.errMsg, "dial") {
+		t.Errorf("errMsg = %q, leaked raw network error text", *tp.completedWith.errMsg)
+	}
+}
+
 func TestOnceKiwiTCMSReportsFailureWhenLoginFails(t *testing.T) {
 	failingNewKiwiTCMS := func(context.Context, string, string, string) (importer.KiwiTCMSReader, error) {
 		return nil, fmt.Errorf("login failed: invalid credentials")
@@ -472,8 +505,13 @@ func TestOnceKiwiTCMSReportsFailureWhenLoginFails(t *testing.T) {
 	if tp.completedWith == nil || tp.completedWith.status != "failed" {
 		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
 	}
-	if tp.completedWith.errMsg == nil || !strings.Contains(*tp.completedWith.errMsg, "login failed") {
-		t.Errorf("errMsg = %v, want it to surface the login failure clearly", tp.completedWith.errMsg)
+	// Not an HTTP-status-shaped or network-typed failure, so it lands in
+	// ClassifyImportError's generic fallback category — still sanitized
+	// (never the raw "login failed: invalid credentials" text), just not
+	// the more specific authentication-failed category. Acceptable per
+	// design.md D4: actionable-and-sanitized over perfectly categorized.
+	if tp.completedWith.errMsg == nil || strings.Contains(*tp.completedWith.errMsg, "login failed") || strings.Contains(*tp.completedWith.errMsg, "invalid credentials") {
+		t.Errorf("errMsg = %v, want a sanitized message that never contains the raw internal error text", tp.completedWith.errMsg)
 	}
 }
 
@@ -566,8 +604,11 @@ func TestOnceXrayReportsFailureWhenConnectFails(t *testing.T) {
 	if tp.completedWith == nil || tp.completedWith.status != "failed" {
 		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
 	}
-	if tp.completedWith.errMsg == nil || !strings.Contains(*tp.completedWith.errMsg, "401") {
-		t.Errorf("errMsg = %v, want it to surface the connect failure clearly", tp.completedWith.errMsg)
+	if tp.completedWith.errMsg == nil || !strings.Contains(strings.ToLower(*tp.completedWith.errMsg), "authentication failed") {
+		t.Errorf("errMsg = %v, want a sanitized authentication-failed message", tp.completedWith.errMsg)
+	}
+	if tp.completedWith.errMsg != nil && strings.Contains(*tp.completedWith.errMsg, "401") {
+		t.Errorf("errMsg = %q, leaked the raw status code text", *tp.completedWith.errMsg)
 	}
 }
 
@@ -631,8 +672,11 @@ func TestOnceTuskrReportsFailureWhenListingFails(t *testing.T) {
 	if tp.completedWith == nil || tp.completedWith.status != "failed" {
 		t.Fatalf("completedWith = %+v, want failed", tp.completedWith)
 	}
-	if tp.completedWith.errMsg == nil || !strings.Contains(*tp.completedWith.errMsg, "tuskr returned 401") {
-		t.Errorf("errMsg = %v, want it to surface the listing failure clearly", tp.completedWith.errMsg)
+	if tp.completedWith.errMsg == nil || !strings.Contains(strings.ToLower(*tp.completedWith.errMsg), "authentication failed") {
+		t.Errorf("errMsg = %v, want a sanitized authentication-failed message", tp.completedWith.errMsg)
+	}
+	if tp.completedWith.errMsg != nil && strings.Contains(*tp.completedWith.errMsg, "tuskr returned 401") {
+		t.Errorf("errMsg = %q, leaked the raw internal error text", *tp.completedWith.errMsg)
 	}
 }
 

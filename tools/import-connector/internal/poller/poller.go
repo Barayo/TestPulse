@@ -83,8 +83,11 @@ func Once(ctx context.Context, tp TestPulseClient, newTestRail NewTestRailClient
 	logger.Info("claimed import job", "jobId", claimed.Job.ID, "mode", claimed.Job.Mode)
 
 	if err := runClaimedJob(ctx, tp, newTestRail, newQase, newZephyrScale, newKiwiTCMS, newXrayCloud, newXrayServer, newTuskr, source, claimed, logger); err != nil {
+		// The full internal error (chain, job ID, etc.) is logged here for
+		// operator debugging; only the classified, sanitized message below
+		// is ever persisted/surfaced to a user (design.md D4).
 		logger.Error("running import job", "jobId", claimed.Job.ID, "error", err)
-		msg := err.Error()
+		msg := importer.ClassifyImportError(sourceLabel(source), err)
 		if cerr := tp.CompleteJob(ctx, claimed.Job.ID, "failed", nil, &msg); cerr != nil {
 			logger.Error("reporting job failure", "jobId", claimed.Job.ID, "error", cerr)
 		}
@@ -259,6 +262,29 @@ func runTuskrJob(ctx context.Context, tp TestPulseClient, newTuskr NewTuskrClien
 			logger.Error("reporting progress", "jobId", claimed.Job.ID, "error", err)
 		}
 	})
+}
+
+// sourceLabel maps the wizard's internal source slug to the vendor display
+// name ClassifyImportError's messages should name — mirrors the frontend's
+// own SOURCE_LABEL (apps/web/src/pages/ImportProjectPage.tsx), kept in
+// sync by hand since these are separate modules with no shared constant.
+func sourceLabel(source string) string {
+	switch source {
+	case "testrail":
+		return "TestRail"
+	case "qase":
+		return "Qase"
+	case "zephyr-scale":
+		return "Zephyr Scale"
+	case "kiwi-tcms":
+		return "Kiwi TCMS"
+	case "xray":
+		return "Xray"
+	case "tuskr":
+		return "Tuskr"
+	default:
+		return source
+	}
 }
 
 // resolveProjectKey finds the human-readable key for a claimed job's

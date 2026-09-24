@@ -1354,6 +1354,24 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+    get:
+      operationId: listImportJobs
+      summary: >-
+        List every import job ever created for a project, newest first —
+        requires the manageProject permission. The primitive that makes an
+        abandoned or failed import discoverable
+        (fix-import-wizard-orphaned-projects design.md D3).
+      tags: [importJobs]
+      responses:
+        "200":
+          description: The project's import jobs, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportJob" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/projects/{projectKey}/import-jobs/{jobId}:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }

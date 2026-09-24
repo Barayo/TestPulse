@@ -25,9 +25,9 @@ type TargetMode = 'new' | 'existing'
 // Sources with a dedicated Connect-form field set. Every other value (an
 // unknown/mistyped :source segment) falls through to the "Unknown import
 // source" guard below.
-type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'kiwi-tcms' | 'xray' | 'tuskr' | 'csv'
+export type Source = 'testrail' | 'qase' | 'zephyr-scale' | 'kiwi-tcms' | 'xray' | 'tuskr' | 'csv'
 
-const SOURCE_LABEL: Record<Source, string> = {
+export const SOURCE_LABEL: Record<Source, string> = {
   testrail: 'TestRail',
   qase: 'Qase',
   'zephyr-scale': 'Zephyr Scale',
@@ -601,7 +601,7 @@ export default function ImportProjectPage() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Need a key? In TestRail:{' '}
+                    Need a credential? In TestRail:{' '}
                     <strong className="font-semibold">My Settings → API Keys → Add Key</strong>.
                   </p>
 
@@ -639,7 +639,7 @@ export default function ImportProjectPage() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Need a token? In Qase: <strong className="font-semibold">My Profile → API Token</strong>.
+                    Need a credential? In Qase: <strong className="font-semibold">My Profile → API Token</strong>.
                   </p>
 
                   {qaseAdvancedOpen ? (
@@ -702,7 +702,7 @@ export default function ImportProjectPage() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Need a token? In Jira:{' '}
+                    Need a credential? In Jira:{' '}
                     <strong className="font-semibold">Profile → Zephyr Scale API Access Tokens</strong>. Zephyr
                     Scale Server/Data Center isn&apos;t supported — Cloud only.
                   </p>
@@ -752,6 +752,11 @@ export default function ImportProjectPage() {
                       />
                     </div>
                   </div>
+
+                  <p className="text-xs text-muted-foreground">
+                    Need a credential? Kiwi TCMS uses your own site account — there&apos;s no separate API key to
+                    generate.
+                  </p>
 
                   <p className="text-xs text-muted-foreground">
                     Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Kiwi

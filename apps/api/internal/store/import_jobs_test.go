@@ -172,6 +172,47 @@ func TestImportJobCompleteClearsCredentials(t *testing.T) {
 	}
 }
 
+func TestImportJobListByProjectReturnsNewestFirst(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	u := mustUser(t, s, "admin@example.com", true)
+
+	first, err := s.ImportJobs.Create(ctx, p.ID, "testrail", domain.ImportModeDryRun, []byte("creds"), u.ID)
+	if err != nil {
+		t.Fatalf("Create first: %v", err)
+	}
+	second, err := s.ImportJobs.Create(ctx, p.ID, "testrail", domain.ImportModeReal, []byte("creds"), u.ID)
+	if err != nil {
+		t.Fatalf("Create second: %v", err)
+	}
+
+	got, err := s.ImportJobs.ListByProject(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ListByProject: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0].ID != second.ID || got[1].ID != first.ID {
+		t.Errorf("got = [%q, %q], want [%q, %q] (newest first)", got[0].ID, got[1].ID, second.ID, first.ID)
+	}
+}
+
+func TestImportJobListByProjectReturnsEmptyForProjectWithNoJobs(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	got, err := s.ImportJobs.ListByProject(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ListByProject: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("len(got) = %d, want 0", len(got))
+	}
+}
+
 func TestImportJobCompleteWithFailure(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()

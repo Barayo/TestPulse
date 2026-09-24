@@ -42,6 +42,14 @@ func (s *Service) GetImportJob(ctx context.Context, jobID string) (domain.Import
 	return s.store.ImportJobs.Get(ctx, jobID)
 }
 
+// ListImportJobsForProject returns every import job ever created for
+// projectID, newest first. Permission (manageProject on projectID) is
+// enforced by requirePermission at the routing layer, not here, matching
+// this codebase's established convention.
+func (s *Service) ListImportJobsForProject(ctx context.Context, projectID string) ([]domain.ImportJob, error) {
+	return s.store.ImportJobs.ListByProject(ctx, projectID)
+}
+
 // ClaimPendingImportJob claims the oldest pending job for source, scoped to
 // the calling actor's own project — only a per-project-scoped agent token
 // may call this (mirrors Service.ListProjects's ScopedProjectID-direct

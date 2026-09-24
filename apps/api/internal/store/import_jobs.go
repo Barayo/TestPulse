@@ -60,6 +60,29 @@ func (r *ImportJobRepo) Create(ctx context.Context, projectID, source string, mo
 	return scanImportJob(row)
 }
 
+// ListByProject returns every import job ever created for projectID,
+// newest first (fix-import-wizard-orphaned-projects design.md D3: small
+// natural cardinality, no pagination).
+func (r *ImportJobRepo) ListByProject(ctx context.Context, projectID string) ([]domain.ImportJob, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+importJobColumns+` FROM import_jobs WHERE project_id = $1 ORDER BY created_at DESC`,
+		projectID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	jobs := []domain.ImportJob{}
+	for rows.Next() {
+		job, err := scanImportJob(rows)
+		if err != nil {
+			return nil, err
+		}
+		jobs = append(jobs, job)
+	}
+	return jobs, rows.Err()
+}
+
 // ProjectID resolves an import job to its project — used by
 // requirePermission's per-resource resolver (matches RequirementRepo's
 // ProjectID shape) for the PATCH .../imports/{jobId} route.

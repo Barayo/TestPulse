@@ -153,6 +153,37 @@ func TestClaimPendingImportJobOnlyClaimsScopedProjectAndDecryptsCredentials(t *t
 	}
 }
 
+func TestListImportJobsForProject(t *testing.T) {
+	s, st := testServiceWithEncryptionKey(t, "a-real-encryption-key")
+	ctx := context.Background()
+	p, err := st.Projects.Create(ctx, "QA", "")
+	if err != nil {
+		t.Fatalf("create project: %v", err)
+	}
+	u := mustCreateUser(t, s, "admin@example.com", "correcthorsebatterystaple", false)
+	actorCtx := domain.WithActor(ctx, actorFor(u))
+
+	dryRun, err := s.CreateImportJob(actorCtx, p.ID, "testrail", domain.ImportModeDryRun, map[string]string{"apiKey": "x"})
+	if err != nil {
+		t.Fatalf("CreateImportJob dry run: %v", err)
+	}
+	real, err := s.CreateImportJob(actorCtx, p.ID, "testrail", domain.ImportModeReal, map[string]string{"apiKey": "x"})
+	if err != nil {
+		t.Fatalf("CreateImportJob real: %v", err)
+	}
+
+	got, err := s.ListImportJobsForProject(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("ListImportJobsForProject: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("len(got) = %d, want 2", len(got))
+	}
+	if got[0].ID != real.ID || got[1].ID != dryRun.ID {
+		t.Errorf("got = [%q, %q], want [%q, %q] (newest first)", got[0].ID, got[1].ID, real.ID, dryRun.ID)
+	}
+}
+
 func TestReportImportJobProgressAndCompleteImportJob(t *testing.T) {
 	s, st := testServiceWithEncryptionKey(t, "a-real-encryption-key")
 	ctx := context.Background()

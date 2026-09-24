@@ -14,9 +14,11 @@ import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
 import { useProjectPermissions, useProjectReadAccess } from '@/lib/useProjectPermissions'
 import { useAuth } from '@/lib/useAuth'
 import { timeAgo } from '@/lib/timeAgo'
+import { SOURCE_LABEL, type Source } from './ImportProjectPage'
 import type { components } from '@testpulse/shared/api'
 
 type Project = components['schemas']['Project']
+type ImportJob = components['schemas']['ImportJob']
 
 function isValidDate(iso: string): boolean {
   return iso !== '' && !Number.isNaN(new Date(iso).getTime())
@@ -142,6 +144,26 @@ export default function ProjectPage() {
       cancelled = true
     }
   }, [projectKey, access])
+
+  // An empty project's Overview otherwise shows a generic getting-started
+  // checklist with zero indication it came from an abandoned or failed
+  // import wizard run (fix-import-wizard-orphaned-projects) — only worth
+  // fetching once we already know the project is empty, and only for a
+  // manageProject-permitted member (the endpoint's own permission
+  // requirement; a member without it simply keeps the generic checklist).
+  const [latestImportJob, setLatestImportJob] = useState<ImportJob>()
+  useEffect(() => {
+    if (!projectKey || access !== 'member' || !permissions?.manageProject) return
+    if (!landing.loaded || landing.totalCases > 0 || landing.totalSuites > 0 || landing.totalRuns > 0) return
+    let cancelled = false
+    void (async () => {
+      const { data } = await api.GET('/api/v1/projects/{projectKey}/import-jobs', { params: { path: { projectKey } } })
+      if (!cancelled) setLatestImportJob(data?.[0])
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [projectKey, access, permissions?.manageProject, landing.loaded, landing.totalCases, landing.totalSuites, landing.totalRuns])
 
   if (!projectKey) return null
   if (notFound) {
@@ -285,7 +307,44 @@ export default function ProjectPage() {
         </div>
       )}
 
-      {isAllEmpty ? (
+      {isAllEmpty && latestImportJob ? (
+        <div className="space-y-3 rounded-2xl border border-border bg-card p-5">
+          <div>
+            <h2 className="tp-heading text-lg">
+              {latestImportJob.status === 'failed'
+                ? 'Import didn’t complete'
+                : latestImportJob.status === 'succeeded'
+                  ? 'Import complete, but nothing landed here'
+                  : 'Import in progress'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {latestImportJob.status === 'failed' ? (
+                <>An import from {SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source} failed: {latestImportJob.error}</>
+              ) : latestImportJob.status === 'succeeded' ? (
+                <>The import from {SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source} finished but this project is still empty.</>
+              ) : (
+                <>An import from {SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source} is still in progress — this page will update once it finishes.</>
+              )}
+            </p>
+          </div>
+          {latestImportJob.status === 'failed' && (
+            <div className="flex gap-2">
+              <Link
+                to={`/import/${latestImportJob.source}`}
+                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted"
+              >
+                Try the import again
+              </Link>
+              <Link
+                to={`/projects/${projectKey}/settings`}
+                className="rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted"
+              >
+                Archive this project
+              </Link>
+            </div>
+          )}
+        </div>
+      ) : isAllEmpty ? (
         <div className="space-y-3">
           <div>
             <h2 className="tp-heading text-lg">Get started</h2>

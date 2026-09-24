@@ -193,6 +193,23 @@ docker compose -f deploy/compose/docker-compose.yml --profile import-connector u
 `importConnector.existingSecret` (a Secret with an `agentToken` key, for a
 real deployment) — see `deploy/helm/testpulse/values.yaml`.
 
+### If a dry run fails or you abandon the wizard partway
+
+Starting a "New project" import creates the target project immediately, on
+the Connect step — before the dry-run scan even runs. If the scan then
+fails, or you close the tab while it's still running, that project is left
+behind empty (`fix-import-wizard-orphaned-projects`). It isn't lost or
+invisible: reopen the project and its Overview page shows the source, the
+job's status, and (if it failed) a short, actionable reason instead of the
+usual empty-project getting-started checklist, with a link to either retry
+the import or archive the project (Settings → Archive, then Delete) if you
+don't want to keep it. This applies to every structural importer on this
+page (TestRail, Qase, Zephyr Scale, Kiwi TCMS, Xray, Tuskr), not just
+TestRail — they all share the same wizard and job machinery. A project's
+full import-job history is also available via
+`GET /api/v1/projects/{projectKey}/import-jobs` (requires `manageProject`),
+newest first.
+
 ## Qase importer
 
 > Independent, unofficial integration — not affiliated with, endorsed by,

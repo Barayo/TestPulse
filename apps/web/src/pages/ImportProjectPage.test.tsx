@@ -437,6 +437,16 @@ describe('ImportProjectPage — Kiwi TCMS Connect stage (add-kiwi-tcms-importer 
     expect(screen.getByText(/not affiliated with, endorsed by, or sponsored by Kiwi TCMS/i)).toBeInTheDocument()
   })
 
+  // fix-import-wizard-orphaned-projects Problem 3 / design.md D5: Kiwi TCMS
+  // was the one Connect screen with no credential-help text at all.
+  it('shows credential-help text, matching the other three sources\' consistency pass (fix-import-wizard-orphaned-projects)', async () => {
+    mockBaseAPI()
+    renderImportPage('/projects/import/kiwi-tcms')
+    await screen.findByText('Connect to Kiwi TCMS')
+
+    expect(screen.getByText(/need a credential/i)).toBeInTheDocument()
+  })
+
   it('"Preview import" stays disabled until the required fields are filled', async () => {
     mockBaseAPI()
     renderImportPage('/projects/import/kiwi-tcms')

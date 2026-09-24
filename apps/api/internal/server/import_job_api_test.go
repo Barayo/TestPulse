@@ -171,6 +171,48 @@ func TestScenario_ClaimPendingImportJobRejectsHumanSessionOverHTTP(t *testing.T)
 	callAs(t, h, admin, "GET", "/api/v1/import-jobs?status=pending&source=testrail", nil, 401, &errBody)
 }
 
+func TestScenario_ListImportJobsRequiresManageProject(t *testing.T) {
+	h, admin := importJobServer(t)
+	var p jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+
+	var member jmap
+	callAs(t, h, admin, "POST", "/api/v1/users",
+		jmap{"email": "tester@example.com", "password": "correcthorse"}, 201, &member)
+	userID, _ := member["id"].(string)
+	testerRoleID := roleIDByName(t, h, admin, "Tester")
+	callAs(t, h, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+userID,
+		jmap{"roleId": testerRoleID}, 204, nil)
+	testerCookie := loginCookie(t, h, "tester@example.com", "correcthorse")
+
+	var errBody jmap
+	callAs(t, h, testerCookie, "GET", "/api/v1/projects/"+projectKey+"/import-jobs", nil, 403, &errBody)
+}
+
+func TestScenario_ListImportJobsReturnsAllJobsForProjectNewestFirst(t *testing.T) {
+	h, admin := importJobServer(t)
+	var p jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+
+	var dryRun jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects/"+projectKey+"/import-jobs",
+		jmap{"source": "testrail", "mode": "dry_run", "credentials": jmap{"apiKey": "x"}}, 201, &dryRun)
+	var real jmap
+	callAs(t, h, admin, "POST", "/api/v1/projects/"+projectKey+"/import-jobs",
+		jmap{"source": "testrail", "mode": "real", "credentials": jmap{"apiKey": "x"}}, 201, &real)
+
+	var list []jmap
+	callAs(t, h, admin, "GET", "/api/v1/projects/"+projectKey+"/import-jobs", nil, 200, &list)
+	if len(list) != 2 {
+		t.Fatalf("len(list) = %d, want 2", len(list))
+	}
+	if list[0]["id"] != real["id"] || list[1]["id"] != dryRun["id"] {
+		t.Errorf("list = %+v, want [real, dryRun] (newest first)", list)
+	}
+}
+
 func TestScenario_PatchImportJobProgressAndCompletionOverHTTP(t *testing.T) {
 	h, admin := importJobServer(t)
 	var p jmap

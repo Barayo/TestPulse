@@ -32,6 +32,14 @@ func (h *api) getImportJob(w http.ResponseWriter, r *http.Request) {
 	h.respond(w, http.StatusOK, job, err)
 }
 
+// listImportJobs is what makes an abandoned/failed import discoverable at
+// all (fix-import-wizard-orphaned-projects) — before this, a job with no
+// UI-visible id was permanently invisible once its creating tab closed.
+func (h *api) listImportJobs(w http.ResponseWriter, r *http.Request) {
+	jobs, err := h.svc.ListImportJobsForProject(r.Context(), resolvedID(r, "projectKey"))
+	h.respond(w, http.StatusOK, jobs, err)
+}
+
 // claimPendingImportJob is importer-facing: claims the oldest pending job
 // for the caller's own scoped project and the requested source, returning
 // its decrypted credentials. Only a per-project-scoped agent token may

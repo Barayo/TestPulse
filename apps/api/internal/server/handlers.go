@@ -65,6 +65,7 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/step-groups", h.createStepGroup)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/imports", h.importResults)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/import-jobs", h.createImportJob)
+			r.With(h.requirePermissionEvenIfArchived(domain.PermManageProject, projectIDParam)).Get("/import-jobs", h.listImportJobs)
 			r.With(h.requirePermissionEvenIfArchived(domain.PermManageProject, projectIDFromImportJob)).Get("/import-jobs/{jobId}", h.getImportJob)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/members", h.getProjectMembership)
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/permissions", h.myPermissions)
