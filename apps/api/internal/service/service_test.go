@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"strings"
 	"testing"
 
@@ -125,4 +126,21 @@ func TestCreateTokenValidatesName(t *testing.T) {
 	s := nilService()
 	_, _, err := s.CreateToken(context.Background(), domain.Actor{ID: "u1", EffectiveUserID: "u1"}, "", nil, nil)
 	wantValidation(t, err, "name")
+}
+
+func TestServiceLogsNothingByDefault(t *testing.T) {
+	s := nilService()
+	if s.logger == nil {
+		t.Fatal("expected a non-nil default logger")
+	}
+	// Must not panic: the default logger is a safe discard sink.
+	s.logger.Warn("this should go nowhere", "field", "value")
+}
+
+func TestWithLoggerSetsTheLogger(t *testing.T) {
+	l := slog.New(slog.DiscardHandler)
+	s := New(nil).WithLogger(l)
+	if s.logger != l {
+		t.Fatal("WithLogger did not set the supplied logger")
+	}
 }

@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"sync"
@@ -325,6 +326,63 @@ func TestRecordResultDoesNotBlockOnMultipleSlowWebhooks(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 1*time.Second {
 		t.Errorf("RecordResult took %v with 3 slow webhook destinations, want well under 1s (dispatch must not block on destination count)", elapsed)
+	}
+}
+
+func TestDispatchWebhooksLogsAFailedDelivery(t *testing.T) {
+	s, st := webhookDispatchTestService(t)
+	h := &recordingHandler{}
+	s = s.WithLogger(slog.New(h))
+	ctx := context.Background()
+	projectID, itemID := mustWebhookProjectAndItem(t, s)
+	// A closed local port: connection refused, not just slow.
+	if _, err := st.Webhooks.Create(ctx, projectID, "https://127.0.0.1:1"); err != nil {
+		t.Fatalf("Webhooks.Create: %v", err)
+	}
+
+	if _, err := s.RecordResult(ctx, itemID, domain.NewResult{Actor: "tester", Verdict: domain.VerdictFailed}); err != nil {
+		t.Fatalf("RecordResult: %v", err)
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	var attrs map[string]any
+	for time.Now().Before(deadline) {
+		attrs = h.attrs("webhook delivery failed")
+		if attrs != nil {
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if attrs == nil {
+		t.Fatalf("no \"webhook delivery failed\" log line produced; got messages %v", h.messages())
+	}
+	if attrs["host"] != "127.0.0.1:1" {
+		t.Errorf("host attr = %v, want 127.0.0.1:1", attrs["host"])
+	}
+	if attrs["event"] != "result.failed" {
+		t.Errorf("event attr = %v, want result.failed", attrs["event"])
+	}
+}
+
+func TestDispatchWebhooksDoesNotLogASuccessfulDelivery(t *testing.T) {
+	t.Cleanup(service.AllowLoopbackWebhooksForTest())
+	s, st := webhookDispatchTestService(t)
+	h := &recordingHandler{}
+	s = s.WithLogger(slog.New(h))
+	ctx := context.Background()
+	projectID, itemID := mustWebhookProjectAndItem(t, s)
+	mock := newCapturingWebhookServer(t)
+	if _, err := st.Webhooks.Create(ctx, projectID, mock.URL); err != nil {
+		t.Fatalf("Webhooks.Create: %v", err)
+	}
+
+	if _, err := s.RecordResult(ctx, itemID, domain.NewResult{Actor: "tester", Verdict: domain.VerdictFailed}); err != nil {
+		t.Fatalf("RecordResult: %v", err)
+	}
+
+	waitForDelivery(t, mock, 1)
+	if attrs := h.attrs("webhook delivery failed"); attrs != nil {
+		t.Errorf("a successful delivery produced a failure log line: %v", attrs)
 	}
 }
 

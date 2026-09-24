@@ -84,7 +84,7 @@ func (w *ProjectDeletionWorker) purgeProject(ctx context.Context, projectID stri
 // Errors are swallowed per-tick (best-effort — retried on the next one);
 // there is no caller to report them to once this is running detached.
 func (w *ProjectDeletionWorker) Run(ctx context.Context) {
-	_ = w.ProcessPending(ctx)
+	w.processAndLog(ctx)
 	ticker := time.NewTicker(w.Interval)
 	defer ticker.Stop()
 	for {
@@ -92,7 +92,13 @@ func (w *ProjectDeletionWorker) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_ = w.ProcessPending(ctx)
+			w.processAndLog(ctx)
 		}
+	}
+}
+
+func (w *ProjectDeletionWorker) processAndLog(ctx context.Context) {
+	if err := w.ProcessPending(ctx); err != nil {
+		w.svc.logger.Warn("project deletion processing failed", "error", err)
 	}
 }

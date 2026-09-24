@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -69,9 +70,18 @@ type Service struct {
 	// deploy-time config — rotating it would orphan any already-encrypted
 	// secret, so it's resolved once at construction like PublicURL.
 	encryptionKey string
+
+	// logger is used for operational (not audit) logging: webhook delivery
+	// failures, background worker tick failures, audit-append failures.
+	// Defaults to a discard sink so tests and any Service constructed
+	// without WithLogger never panic on a nil logger (add-service-request-
+	// logging).
+	logger *slog.Logger
 }
 
-func New(s *store.Store) *Service { return &Service{store: s} }
+func New(s *store.Store) *Service {
+	return &Service{store: s, logger: slog.New(slog.DiscardHandler)}
+}
 
 // WithMailer enables password-reset email delivery (add-forgot-password).
 // publicURL builds the absolute reset link; enabled mirrors
@@ -87,6 +97,13 @@ func (s *Service) WithMailer(sender mailer.Sender, publicURL string, enabled boo
 // secret at rest (add-sso-oidc design.md D7).
 func (s *Service) WithEncryptionKey(key string) *Service {
 	s.encryptionKey = key
+	return s
+}
+
+// WithLogger configures operational logging for webhook delivery,
+// background worker, and audit failures (add-service-request-logging).
+func (s *Service) WithLogger(l *slog.Logger) *Service {
+	s.logger = l
 	return s
 }
 

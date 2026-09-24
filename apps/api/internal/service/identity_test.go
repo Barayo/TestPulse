@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"reflect"
 	"strings"
 	"sync"
@@ -2085,5 +2086,24 @@ func TestGetUserByID(t *testing.T) {
 	got, err := s.GetUser(context.Background(), created.ID)
 	if err != nil || got.Email != "getme@example.com" {
 		t.Fatalf("GetUser = %+v, %v", got, err)
+	}
+}
+
+// TestAuditLogsAppendFailure covers add-service-request-logging: a failed
+// audit-log write is logged rather than silently discarded. A pre-cancelled
+// context is the minimal viable way to force store.Audit.Append to fail.
+func TestAuditLogsAppendFailure(t *testing.T) {
+	s := testService(t)
+	h := &recordingHandler{}
+	s = s.WithLogger(slog.New(h))
+	admin := mustCreateUser(t, s, "auditfail@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+	cctx, cancel := context.WithCancel(ctx)
+	cancel()
+
+	s.AuditForTest(cctx, "create", "project", "p1")
+
+	if attrs := h.attrs("audit append failed"); attrs == nil {
+		t.Fatalf("no failure log line produced; got messages %v", h.messages())
 	}
 }

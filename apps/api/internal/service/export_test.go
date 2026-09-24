@@ -1,6 +1,9 @@
 package service
 
-import "net"
+import (
+	"context"
+	"net"
+)
 
 // AllowLoopbackWebhooksForTest disables the dial-time SSRF IP check
 // (webhookIPCheck) for the duration of the test, restoring it via
@@ -14,4 +17,11 @@ func AllowLoopbackWebhooksForTest() func() {
 	orig := webhookIPCheck
 	webhookIPCheck = func(net.IP) bool { return false }
 	return func() { webhookIPCheck = orig }
+}
+
+// AuditForTest calls the package-private audit() directly, so tests can
+// exercise its failure-logging behavior (add-service-request-logging)
+// without needing a full write flow to trigger it.
+func (s *Service) AuditForTest(ctx context.Context, action, entityType, entityID string) {
+	s.audit(ctx, action, entityType, entityID)
 }

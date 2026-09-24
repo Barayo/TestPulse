@@ -63,7 +63,7 @@ func run() error {
 			From: cfg.SMTPFromAddress,
 		},
 		cfg.PublicURL, cfg.PasswordResetEnabled(),
-	).WithEncryptionKey(cfg.EncryptionKey)
+	).WithEncryptionKey(cfg.EncryptionKey).WithLogger(logger)
 
 	oidcManager := buildOIDCManager(ctx, logger, svc, cfg.PublicURL, cfg.EncryptionKey)
 	sso := &server.SSOConfig{Manager: oidcManager, PublicURL: cfg.PublicURL, EncryptionKey: cfg.EncryptionKey}

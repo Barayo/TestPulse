@@ -33,8 +33,10 @@ type SSOConfig struct {
 func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, loginRateLimitPerMinute float64, loginRateLimitBurst int, sso *SSOConfig, mcpEnabled bool) http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
+	r.Use(requestID)
 	r.Use(middleware.Recoverer)
 	r.Use(securityHeaders)
+	r.Use(requestLogging(logger))
 
 	r.Get("/healthz", handleLiveness)
 	r.Get("/readyz", handleReadiness(logger, readiness))

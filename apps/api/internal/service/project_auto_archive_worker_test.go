@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"log/slog"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -181,5 +182,24 @@ func TestProjectAutoArchiveWorkerAuditsAsSystemActor(t *testing.T) {
 	}
 	if archiveEntry.ActorID != "auto-archive-worker" {
 		t.Errorf("ActorID = %q, want %q", archiveEntry.ActorID, "auto-archive-worker")
+	}
+}
+
+// TestProjectAutoArchiveWorkerLogsSweepFailure covers add-service-request-
+// logging: a tick's failure is logged rather than silently discarded. A
+// pre-cancelled context is the minimal viable way to force Sweep's first
+// store call to fail, and also makes Run return after exactly one tick.
+func TestProjectAutoArchiveWorkerLogsSweepFailure(t *testing.T) {
+	s, _ := testServiceWithPool(t)
+	h := &recordingHandler{}
+	s = s.WithLogger(slog.New(h))
+	worker := service.NewProjectAutoArchiveWorker(s)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	worker.Run(ctx)
+
+	if attrs := h.attrs("project auto-archive sweep failed"); attrs == nil {
+		t.Fatalf("no failure log line produced; got messages %v", h.messages())
 	}
 }

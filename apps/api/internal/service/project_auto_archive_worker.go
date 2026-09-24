@@ -73,7 +73,7 @@ func (w *ProjectAutoArchiveWorker) Sweep(ctx context.Context) (int, error) {
 // on the next one); there is no caller to report them to once this is
 // running detached.
 func (w *ProjectAutoArchiveWorker) Run(ctx context.Context) {
-	_, _ = w.Sweep(ctx)
+	w.sweepAndLog(ctx)
 	ticker := time.NewTicker(w.Interval)
 	defer ticker.Stop()
 	for {
@@ -81,7 +81,13 @@ func (w *ProjectAutoArchiveWorker) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_, _ = w.Sweep(ctx)
+			w.sweepAndLog(ctx)
 		}
+	}
+}
+
+func (w *ProjectAutoArchiveWorker) sweepAndLog(ctx context.Context) {
+	if _, err := w.Sweep(ctx); err != nil {
+		w.svc.logger.Warn("project auto-archive sweep failed", "error", err)
 	}
 }

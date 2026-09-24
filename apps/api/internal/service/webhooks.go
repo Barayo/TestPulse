@@ -171,15 +171,31 @@ func (s *Service) dispatchWebhooks(ctx context.Context, projectID string, event 
 		return
 	}
 	for _, d := range destinations {
+		host := webhookDestinationHost(d.URL)
 		req, err := http.NewRequestWithContext(ctx, http.MethodPost, d.URL, bytes.NewReader(body))
 		if err != nil {
+			s.logger.Warn("webhook delivery failed", "host", host, "event", event.Event, "error", err)
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
 		resp, err := webhookHTTPClient.Do(req)
 		if err != nil {
+			s.logger.Warn("webhook delivery failed", "host", host, "event", event.Event, "error", err)
 			continue
+		}
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			s.logger.Warn("webhook delivery failed", "host", host, "event", event.Event, "status", resp.StatusCode)
 		}
 		_ = resp.Body.Close()
 	}
+}
+
+// webhookDestinationHost extracts just the host (never the full URL, which
+// may carry a sensitive query string) for logging (design.md D4).
+func webhookDestinationHost(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return "unknown"
+	}
+	return u.Host
 }

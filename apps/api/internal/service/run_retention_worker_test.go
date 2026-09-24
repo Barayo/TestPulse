@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -177,5 +178,24 @@ func TestRunRetentionWorkerAuditsAsSystemActor(t *testing.T) {
 	}
 	if deleteEntry.ActorID != "retention-worker" {
 		t.Errorf("ActorID = %q, want %q", deleteEntry.ActorID, "retention-worker")
+	}
+}
+
+// TestRunRetentionWorkerLogsSweepFailure covers add-service-request-logging:
+// a tick's failure is logged rather than silently discarded. A pre-cancelled
+// context is the minimal viable way to force Sweep's first store call to
+// fail, and also makes Run return after exactly one tick.
+func TestRunRetentionWorkerLogsSweepFailure(t *testing.T) {
+	s, _ := testServiceWithPool(t)
+	h := &recordingHandler{}
+	s = s.WithLogger(slog.New(h))
+	worker := service.NewRunRetentionWorker(s)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	worker.Run(ctx)
+
+	if attrs := h.attrs("run retention sweep failed"); attrs == nil {
+		t.Fatalf("no failure log line produced; got messages %v", h.messages())
 	}
 }

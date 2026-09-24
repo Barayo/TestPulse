@@ -71,7 +71,7 @@ func (w *RunRetentionWorker) Sweep(ctx context.Context) (int, error) {
 // next one); there is no caller to report them to once this is running
 // detached.
 func (w *RunRetentionWorker) Run(ctx context.Context) {
-	_, _ = w.Sweep(ctx)
+	w.sweepAndLog(ctx)
 	ticker := time.NewTicker(w.Interval)
 	defer ticker.Stop()
 	for {
@@ -79,7 +79,13 @@ func (w *RunRetentionWorker) Run(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			_, _ = w.Sweep(ctx)
+			w.sweepAndLog(ctx)
 		}
+	}
+}
+
+func (w *RunRetentionWorker) sweepAndLog(ctx context.Context) {
+	if _, err := w.Sweep(ctx); err != nil {
+		w.svc.logger.Warn("run retention sweep failed", "error", err)
 	}
 }

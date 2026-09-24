@@ -3,6 +3,7 @@ package service_test
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"testing"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
@@ -114,5 +115,25 @@ func TestProjectDeletionWorkerLeavesUnmarkedProjectsAlone(t *testing.T) {
 
 	if _, err := s.GetProject(context.Background(), kept.ID); err != nil {
 		t.Errorf("GetProject(kept) = %v, want the project untouched", err)
+	}
+}
+
+// TestProjectDeletionWorkerLogsProcessingFailure covers add-service-request-
+// logging: a tick's failure is logged rather than silently discarded. A
+// pre-cancelled context is the minimal viable way to force ProcessPending's
+// first store call to fail, and also makes Run return after exactly one
+// tick.
+func TestProjectDeletionWorkerLogsProcessingFailure(t *testing.T) {
+	s := testService(t)
+	h := &recordingHandler{}
+	s = s.WithLogger(slog.New(h))
+	worker := service.NewProjectDeletionWorker(s)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	worker.Run(ctx)
+
+	if attrs := h.attrs("project deletion processing failed"); attrs == nil {
+		t.Fatalf("no failure log line produced; got messages %v", h.messages())
 	}
 }

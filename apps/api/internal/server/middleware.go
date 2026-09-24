@@ -2,10 +2,13 @@ package server
 
 import (
 	"context"
+	"log/slog"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
@@ -34,6 +37,48 @@ func securityHeaders(next http.Handler) http.Handler {
 		}
 		next.ServeHTTP(w, r)
 	})
+}
+
+// requestID sets the X-Request-Id response header from chi's own
+// middleware.RequestID (which only stores the ID in context, deliberately
+// never setting a response header itself — that's the app's job). Must run
+// after middleware.RequestID in the chain (add-service-request-logging D3).
+func requestID(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Request-Id", middleware.GetReqID(r.Context()))
+		next.ServeHTTP(w, r)
+	})
+}
+
+// requestLogging logs one line for any response with status >= 400: method,
+// path, status, request ID, duration. Warn for 4xx, Error for 5xx. Runs
+// alongside (not instead of) respond's own "request failed" line for the
+// 500 case, which carries the actual Go error value this middleware can't
+// see (add-service-request-logging D2).
+func requestLogging(logger *slog.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			ww := middleware.NewWrapResponseWriter(w, r.ProtoMajor)
+			start := time.Now()
+			next.ServeHTTP(ww, r)
+			status := ww.Status()
+			if status < 400 {
+				return
+			}
+			attrs := []any{
+				"method", r.Method,
+				"path", r.URL.Path,
+				"status", status,
+				"requestId", middleware.GetReqID(r.Context()),
+				"duration", time.Since(start).String(),
+			}
+			if status >= 500 {
+				logger.Error("request error", attrs...)
+			} else {
+				logger.Warn("request error", attrs...)
+			}
+		})
+	}
 }
 
 // defaultMaxBodyBytes bounds every /api/v1 request body not already

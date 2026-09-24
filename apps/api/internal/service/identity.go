@@ -805,7 +805,7 @@ func (s *Service) audit(ctx context.Context, action, entityType, entityID string
 	// project) must never block the write being audited, matching this
 	// function's existing tolerance for missing actor context above.
 	projectID, _ := s.ProjectIDForAuditEntity(ctx, entityType, entityID)
-	_ = s.store.Audit.Append(ctx, domain.AuditEntry{
+	if err := s.store.Audit.Append(ctx, domain.AuditEntry{
 		ActorKind:  actor.Kind,
 		ActorID:    actor.ID,
 		ActorName:  actor.DisplayName,
@@ -814,7 +814,9 @@ func (s *Service) audit(ctx context.Context, action, entityType, entityID string
 		EntityID:   entityID,
 		ProjectID:  projectID,
 		Detail:     d,
-	})
+	}); err != nil {
+		s.logger.Warn("audit append failed", "action", action, "entityType", entityType, "error", err)
+	}
 }
 
 func (s *Service) AuditHistory(ctx context.Context, entityType, entityID string) ([]domain.AuditEntry, error) {
