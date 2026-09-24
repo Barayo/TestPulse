@@ -18,12 +18,6 @@ jobs:
   analyze:
     name: Analyze (${{ matrix.language }})
     runs-on: ubuntu-latest
-    permissions:
-      # security-events: write is required for CodeQL's analyze step to
-      # upload its SARIF results as Code Scanning alerts.
-      actions: read
-      contents: read
-      security-events: write
     strategy:
       fail-fast: false
       matrix:
@@ -60,3 +54,42 @@ jobs:
       - uses: github/codeql-action/analyze@cdf488f595d80d6e07e03d4674febd5ab45fa938 # v4.37.9
         with:
           category: "/language:${{ matrix.language }}"
+          # upload: never — GitHub's Code Scanning upload API requires GitHub
+          # Advanced Security, a paid per-committer add-on not available for
+          # this private repo (no budget, free/open-source tools only). Same
+          # constraint the `secrets` job above already works around by using
+          # gitleaks' own CLI instead of GitHub's native (GHAS-gated) secret
+          # scanning. The analysis itself is unaffected — only the upload
+          # step is skipped; the two steps below turn the local SARIF output
+          # into an equivalent free CI gate (design.md's updated D6).
+          upload: never
+          output: sarif-results
+
+      - name: Fail if CodeQL found anything
+        run: |
+          count=$(python3 -c "
+          import json, glob
+          total = 0
+          for f in glob.glob('sarif-results/*.sarif'):
+              with open(f) as fh:
+                  data = json.load(fh)
+              for run in data.get('runs', []):
+                  total += len(run.get('results', []))
+          print(total)
+          ")
+          echo "CodeQL findings for ${{ matrix.language }}: $count"
+          if [ "$count" -gt 0 ]; then
+            echo "::error::CodeQL found $count issue(s) in ${{ matrix.language }} — see the codeql-${{ matrix.language }}-sarif artifact for details"
+            exit 1
+          fi
+
+      - name: Upload SARIF as a build artifact
+        # The only place results are visible without GHAS — download from
+        # the workflow run's Summary page and open with any SARIF viewer
+        # (e.g. the free "SARIF Viewer" VS Code extension).
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: codeql-${{ matrix.language }}-sarif
+          path: sarif-results/
+          retention-days: 30
