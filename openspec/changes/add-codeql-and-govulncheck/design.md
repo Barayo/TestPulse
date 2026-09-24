@@ -100,6 +100,27 @@ turning the gate on. Filing them separately would just mean merging a
 red/failing gate now and a trivial fix PR five minutes later — no benefit,
 extra process.
 
+**D7: No GitHub Advanced Security — CodeQL's own SARIF output is parsed
+directly to fail the job, instead of uploading to Code Scanning.**
+Discovered mid-implementation: `codeql-action/analyze`'s default upload
+step failed on the first real PR run with "Advanced Security must be
+enabled for this repository" — this repo is private, and GHAS's Code
+Security add-on is a paid per-active-committer product (confirmed ~$30/
+committer/month as of 2026), out of budget for this project (free/
+open-source tools only). This is the exact same constraint the `secrets`
+job already documents and works around for GitHub's native secret
+scanning, using gitleaks' own CLI instead — D7 applies the identical
+pattern to CodeQL: `analyze` still runs the real analysis (`upload:
+never`, `output: sarif-results`), a follow-up step parses the resulting
+SARIF file(s) with a small inline Python script and `exit 1`s if any
+`results` entries exist, and the SARIF is kept as a 30-day build artifact
+(downloadable, openable with any free SARIF viewer) so a finding is still
+inspectable — it's just not surfaced through GitHub's Code Scanning UI or
+inline PR annotations. Confirmed via a live PR (#208) that the pre-GHAS
+approach genuinely fails on the upload step even though the underlying
+analysis itself succeeds — this isn't a workflow misconfiguration, it's a
+product-tier gate.
+
 ## Risks / Trade-offs
 
 - **A future `govulncheck`/CodeQL-action bump could introduce new
@@ -114,6 +135,16 @@ extra process.
   behavior** → Low risk for a single patch version; `apps/api`'s existing
   `attachmentimage` test suite exercises decode paths and must stay green
   after the bump (verified as part of this change, not assumed).
+- **Without GHAS (D7), a CodeQL finding has no inline PR annotation and no
+  persistent dashboard** — a contributor has to notice the CI job failed
+  and download the SARIF artifact to see what was found, rather than
+  seeing it inline on the diff → Accepted given the budget constraint; the
+  job still fails the PR either way, which is the actual thing that
+  matters (a finding can't silently merge). If this project's budget or
+  hosting model changes later (e.g. a future public-repo migration, where
+  GHAS is free), revisiting D7 to re-enable upload is a small, easily
+  reversible change — swap `upload: never` back to the default and drop
+  the two SARIF-parsing/artifact steps.
 
 ## Migration Plan
 

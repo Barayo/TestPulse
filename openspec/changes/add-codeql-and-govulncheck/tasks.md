@@ -69,12 +69,26 @@
   `codeql-action/init` with `languages: javascript-typescript`,
   `build-mode: none`, `codeql-action/analyze` — no build step needed
   (source-only analysis).
-- [ ] 5.4 (deferred to 7.4, combined with 4.3 in one push) Push a throwaway branch (or open a draft PR) to confirm the
+- [x] 5.4 Push a throwaway branch (or open a draft PR) to confirm the
   workflow actually runs to completion for both matrix entries in real
   GitHub Actions and produces a Code Scanning result (even if empty) —
   CodeQL's manual-build-mode wiring is easy to get subtly wrong
   (e.g. wrong working directory) in a way that only surfaces at runtime,
-  not from reading the YAML.
+  not from reading the YAML. Opened PR #208. Both matrix entries' analysis
+  ran successfully, but the upload step failed: "Advanced Security must be
+  enabled for this repository to use code scanning" — this repo is
+  private, GHAS's Code Security add-on is ~$30/active-committer/month, out
+  of budget (user: "No budget for it... only free and opensource tools").
+  Fixed per design.md D7: `upload: never` + `output: sarif-results` on the
+  `analyze` step, a new step parsing the SARIF with inline Python and
+  `exit 1`-ing on any finding, plus an `upload-artifact` step (30-day
+  retention) so a finding is still downloadable/inspectable without GHAS —
+  mirrors the `secrets` job's own established gitleaks-instead-of-native-
+  scanning pattern. Re-pushed; see task 7.4 for the confirmed-green re-run.
+- [ ] 5.5 Re-verify: with D7's fix pushed, confirm both `Analyze (go)` and
+  `Analyze (javascript-typescript)` pass in the real PR (not just that the
+  analysis step ran — that the whole job, including the new SARIF-parsing
+  gate step, is green).
 
 ## 6. Documentation
 
