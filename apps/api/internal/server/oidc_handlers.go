@@ -148,9 +148,20 @@ func (h *api) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Single-use: clear it now that it's been checked, whether or not the
-	// rest of the callback succeeds.
+	// rest of the callback succeeds. Attributes mirror the cookie's own
+	// original Set-Cookie (line ~113-121) — a clearing Set-Cookie with
+	// different Secure/HttpOnly/SameSite is itself flagged by CodeQL
+	// (go/cookie-secure-not-set) as a cookie sent without Secure, and
+	// matching attributes is also what makes the deletion reliable.
 	http.SetCookie(w, &http.Cookie{
-		Name: oidcStateCookieName, Value: "", Path: "/", MaxAge: -1, Expires: time.Unix(0, 0),
+		Name:     oidcStateCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   requestIsHTTPS(r),
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
 	})
 
 	code := r.URL.Query().Get("code")

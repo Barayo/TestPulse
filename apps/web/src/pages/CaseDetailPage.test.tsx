@@ -593,7 +593,13 @@ describe('CaseDetailPage', () => {
     expect(bars[2]).toHaveAttribute('aria-label', expect.stringContaining('Pass'))
 
     const lastRun = new Date('2026-07-20T10:00:00Z').toLocaleDateString()
-    expect(screen.getByText(new RegExp(`Last run.*${lastRun.replace(/\//g, '\\/')}`))).toBeInTheDocument()
+    // Escape every regex metacharacter in the locale-formatted date, not
+    // just '/' — a partial escape is itself a CodeQL finding
+    // (js/incomplete-sanitization), since it silently breaks if the
+    // runtime's locale format ever includes an unescaped char this pattern
+    // missed.
+    const escapedLastRun = lastRun.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    expect(screen.getByText(new RegExp(`Last run.*${escapedLastRun}`))).toBeInTheDocument()
   })
 
   it('orders sidebar sections Properties → Results → Version history', async () => {
