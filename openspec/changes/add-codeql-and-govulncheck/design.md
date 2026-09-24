@@ -121,6 +121,16 @@ approach genuinely fails on the upload step even though the underlying
 analysis itself succeeds — this isn't a workflow misconfiguration, it's a
 product-tier gate.
 
+A second, unrelated permission gap surfaced on the next PR re-run after
+D7's fix: dropping the job-level `permissions:` block along with
+`security-events: write` also dropped the implicit `actions: read` it
+carried, and `codeql-action/analyze` calls the workflow-run API for an
+unrelated file-coverage feature (restricted to default/protected branches
+regardless) even when `upload: never` — failing both matrix jobs with
+"Resource not accessible by integration" before ever reaching the
+SARIF-parsing gate. Fixed by adding `actions: read` back to the
+workflow-level `permissions:` block.
+
 ## Risks / Trade-offs
 
 - **A future `govulncheck`/CodeQL-action bump could introduce new
