@@ -200,3 +200,18 @@ private network/VPN) plain HTTP is fine; on the public internet or an
 untrusted shared network, session cookies and credentials travel in clear
 text and are interceptable without TLS in front, exactly like any other
 auth mechanism would be on an unencrypted connection.
+
+**Every response carries a `Content-Security-Policy` header** (backlog
+#189, `securityHeaders` in `apps/api/internal/server/middleware.go`),
+scoped to what the embedded `apps/web` bundle actually uses:
+`script-src 'self'` with no `'unsafe-inline'`/`'unsafe-eval'` (the
+directive that actually stops an injected-script XSS regression),
+`style-src 'self' 'unsafe-inline'` (React's `style={{}}` prop compiles to
+real inline `style=""` attributes throughout the UI), `img-src 'self'
+data:`, `font-src 'self'`, `connect-src 'self'` (all API traffic is
+same-origin), `object-src 'none'`, `base-uri 'self'`, `form-action
+'self'`, and `frame-ancestors 'none'` (CSP's modern equivalent to the
+existing `X-Frame-Options: DENY`, kept alongside it). **If you add a
+CDN-hosted script, font, or image, or embed a third-party iframe, you
+must add the matching source to this policy** — it isn't a permissive
+default, it's audited against the bundle as it exists today.

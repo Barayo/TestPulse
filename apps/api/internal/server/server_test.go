@@ -102,9 +102,10 @@ func TestReadinessDoesNotLeakUnderlyingErrorDetail(t *testing.T) {
 
 // Every response — including the unauthenticated liveness probe, so the
 // check has no route-specific escape hatch — must carry basic
-// clickjacking/MIME-sniffing hardening (backlog #114). A full
-// Content-Security-Policy is a separate, bigger follow-up (needs an audit
-// of the embedded React bundle for inline scripts/styles first).
+// clickjacking/MIME-sniffing hardening (backlog #114), plus a
+// Content-Security-Policy scoped to what the embedded React bundle
+// actually uses (add-content-security-policy design.md D1, following a
+// bundle audit).
 func TestSecurityHeadersPresentOnEveryResponse(t *testing.T) {
 	h := newTestServer(nil)
 	rec := httptest.NewRecorder()
@@ -118,6 +119,12 @@ func TestSecurityHeadersPresentOnEveryResponse(t *testing.T) {
 	}
 	if got := rec.Header().Get("Referrer-Policy"); got != "strict-origin-when-cross-origin" {
 		t.Errorf("Referrer-Policy = %q, want strict-origin-when-cross-origin", got)
+	}
+	wantCSP := "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+		"img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; " +
+		"base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+	if got := rec.Header().Get("Content-Security-Policy"); got != wantCSP {
+		t.Errorf("Content-Security-Policy = %q, want %q", got, wantCSP)
 	}
 }
 

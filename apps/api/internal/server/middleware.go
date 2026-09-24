@@ -26,12 +26,25 @@ const sessionCookieName = "session"
 // request actually arrived over HTTPS (requestIsHTTPS, backlog #112's
 // helper) — sending it over a genuine plain-HTTP connection (local/dev)
 // would be misleading, and browsers ignore it there anyway per spec.
+// contentSecurityPolicy is scoped to what the embedded apps/web bundle
+// actually uses (add-content-security-policy design.md D1, following a
+// bundle audit): no inline/eval script anywhere, so script-src stays
+// strict; style-src needs 'unsafe-inline' for React's style={{}} prop
+// (59 call sites, not itself an XSS vector the way inline script is);
+// img-src needs data: for one CSS noise-texture URI. Set unconditionally,
+// unlike HSTS below, since it has no protocol-dependent caveat (D2).
+const contentSecurityPolicy = "default-src 'self'; script-src 'self'; " +
+	"style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; " +
+	"connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; " +
+	"frame-ancestors 'none'"
+
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		h := w.Header()
 		h.Set("X-Frame-Options", "DENY")
 		h.Set("X-Content-Type-Options", "nosniff")
 		h.Set("Referrer-Policy", "strict-origin-when-cross-origin")
+		h.Set("Content-Security-Policy", contentSecurityPolicy)
 		if requestIsHTTPS(r) {
 			h.Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
