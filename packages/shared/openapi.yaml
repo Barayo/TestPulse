@@ -12,6 +12,8 @@ info:
 servers:
   - url: /
     description: Same-origin deployment
+security:
+  - bearerAuth: []
 paths:
   /healthz:
     get:
@@ -2957,6 +2959,10 @@ paths:
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
   responses:
     ValidationError:
       description: Invalid input; the message names the offending field

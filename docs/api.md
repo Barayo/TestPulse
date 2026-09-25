@@ -10,6 +10,15 @@ source of truth consumed by:
   `openapi-fetch`),
 - external tooling and future connectors.
 
+**Every running instance serves this contract live and interactively at
+`GET /docs`** — a Swagger UI embedded in the binary itself (`go:embed`, same
+pattern as the web UI), always exactly in sync with the version actually
+deployed, with zero external hosting dependency (works air-gapped). It's
+unauthenticated — the API's shape is already public via this repo's
+`openapi.yaml`. Use its "Authorize" button with a scoped API token
+(`Authorization: Bearer <token>`) to make real "Try it out" requests against
+that instance.
+
 All application endpoints are versioned under `/api/v1`. Health probes sit at
 the root because infrastructure expects them there. The [MCP server](mcp-server.md)
 (`/mcp`) is a separate protocol, not part of this OpenAPI contract, but its

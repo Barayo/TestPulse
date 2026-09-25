@@ -1,0 +1,4789 @@
+openapi: 3.0.3
+info:
+  title: TestPulse API
+  description: >
+    The TestPulse REST API. This contract is the single source of truth
+    consumed by the web UI (generated TypeScript client), MCP tooling, and
+    external integrations.
+  version: 0.0.1
+  license:
+    name: AGPL-3.0-only
+    url: https://www.gnu.org/licenses/agpl-3.0.txt
+servers:
+  - url: /
+    description: Same-origin deployment
+security:
+  - bearerAuth: []
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Reports process health only; independent of dependency state.
+      tags: [system]
+      responses:
+        "200":
+          description: Process is alive
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: >
+        Reports dependency health: database reachable and schema migrations
+        current.
+      tags: [system]
+      responses:
+        "200":
+          description: Service is ready to receive traffic
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+        "503":
+          description: A dependency is unhealthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /api/v1/meta:
+    get:
+      operationId: getMeta
+      summary: Service metadata
+      tags: [system]
+      responses:
+        "200":
+          description: Service name, version, and the publicProjectsEnabled kill switch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Meta"
+  /api/v1/instance-settings:
+    get:
+      operationId: getInstanceSettings
+      summary: Read instance-wide settings
+      description: Tenant-Admin-only.
+      tags: [system]
+      responses:
+        "200":
+          description: Current instance settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstanceSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    patch:
+      operationId: updateInstanceSettings
+      summary: Update instance-wide settings
+      description: >
+        Tenant-Admin-only. A partial update — publicProjectsEnabled
+        (enable-public-project-access) and runRetentionDays
+        (add-data-retention) may be set independently or together.
+      tags: [system]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/InstanceSettingsUpdate" }
+      responses:
+        "200":
+          description: Updated instance settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/InstanceSettings" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/projects:
+    get:
+      operationId: listProjects
+      summary: List projects
+      tags: [projects]
+      responses:
+        "200":
+          description: All projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
+    post:
+      operationId: createProject
+      summary: Create a project
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectInput" }
+      responses:
+        "201":
+          description: Created project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/projects/summaries:
+    get:
+      operationId: listProjectSummaries
+      summary: Suite/case counts and latest-run pass rate for every non-archived project, in one request
+      tags: [projects]
+      responses:
+        "200":
+          description: One summary per non-archived project
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ProjectSummary" }
+  /api/v1/tags:
+    get:
+      operationId: listTagNames
+      summary: >-
+        List the full shared project tag vocabulary (add-project-tags), for
+        the project list's filter control and the tag picker's autocomplete.
+      tags: [projects]
+      responses:
+        "200":
+          description: Every tag name currently in the shared vocabulary
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+  /api/v1/projects/{projectKey}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getProject
+      summary: Get a project
+      tags: [projects]
+      responses:
+        "200":
+          description: The project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      operationId: updateProject
+      summary: Rename, describe, or archive a project
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectUpdate" }
+      responses:
+        "200":
+          description: Updated project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: deleteProject
+      summary: >-
+        Permanently delete an already-archived project and everything
+        scoped to it. Queues the deletion (hidden from listings
+        immediately) and returns before the background purge completes.
+      tags: [projects]
+      responses:
+        "202": { description: Deletion queued; the project is already hidden from listings }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/favorite:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: starProject
+      summary: Star a project for the calling user
+      tags: [projects]
+      responses:
+        "204": { description: Project is now favorited by the caller }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: unstarProject
+      summary: Unstar a project for the calling user
+      tags: [projects]
+      responses:
+        "204": { description: Project is no longer favorited by the caller }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/projects/{projectKey}/tags/{tagName}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+      - { name: tagName, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: assignProjectTag
+      summary: >-
+        Assign a tag to a project, creating the shared vocabulary entry if
+        it doesn't already exist (case-insensitive reuse).
+      tags: [projects]
+      responses:
+        "204": { description: The project now has this tag assigned }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeProjectTag
+      summary: >-
+        Remove a tag from a project. The tag itself stays in the shared
+        vocabulary for reuse, even if this was its last assignment.
+      tags: [projects]
+      responses:
+        "204": { description: The tag is no longer assigned to this project }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/projects/{projectKey}/cases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCases
+      summary: List test cases in a project, cursor-paginated in insertion order
+      tags: [cases]
+      parameters:
+        - name: jiraLinked
+          in: query
+          required: false
+          schema: { type: boolean }
+          description: >-
+            When true, return only cases with a non-null jiraIssueKey
+            (add-jira-connector) — a DB-level filter, not client-side. Not
+            itself paginated (always the whole matching set, nextCursor
+            always null) — a project's jira-linked cases are inherently a
+            small subset.
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of test cases with their current version content
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaseListPage" }
+    post:
+      operationId: createCase
+      summary: Create a test case (version 1). Defaults into the project's root folder.
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseCreateInput" }
+      responses:
+        "201":
+          description: Created case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/cases/import-csv:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: importCasesCSV
+      summary: >-
+        Bulk-create cases from an uploaded CSV file (add-csv-import-export).
+        A CSV column not matching a fixed core header is created as a
+        text-type project custom field on first encounter. A row that fails
+        validation is skipped and named in the response, never silently
+        dropped — the rest of the file still imports.
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+                folderId:
+                  type: string
+                  description: Required — the target folder every imported case is created in.
+              required: [file, folderId]
+      responses:
+        "201":
+          description: Import result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CsvImportResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/cases/export-csv:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: exportCasesCSV
+      summary: >-
+        Export cases as CSV, in the same column shape import accepts
+        (add-csv-import-export) — the whole project, or one folder when
+        folderId is given.
+      tags: [cases]
+      parameters:
+        - name: folderId
+          in: query
+          required: false
+          schema: { type: string }
+      responses:
+        "200":
+          description: CSV file
+          content:
+            text/csv: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/folders:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listFolders
+      summary: List folders in a project (flat; reconstruct the tree from parentFolderId), cursor-paginated in insertion order
+      tags: [folders]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of folders, including the project's root folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolderListPage" }
+    post:
+      operationId: createFolder
+      summary: Create a subfolder (a parent folder is always required)
+      tags: [folders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewFolder" }
+      responses:
+        "201":
+          description: Created folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Folder" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/folders/{folderId}:
+    parameters:
+      - { name: folderId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: moveFolder
+      summary: >-
+        Move (reparent) a folder to a different parent folder
+        (add-library-folder-selection, sectionEdit permission). Rejects a
+        target that is the folder itself or anywhere in its own subtree, and
+        rejects moving the root folder — both as 400, not a 500 or a silent
+        no-op.
+      tags: [folders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [parentFolderId]
+              properties:
+                parentFolderId: { type: string }
+      responses:
+        "200":
+          description: The moved folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Folder" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: deleteFolder
+      summary: >-
+        Delete a folder (Tenant Admin or sectionDelete permission).
+        Cascading soft delete (add-delete-mode): the folder and every folder
+        and case anywhere in its subtree are soft-deleted, not reparented.
+        The root folder cannot be deleted.
+      tags: [folders]
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/folders/{folderId}/delete-preview:
+    parameters:
+      - { name: folderId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: folderDeletePreview
+      summary: >-
+        Preview how many cases and descendant folders a delete of this
+        folder would remove (add-delete-mode) — computed before the
+        confirmation dialog opens, not part of the delete response.
+      tags: [folders]
+      responses:
+        "200":
+          description: Subtree counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolderDeletePreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/cases/{caseKey}/folder:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: moveCase
+      summary: Move a case to a different folder (suite membership is unaffected)
+      tags: [cases, folders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [folderId]
+              properties:
+                folderId: { type: string }
+      responses:
+        "204": { description: Moved }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/cases/{caseKey}/jira-link:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setCaseJiraLink
+      summary: >-
+        Set or clear a case's Jira issue key (add-jira-connector) —
+        independent of versioned content, never creates a new version.
+        Clearing also clears the cached jiraIssueSummary/jiraIssueStatus.
+      tags: [cases, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueKey]
+              properties:
+                jiraIssueKey: { type: string, nullable: true }
+      responses:
+        "200":
+          description: The case with its updated Jira link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/cases/{caseKey}/jira-sync:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setCaseJiraSync
+      summary: >-
+        Write the Jira connector's cached issue summary/status for a case
+        (add-jira-connector) — requires an existing jiraIssueKey (409
+        otherwise); jiraLastSyncedAt is set server-side.
+      tags: [cases, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueSummary, jiraIssueStatus]
+              properties:
+                jiraIssueSummary: { type: string }
+                jiraIssueStatus: { type: string }
+      responses:
+        "200":
+          description: The case with its updated cached Jira fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/cases/{caseKey}:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getCase
+      summary: Get a case at its current version
+      tags: [cases]
+      responses:
+        "200":
+          description: The case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: editCase
+      summary: Edit a case (creates a new immutable version)
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CaseContent" }
+      responses:
+        "200":
+          description: Case at its new version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: deleteCase
+      summary: >-
+        Soft-delete a case (Tenant Admin or caseDelete permission) — versions
+        stay readable in runs
+      tags: [cases]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/cases/{caseKey}/versions:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCaseVersions
+      summary: Full version history of a case
+      tags: [cases]
+      responses:
+        "200":
+          description: All versions, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseVersion" }
+  /api/v1/cases/{caseKey}/versions/{version}/restore:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+      - { name: version, in: path, required: true, schema: { type: integer } }
+    post:
+      operationId: restoreCaseVersion
+      summary: Restore an old version's content as a new current version
+      tags: [cases]
+      responses:
+        "201":
+          description: Case at its new (restored-content) version
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/cases/{caseKey}/executions:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+      - name: order
+        in: query
+        required: false
+        schema: { type: string, enum: [recent] }
+        description: Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`.
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 50 }
+        description: Only valid paired with order=recent; caps the number of executions returned.
+    get:
+      operationId: listCaseExecutions
+      summary: Every execution that has pinned this case, across all runs — grouped by version by default, or the most recent N ordered by recency
+      tags: [cases]
+      responses:
+        "200":
+          description: Executions ordered by pinned version then time (default), or strictly by recency and capped (order=recent&limit=N)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseExecution" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/projects/{projectKey}/flaky-cases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listFlakyCases
+      summary: List every currently-flaky case in a project
+      tags: [cases]
+      responses:
+        "200":
+          description: Flaky cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FlakyCase" }
+  /api/v1/projects/{projectKey}/audit:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listProjectActivity
+      summary: A project's most recent audited writes, newest first (project-activity-feed)
+      description: >-
+        Backs the dashboard Activity panel — a bounded teaser, not a full
+        paginated history. Only entries for entity types with an owning
+        project appear; entries recorded before this endpoint shipped have
+        no project association and never appear here (no backfill).
+      tags: [projects]
+      parameters:
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Recent audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+  /api/v1/projects/{projectKey}/suites:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listSuites
+      summary: List suites in a project, cursor-paginated in insertion order
+      tags: [suites]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of suites with case membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuiteListPage" }
+    post:
+      operationId: createSuite
+      summary: Create a suite
+      tags: [suites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SuiteInput" }
+      responses:
+        "201":
+          description: Created suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/suites/{suiteKey}/cases/{caseKey}:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: addCaseToSuite
+      summary: Add a case to a suite (n:m)
+      tags: [suites]
+      responses:
+        "204": { description: Added }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: removeCaseFromSuite
+      summary: Remove a case from a suite (case itself survives)
+      tags: [suites]
+      responses:
+        "204": { description: Removed }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/runs:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listRuns
+      summary: List runs in a project, cursor-paginated
+      tags: [runs]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunListPage" }
+    post:
+      operationId: createRun
+      summary: Create a run, pinning each case's current version
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunInput" }
+      responses:
+        "201":
+          description: Created run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/releases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listReleases
+      summary: List a project's releases, newest first, optionally filtered by status
+      tags: [releases]
+      parameters:
+        - { name: status, in: query, required: false, schema: { $ref: "#/components/schemas/ReleaseStatus" } }
+      responses:
+        "200":
+          description: Releases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Release" }
+    post:
+      operationId: createRelease
+      summary: Create a release
+      tags: [releases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReleaseInput" }
+      responses:
+        "201":
+          description: Created release
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Release" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/releases/{releaseKey}:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRelease
+      summary: Get a release
+      tags: [releases]
+      responses:
+        "200":
+          description: Release
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Release" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: updateRelease
+      summary: Update a release's name, description, and status
+      tags: [releases]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ReleaseInput" }
+      responses:
+        "200":
+          description: Updated release
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Release" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: deleteRelease
+      summary: Delete a release (rejected while it still has Test Plans)
+      tags: [releases]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Release still has Test Plans }
+  /api/v1/releases/{releaseKey}/rollup:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getReleaseRollup
+      summary: Aggregated pass rate/run count across the release's Test Plans' runs
+      tags: [releases]
+      responses:
+        "200":
+          description: Rollup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rollup" }
+  /api/v1/releases/{releaseKey}/requirements-coverage:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getReleaseRequirementsCoverage
+      summary: Coverage matrix for every requirement in the release's project, scoped to this release's Test Plans
+      tags: [requirements]
+      responses:
+        "200":
+          description: Coverage matrix
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/RequirementCoverage" }
+  /api/v1/projects/{projectKey}/requirements:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listRequirements
+      summary: List a project's requirements
+      tags: [requirements]
+      responses:
+        "200":
+          description: Requirements
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Requirement" }
+    post:
+      operationId: createRequirement
+      summary: Create a requirement
+      tags: [requirements]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequirementInput" }
+      responses:
+        "201":
+          description: Created requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requirement" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/requirements/{requirementKey}:
+    parameters:
+      - { name: requirementKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRequirement
+      summary: Get a requirement
+      tags: [requirements]
+      responses:
+        "200":
+          description: Requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requirement" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: updateRequirement
+      summary: Update a requirement's name, description, and externalRef
+      tags: [requirements]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RequirementInput" }
+      responses:
+        "200":
+          description: Updated requirement
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Requirement" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: deleteRequirement
+      summary: Delete a requirement (rejected while it still has linked cases)
+      tags: [requirements]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Requirement still has linked cases }
+  /api/v1/requirements/{requirementKey}/cases/{caseKey}:
+    parameters:
+      - { name: requirementKey, in: path, required: true, schema: { type: string } }
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: linkRequirementCase
+      summary: Link a case to a requirement (n:m, idempotent)
+      tags: [requirements]
+      responses:
+        "204": { description: Linked }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: unlinkRequirementCase
+      summary: Unlink a case from a requirement (case and requirement both survive)
+      tags: [requirements]
+      responses:
+        "204": { description: Unlinked }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/plans:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listTestPlansByProject
+      summary: List every test plan across all of a project's releases, in one batched request
+      description: >-
+        Populates a Test Plan picker (e.g. the run-creation flow) without an
+        N+1 releases-then-plans client-side fetch loop.
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Test plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TestPlan" }
+  /api/v1/releases/{releaseKey}/plans:
+    parameters:
+      - { name: releaseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listTestPlans
+      summary: List a release's test plans, newest first
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Test plans
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/TestPlan" }
+    post:
+      operationId: createTestPlan
+      summary: Create a test plan scoped to a release
+      tags: [testPlans]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestPlanInput" }
+      responses:
+        "201":
+          description: Created test plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestPlan" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/plans/{planKey}:
+    parameters:
+      - { name: planKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTestPlan
+      summary: Get a test plan
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Test plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestPlan" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: updateTestPlan
+      summary: Update a test plan's name and description
+      tags: [testPlans]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TestPlanInput" }
+      responses:
+        "200":
+          description: Updated test plan
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestPlan" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: deleteTestPlan
+      summary: Delete a test plan (rejected while it still has runs)
+      tags: [testPlans]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { description: Test plan still has runs }
+  /api/v1/plans/{planKey}/rollup:
+    parameters:
+      - { name: planKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTestPlanRollup
+      summary: Aggregated pass rate/run count across the test plan's runs
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Rollup
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Rollup" }
+  /api/v1/plans/{planKey}/runs:
+    parameters:
+      - { name: planKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listRunsByTestPlan
+      summary: List the runs scoped to a single test plan, newest first
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Runs
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Run" }
+  /api/v1/projects/{projectKey}/runs/status-summary:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getProjectStatusSummary
+      summary: Project-wide run item status breakdown, across every run
+      tags: [runs]
+      responses:
+        "200":
+          description: Status summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectStatusSummary" }
+  /api/v1/projects/{projectKey}/custom-fields:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCustomFields
+      summary: List a project's custom field definitions, ordered by their admin-set position
+      tags: [customFields]
+      responses:
+        "200":
+          description: Custom fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CustomField" }
+    post:
+      operationId: createCustomField
+      summary: Define a new custom field
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldInput" }
+      responses:
+        "201":
+          description: Created field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomField" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/custom-fields/order:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: reorderCustomFields
+      summary: Set the display order of a project's custom fields
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldOrderInput" }
+      responses:
+        "204": { description: Reordered }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/webhooks:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listWebhookDestinations
+      summary: List a project's configured webhook destinations (add-run-notifications)
+      tags: [webhooks]
+      responses:
+        "200":
+          description: Webhook destinations
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/WebhookDestination" }
+    post:
+      operationId: addWebhookDestination
+      summary: >-
+        Configure a new webhook destination. Fires on a failed/blocked
+        result and on run close; the URL must be https and may not point
+        to a localhost, private, or link-local address.
+      tags: [webhooks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/WebhookDestinationInput" }
+      responses:
+        "201":
+          description: Created destination
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/WebhookDestination" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/webhooks/{webhookId}:
+    parameters:
+      - { name: webhookId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: removeWebhookDestination
+      summary: Remove a webhook destination
+      tags: [webhooks]
+      responses:
+        "204": { description: Removed }
+  /api/v1/custom-fields/{fieldId}:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: renameCustomField
+      summary: Rename a custom field (its type cannot change after creation)
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldRenameInput" }
+      responses:
+        "200":
+          description: Renamed field
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomField" }
+    delete:
+      operationId: deleteCustomField
+      summary: Delete a custom field — does not rewrite any case version's recorded history
+      tags: [customFields]
+      responses:
+        "204": { description: Deleted }
+  /api/v1/custom-fields/{fieldId}/deletion-preview:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: customFieldDeletionPreview
+      summary: How many of the project's current cases have a value set for this field
+      tags: [customFields]
+      responses:
+        "200":
+          description: Deletion preview
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomFieldDeletionPreview" }
+  /api/v1/custom-fields/{fieldId}/options:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: addCustomFieldOption
+      summary: Add an option to a select-type custom field
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldOptionInput" }
+      responses:
+        "201":
+          description: Created option
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CustomFieldOption" }
+  /api/v1/custom-fields/{fieldId}/options/order:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: reorderCustomFieldOptions
+      summary: Set the display order of a select field's options
+      tags: [customFields]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CustomFieldOptionOrderInput" }
+      responses:
+        "204": { description: Reordered }
+  /api/v1/custom-fields/{fieldId}/options/{optionId}:
+    parameters:
+      - { name: fieldId, in: path, required: true, schema: { type: string } }
+      - { name: optionId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: removeCustomFieldOption
+      summary: Remove an option from a select-type custom field
+      tags: [customFields]
+      responses:
+        "204": { description: Removed }
+  /api/v1/projects/{projectKey}/step-groups:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listStepGroups
+      summary: List a project's shared step groups (add-reusable-steps) — requires read
+      tags: [stepGroups]
+      responses:
+        "200":
+          description: Step groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/StepGroup" }
+    post:
+      operationId: createStepGroup
+      summary: Create a shared step group — requires manageProject
+      tags: [stepGroups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepGroupInput" }
+      responses:
+        "201":
+          description: Created step group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepGroup" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/step-groups/{groupId}:
+    parameters:
+      - { name: groupId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getStepGroup
+      summary: Get a step group — requires read on its project
+      tags: [stepGroups]
+      responses:
+        "200":
+          description: Step group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepGroup" }
+    put:
+      operationId: updateStepGroup
+      summary: Rename and/or redefine a step group's steps — requires manageProject. Never changes an already-saved case version that referenced it.
+      tags: [stepGroups]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StepGroupInput" }
+      responses:
+        "200":
+          description: Updated step group
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepGroup" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+    delete:
+      operationId: deleteStepGroup
+      summary: Soft-delete a step group — requires manageProject. Already-saved case versions are unaffected.
+      tags: [stepGroups]
+      responses:
+        "204": { description: Deleted }
+  /api/v1/projects/{projectKey}/imports:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: importResults
+      summary: >-
+        Bulk-import externally-run test results from a JUnit XML report,
+        matching each reported test to an existing case by its key
+      tags: [imports]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportRequest" }
+      responses:
+        "201":
+          description: Every reported test matched an existing case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "207":
+          description: Import succeeded but one or more tests had no matching case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/import-jobs:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: createImportJob
+      summary: >-
+        Start a structural import job (cases/folders) from an external
+        source such as TestRail — requires the manageProject permission.
+        Deliberately a distinct resource from POST .../imports (synchronous
+        JUnit-XML result import): add-testrail-importer design.md D3
+        correction, found before implementing, since that path was already
+        taken.
+      tags: [importJobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewImportJob" }
+      responses:
+        "201":
+          description: Job created, pending an importer to claim it
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    get:
+      operationId: listImportJobs
+      summary: >-
+        List every import job ever created for a project, newest first —
+        requires the manageProject permission. The primitive that makes an
+        abandoned or failed import discoverable
+        (fix-import-wizard-orphaned-projects design.md D3).
+      tags: [importJobs]
+      responses:
+        "200":
+          description: The project's import jobs, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ImportJob" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/import-jobs/{jobId}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+      - { name: jobId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getImportJob
+      summary: Poll a structural import job's status/progress/report — requires the manageProject permission
+      tags: [importJobs]
+      responses:
+        "200":
+          description: The job
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ImportJob" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/import-jobs:
+    get:
+      operationId: claimPendingImportJob
+      summary: >-
+        Importer-facing: claim the oldest pending job for the caller's
+        scoped project and source. Requires a per-project-scoped agent
+        token (add-testrail-importer design.md D4) — a human session or an
+        unscoped token is rejected.
+      tags: [importJobs]
+      parameters:
+        - { name: status, in: query, required: true, schema: { type: string, enum: [pending] } }
+        - { name: source, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: A job was claimed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ClaimedImportJob" }
+        "204": { description: Nothing pending for this project/source }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/import-jobs/{jobId}:
+    parameters:
+      - { name: jobId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: patchImportJob
+      summary: >-
+        Importer-facing: report progress and/or terminal completion.
+        Requires the manageProject permission, which a scoped agent token
+        confined to the job's own project satisfies (design.md D3).
+      tags: [importJobs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ImportJobPatch" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/runs/{runKey}:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRun
+      summary: Get a run
+      tags: [runs]
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteRun
+      summary: Permanently delete a run and everything scoped to it (items, results)
+      tags: [runs]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/runs/{runKey}/close:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: closeRun
+      summary: Seal a run — its items become read-only until reopened
+      tags: [runs]
+      responses:
+        "204": { description: Closed }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/runs/{runKey}/reopen:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: reopenRun
+      summary: Reopen a closed run — requires the manageProject permission
+      tags: [runs]
+      responses:
+        "204": { description: Reopened }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/runs/{runKey}/items:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+      - { name: assignee, in: query, required: false, schema: { type: string } }
+      - name: jiraLinked
+        in: query
+        required: false
+        schema: { type: boolean }
+        description: >-
+          When true, return only items with a non-null jiraIssueKey
+          (add-jira-connector) — a DB-level filter, not client-side. Not
+          itself paginated (always the whole matching set, nextCursor
+          always null) — a run's jira-linked items are inherently a small
+          subset.
+      - $ref: "#/components/parameters/cursor"
+      - $ref: "#/components/parameters/limit"
+    get:
+      operationId: listRunItems
+      summary: List run items with pinned content, cursor-paginated in insertion order, optionally filtered by assignee or jiraLinked
+      tags: [runs]
+      responses:
+        "200":
+          description: A page of run items, in insertion order (oldest first — matches the execution board's traversal order, not newest-first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunItemListPage" }
+    post:
+      operationId: addRunItem
+      summary: Add a case to an open run (pins its then-current version); one id per data row for a parameterized case, otherwise a single id
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AddItemInput" }
+      responses:
+        "201":
+          description: Created run item id(s)
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ids]
+                properties:
+                  ids:
+                    type: array
+                    items: { type: string }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/results:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listResults
+      summary: Append-only result log of a run item
+      tags: [runs]
+      responses:
+        "200":
+          description: Results, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Result" }
+    post:
+      operationId: recordResult
+      summary: Record a verdict (appends to log, updates item status)
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NewResult" }
+      responses:
+        "201":
+          description: Recorded result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Result" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/steps/{stepIndex}:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+      - { name: stepIndex, in: path, required: true, schema: { type: integer } }
+    put:
+      operationId: setStepResult
+      summary: Mark one step's verdict, independent of the item's overall verdict
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [verdict]
+              properties:
+                verdict: { $ref: "#/components/schemas/Verdict" }
+      responses:
+        "200":
+          description: The updated step verdict
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StepResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/attachments:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listStagedAttachments
+      summary: Attachments uploaded against this item before a verdict exists
+      tags: [runs]
+      responses:
+        "200":
+          description: Staged attachments (not yet linked to a result), oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Attachment" }
+    post:
+      operationId: stageAttachment
+      summary: >-
+        Upload a screenshot against this item before a verdict exists
+        (PNG/JPEG/WebP, max 5MB) — link it to a result later via NewResult's
+        attachmentIds
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        "201":
+          description: Staged attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/results/{resultId}/attachments:
+    parameters:
+      - { name: resultId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listResultAttachments
+      summary: A result's attachments, oldest first
+      tags: [runs]
+      responses:
+        "200":
+          description: Attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Attachment" }
+    post:
+      operationId: attachToResult
+      summary: >-
+        Upload a screenshot directly against an already-recorded result
+        (PNG/JPEG/WebP, max 5MB) — the after-the-fact attach path from
+        History
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        "201":
+          description: Created attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Attachment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getAttachment
+      summary: The raw image bytes for an attachment
+      tags: [runs]
+      responses:
+        "200":
+          description: Attachment image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        "304": { description: Not modified (matched If-None-Match) }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteAttachment
+      summary: Delete an attachment
+      tags: [runs]
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/status:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: updateItemStatus
+      summary: Set item status (e.g. retest) or assignee
+      tags: [runs]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ItemStatusUpdate" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/jira-link:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setRunItemJiraLink
+      summary: >-
+        Set or clear a run item's Jira issue key (add-jira-connector) —
+        rejected once the parent run is closed, like other item mutations.
+      tags: [runs, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueKey]
+              properties:
+                jiraIssueKey: { type: string, nullable: true }
+      responses:
+        "200":
+          description: The run item with its updated Jira link
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/items/{itemId}/jira-sync:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setRunItemJiraSync
+      summary: >-
+        Write the Jira connector's cached issue summary/status for a run
+        item (add-jira-connector) — requires an existing jiraIssueKey.
+      tags: [runs, jira]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [jiraIssueSummary, jiraIssueStatus]
+              properties:
+                jiraIssueSummary: { type: string }
+                jiraIssueStatus: { type: string }
+      responses:
+        "200":
+          description: The run item with its updated cached Jira fields
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunItem" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/runs/{runKey}/summary:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getRunSummary
+      summary: Item counts by status
+      tags: [runs]
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/runs/{runKey}/compare/{otherRunKey}:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+      - { name: otherRunKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: compareRuns
+      summary: >-
+        Categorized item-level diff between two closed runs from the same
+        project (regressed/improved/unchanged/added/removed), joined by
+        case key. Order of the two run keys in the URL doesn't matter —
+        older/newer is resolved by each run's creation time.
+      tags: [runs]
+      responses:
+        "200":
+          description: Comparison
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunComparison" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/suites/{suiteKey}:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getSuite
+      summary: Get a single suite with its case membership
+      tags: [suites]
+      responses:
+        "200":
+          description: Suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    put:
+      operationId: renameSuite
+      summary: Rename a suite
+      tags: [suites]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SuiteInput" }
+      responses:
+        "200":
+          description: Renamed suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: deleteSuite
+      summary: Delete a suite (member cases and past runs are untouched)
+      tags: [suites]
+      responses:
+        "204": { description: Deleted }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/suites/{suiteKey}/trend:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+      - { name: includeOpen, in: query, required: false, schema: { type: boolean }, description: "When true, adds the suite's current open run as a trailing, isOpen-marked point." }
+    get:
+      operationId: getSuiteTrend
+      summary: Pass-rate trend across a suite's closed runs
+      tags: [suites]
+      responses:
+        "200":
+          description: Trend
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuiteTrend" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects:
+    get:
+      operationId: listPublicProjects
+      summary: >-
+        List every public project without authentication
+        (add-public-project-discovery). Empty whenever the instance-wide
+        publicProjectsEnabled kill switch is off or no project is public —
+        the same response in either case, so which is true is never leaked.
+      tags: [public]
+      responses:
+        "200":
+          description: Public projects
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Project" }
+  /api/v1/public/projects/{projectKey}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicProject
+      summary: >-
+        Get a project without authentication (enable-public-project-access).
+        404 whenever the project isn't public, doesn't exist, or the
+        instance-wide publicProjectsEnabled kill switch is off — the same
+        response in every case, so existence is never leaked.
+      tags: [public]
+      responses:
+        "200":
+          description: The project
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Project" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/cases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCases
+      summary: List test cases in a public project, cursor-paginated in insertion order (shares listCases' handler)
+      tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of test cases with their current version content
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaseListPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/folders:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicFolders
+      summary: List folders in a public project, cursor-paginated in insertion order (shares listFolders' handler)
+      tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of folders, including the project's root folder
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FolderListPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/flaky-cases:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicFlakyCases
+      summary: List every currently-flaky case in a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Flaky cases
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/FlakyCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/audit:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicProjectActivity
+      summary: A public project's most recent audited writes, newest first (project-activity-feed)
+      tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: Recent audit entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/suites:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicSuites
+      summary: List suites in a public project, cursor-paginated in insertion order (shares listSuites' handler)
+      tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of suites with case membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuiteListPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/runs:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicRuns
+      summary: List runs in a public project, cursor-paginated, newest first (shares listRuns' handler)
+      tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of runs, newest first
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunListPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/runs/status-summary:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicProjectStatusSummary
+      summary: Project-wide run item status breakdown, for a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Status summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectStatusSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/projects/{projectKey}/custom-fields:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCustomFields
+      summary: List a public project's custom field definitions
+      tags: [public]
+      responses:
+        "200":
+          description: Custom fields
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CustomField" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicCase
+      summary: Get a case at its current version, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: The case
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TestCase" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}/versions:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCaseVersions
+      summary: Full version history of a case, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: All versions, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseVersion" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}/executions:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+      - name: order
+        in: query
+        required: false
+        schema: { type: string, enum: [recent] }
+        description: Omit for the default version-grouped order. "recent" sorts strictly by when each execution occurred, most recent first, and requires `limit`.
+      - name: limit
+        in: query
+        required: false
+        schema: { type: integer, minimum: 1, maximum: 50 }
+        description: Only valid paired with order=recent; caps the number of executions returned.
+    get:
+      operationId: listPublicCaseExecutions
+      summary: Every execution that has pinned this case, from a public project — grouped by version by default, or the most recent N ordered by recency
+      tags: [public]
+      responses:
+        "200":
+          description: Executions ordered by pinned version then time (default), or strictly by recency and capped (order=recent&limit=N)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseExecution" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/suites/{suiteKey}:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicSuite
+      summary: >-
+        Get a suite with its case membership, from a public project. 404 if
+        the suite's own project isn't public — never trusts a {projectKey}
+        URL segment, since this route has none.
+      tags: [public]
+      responses:
+        "200":
+          description: Suite
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Suite" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/suites/{suiteKey}/trend:
+    parameters:
+      - { name: suiteKey, in: path, required: true, schema: { type: string } }
+      - { name: includeOpen, in: query, required: false, schema: { type: boolean }, description: "When true, adds the suite's current open run as a trailing, isOpen-marked point." }
+    get:
+      operationId: getPublicSuiteTrend
+      summary: Pass-rate trend across a suite's closed runs, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Trend
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SuiteTrend" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/runs/{runKey}:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicRun
+      summary: Get a run from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Run" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/runs/{runKey}/items:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicRunItems
+      summary: List run items with pinned content, cursor-paginated in insertion order, from a public project (shares listRunItems' handler)
+      tags: [public]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of run items, in insertion order (oldest first)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunItemListPage" }
+  /api/v1/public/runs/{runKey}/compare/{otherRunKey}:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+      - { name: otherRunKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: comparePublicRuns
+      summary: Categorized item-level diff between two closed runs, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Comparison
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunComparison" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/runs/{runKey}/summary:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicRunSummary
+      summary: Item counts by status, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RunSummary" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/items/{itemId}/results:
+    parameters:
+      - { name: itemId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicResults
+      summary: Append-only result log of a run item, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Results, oldest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Result" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicAttachment
+      summary: The raw image bytes for an attachment, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Attachment image
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      summary: Authenticate with email and password, starting a session
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginInput" }
+      responses:
+        "200":
+          description: Authenticated; a session cookie is set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/setup:
+    post:
+      operationId: setupFirstAdmin
+      summary: Create the instance's first admin account (first-run setup)
+      description: >
+        Unauthenticated, and only available while the instance has zero
+        user accounts (add-first-run-setup) — the fallback for when
+        TESTPULSE_ADMIN_EMAIL/PASSWORD were not both set at startup. The
+        submitted email and password become the Tenant Admin's own,
+        chosen directly rather than a temporary/generated one; on success
+        the response is identical to a successful login (a session is
+        created and its cookie set). Permanently unavailable once any
+        user exists, regardless of the env vars' state.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SetupInput" }
+      responses:
+        "200":
+          description: Admin account created; authenticated as it, a session cookie is set
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/auth/oidc/login:
+    get:
+      operationId: oidcLogin
+      summary: Start OIDC/SSO login (add-sso-oidc)
+      description: >
+        Redirects to the configured identity provider's authorization
+        endpoint (Authorization Code + PKCE), carrying a signed `state`
+        that encodes the PKCE verifier and nonce rather than any
+        server-side session — see design.md D2. 404s entirely when OIDC
+        isn't configured.
+      tags: [auth]
+      responses:
+        "302": { description: Redirect to the identity provider }
+        "404": { description: OIDC is not configured }
+  /api/v1/auth/oidc/callback:
+    get:
+      operationId: oidcCallback
+      summary: OIDC/SSO callback — completes login (add-sso-oidc)
+      description: >
+        Exchanges the authorization code, verifies the ID token
+        (signature, issuer, audience, nonce), resolves or JIT-provisions
+        the account, applies claim-based Tenant Admin mapping, and starts
+        a session exactly like a password login would. 404s entirely when
+        OIDC isn't configured.
+      tags: [auth]
+      parameters:
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        "302": { description: Authenticated; a session cookie is set, redirects to the app }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { description: OIDC is not configured }
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: End the current session
+      tags: [auth]
+      responses:
+        "204": { description: Logged out }
+  /api/v1/auth/forgot-password:
+    post:
+      operationId: forgotPassword
+      summary: Request a password-reset email
+      description: >
+        Always returns 200 regardless of outcome (add-forgot-password
+        design.md) — an unknown email, a deactivated account, or SMTP not
+        being configured all look identical to the caller, so the response
+        never leaks account existence, deactivation status, or instance
+        configuration.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ForgotPasswordInput" }
+      responses:
+        "200": { description: Request accepted (no signal about the outcome) }
+  /api/v1/auth/reset-password:
+    post:
+      operationId: resetPassword
+      summary: Redeem a password-reset token, setting a new password
+      description: >
+        Revokes every existing session for the account on success, the same
+        guarantee as a Tenant Admin's SetUserPassword.
+      tags: [auth]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResetPasswordInput" }
+      responses:
+        "204": { description: Password updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/users:
+    get:
+      operationId: listUsers
+      summary: List users, cursor-paginated in insertion order
+      tags: [users]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of users
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserListPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createUser
+      summary: Create a user (Tenant Admin only)
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserInput" }
+      responses:
+        "201":
+          description: Created user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/users/me:
+    get:
+      operationId: getCurrentUser
+      summary: The currently authenticated actor, as a user record
+      tags: [users]
+      responses:
+        "200":
+          description: Current user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      operationId: updateCurrentUserProfile
+      summary: Update the caller's own display name, avatar, or timezone
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserProfileUpdate" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/users/me/password:
+    post:
+      operationId: changeOwnPassword
+      summary: Change the caller's own password, given the current one
+      description: >-
+        Revokes every session for the account, including the one making
+        this request, and clears the account's required-password-change
+        flag if it was set (add-change-own-password).
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeOwnPasswordInput" }
+      responses:
+        "204": { description: Password changed }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/users/me/avatar:
+    post:
+      operationId: updateCurrentUserAvatar
+      summary: Upload a custom photo avatar (JPEG/PNG/WebP, max 500KB) — replaces any preset selection
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                avatar: { type: string, format: binary }
+              required: [avatar]
+      responses:
+        "200":
+          description: Updated user (avatarKey is now "custom")
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    delete:
+      operationId: removeCurrentUserAvatar
+      summary: Remove the caller's custom photo avatar, reverting to the generated default
+      tags: [users]
+      responses:
+        "200":
+          description: Updated user (avatarKey is now unset)
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/User" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/users/{userId}/avatar:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getUserAvatar
+      summary: The raw image bytes for a user's custom photo avatar, if they have one
+      tags: [users]
+      responses:
+        "200":
+          description: Avatar image (always JPEG)
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        "304": { description: Not modified (matched If-None-Match) }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/users/{userId}:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updateUser
+      summary: Change a user's Tenant Admin flag, deactivate/reactivate them, update their email, or require a password change (Tenant Admin only)
+      tags: [users]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "204": { description: Updated }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteUser
+      summary: Permanently delete a user (Tenant Admin only; the target must already be deactivated; self-deletion is rejected)
+      tags: [users]
+      responses:
+        "204": { description: Deleted }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/users/{userId}/deletion-preview:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: userDeletionPreview
+      summary: Real counts of what deleting this user would remove (Tenant Admin only) — teams, direct project memberships, and live API tokens
+      tags: [users]
+      responses:
+        "200":
+          description: Deletion preview counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UserDeletionPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/users/{userId}/password-reset-email:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: adminSendPasswordResetEmail
+      summary: Trigger a password-reset email for this account (Tenant Admin only)
+      description: >-
+        The same reset-email mechanism the self-service forgot-password
+        flow uses, addressed at a known account rather than an email the
+        caller supplied. Only available when the instance has SMTP
+        configured (add-change-own-password) — the temporary-password
+        fallback exists for the case where it isn't.
+      tags: [users]
+      responses:
+        "204": { description: Reset email sent }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/users/{userId}/generate-temporary-password:
+    parameters:
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: adminGenerateTemporaryPassword
+      summary: Generate a temporary password for this account (Tenant Admin only, SMTP-less fallback)
+      description: >-
+        Only available when the instance has no SMTP configured — the
+        reset-email path is required when it does. Sets the account's
+        required-password-change flag and revokes every existing session
+        in the same action. The raw password is returned once and never
+        retrievable again (add-change-own-password).
+      tags: [users]
+      responses:
+        "200":
+          description: Temporary password generated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TemporaryPassword" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/tokens:
+    get:
+      operationId: listTokens
+      summary: List API tokens (own tokens, or another user's via userId — Tenant Admin only)
+      tags: [tokens]
+      parameters:
+        - name: userId
+          in: query
+          schema: { type: string }
+          description: Omit to list the caller's own tokens.
+      responses:
+        "200":
+          description: Tokens (never the full secret value, only name and prefix)
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/ApiToken" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createToken
+      summary: Create an API token for an agent — the full value is returned once and never again
+      tags: [tokens]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TokenInput" }
+      responses:
+        "201":
+          description: Created token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiTokenCreated" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/tokens/{tokenId}:
+    parameters:
+      - { name: tokenId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: revokeToken
+      summary: Revoke a token (its own creator, or a Tenant Admin)
+      tags: [tokens]
+      responses:
+        "204": { description: Revoked }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/audit:
+    get:
+      operationId: listAuditEntries
+      summary: Audit history for a specific entity, oldest first
+      tags: [audit]
+      parameters:
+        - { name: entityType, in: query, required: true, schema: { type: string } }
+        - { name: entityId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Audit entries for the entity
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/AuditEntry" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+  /api/v1/teams:
+    get:
+      operationId: listTeams
+      summary: List teams, cursor-paginated in insertion order
+      tags: [teams]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of teams
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamListPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      operationId: createTeam
+      summary: Create a team (Tenant Admin only)
+      tags: [teams]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamInput" }
+      responses:
+        "201":
+          description: Created team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/teams/{teamId}:
+    parameters:
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: renameTeam
+      summary: Rename a team (Tenant Admin only)
+      tags: [teams]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/TeamUpdate" }
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteTeam
+      summary: Delete a team (Tenant Admin only) — removes its membership and project role assignments
+      tags: [teams]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/teams/{teamId}/deletion-preview:
+    parameters:
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: teamDeletionPreview
+      summary: Real counts of what deleting this team would affect (Tenant Admin only) — current member count and distinct projects it holds a role on
+      tags: [teams]
+      responses:
+        "200":
+          description: Deletion preview counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/TeamDeletionPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/teams/{teamId}/members/{userId}:
+    parameters:
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: addTeamMember
+      summary: Add a user to a team (Tenant Admin only)
+      tags: [teams]
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: removeTeamMember
+      summary: Remove a user from a team (Tenant Admin only)
+      tags: [teams]
+      responses:
+        "200":
+          description: Updated team
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Team" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/sso/team-mappings:
+    get:
+      operationId: listOidcTeamMappings
+      summary: List claim→Team mappings (Tenant Admin only, add-sso-oidc)
+      description: >
+        Configured {claimValue, Team} pairs (design.md D10) — on every
+        OIDC login, a user whose ID token's group claim includes
+        claimValue is added to that Team if not already a member.
+        Additive only: losing the claim value never removes membership.
+      tags: [sso]
+      responses:
+        "200":
+          description: All configured mappings
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/OIDCTeamMapping" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createOidcTeamMapping
+      summary: Create a claim→Team mapping (Tenant Admin only, add-sso-oidc)
+      tags: [sso]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OIDCTeamMappingInput" }
+      responses:
+        "201":
+          description: Created mapping
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OIDCTeamMapping" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/sso/team-mappings/{mappingId}:
+    parameters:
+      - { name: mappingId, in: path, required: true, schema: { type: string } }
+    delete:
+      operationId: deleteOidcTeamMapping
+      summary: Delete a claim→Team mapping (Tenant Admin only, add-sso-oidc)
+      tags: [sso]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/roles:
+    get:
+      operationId: listRoles
+      summary: List roles (add-project-rbac design.md D10 — fully custom, instance-wide), cursor-paginated by rank then insertion order
+      tags: [roles]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of roles
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleListPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      operationId: createRole
+      summary: Create a role (Tenant Admin only)
+      tags: [roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleInput" }
+      responses:
+        "201":
+          description: Created role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Role" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/roles/reset:
+    post:
+      operationId: resetRolesToDefaults
+      summary: >-
+        Restore Tester/Contributor/Project Admin to their factory permission
+        flags (Tenant Admin only). Selective, not a wipe (design.md D12): an
+        existing role with one of these three names is updated in place
+        (same id — every project/team assignment referencing it stays
+        valid); a missing one is recreated. Every other role, and every
+        assignment anywhere in the instance, is left untouched.
+      tags: [roles]
+      responses:
+        "200":
+          description: The three resulting default roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/Role" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/roles/{roleId}:
+    parameters:
+      - { name: roleId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updateRole
+      summary: Update a role's name, rank, or permission flags (Tenant Admin only)
+      tags: [roles]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RoleInput" }
+      responses:
+        "200":
+          description: Updated role
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Role" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteRole
+      summary: >-
+        Delete a role (Tenant Admin only). Any project membership or team
+        role assignment referencing it is removed too (CASCADE) — users
+        whose access depended solely on this role lose it immediately.
+      tags: [roles]
+      responses:
+        "204": { description: Deleted }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/roles/{roleId}/deletion-preview:
+    parameters:
+      - { name: roleId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: roleDeletionPreview
+      summary: Real counts of what deleting this role would affect (Tenant Admin only) — direct user assignments, team assignments, and distinct projects touched
+      tags: [roles]
+      responses:
+        "200":
+          description: Deletion preview counts
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/RoleDeletionPreview" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/members:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getProjectMembership
+      summary: List a project's directly-assigned users and assigned teams, each with their role
+      tags: [projects]
+      responses:
+        "200":
+          description: The project's membership
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ProjectMembership" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/permissions:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: myPermissions
+      summary: >-
+        The authenticated caller's own effective permissions on this
+        project (add-delete-mode) — a Tenant Admin gets every flag true; a
+        non-member gets every flag false, not an error, so the frontend can
+        hide permission-gated controls entirely rather than just disabling
+        them.
+      tags: [projects]
+      responses:
+        "200":
+          description: The caller's effective permissions
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Permissions" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/members/{userId}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+      - { name: userId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setProjectMember
+      summary: Assign a user a role on a project, or change it (Tenant Admin only)
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectRoleInput" }
+      responses:
+        "204": { description: Assigned }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: removeProjectMember
+      summary: Remove a user's direct role assignment on a project (Tenant Admin only)
+      tags: [projects]
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/projects/{projectKey}/teams/{teamId}:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+      - { name: teamId, in: path, required: true, schema: { type: string } }
+    put:
+      operationId: setProjectTeamRole
+      summary: Assign a team a role on a project, or change it (Tenant Admin only)
+      tags: [projects]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProjectRoleInput" }
+      responses:
+        "204": { description: Assigned }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      operationId: removeProjectTeamRole
+      summary: Remove a team's role assignment on a project (Tenant Admin only)
+      tags: [projects]
+      responses:
+        "204": { description: Removed }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+  responses:
+    ValidationError:
+      description: Invalid input; the message names the offending field
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    NotFound:
+      description: Entity does not exist
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Unauthorized:
+      description: Missing, invalid, or expired authentication
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Forbidden:
+      description: Authenticated, but not permitted to perform this action
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+    Conflict:
+      description: The request conflicts with the resource's current state (e.g. the run is closed)
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+  parameters:
+    cursor:
+      name: cursor
+      in: query
+      required: false
+      description: Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim.
+      schema: { type: string }
+    limit:
+      name: limit
+      in: query
+      required: false
+      description: Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected.
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string }
+    Status:
+      type: string
+      enum: [pending, pass, failed, skipped, blocked, retest]
+    RunStatus:
+      type: string
+      enum: [open, closed]
+    Verdict:
+      type: string
+      enum: [pass, failed, skipped, blocked]
+    StepResult:
+      type: object
+      required: [stepIndex, verdict]
+      description: >-
+        A single step's verdict, identified by its position in the run
+        item's pinned content.steps array (add-step-level-results).
+      properties:
+        stepIndex: { type: integer }
+        verdict: { $ref: "#/components/schemas/Verdict" }
+    Priority:
+      type: string
+      enum: [low, medium, high, critical]
+    Step:
+      type: object
+      properties:
+        action: { type: string }
+        expected: { type: string }
+        groupRef:
+          $ref: "#/components/schemas/StepGroupRef"
+          description: >-
+            When set, this step references a shared step group
+            (add-reusable-steps) instead of carrying its own action/expected
+            — the server resolves and expands it to the group's full step
+            sequence at save time, ignoring any action/expected the client
+            supplied on this entry. On input, only groupKey is read; id and
+            snapshotUpdatedAt are server-set and returned on output.
+    StepGroupRef:
+      type: object
+      required: [groupKey]
+      properties:
+        groupId: { type: string, readOnly: true }
+        groupKey: { type: string }
+        snapshotUpdatedAt: { type: string, format: date-time, readOnly: true }
+    CaseParameters:
+      type: object
+      required: [columns, rows]
+      description: >-
+        A Steps-format case's optional data-driven table
+        (add-parameterized-cases). columns[0] is always "Name" — required,
+        never removable, used as each row's label wherever a row is shown
+        (run item name, history). Step action/expected text may reference
+        {columnName} placeholders, substituted per row when the case is
+        added to a run — never on the case's own template view.
+      properties:
+        columns:
+          type: array
+          items: { type: string }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: { type: string }
+    CaseContent:
+      type: object
+      required: [title]
+      properties:
+        title: { type: string }
+        description: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/Step" }
+        expectedResult: { type: string }
+        priority: { $ref: "#/components/schemas/Priority" }
+        tags:
+          type: array
+          items: { type: string }
+        platform:
+          type: string
+          description: Free text — target platform (e.g. "web", "iOS"). No fixed taxonomy.
+        testType:
+          type: string
+          description: Free text — kind of test (e.g. "unit", "e2e"). No fixed taxonomy.
+        automated:
+          type: boolean
+          description: Defaults to false — every case is manual until marked otherwise.
+        customFields:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            The project's custom field values, keyed by field id (a select
+            field's value is one of its option ids). Sparse — a field with
+            no recorded value is simply absent, not a default (add-case-custom-fields).
+        format:
+          type: string
+          enum: [steps, text, gherkin]
+          description: >-
+            The case's content authoring format (add-case-authoring-formats).
+            Defaults to "steps" when omitted. "text" uses description as the
+            full narrative with no structured steps; "gherkin" uses
+            gherkinSource for a free-form Given/When/Then block.
+        gherkinSource:
+          type: string
+          description: >-
+            The raw Given/When/Then source, meaningful when format is
+            "gherkin" (add-case-authoring-formats).
+        parameters:
+          allOf: [{ $ref: "#/components/schemas/CaseParameters" }]
+          description: >-
+            Optional data-driven table (add-parameterized-cases). Steps
+            format only; absent for the overwhelming majority of cases.
+    CaseCreateInput:
+      allOf:
+        - $ref: "#/components/schemas/CaseContent"
+        - type: object
+          properties:
+            folderId:
+              type: string
+              description: Defaults to the project's root folder when omitted.
+    CsvImportResult:
+      type: object
+      required: [created, problems, newFields]
+      properties:
+        created:
+          type: integer
+          description: Number of rows successfully imported as new cases.
+        newFields:
+          type: array
+          description: >-
+            Names of any project custom fields auto-created by this import
+            (a CSV column not matching an existing fixed or custom-field
+            column, add-csv-import-export design.md D2) — surfaced so the
+            UI can show this real, otherwise-invisible side effect rather
+            than requiring a before/after diff of the field list.
+          items: { type: string }
+        problems:
+          type: array
+          description: >-
+            Every row that failed to import, named individually — never
+            truncated or collapsed into a count (add-csv-import-export).
+          items:
+            type: object
+            required: [row, reason]
+            properties:
+              row:
+                type: integer
+                description: >-
+                  The row number a spreadsheet tool itself would show —
+                  the header is row 1, so the first data row is row 2.
+              reason: { type: string }
+    Folder:
+      type: object
+      required: [id, projectId, name, slug, createdAt]
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        parentFolderId:
+          type: string
+          description: Absent for a project's root folder.
+        name: { type: string }
+        slug:
+          type: string
+          description: >-
+            URL-routing slug derived from name (add-folder-slug-urls) —
+            used client-side to build/resolve a folder's human-readable
+            browser URL. Unique only per (project, parent folder), not
+            globally.
+        createdAt: { type: string, format: date-time }
+        previousSlug:
+          type: string
+          description: >-
+            This folder's slug immediately before its most recent move —
+            absent if it has never been moved. Combined with
+            previousParentFolderId, lets the frontend resolve a
+            bookmarked URL from before that one move (single-hop
+            redirect only, not a full history).
+        previousParentFolderId:
+          type: string
+          description: >-
+            This folder's parent immediately before its most recent
+            move — absent if it has never been moved.
+    FolderListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Folder" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    FolderDeletePreview:
+      type: object
+      required: [caseCount, folderCount]
+      properties:
+        caseCount:
+          type: integer
+          description: Cases anywhere in the folder's subtree that would be soft-deleted.
+        folderCount:
+          type: integer
+          description: Descendant folders (not including this one) that would be soft-deleted.
+    NewFolder:
+      type: object
+      required: [name, parentFolderId]
+      properties:
+        name: { type: string }
+        parentFolderId:
+          type: string
+          description: Required — only the root folder (auto-created with the project) may have no parent.
+    Project:
+      type: object
+      required: [id, key, name, archived, description, isSample, publicAccess, autoArchiveExempt, assigneeRestrictedRecording, createdAt]
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: Short, unique, human-readable identifier auto-derived from the project's name at creation. Immutable.
+        name: { type: string }
+        archived: { type: boolean }
+        description: { type: string }
+        isSample:
+          type: boolean
+          description: True for the single, automatically-seeded showroom project. False for every normally-created project.
+        publicAccess:
+          type: boolean
+          description: >
+            Opts this project into unauthenticated read-only access at its
+            public URL (/api/v1/public/projects/{projectKey}/...). False by
+            default. Also gated by the instance-wide
+            Meta.publicProjectsEnabled kill switch — a project is only
+            actually reachable anonymously when both are true.
+        autoArchiveExempt:
+          type: boolean
+          description: >
+            Exempts this project from the instance-wide
+            autoArchiveInactiveDays policy (add-data-retention). Settable
+            only by a Tenant Admin, via PATCH — a request setting this
+            field from anyone else is rejected (403), even a Project Admin
+            who otherwise has manageProject on this project.
+        assigneeRestrictedRecording:
+          type: boolean
+          description: >
+            When true, recording a result or changing a run item's status
+            requires the authenticated actor to match the item's assignee
+            (or hold manageProject), unless the item is unassigned
+            (restrict-run-item-status-to-assignee). False by default.
+        landingView:
+          allOf: [{ $ref: '#/components/schemas/LandingView' }]
+          nullable: true
+          description: >
+            This project's own landing-view override
+            (add-configurable-project-landing). Null means it inherits the
+            instance-wide Meta.defaultLandingView. Settable by a user with
+            manageProject on this project.
+        createdAt: { type: string, format: date-time }
+    ProjectInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+    ProjectUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        description: { type: string }
+        archived: { type: boolean }
+        publicAccess: { type: boolean }
+        autoArchiveExempt: { type: boolean }
+        assigneeRestrictedRecording: { type: boolean }
+        landingView:
+          $ref: '#/components/schemas/LandingView'
+        clearLandingView:
+          type: boolean
+          description: >
+            Clears this project's landing-view override, reverting it to
+            inherit the instance-wide default — a dedicated action rather
+            than a null sentinel on landingView (the same reasoning as
+            disableSso on InstanceSettingsUpdate).
+    TestCase:
+      type: object
+      required: [id, key, projectId, folderId, currentVersion, content, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-{n}. Immutable."
+        projectId: { type: string }
+        folderId: { type: string }
+        currentVersion: { type: integer }
+        content: { $ref: "#/components/schemas/CaseContent" }
+        createdAt: { type: string, format: date-time }
+        updatedAt:
+          type: string
+          format: date-time
+          description: The current version's own createdAt — when the case was last edited, not when it was originally created. Equal to createdAt for a never-edited case.
+        jiraIssueKey:
+          type: string
+          nullable: true
+          description: >-
+            Linked Jira issue key (add-jira-connector), e.g. "PROJ-123".
+            Identity-level metadata, independent of versioned content — set
+            via PUT .../jira-link, never the content-edit endpoint.
+        jiraIssueSummary:
+          type: string
+          nullable: true
+          description: Cached Jira issue summary, written only by the Jira connector via PUT .../jira-sync.
+        jiraIssueStatus:
+          type: string
+          nullable: true
+          description: Cached Jira issue status (a plain string — Jira workflows are customizable), written only by the connector.
+        jiraLastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
+    CaseListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/TestCase" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    CaseVersion:
+      type: object
+      required: [caseId, version, content, actorKind, createdAt]
+      properties:
+        caseId: { type: string }
+        version: { type: integer }
+        content: { $ref: "#/components/schemas/CaseContent" }
+        actorKind: { $ref: "#/components/schemas/ResultActorKind" }
+        actorRefId:
+          type: string
+          description: The real user/agent id who created this version, when known.
+        createdAt: { type: string, format: date-time }
+    CaseExecution:
+      type: object
+      required: [runItemId, runId, runKey, runName, caseVersion, status, createdAt]
+      properties:
+        runItemId: { type: string }
+        runId: { type: string }
+        runKey:
+          type: string
+          description: The run's own key — lets a client link to the run item's own page without a second lookup.
+        runName: { type: string }
+        caseVersion: { type: integer }
+        status: { $ref: "#/components/schemas/Status" }
+        createdAt: { type: string, format: date-time }
+    Suite:
+      type: object
+      required: [id, key, projectId, name, caseIds, createdAt, passRate, lastRunAt]
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-S{n}. Immutable."
+        projectId: { type: string }
+        name: { type: string }
+        caseIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+        passRate:
+          type: integer
+          nullable: true
+          description: From the suite's most recently created run only (open or closed); null if it has no runs yet.
+        lastRunAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the suite's most recently created run was started; null if it has no runs yet.
+    SuiteListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Suite" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    SuiteInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    Run:
+      type: object
+      required: [id, key, projectId, projectKey, name, status, createdAt]
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-R{n}. Immutable."
+        projectId: { type: string }
+        projectKey:
+          type: string
+          description: The owning project's key — a run's own route isn't nested under its project's, so this lets a client link back without a second lookup.
+        name: { type: string }
+        status:
+          allOf: [{ $ref: "#/components/schemas/RunStatus" }]
+          description: Runs created explicitly (POST /runs) start open; runs created via bulk import start closed, since every item they contain already has a final verdict. A closed run's items become read-only until reopened.
+        suiteKey:
+          type: string
+          nullable: true
+          description: The key of the suite this run was created from, if any. Absent (null) for a run created from an explicit case list, or via execution import. Set once at creation and never changes; unaffected by later deletion of the suite itself.
+        createdAt: { type: string, format: date-time }
+        passRate:
+          type: integer
+          nullable: true
+          description: This run's own items' pass rate; null if it has no items yet. Computed alongside the list query — cheap, not a per-run round trip.
+        testPlanKey:
+          type: string
+          nullable: true
+          description: The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself.
+    RunListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Run" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    RunInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        suiteKey:
+          type: string
+          description: Include all cases of this suite
+        testPlanKey:
+          type: string
+          description: Optionally scope this run to a Test Plan (introduce-release-test-plan). Must belong to the same project.
+        caseKeys:
+          type: array
+          items: { type: string }
+          description: Explicit cases to include
+    ReleaseStatus:
+      type: string
+      enum: [active, maintained, eol]
+    Release:
+      type: object
+      required: [id, key, projectId, name, description, status, createdAt]
+      description: >-
+        A project-scoped, long-lived entity tracking one supported release's
+        lifecycle (introduce-release-test-plan) — optional: a project with no
+        Releases is unaffected.
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-REL{n}. Immutable."
+        projectId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/ReleaseStatus" }
+        createdAt: { type: string, format: date-time }
+    ReleaseInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        status: { $ref: "#/components/schemas/ReleaseStatus" }
+    TestPlan:
+      type: object
+      required: [id, key, projectId, releaseId, releaseKey, name, description, createdAt]
+      description: >-
+        The execution-scope grouping of Runs belonging to one Release
+        (introduce-release-test-plan) — e.g. one Test Plan per platform being
+        tested against a release. A Test Plan's Release never changes after
+        creation.
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-PLAN{n}. Immutable."
+        projectId: { type: string }
+        releaseId: { type: string }
+        releaseKey: { type: string }
+        name: { type: string }
+        description: { type: string }
+        createdAt: { type: string, format: date-time }
+    TestPlanInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+    Rollup:
+      type: object
+      required: [runCount]
+      description: >-
+        A server-side aggregated pass rate + run count across a Test Plan's
+        or Release's runs (introduce-release-test-plan design.md D5) —
+        always a single aggregate query, never a client-side per-entity
+        fetch loop.
+      properties:
+        runCount: { type: integer }
+        passRate:
+          type: integer
+          nullable: true
+          description: Null when runCount is 0 (or every run has no items yet).
+    Requirement:
+      type: object
+      required: [id, key, projectId, name, description, externalRef, caseIds, createdAt]
+      description: >-
+        A project-scoped, flat (no hierarchy) record linkable to test cases
+        (add-requirements-traceability). externalRef is a free-text field
+        only — no live Jira/ADO sync.
+      properties:
+        id: { type: string }
+        key:
+          type: string
+          description: "Human-readable identifier, scoped to the project: {projectKey}-REQ{n}. Immutable."
+        projectId: { type: string }
+        name: { type: string }
+        description: { type: string }
+        externalRef: { type: string }
+        caseIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    RequirementInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        externalRef: { type: string }
+    CoverageStatus:
+      type: string
+      enum: [notRun, failing, covered]
+    RequirementCoverage:
+      type: object
+      required: [requirementId, requirementKey, name, status, caseCount]
+      description: >-
+        One row of a Release's coverage matrix — computed via a worst-case
+        rollup across a Requirement's linked cases' latest results among
+        that Release's Test Plans specifically (add-requirements-traceability
+        design.md D3), never stored.
+      properties:
+        requirementId: { type: string }
+        requirementKey: { type: string }
+        name: { type: string }
+        status: { $ref: "#/components/schemas/CoverageStatus" }
+        caseCount: { type: integer }
+    RunItemAssignee:
+      type: object
+      required: [kind, id, name]
+      description: >-
+        A run item's real assignee (link-run-item-assignee-to-identity) —
+        always a real user or team, resolved at read time so the name is
+        always current.
+      properties:
+        kind: { type: string, enum: [user, team] }
+        id: { type: string }
+        name: { type: string }
+        avatarKey: { type: string, nullable: true }
+    RunItem:
+      type: object
+      required: [id, runId, caseId, caseKey, caseVersion, currentStatus, content, newerVersion, createdAt]
+      properties:
+        id: { type: string }
+        runId: { type: string }
+        caseId: { type: string }
+        caseKey:
+          type: string
+          description: The pinned case's own key — lets a client route to the case's detail page or a per-item page without a second lookup.
+        caseVersion: { type: integer }
+        assignee:
+          allOf: [{ $ref: "#/components/schemas/RunItemAssignee" }]
+          nullable: true
+          description: Absent (null) when the item is unassigned, including when its previously-assigned user or team has since been deleted.
+        currentStatus: { $ref: "#/components/schemas/Status" }
+        content:
+          allOf: [{ $ref: "#/components/schemas/CaseContent" }]
+          description: Content of the pinned version, not the current one
+        newerVersion:
+          type: boolean
+          description: True when the case has a newer version than the pinned one
+        testName:
+          type: string
+          description: >-
+            The literal name an external test runner reported for this
+            item, or (add-parameterized-cases) the Name of the parameter
+            row this item was expanded from — independent of the pinned
+            case's own title. Absent for a plain manually-added item.
+        testDataRow:
+          type: object
+          additionalProperties: { type: string }
+          description: >-
+            This item's parameterized-case data-row values
+            (add-parameterized-cases), excluding the row's own "Name"
+            (already carried by testName). Absent for the overwhelming
+            majority of items — those not expanded from a parameter table.
+        createdAt: { type: string, format: date-time }
+        jiraIssueKey:
+          type: string
+          nullable: true
+          description: >-
+            Linked Jira issue key (add-jira-connector), independent of the
+            pinned case version — set via PUT .../jira-link.
+        jiraIssueSummary:
+          type: string
+          nullable: true
+          description: Cached Jira issue summary, written only by the Jira connector via PUT .../jira-sync.
+        jiraIssueStatus:
+          type: string
+          nullable: true
+          description: Cached Jira issue status (a plain string — Jira workflows are customizable), written only by the connector.
+        jiraLastSyncedAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the connector last refreshed jiraIssueSummary/jiraIssueStatus.
+        stepStates:
+          type: array
+          items: { $ref: "#/components/schemas/StepResult" }
+          description: >-
+            This item's live, carry-forward step verdicts
+            (add-step-level-results) — not reset when an overall verdict is
+            recorded. Absent/empty when no step has ever been marked.
+    RunItemListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/RunItem" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    AddItemInput:
+      type: object
+      required: [caseKey]
+      properties:
+        caseKey: { type: string }
+    NewResult:
+      type: object
+      required: [verdict]
+      properties:
+        actor:
+          type: string
+          description: >-
+            Optional. Defaults to the authenticated caller's display name.
+            If supplied, overrides only the displayed name — the real
+            authenticated actor's kind/ref is still recorded alongside it.
+        verdict: { $ref: "#/components/schemas/Verdict" }
+        comment: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        platform: { type: string }
+        version: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        attachmentIds:
+          type: array
+          items: { type: string }
+          description: >-
+            Ids of attachments previously staged against this item (POST
+            .../items/{itemId}/attachments before this verdict existed),
+            linked to this result in the same request.
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/NewAttachment" }
+          description: >-
+            Inline image attachments, created in the same transaction as
+            this result — for a client that already has the bytes and wants
+            a single atomic call.
+        stepResults:
+          type: array
+          items: { $ref: "#/components/schemas/StepResult" }
+          description: >-
+            Optional (add-step-level-results). When supplied, becomes this
+            result's step-verdict snapshot verbatim and also becomes the
+            item's new live step verdicts, overriding whatever was
+            previously marked. When omitted, the item's current live step
+            verdicts (set via PUT .../items/{itemId}/steps/{stepIndex}) are
+            snapshotted instead.
+    NewAttachment:
+      type: object
+      required: [filename, contentType, data]
+      properties:
+        caseKey:
+          type: string
+          description: >-
+            Scopes this attachment to one matched test within a bulk import
+            request. Omit when submitting directly on a NewResult, which has
+            no ambiguity about which result it belongs to.
+        filename: { type: string }
+        contentType: { type: string }
+        data:
+          type: string
+          format: byte
+          description: Base64-encoded image bytes (PNG, JPEG, or WebP, max 5MB).
+    Attachment:
+      type: object
+      required: [id, runItemId, filename, contentType, createdAt]
+      properties:
+        id: { type: string }
+        runItemId: { type: string }
+        resultId:
+          type: string
+          description: Absent when staged but not yet linked to a result.
+        filename: { type: string }
+        contentType: { type: string }
+        createdAt: { type: string, format: date-time }
+    ResultActorKind:
+      type: string
+      enum: [user, agent, unknown]
+    Result:
+      type: object
+      required: [id, runItemId, actor, actorKind, verdict, comment, createdAt]
+      properties:
+        id: { type: string }
+        runItemId: { type: string }
+        actor: { type: string }
+        actorKind: { $ref: "#/components/schemas/ResultActorKind" }
+        actorRefId:
+          type: string
+          description: The real user/agent id behind this result, when known.
+        verdict: { $ref: "#/components/schemas/Verdict" }
+        comment: { type: string }
+        startTime: { type: string, format: date-time }
+        endTime: { type: string, format: date-time }
+        platform: { type: string }
+        version: { type: string }
+        tags:
+          type: array
+          items: { type: string }
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/Attachment" }
+        stepResults:
+          type: array
+          items: { $ref: "#/components/schemas/StepResult" }
+          description: >-
+            This result's immutable step-verdict snapshot, taken at the
+            moment it was recorded (add-step-level-results). Absent when no
+            step was marked at that time.
+        createdAt: { type: string, format: date-time }
+    ImportRequest:
+      type: object
+      required: [format, report]
+      properties:
+        format:
+          type: string
+          enum: [junit-xml]
+        name:
+          type: string
+          description: >-
+            Run name. Defaults to the report's own <testsuite> name if
+            present, otherwise a generated default.
+        report:
+          type: string
+          description: The raw report content (JUnit XML).
+        attachments:
+          type: array
+          items: { $ref: "#/components/schemas/NewAttachment" }
+          description: >-
+            Screenshots to attach to specific matched tests, each keyed by
+            its caseKey — the JUnit report itself is never parsed for
+            embedded attachments.
+    ImportResult:
+      type: object
+      required: [run, message, matched, unmatched]
+      properties:
+        run: { $ref: "#/components/schemas/Run" }
+        message: { type: string }
+        matched: { type: integer }
+        unmatched:
+          type: array
+          items: { $ref: "#/components/schemas/UnmatchedTest" }
+    UnmatchedTest:
+      type: object
+      required: [caseKey, verdict]
+      properties:
+        caseKey: { type: string }
+        verdict: { $ref: "#/components/schemas/Verdict" }
+    ImportJobMode:
+      type: string
+      enum: [dry_run, real]
+    ImportJobStatus:
+      type: string
+      enum: [pending, running, succeeded, failed]
+    ImportJobReport:
+      type: object
+      required: [counts, unmapped]
+      description: >-
+        Per-entity created counts plus individually-named unmapped fields
+        (add-testrail-importer design.md D7 — never collapsed into a "+N
+        more" summary).
+      properties:
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        unmapped:
+          type: array
+          items: { type: string }
+    ImportJob:
+      type: object
+      required:
+        [
+          id,
+          projectId,
+          source,
+          mode,
+          status,
+          progressCurrent,
+          progressTotal,
+          createdBy,
+          createdAt,
+          updatedAt,
+        ]
+      description: >-
+        A structural import job (cases/folders from an external test-
+        management tool) — distinct from ImportRequest/ImportResult, which
+        cover synchronous JUnit-XML result import. Never carries connection
+        credentials; add-testrail-importer design.md D2's structural
+        guarantee.
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        source:
+          type: string
+          description: Opaque connector identifier, e.g. "testrail".
+        mode: { $ref: "#/components/schemas/ImportJobMode" }
+        status: { $ref: "#/components/schemas/ImportJobStatus" }
+        report: { $ref: "#/components/schemas/ImportJobReport" }
+        progressCurrent: { type: integer }
+        progressTotal: { type: integer }
+        error: { type: string }
+        createdBy: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+        startedAt: { type: string, format: date-time }
+        finishedAt: { type: string, format: date-time }
+    NewImportJob:
+      type: object
+      required: [source, mode, credentials]
+      properties:
+        source: { type: string }
+        mode: { $ref: "#/components/schemas/ImportJobMode" }
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+          description: Connector-specific connection secrets, encrypted at rest and never echoed back.
+    ClaimedImportJob:
+      type: object
+      required: [job, credentials]
+      description: >-
+        Agent-facing only — pairs a claimed job with its decrypted
+        credentials. Never returned to a browser-facing caller.
+      properties:
+        job: { $ref: "#/components/schemas/ImportJob" }
+        credentials:
+          type: object
+          additionalProperties: { type: string }
+    ImportJobPatch:
+      type: object
+      description: >-
+        PATCH body an importer sends to report progress and/or terminal
+        completion. A progress-only patch sets progressCurrent/
+        progressTotal; a completion patch sets status (plus report or
+        error).
+      properties:
+        progressCurrent: { type: integer }
+        progressTotal: { type: integer }
+        status: { $ref: "#/components/schemas/ImportJobStatus" }
+        report: { $ref: "#/components/schemas/ImportJobReport" }
+        error: { type: string }
+    ItemStatusUpdate:
+      type: object
+      description: >-
+        assigneeUserId and assigneeTeamId are mutually exclusive
+        (link-run-item-assignee-to-identity) — assignment must reference a
+        real project member, free text is no longer accepted.
+      properties:
+        status: { $ref: "#/components/schemas/Status" }
+        assigneeUserId: { type: string }
+        assigneeTeamId: { type: string }
+    RunSummary:
+      type: object
+      required: [runId, total, counts]
+      properties:
+        runId: { type: string }
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+    ProjectStatusSummary:
+      type: object
+      required: [total, counts]
+      properties:
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+    SuiteTrendPoint:
+      type: object
+      required: [runKey, runName, createdAt, total, counts]
+      properties:
+        runKey: { type: string }
+        runName: { type: string }
+        createdAt: { type: string, format: date-time }
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        isOpen:
+          type: boolean
+          description: "True only for the trailing point added by includeOpen=true — the suite's current open run. Absent/false for every closed-run point."
+    SuiteTrend:
+      type: object
+      required: [suiteId, suiteKey, points]
+      properties:
+        suiteId: { type: string }
+        suiteKey: { type: string }
+        points:
+          type: array
+          items: { $ref: "#/components/schemas/SuiteTrendPoint" }
+    RunComparisonItem:
+      type: object
+      required: [caseKey, caseTitle]
+      properties:
+        caseKey: { type: string }
+        caseTitle: { type: string }
+        statusOlder:
+          allOf: [{ $ref: "#/components/schemas/Status" }]
+          nullable: true
+          description: Absent for an item categorized as added (it has no older-run status).
+        statusNewer:
+          allOf: [{ $ref: "#/components/schemas/Status" }]
+          nullable: true
+          description: Absent for an item categorized as removed (it has no newer-run status).
+    RunComparisonSummary:
+      type: object
+      required: [runKey, runName, createdAt, total, counts]
+      properties:
+        runKey: { type: string }
+        runName: { type: string }
+        createdAt: { type: string, format: date-time }
+        total: { type: integer }
+        counts:
+          type: object
+          additionalProperties: { type: integer }
+        totalDurationMs:
+          type: integer
+          format: int64
+          nullable: true
+          description: "Total elapsed time summed across each item's latest fully-timed result, in milliseconds. Absent/null means no item in this run has a fully-timed result — never 0."
+    RunComparison:
+      type: object
+      required: [olderRun, newerRun, regressed, improved, unchanged, added, removed]
+      properties:
+        olderRun: { $ref: "#/components/schemas/RunComparisonSummary" }
+        newerRun: { $ref: "#/components/schemas/RunComparisonSummary" }
+        regressed:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        improved:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        unchanged:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        added:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+        removed:
+          type: array
+          items: { $ref: "#/components/schemas/RunComparisonItem" }
+    FlakyCase:
+      type: object
+      required: [caseKey, caseTitle, currentVersion, rate]
+      properties:
+        caseKey: { type: string }
+        caseTitle: { type: string }
+        currentVersion: { type: integer }
+        rate: { type: integer, description: "0-100 percentage: min(pass, failedOrBlocked) / (pass + failedOrBlocked)" }
+    CustomFieldType:
+      type: string
+      enum: [text, select]
+    CustomFieldOption:
+      type: object
+      required: [id, value]
+      properties:
+        id: { type: string }
+        value: { type: string }
+    CustomField:
+      type: object
+      required: [id, name, fieldType, createdAt]
+      description: >-
+        A project-scoped custom field definition (add-case-custom-fields).
+        fieldType is fixed at creation and never changes.
+      properties:
+        id: { type: string }
+        name: { type: string }
+        fieldType: { $ref: "#/components/schemas/CustomFieldType" }
+        options:
+          type: array
+          items: { $ref: "#/components/schemas/CustomFieldOption" }
+          description: Populated only for a `select` field, ordered by its admin-set position.
+        createdAt: { type: string, format: date-time }
+    WebhookDestination:
+      type: object
+      required: [id, projectId, url, createdAt]
+      description: >-
+        A project-scoped outbound webhook (add-run-notifications). Fires
+        on a failed/blocked result or a run close; delivery is
+        fire-and-forget and not retried on failure.
+      properties:
+        id: { type: string }
+        projectId: { type: string }
+        url: { type: string }
+        createdAt: { type: string, format: date-time }
+    WebhookDestinationInput:
+      type: object
+      required: [url]
+      properties:
+        url:
+          type: string
+          description: Must be https; may not point to localhost, a private, or a link-local address.
+    CustomFieldInput:
+      type: object
+      required: [name, fieldType]
+      properties:
+        name: { type: string }
+        fieldType: { $ref: "#/components/schemas/CustomFieldType" }
+    CustomFieldRenameInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    CustomFieldOptionInput:
+      type: object
+      required: [value]
+      properties:
+        value: { type: string }
+    CustomFieldOrderInput:
+      type: object
+      required: [fieldIds]
+      properties:
+        fieldIds:
+          type: array
+          items: { type: string }
+    CustomFieldOptionOrderInput:
+      type: object
+      required: [optionIds]
+      properties:
+        optionIds:
+          type: array
+          items: { type: string }
+    CustomFieldDeletionPreview:
+      type: object
+      required: [caseCount]
+      description: >-
+        Real count of what deleting a custom field would affect, mirroring
+        RoleDeletionPreview's counts-only pattern.
+      properties:
+        caseCount:
+          type: integer
+          description: The project's current cases with a value set for this field.
+    StepGroup:
+      type: object
+      required: [id, key, name, steps, createdAt, updatedAt]
+      description: >-
+        A project-scoped, named, ordered list of steps a test case's
+        content may reference (add-reusable-steps). Mutable in place, not
+        itself versioned — editing it never changes an already-saved case
+        version that previously referenced it (see the Step schema's
+        groupRef).
+      properties:
+        id: { type: string }
+        key: { type: string }
+        name: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/Step" }
+        createdAt: { type: string, format: date-time }
+        updatedAt:
+          type: string
+          format: date-time
+          description: Compared against a referencing step's snapshotUpdatedAt to detect staleness while editing a case.
+    StepGroupInput:
+      type: object
+      required: [name, steps]
+      properties:
+        name: { type: string }
+        steps:
+          type: array
+          items: { $ref: "#/components/schemas/Step" }
+    ProjectSummary:
+      type: object
+      required: [projectId, suiteCount, caseCount, passRate, lastRunAt, isFavorite, archived, tags]
+      properties:
+        projectId: { type: string }
+        suiteCount: { type: integer }
+        caseCount: { type: integer }
+        passRate:
+          type: integer
+          nullable: true
+          description: From the project's most recently created run only; null if it has no runs yet.
+        lastRunAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the project's most recently created run was started; null if it has no runs yet.
+        isFavorite:
+          type: boolean
+          description: Whether the calling user has starred this project.
+        archived:
+          type: boolean
+          description: >-
+            The project's current archived state (add-data-retention) —
+            summaries now include archived projects (previously excluded),
+            since the delete-project confirmation needs real counts for
+            the one project this always excluded before.
+        tags:
+          type: array
+          items: { type: string }
+          description: >-
+            The project's assigned tag names (add-project-tags), from the
+            shared instance-wide tag vocabulary. Empty, not null, when
+            untagged.
+    HealthStatus:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [ok, unavailable]
+        reason:
+          type: string
+          description: Present when status is "unavailable".
+    Meta:
+      type: object
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView, mcpEnabled]
+      properties:
+        name:
+          type: string
+          example: TestPulse
+        version:
+          type: string
+          example: 0.0.1
+        publicProjectsEnabled:
+          type: boolean
+          description: >
+            Instance-wide kill switch (enable-public-project-access),
+            Tenant-Admin-controlled. When false, no project is reachable at
+            its public URL regardless of that project's own publicAccess
+            flag. Read here since this endpoint is unauthenticated and
+            needed by both the anonymous public frontend and the
+            authenticated Project Settings page.
+        passwordResetEnabled:
+          type: boolean
+          description: >
+            Self-service password recovery (add-forgot-password) is only
+            available when the instance has SMTP fully configured
+            (TESTPULSE_SMTP_* + TESTPULSE_PUBLIC_URL). The login page
+            renders its "Forgot password?" link only when true, rather
+            than showing it and failing at submit time.
+        setupRequired:
+          type: boolean
+          description: >
+            True while the instance has zero user accounts and startup did
+            not bootstrap one from TESTPULSE_ADMIN_EMAIL/PASSWORD
+            (add-first-run-setup). The frontend redirects every route to
+            /setup while true; once any user exists this is permanently
+            false, regardless of the env vars' state.
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+        customPalette:
+          allOf: [{ $ref: '#/components/schemas/CustomPalette' }]
+          nullable: true
+          description: >
+            Present only when colorTheme is "custom" — every visitor,
+            including anonymous ones, needs the full palette to render it
+            (add-color-theme-customization), the same reasoning that already
+            put publicProjectsEnabled here for non-admin visibility.
+        ssoEnabled:
+          type: boolean
+          description: >
+            OIDC/SSO login (add-sso-oidc) is configured
+            (TESTPULSE_OIDC_ISSUER/_CLIENT_ID/_CLIENT_SECRET +
+            TESTPULSE_PUBLIC_URL). The login page renders a "Sign in with
+            SSO" action only when true.
+        ssoOnly:
+          type: boolean
+          description: >
+            Password-based login and password recovery are disabled
+            instance-wide (TESTPULSE_OIDC_ONLY, only takes effect when
+            ssoEnabled is also true). The login page renders only the SSO
+            action when true, hiding the password form entirely.
+        defaultLandingView:
+          allOf: [{ $ref: '#/components/schemas/LandingView' }]
+          description: >
+            Instance-wide default landing view
+            (add-configurable-project-landing). Read here (not only via the
+            Tenant-Admin-only InstanceSettings) since every visitor,
+            including anonymous ones, needs it to resolve which view a
+            project without its own override opens into — the same
+            reasoning that already put colorTheme here.
+        mcpEnabled:
+          type: boolean
+          description: >
+            Whether the MCP server is mounted at /mcp (TESTPULSE_MCP_ENABLED,
+            default true). Read here so the admin UI's MCP integration card
+            (mcp-admin-discoverability-card) can show real enabled/disabled
+            state instead of unconditionally claiming the server is
+            available.
+    ColorTheme:
+      type: string
+      enum: [teal, indigo, ocean, forest, custom]
+      description: >
+        The instance-wide color palette (add-color-theme-customization).
+        "teal" is the unchanged default; indigo/ocean/forest are built-in
+        presets; "custom" means the Tenant-Admin-authored CustomPalette is
+        active.
+    LandingView:
+      type: string
+      enum: [dashboard, library, suites, runs, reports]
+      description: >
+        Which view a project opens into (add-configurable-project-landing).
+        "dashboard" is the original fixed multi-panel view; the others
+        redirect straight to that view's own existing route.
+    CustomPaletteMode:
+      type: object
+      required: [background, foreground, card, primary, primaryForeground, muted, mutedForeground, accent, border, input]
+      description: >
+        The 10 admin-editable tokens for one light/dark mode of a custom
+        palette — every other CSS custom property is derived from these by
+        copying, matching how every built-in preset is already structured.
+      properties:
+        background: &hexColor { type: string, pattern: '^#[0-9A-Fa-f]{6}$', example: '#F8F7FA' }
+        foreground: *hexColor
+        card: *hexColor
+        primary: *hexColor
+        primaryForeground: *hexColor
+        muted: *hexColor
+        mutedForeground: *hexColor
+        accent: *hexColor
+        border: *hexColor
+        input: *hexColor
+    CustomPalette:
+      type: object
+      required: [light, dark]
+      properties:
+        light: { $ref: '#/components/schemas/CustomPaletteMode' }
+        dark: { $ref: '#/components/schemas/CustomPaletteMode' }
+    InstanceSettings:
+      type: object
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView]
+      properties:
+        publicProjectsEnabled: { type: boolean }
+        runRetentionDays:
+          type: integer
+          minimum: 0
+          description: >
+            Instance-wide, Tenant-Admin-configurable age threshold (in days)
+            past which a closed run is automatically and permanently
+            deleted. 0 (the default) means the policy is off.
+        autoArchiveInactiveDays:
+          type: integer
+          minimum: 0
+          description: >
+            Instance-wide, Tenant-Admin-configurable inactivity threshold
+            (in days) past which a non-exempt project is automatically
+            archived. 0 (the default) means the policy is off. Archiving is
+            reversible; unlike runRetentionDays, this never destroys data.
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+        customPalette:
+          allOf: [{ $ref: '#/components/schemas/CustomPalette' }]
+          nullable: true
+        updatedAt: { type: string, format: date-time }
+        oidcIssuer:
+          type: string
+          description: OIDC/SSO issuer URL (add-sso-oidc), empty when not configured.
+        oidcClientId:
+          type: string
+          description: OIDC/SSO client ID, empty when not configured.
+        oidcClientSecretSet:
+          type: boolean
+          description: >
+            Whether an OIDC client secret is currently stored — the secret
+            itself is never returned by any read, only this flag.
+        oidcGroupClaim:
+          type: string
+          description: >
+            The ID-token claim name whose values feed both the Tenant Admin
+            mapping and claim→Team mapping (add-sso-oidc).
+        oidcAdminClaimValues:
+          type: array
+          items: { type: string }
+          description: Claim values that grant Tenant Admin on every OIDC login.
+        oidcOnly:
+          type: boolean
+          description: >
+            Password-based login and password recovery are disabled
+            instance-wide. Only takes effect while OIDC is configured.
+        jiraSiteUrl:
+          type: string
+          description: >-
+            Jira Cloud site base URL (add-jira-connector), e.g.
+            "https://mycompany.atlassian.net" — used only to build
+            browsable issue links in the UI. Empty when not configured; a
+            linked issue key still shows then, just without a working link.
+        sessionTimeoutDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: >-
+            Instance-wide, Tenant-Admin-configurable sliding session expiry
+            window in days (add-session-timeout-setting). Default 30.
+            Changing it only affects sessions created or extended
+            afterward — already-active sessions keep their existing expiry.
+        defaultLandingView:
+          $ref: '#/components/schemas/LandingView'
+    InstanceSettingsUpdate:
+      type: object
+      description: A partial update — every field is optional; omitted fields are left unchanged.
+      properties:
+        publicProjectsEnabled: { type: boolean }
+        runRetentionDays: { type: integer, minimum: 0 }
+        autoArchiveInactiveDays: { type: integer, minimum: 0 }
+        colorTheme:
+          $ref: '#/components/schemas/ColorTheme'
+        customPalette:
+          $ref: '#/components/schemas/CustomPalette'
+        oidcIssuer: { type: string }
+        oidcClientId: { type: string }
+        oidcClientSecret:
+          type: string
+          description: >
+            Write-only (add-sso-oidc) — encrypted at rest before storage,
+            never echoed back by any read. Omit to leave the currently
+            stored secret unchanged.
+        oidcGroupClaim: { type: string }
+        oidcAdminClaimValues:
+          type: array
+          items: { type: string }
+        oidcOnly: { type: boolean }
+        disableSso:
+          type: boolean
+          description: >
+            Clears every OIDC/SSO field at once (add-sso-oidc) — a
+            dedicated action rather than blanking oidcIssuer as a sentinel.
+        jiraSiteUrl:
+          type: string
+          description: Jira Cloud site base URL (add-jira-connector).
+        sessionTimeoutDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+          description: Sliding session expiry window in days (add-session-timeout-setting), 1-90.
+        defaultLandingView:
+          $ref: '#/components/schemas/LandingView'
+    User:
+      type: object
+      required: [id, email, isTenantAdmin, createdAt, mustChangePassword]
+      properties:
+        id: { type: string }
+        email: { type: string }
+        isTenantAdmin: { type: boolean }
+        displayName: { type: string, nullable: true }
+        avatarKey:
+          type: string
+          nullable: true
+          description: >-
+            A preset key, null (generated default), or the reserved value
+            "custom" meaning the user has uploaded their own photo —
+            fetch it from GET /api/v1/users/{userId}/avatar.
+        timezone: { type: string, nullable: true }
+        deactivatedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+        mustChangePassword:
+          type: boolean
+          description: >-
+            True when this account must set a new password before doing
+            anything else (add-change-own-password) — set by a Tenant
+            Admin directly, or as a side effect of a generated temporary
+            password. On the response to POST /auth/login, signals the
+            frontend to show the required-change gate before the app
+            shell.
+    UserListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/User" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    UserProfileUpdate:
+      type: object
+      description: Self-service profile fields — a user editing their own display name, avatar, or timezone.
+      properties:
+        displayName: { type: string, nullable: true }
+        avatarKey:
+          type: string
+          nullable: true
+          description: >-
+            A known preset key, or null for the generated default. The
+            reserved value "custom" is rejected here — set only by
+            POST /api/v1/users/me/avatar.
+        timezone: { type: string, nullable: true }
+    UserInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+        isTenantAdmin: { type: boolean, default: false }
+    UserUpdate:
+      type: object
+      properties:
+        isTenantAdmin: { type: boolean }
+        deactivate:
+          type: boolean
+          description: Set true to deactivate the user.
+        reactivate:
+          type: boolean
+          description: Set true to reactivate a previously-deactivated user.
+        email:
+          type: string
+          description: Change the account's email (add-update-user).
+        requirePasswordChange:
+          type: boolean
+          description: >-
+            Flag (or clear) the account as requiring a new password,
+            enforced starting at its next login (add-change-own-password).
+            A Tenant Admin can no longer set another account's password
+            directly — see POST .../password-reset-email and
+            POST .../generate-temporary-password.
+    ChangeOwnPasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string }
+        newPassword: { type: string }
+    TemporaryPassword:
+      type: object
+      required: [password]
+      properties:
+        password:
+          type: string
+          description: >-
+            The generated raw value — shown once, never retrievable again.
+    UserDeletionPreview:
+      type: object
+      description: >-
+        Real counts of what deleting a user would remove (add-user-deletion
+        design.md D5) — server-computed, not a client-side fan-out.
+      required: [teamCount, projectCount, tokenCount]
+      properties:
+        teamCount: { type: integer }
+        projectCount:
+          type: integer
+          description: Direct project memberships only, not team-derived access.
+        tokenCount:
+          type: integer
+          description: Live (non-revoked) API tokens created by this user.
+    RoleDeletionPreview:
+      type: object
+      description: >-
+        Real counts of what deleting a role would affect (redesign-admin-shell)
+        — server-computed, mirroring UserDeletionPreview's pattern.
+      required: [directUserCount, teamCount, projectCount]
+      properties:
+        directUserCount:
+          type: integer
+          description: Users holding this role via direct project membership.
+        teamCount:
+          type: integer
+          description: Teams holding this role.
+        projectCount:
+          type: integer
+          description: Distinct projects touched by either direct or team assignment.
+    TeamDeletionPreview:
+      type: object
+      description: >-
+        Real counts of what deleting a team would affect
+        (add-team-deletion-preview) — server-computed, mirroring
+        UserDeletionPreview and RoleDeletionPreview's pattern.
+      required: [memberCount, projectCount]
+      properties:
+        memberCount:
+          type: integer
+          description: The team's current member count.
+        projectCount:
+          type: integer
+          description: Distinct projects the team holds a role on.
+    Permissions:
+      type: object
+      description: >-
+        A resolved, unioned set of permission flags — the caller's own
+        effective permissions on one project (add-delete-mode), not a role
+        definition.
+      required:
+        [read, caseCreate, caseEdit, caseDelete, sectionCreate, sectionEdit, sectionDelete,
+         suiteCreate, suiteEditMembership, runCreate, runRecordResult, manageProject,
+         runDelete, projectDelete]
+      properties:
+        read: { type: boolean }
+        caseCreate: { type: boolean }
+        caseEdit: { type: boolean }
+        caseDelete: { type: boolean }
+        sectionCreate: { type: boolean }
+        sectionEdit: { type: boolean }
+        sectionDelete: { type: boolean }
+        suiteCreate: { type: boolean }
+        suiteEditMembership: { type: boolean }
+        runCreate: { type: boolean }
+        runRecordResult: { type: boolean }
+        manageProject: { type: boolean }
+        runDelete: { type: boolean }
+        projectDelete: { type: boolean }
+    Role:
+      type: object
+      description: >-
+        A fully custom, instance-wide role (add-project-rbac design.md D10):
+        the Tenant Admin creates/renames/deletes roles and toggles their
+        permission flags freely. A user's effective permissions on a project
+        are the union of every role granted to them directly or via a team
+        (not a single "highest" role — there is no fixed ranking). Ten
+        concrete, per-resource flags (design.md D11) rather than a handful
+        of broad ones — e.g. caseCreate is independent of caseDelete.
+      required:
+        [id, name, rank, canRead, canCaseCreate, canCaseEdit, canCaseDelete,
+         canSectionCreate, canSectionEdit, canSectionDelete, canSuiteCreate, canSuiteEditMembership,
+         canRunCreate, canRunRecordResult, canManageProject, canRunDelete,
+         canProjectDelete, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        rank:
+          type: integer
+          description: Tenant-Admin-set display/sort order only — never compared for authorization.
+        canRead: { type: boolean }
+        canCaseCreate: { type: boolean }
+        canCaseEdit: { type: boolean }
+        canCaseDelete: { type: boolean }
+        canSectionCreate: { type: boolean }
+        canSectionEdit: { type: boolean }
+        canSectionDelete: { type: boolean }
+        canSuiteCreate: { type: boolean }
+        canSuiteEditMembership: { type: boolean }
+        canRunCreate: { type: boolean }
+        canRunRecordResult: { type: boolean }
+        canManageProject: { type: boolean }
+        canRunDelete: { type: boolean }
+        canProjectDelete: { type: boolean }
+        createdAt: { type: string, format: date-time }
+    RoleListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Role" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    RoleInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        rank: { type: integer }
+        canRead: { type: boolean }
+        canCaseCreate: { type: boolean }
+        canCaseEdit: { type: boolean }
+        canCaseDelete: { type: boolean }
+        canSectionCreate: { type: boolean }
+        canSectionEdit: { type: boolean }
+        canSectionDelete: { type: boolean }
+        canSuiteCreate: { type: boolean }
+        canSuiteEditMembership: { type: boolean }
+        canRunCreate: { type: boolean }
+        canRunRecordResult: { type: boolean }
+        canManageProject: { type: boolean }
+        canRunDelete: { type: boolean }
+        canProjectDelete: { type: boolean }
+    Team:
+      type: object
+      required: [id, name, memberIds, createdAt]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        memberIds:
+          type: array
+          items: { type: string }
+        createdAt: { type: string, format: date-time }
+    TeamListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Team" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    TeamInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    OIDCTeamMapping:
+      type: object
+      required: [id, claimValue, teamId]
+      properties:
+        id: { type: string }
+        claimValue: { type: string }
+        teamId: { type: string }
+    OIDCTeamMappingInput:
+      type: object
+      required: [claimValue, teamId]
+      properties:
+        claimValue: { type: string }
+        teamId: { type: string }
+    TeamUpdate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+    ProjectMember:
+      type: object
+      required: [userId, roleId]
+      properties:
+        userId: { type: string }
+        roleId: { type: string }
+    ProjectTeamRole:
+      type: object
+      required: [teamId, roleId]
+      properties:
+        teamId: { type: string }
+        roleId: { type: string }
+    ProjectMembership:
+      type: object
+      required: [users, teams]
+      properties:
+        users:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectMember" }
+        teams:
+          type: array
+          items: { $ref: "#/components/schemas/ProjectTeamRole" }
+    ProjectRoleInput:
+      type: object
+      required: [roleId]
+      properties:
+        roleId: { type: string }
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    SetupInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string }
+        password: { type: string }
+    ForgotPasswordInput:
+      type: object
+      required: [email]
+      properties:
+        email: { type: string }
+    ResetPasswordInput:
+      type: object
+      required: [token, newPassword]
+      properties:
+        token: { type: string }
+        newPassword: { type: string }
+    ApiToken:
+      type: object
+      required: [id, createdBy, name, prefix, createdAt]
+      properties:
+        id: { type: string }
+        createdBy: { type: string }
+        name: { type: string }
+        prefix:
+          type: string
+          description: Short, non-secret prefix of the token, for identification only.
+        projectId:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
+        roleId:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+    ApiTokenCreated:
+      allOf:
+        - $ref: "#/components/schemas/ApiToken"
+        - type: object
+          required: [token]
+          properties:
+            token:
+              type: string
+              description: The full secret token value. Shown only in this response, never again.
+    TokenInput:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        projectId:
+          type: string
+          description: >-
+            Omit alongside roleId for an unscoped token (inherits the
+            creator's full, live permission level — the default). Set
+            alongside roleId to scope the token to exactly that project and
+            role; rejected if the role grants more than the creator's own
+            current access.
+        roleId: { type: string }
+    ActorKind:
+      type: string
+      enum: [user, agent, system]
+      description: >-
+        "system" attributes an audit entry to an unattended background
+        process (e.g. the automatic run-retention or project-archiving
+        sweep) rather than a resolved request-time actor
+        (project-activity-feed) — the schema previously only listed
+        user/agent even though domain.ActorKindSystem has existed since
+        add-data-retention; fixed here since the Activity panel is the
+        first UI consumer that needs to distinguish it correctly.
+    AuditEntry:
+      type: object
+      required: [id, actorKind, actorId, actorName, action, entityType, entityId, occurredAt]
+      properties:
+        id: { type: string }
+        actorKind: { $ref: "#/components/schemas/ActorKind" }
+        actorId: { type: string }
+        actorName: { type: string }
+        action: { type: string }
+        entityType: { type: string }
+        entityId: { type: string }
+        projectId:
+          type: string
+          description: >-
+            The entity's owning project, resolved at write time
+            (project-activity-feed). Omitted for entity types with no
+            owning project (user, team, role, instance_settings,
+            api_token), and for entries recorded before this field
+            existed (no backfill).
+        occurredAt: { type: string, format: date-time }
+        detail:
+          type: object
+          additionalProperties: true
+          description: >-
+            Optional structured before/after detail, shape varies by action
+            (e.g. move: {from, to}; restore: {restoredFrom, newVersion}).
+            Omitted when an action carries no extra detail.

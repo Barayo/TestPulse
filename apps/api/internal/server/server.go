@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/Barayo/TestPulse/apps/api/internal/apidocs"
 	"github.com/Barayo/TestPulse/apps/api/internal/mcp"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
 	"github.com/Barayo/TestPulse/apps/api/internal/web"
@@ -40,6 +41,15 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 
 	r.Get("/healthz", handleLiveness)
 	r.Get("/readyz", handleReadiness(logger, readiness))
+
+	// Unauthenticated: the API's shape is already public via the OSS repo's
+	// openapi.yaml, so this exposes nothing new (add-live-api-docs).
+	// StripPrefix is required here: unlike a mounted chi.Router (e.g. /mcp
+	// below), chi.Mount only rewrites its internal routing context for a
+	// plain http.Handler, not r.URL.Path itself — apidocs.Handler() reads
+	// r.URL.Path directly (mirroring internal/web's pattern), so without
+	// this every request would arrive still prefixed with "/docs".
+	r.Mount("/docs", http.StripPrefix("/docs", apidocs.Handler()))
 
 	if sso == nil {
 		sso = &SSOConfig{}

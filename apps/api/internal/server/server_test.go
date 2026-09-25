@@ -58,6 +58,21 @@ func TestMCPNotMountedWhenDisabled(t *testing.T) {
 	}
 }
 
+// The API's shape is already public via the OSS repo's openapi.yaml, so an
+// unauthenticated /docs endpoint exposes nothing new (add-live-api-docs
+// proposal.md).
+func TestScenario_DocsEndpointServesWithoutAuthentication(t *testing.T) {
+	h := newTestServer(nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/docs", nil))
+	if rec.Code != http.StatusOK {
+		t.Errorf("GET /docs = %d, want 200", rec.Code)
+	}
+	if !strings.Contains(rec.Body.String(), "swagger-ui") {
+		t.Errorf("GET /docs body = %q, want the Swagger UI shell (not the web SPA's index.html)", rec.Body.String())
+	}
+}
+
 func TestLivenessAlwaysOK(t *testing.T) {
 	// Liveness must succeed even when dependencies are down.
 	h := newTestServer(errors.New("database unreachable"))

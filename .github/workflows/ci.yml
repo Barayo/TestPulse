@@ -164,6 +164,15 @@ jobs:
         run: |
           npm -w @testpulse/shared run generate
           git diff --exit-code packages/shared/src
+      - name: API docs embed is current
+        # apps/api/internal/apidocs is a committed copy (go:embed can't
+        # reach outside apps/api's directory tree) of openapi.yaml plus a
+        # vendored swagger-ui-dist build (add-live-api-docs design.md D2/D3)
+        # — this fails the same way a stale generated TS client already
+        # does above, if either drifts from the committed embed.
+        run: |
+          npm -w @testpulse/shared run sync-api-docs
+          git diff --exit-code apps/api/internal/apidocs
       - name: Lint
         run: npm -w web run lint
       - name: Typecheck

@@ -14,6 +14,7 @@ RUN npm ci --ignore-scripts
 COPY packages/shared/ packages/shared/
 COPY apps/web/ apps/web/
 RUN npm -w web run build
+RUN npm -w @testpulse/shared run sync-api-docs
 
 # --- Stage 2: build the Go binary with embedded web assets ---------------
 # --platform=$BUILDPLATFORM + explicit GOOS/GOARCH: Go cross-compiles
@@ -29,6 +30,7 @@ COPY apps/api/go.mod apps/api/go.sum apps/api/
 RUN cd apps/api && go mod download
 COPY apps/api/ apps/api/
 COPY --from=web /src/apps/web/dist/ apps/api/internal/web/dist/
+COPY --from=web /src/apps/api/internal/apidocs/ apps/api/internal/apidocs/
 RUN cd apps/api && CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH go build -trimpath -ldflags="-s -w" \
     -o /out/testpulse-api ./cmd/testpulse-api
 

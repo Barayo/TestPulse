@@ -11,9 +11,11 @@
     }
   },
   "scripts": {
-    "generate": "openapi-typescript openapi.yaml -o src/api.ts"
+    "generate": "openapi-typescript openapi.yaml -o src/api.ts",
+    "sync-api-docs": "node scripts/sync-api-docs.mjs"
   },
   "devDependencies": {
-    "openapi-typescript": "^7.9.1"
+    "openapi-typescript": "^7.9.1",
+    "swagger-ui-dist": "^5.30.4"
   }
 }

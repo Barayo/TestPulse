@@ -15,6 +15,9 @@ sync-web: build-web ## Copy the web bundle into the API for embedding (container
 	rm -rf apps/api/internal/web/dist
 	cp -R apps/web/dist apps/api/internal/web/dist
 
+sync-api-docs: ## Copy the OpenAPI contract and swagger-ui-dist into the API for embedding
+	npm -w @testpulse/shared run sync-api-docs
+
 generate: ## Regenerate the TypeScript API client from the OpenAPI spec
 	npm -w @testpulse/shared run generate
 
