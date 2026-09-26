@@ -13,6 +13,7 @@ const baseRun: Run = {
   projectKey: 'p1',
   name: 'Sprint 1',
   status: 'open',
+  archived: false,
   createdAt: new Date().toISOString(),
 }
 

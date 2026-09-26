@@ -52,6 +52,95 @@ func TestScenario_ClosedRunRejectsMutationsWith409(t *testing.T) {
 	call(t, h, "PUT", fmt.Sprintf("/api/v1/items/%s/status", itemID), jmap{"status": "retest"}, 409, nil)
 }
 
+// TestScenario_ArchiveRunRequiresManageProject covers auto-archive-runs:
+// archive/unarchive are gated by manageProject, same bar as reopen.
+func TestScenario_ArchiveRunRequiresManageProject(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+	contributorRoleID := roleIDByName(t, handler, admin, "Contributor")
+	projectAdminRoleID := roleIDByName(t, handler, admin, "Project Admin")
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+
+	var contributor jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "archcontributor@example.com", "password": "correcthorse"}, 201, &contributor)
+	contributorID, _ := contributor["id"].(string)
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+contributorID,
+		jmap{"roleId": contributorRoleID}, 204, nil)
+	contributorCookie := loginCookie(t, handler, "archcontributor@example.com", "correcthorse")
+
+	var projectAdmin jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "archprojectadmin@example.com", "password": "correcthorse"}, 201, &projectAdmin)
+	projectAdminID, _ := projectAdmin["id"].(string)
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+projectAdminID,
+		jmap{"roleId": projectAdminRoleID}, 204, nil)
+	projectAdminCookie := loginCookie(t, handler, "archprojectadmin@example.com", "correcthorse")
+
+	var run jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/runs", jmap{"name": "sprint 1"}, 201, &run)
+	runKey, _ := run["key"].(string)
+
+	var errBody jmap
+	callAs(t, handler, contributorCookie, "POST", "/api/v1/runs/"+runKey+"/archive", nil, 403, &errBody)
+
+	callAs(t, handler, projectAdminCookie, "POST", "/api/v1/runs/"+runKey+"/archive", nil, 204, nil)
+
+	var got jmap
+	callAs(t, handler, admin, "GET", "/api/v1/runs/"+runKey, nil, 200, &got)
+	if got["archived"] != true {
+		t.Fatalf("archived after archive = %v, want true", got["archived"])
+	}
+}
+
+// TestScenario_UnarchiveRunRequiresManageProject mirrors the above for
+// unarchive.
+func TestScenario_UnarchiveRunRequiresManageProject(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+	contributorRoleID := roleIDByName(t, handler, admin, "Contributor")
+	projectAdminRoleID := roleIDByName(t, handler, admin, "Project Admin")
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "QA"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+
+	var contributor jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "unarchcontributor@example.com", "password": "correcthorse"}, 201, &contributor)
+	contributorID, _ := contributor["id"].(string)
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+contributorID,
+		jmap{"roleId": contributorRoleID}, 204, nil)
+	contributorCookie := loginCookie(t, handler, "unarchcontributor@example.com", "correcthorse")
+
+	var projectAdmin jmap
+	callAs(t, handler, admin, "POST", "/api/v1/users",
+		jmap{"email": "unarchprojectadmin@example.com", "password": "correcthorse"}, 201, &projectAdmin)
+	projectAdminID, _ := projectAdmin["id"].(string)
+	callAs(t, handler, admin, "PUT", "/api/v1/projects/"+projectKey+"/members/"+projectAdminID,
+		jmap{"roleId": projectAdminRoleID}, 204, nil)
+	projectAdminCookie := loginCookie(t, handler, "unarchprojectadmin@example.com", "correcthorse")
+
+	var run jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects/"+projectKey+"/runs", jmap{"name": "sprint 1"}, 201, &run)
+	runKey, _ := run["key"].(string)
+	callAs(t, handler, admin, "POST", "/api/v1/runs/"+runKey+"/archive", nil, 204, nil)
+
+	var errBody jmap
+	callAs(t, handler, contributorCookie, "POST", "/api/v1/runs/"+runKey+"/unarchive", nil, 403, &errBody)
+
+	callAs(t, handler, projectAdminCookie, "POST", "/api/v1/runs/"+runKey+"/unarchive", nil, 204, nil)
+
+	var got jmap
+	callAs(t, handler, admin, "GET", "/api/v1/runs/"+runKey, nil, 200, &got)
+	if got["archived"] != false {
+		t.Fatalf("archived after unarchive = %v, want false", got["archived"])
+	}
+}
+
 func TestScenario_ReopenRequiresManageProject(t *testing.T) {
 	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
 	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")

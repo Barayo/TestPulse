@@ -13,6 +13,7 @@ const runA: Run = {
   projectKey: 'p1',
   name: 'Smoke run',
   status: 'closed',
+  archived: false,
   passRate: 80,
   createdAt: '2026-08-01T00:00:00Z',
 }
@@ -24,6 +25,7 @@ const runB: Run = {
   projectKey: 'p1',
   name: 'Smoke run',
   status: 'closed',
+  archived: false,
   passRate: 40,
   createdAt: '2026-08-10T00:00:00Z',
 }

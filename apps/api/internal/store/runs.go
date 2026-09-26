@@ -416,13 +416,13 @@ func pinItem(ctx context.Context, tx pgx.Tx, runID, caseID, testName, testDataRo
 func (r *RunRepo) Get(ctx context.Context, runID string) (domain.Run, error) {
 	var run domain.Run
 	err := r.pool.QueryRow(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.archived, tr.created_at
 		 FROM test_runs tr
 		 JOIN projects p ON p.id = tr.project_id
 		 LEFT JOIN test_suites ts ON ts.id = tr.suite_id
 		 LEFT JOIN test_plans tp ON tp.id = tr.test_plan_id
 		 WHERE tr.id = $1`, runID,
-	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt)
+	).Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.Archived, &run.CreatedAt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.Run{}, ErrNotFound
 	}
@@ -448,6 +448,33 @@ func (r *RunRepo) Close(ctx context.Context, runID string) error {
 func (r *RunRepo) Reopen(ctx context.Context, runID string) error {
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE test_runs SET status = 'open' WHERE id = $1`, runID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Archive hides a run from the project's active run list (auto-archive-runs
+// design.md D2) — reversible, no status precondition.
+func (r *RunRepo) Archive(ctx context.Context, runID string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE test_runs SET archived = true WHERE id = $1`, runID)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return ErrNotFound
+	}
+	return nil
+}
+
+// Unarchive returns an archived run to the active run list.
+func (r *RunRepo) Unarchive(ctx context.Context, runID string) error {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE test_runs SET archived = false WHERE id = $1`, runID)
 	if err != nil {
 		return err
 	}
@@ -498,6 +525,32 @@ func (r *RunRepo) ListEligibleForRetention(ctx context.Context, days int) ([]dom
 	return runs, rows.Err()
 }
 
+// ListEligibleForAutoArchive returns every closed, non-archived run whose
+// created_at is older than days (auto-archive-runs design.md D5). A pure
+// age filter — callers (RunAutoArchiveWorker) are responsible for treating
+// days == 0 as "policy off" before calling this, not this method.
+func (r *RunRepo) ListEligibleForAutoArchive(ctx context.Context, days int) ([]domain.Run, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, key, project_id, name, status, created_at
+		 FROM test_runs
+		 WHERE status = $1 AND archived = false AND created_at < now() - make_interval(days => $2)`,
+		domain.RunStatusClosed, days)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	runs := []domain.Run{}
+	for rows.Next() {
+		var run domain.Run
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.Name, &run.Status, &run.CreatedAt); err != nil {
+			return nil, err
+		}
+		runs = append(runs, run)
+	}
+	return runs, rows.Err()
+}
+
 // IDByKey resolves a run's key to its internal id — used at the API
 // boundary to translate a key-based path param before delegating to
 // UUID-based service/store calls (add-human-readable-keys D4).
@@ -515,7 +568,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	// list, not a round trip per run) — same LEFT JOIN + FILTER shape as
 	// SuiteRepo.latestRunStats and ProjectRepo's summaries query.
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at,
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.archived, tr.created_at,
 		        count(i.id) AS total,
 		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
 		 FROM test_runs tr
@@ -535,7 +588,7 @@ func (r *RunRepo) List(ctx context.Context, projectID string) ([]domain.Run, err
 	for rows.Next() {
 		var run domain.Run
 		var total, passCount int
-		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt, &total, &passCount); err != nil {
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.Archived, &run.CreatedAt, &total, &passCount); err != nil {
 			return nil, err
 		}
 		if total > 0 {
@@ -563,7 +616,7 @@ func (r *RunRepo) ListPage(ctx context.Context, projectID, cursor string, limit 
 		cursorCreatedAt, cursorID = createdAt, id
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at,
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.archived, tr.created_at,
 		        count(i.id) AS total,
 		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
 		 FROM test_runs tr
@@ -586,7 +639,7 @@ func (r *RunRepo) ListPage(ctx context.Context, projectID, cursor string, limit 
 	for rows.Next() {
 		var run domain.Run
 		var total, passCount int
-		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt, &total, &passCount); err != nil {
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.Archived, &run.CreatedAt, &total, &passCount); err != nil {
 			return nil, "", err
 		}
 		if total > 0 {
@@ -613,7 +666,7 @@ func (r *RunRepo) ListPage(ctx context.Context, projectID, cursor string, limit 
 // single Test Plan"), same pass-rate aggregation shape as List.
 func (r *RunRepo) ListByTestPlan(ctx context.Context, testPlanID string) ([]domain.Run, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.created_at,
+		`SELECT tr.id, tr.key, tr.project_id, p.key, tr.name, tr.status, ts.key, tr.test_plan_id, tp.key, tr.archived, tr.created_at,
 		        count(i.id) AS total,
 		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
 		 FROM test_runs tr
@@ -633,7 +686,7 @@ func (r *RunRepo) ListByTestPlan(ctx context.Context, testPlanID string) ([]doma
 	for rows.Next() {
 		var run domain.Run
 		var total, passCount int
-		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.CreatedAt, &total, &passCount); err != nil {
+		if err := rows.Scan(&run.ID, &run.Key, &run.ProjectID, &run.ProjectKey, &run.Name, &run.Status, &run.SuiteKey, &run.TestPlanID, &run.TestPlanKey, &run.Archived, &run.CreatedAt, &total, &passCount); err != nil {
 			return nil, err
 		}
 		if total > 0 {

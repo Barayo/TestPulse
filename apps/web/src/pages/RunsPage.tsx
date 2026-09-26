@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { ChevronRightIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Button } from '@/components/ui/button'
@@ -29,6 +30,7 @@ export default function RunsPage() {
   const [runsCursor, setRunsCursor] = useState<string | null>(null)
   const [loadingMoreRuns, setLoadingMoreRuns] = useState(false)
   const [suites, setSuites] = useState<Suite[]>([])
+  const [archivedExpanded, setArchivedExpanded] = useState(false)
 
   const fetchRunsPage = useCallback(
     (cursor?: string) =>
@@ -116,8 +118,9 @@ export default function RunsPage() {
     )
   }
 
-  const open = runs.filter((r) => r.status === 'open')
-  const closed = runs.filter((r) => r.status === 'closed')
+  const open = runs.filter((r) => r.status === 'open' && !r.archived)
+  const closed = runs.filter((r) => r.status === 'closed' && !r.archived)
+  const archived = runs.filter((r) => r.archived)
 
   return (
     <div className="space-y-6">
@@ -198,6 +201,24 @@ export default function RunsPage() {
                   <ClosedRunsLedger runs={closed} suites={suites} projectKey={projectKey} />
                 )}
               </div>
+              {archived.length > 0 && (
+                <section aria-label="Archived runs" className="space-y-3">
+                  <button
+                    type="button"
+                    aria-label={archivedExpanded ? 'Collapse Archived' : 'Expand Archived'}
+                    aria-expanded={archivedExpanded}
+                    className="flex items-center gap-2 text-muted-foreground"
+                    onClick={() => setArchivedExpanded((v) => !v)}
+                  >
+                    <ChevronRightIcon
+                      className={`size-3.5 transition-transform ${archivedExpanded ? 'rotate-90' : ''}`}
+                      aria-hidden="true"
+                    />
+                    <span className="tp-label">Archived · {archived.length}</span>
+                  </button>
+                  {archivedExpanded && <ClosedRunsLedger runs={archived} suites={suites} projectKey={projectKey} />}
+                </section>
+              )}
               {/* One fetch from GET /runs (newest-first, mixed) can land in
                   either bucket above, so the label stays generic rather
                   than scoped to "open"/"closed". */}

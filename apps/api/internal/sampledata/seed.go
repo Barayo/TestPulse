@@ -949,6 +949,27 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: closing scratch run: %w", err)
 	}
 
+	// 5.6. A small, closed, already-archived run (auto-archive-runs) —
+	// demonstrates the Runs list's collapsed "Archived" section and the
+	// Archive/Unarchive action on first load, the same way the scratch run
+	// above demonstrates Delete. Created and archived before the final run
+	// below, so it never drives the project's own health indicator.
+	archivedRunName := "Regression checkpoint 12 — archived"
+	if err := RunWithVerdicts(ctx, svc, p.ID, archivedRunName,
+		[]string{checkoutValid.ID}, []domain.Verdict{domain.VerdictPass}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	archivedShowcaseRun, err := runByName(ctx, svc, p.ID, archivedRunName)
+	if err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := svc.CloseRun(ctx, archivedShowcaseRun.ID); err != nil {
+		return fmt.Errorf("sampledata: closing archived showcase run: %w", err)
+	}
+	if err := svc.ArchiveRun(ctx, archivedShowcaseRun.ID); err != nil {
+		return fmt.Errorf("sampledata: archiving showcase run: %w", err)
+	}
+
 	// 6. Final run, created last: a strong go/no-go pass across a wide set
 	// of cases, so the project's health indicator (driven only by the most
 	// recently created run) shows its healthy state.

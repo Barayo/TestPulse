@@ -1000,6 +1000,42 @@ func TestSeedIncludesADisposableScratchRun(t *testing.T) {
 	}
 }
 
+// TestSeedIncludesAnAlreadyArchivedRun covers auto-archive-runs: the Sample
+// Project showcases the Runs list's Archived section on first load, not
+// just after a user manually archives something themselves.
+func TestSeedIncludesAnAlreadyArchivedRun(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	runs, err := svc.ListRuns(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	var archivedRun *domain.Run
+	for i, r := range runs {
+		if r.Archived {
+			archivedRun = &runs[i]
+		}
+	}
+	if archivedRun == nil {
+		t.Fatal("no archived run seeded")
+	}
+	if archivedRun.Status != domain.RunStatusClosed {
+		t.Errorf("archived run status = %q, want closed", archivedRun.Status)
+	}
+	// ListRuns orders newest first — the archived run must never be it, same
+	// reasoning as the scratch run above.
+	if runs[0].ID == archivedRun.ID {
+		t.Error("archived run is the most recently created run, want the final go/no-go run to stay last")
+	}
+}
+
 // collapse-duplicate-ci-runs: the Sample Project should demonstrate the
 // fixed import behavior — a commit-style name, created closed — not the
 // old bug (mislabeled, stuck open).

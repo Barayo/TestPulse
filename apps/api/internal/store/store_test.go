@@ -1221,6 +1221,39 @@ func TestCloseAndReopenRun(t *testing.T) {
 	}
 }
 
+func TestArchiveRunSetsArchivedFlag(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", nil)
+
+	if err := s.Runs.Archive(ctx, run.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	got, _ := s.Runs.Get(ctx, run.ID)
+	if !got.Archived {
+		t.Error("Archived = false after Archive, want true")
+	}
+}
+
+func TestUnarchiveRunClearsArchivedFlag(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+	p := mustProject(t, s)
+	run, _ := s.Runs.Create(ctx, p.ID, "sprint 1", nil)
+	if err := s.Runs.Archive(ctx, run.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+
+	if err := s.Runs.Unarchive(ctx, run.ID); err != nil {
+		t.Fatalf("Unarchive: %v", err)
+	}
+	got, _ := s.Runs.Get(ctx, run.ID)
+	if got.Archived {
+		t.Error("Archived = true after Unarchive, want false")
+	}
+}
+
 // TestClosedRunRejectsMutations covers the "Closed run rejects ..."
 // scenarios: every existing mutating run-item store method refuses once
 // the parent run is closed.
@@ -2261,6 +2294,49 @@ func TestListEligibleForRetentionWithZeroDaysAppliesNoSpecialCase(t *testing.T) 
 	}
 	if len(eligible) != 1 || eligible[0].ID != run.ID {
 		t.Errorf("ListEligibleForRetention(0) = %+v, want just-created closed run %q (no 0 special-case)", eligible, run.ID)
+	}
+}
+
+// TestListEligibleForAutoArchiveOnlyReturnsOldClosedNonArchivedRuns covers
+// the store-layer eligibility rule (auto-archive-runs design.md D5): closed,
+// non-archived runs older than the threshold — never open runs regardless
+// of age, and never runs already archived.
+func TestListEligibleForAutoArchiveOnlyReturnsOldClosedNonArchivedRuns(t *testing.T) {
+	pool := testutil.Pool(t, "store")
+	s := store.New(pool)
+	ctx := context.Background()
+	p := mustProject(t, s)
+
+	oldClosed, _ := s.Runs.Create(ctx, p.ID, "old closed", nil)
+	if err := s.Runs.Close(ctx, oldClosed.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	backdateRunCreatedAt(t, pool, oldClosed.ID, 40)
+
+	recentClosed, _ := s.Runs.Create(ctx, p.ID, "recent closed", nil)
+	if err := s.Runs.Close(ctx, recentClosed.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	backdateRunCreatedAt(t, pool, recentClosed.ID, 5)
+
+	oldOpen, _ := s.Runs.Create(ctx, p.ID, "old open", nil)
+	backdateRunCreatedAt(t, pool, oldOpen.ID, 40)
+
+	oldClosedArchived, _ := s.Runs.Create(ctx, p.ID, "old closed archived", nil)
+	if err := s.Runs.Close(ctx, oldClosedArchived.ID); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	if err := s.Runs.Archive(ctx, oldClosedArchived.ID); err != nil {
+		t.Fatalf("Archive: %v", err)
+	}
+	backdateRunCreatedAt(t, pool, oldClosedArchived.ID, 40)
+
+	eligible, err := s.Runs.ListEligibleForAutoArchive(ctx, 30)
+	if err != nil {
+		t.Fatalf("ListEligibleForAutoArchive: %v", err)
+	}
+	if len(eligible) != 1 || eligible[0].ID != oldClosed.ID {
+		t.Errorf("ListEligibleForAutoArchive(30) = %+v, want only %q (old closed non-archived run)", eligible, oldClosed.ID)
 	}
 }
 

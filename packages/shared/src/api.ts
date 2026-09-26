@@ -1189,6 +1189,44 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/runs/{runKey}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive a run — hides it from the active run list, reversible, no status precondition */
+        post: operations["archiveRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/runs/{runKey}/unarchive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Unarchive a run — returns it to the active run list */
+        post: operations["unarchiveRun"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/runs/{runKey}/items": {
         parameters: {
             query?: {
@@ -2742,6 +2780,8 @@ export interface components {
             passRate?: number | null;
             /** @description The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself. */
             testPlanKey?: string | null;
+            /** @description Hides this run from the project's active run list by default (auto-archive-runs). Reversible; independent of status — an open or closed run may be archived. */
+            archived: boolean;
         };
         RunListPage: {
             items: components["schemas"]["Run"][];
@@ -3251,6 +3291,8 @@ export interface components {
             runRetentionDays: number;
             /** @description Instance-wide, Tenant-Admin-configurable inactivity threshold (in days) past which a non-exempt project is automatically archived. 0 (the default) means the policy is off. Archiving is reversible; unlike runRetentionDays, this never destroys data. */
             autoArchiveInactiveDays: number;
+            /** @description Instance-wide, Tenant-Admin-configurable age threshold (in days) past which a closed, non-archived run is automatically archived (auto-archive-runs). 0 (the default) means the policy is off. Reversible; unlike runRetentionDays, this never destroys data. */
+            runAutoArchiveInactiveDays: number;
             colorTheme: components["schemas"]["ColorTheme"];
             customPalette?: components["schemas"]["CustomPalette"] | null;
             /** Format: date-time */
@@ -3278,6 +3320,7 @@ export interface components {
             publicProjectsEnabled?: boolean;
             runRetentionDays?: number;
             autoArchiveInactiveDays?: number;
+            runAutoArchiveInactiveDays?: number;
             colorTheme?: components["schemas"]["ColorTheme"];
             customPalette?: components["schemas"]["CustomPalette"];
             oidcIssuer?: string;
@@ -5904,6 +5947,50 @@ export interface operations {
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    archiveRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Archived */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    unarchiveRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                runKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Unarchived */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listRunItems: {

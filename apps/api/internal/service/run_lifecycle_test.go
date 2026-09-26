@@ -65,6 +65,78 @@ func TestCloseRunThenReopen(t *testing.T) {
 	}
 }
 
+// TestArchiveRunAudited covers auto-archive-runs design.md D2/D3: manual
+// archive sets the flag and is audited, mirroring CloseRun's own shape.
+func TestArchiveRunAudited(t *testing.T) {
+	s := lifecycleTestService(t)
+	admin := mustCreateUser(t, s, "archiver1@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+	p := mustLifecycleProject(t, s)
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "sprint 1"})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	if err := s.ArchiveRun(ctx, run.ID); err != nil {
+		t.Fatalf("ArchiveRun: %v", err)
+	}
+	got, err := s.GetRun(ctx, run.ID)
+	if err != nil || !got.Archived {
+		t.Fatalf("after ArchiveRun, archived = %v, %v; want true", got.Archived, err)
+	}
+
+	history, err := s.AuditHistory(ctx, "run", run.ID)
+	if err != nil {
+		t.Fatalf("AuditHistory: %v", err)
+	}
+	var found bool
+	for _, e := range history {
+		if e.Action == "archive" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("audit history = %+v, want an 'archive' entry", history)
+	}
+}
+
+// TestUnarchiveRunAudited covers the inverse of TestArchiveRunAudited.
+func TestUnarchiveRunAudited(t *testing.T) {
+	s := lifecycleTestService(t)
+	admin := mustCreateUser(t, s, "archiver2@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+	p := mustLifecycleProject(t, s)
+	run, err := s.CreateRun(ctx, p.ID, service.RunInput{Name: "sprint 1"})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	if err := s.ArchiveRun(ctx, run.ID); err != nil {
+		t.Fatalf("ArchiveRun: %v", err)
+	}
+
+	if err := s.UnarchiveRun(ctx, run.ID); err != nil {
+		t.Fatalf("UnarchiveRun: %v", err)
+	}
+	got, err := s.GetRun(ctx, run.ID)
+	if err != nil || got.Archived {
+		t.Fatalf("after UnarchiveRun, archived = %v, %v; want false", got.Archived, err)
+	}
+
+	history, err := s.AuditHistory(ctx, "run", run.ID)
+	if err != nil {
+		t.Fatalf("AuditHistory: %v", err)
+	}
+	var found bool
+	for _, e := range history {
+		if e.Action == "unarchive" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("audit history = %+v, want an 'unarchive' entry", history)
+	}
+}
+
 // An imported run is created closed (collapse-duplicate-ci-runs); confirm
 // the existing reopen capability generalizes to it unmodified.
 // TestDeleteRunRemovesIt covers add-data-retention design.md D1: a plain,

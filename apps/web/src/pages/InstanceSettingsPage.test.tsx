@@ -20,6 +20,7 @@ function mockAsTenantAdmin(
   sessionTimeoutDays = 30,
   defaultLandingView = 'dashboard',
   mcpEnabled = true,
+  runAutoArchiveInactiveDays = 0,
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
@@ -31,6 +32,7 @@ function mockAsTenantAdmin(
           publicProjectsEnabled,
           runRetentionDays,
           autoArchiveInactiveDays,
+          runAutoArchiveInactiveDays,
           colorTheme,
           jiraSiteUrl,
           sessionTimeoutDays,
@@ -207,6 +209,60 @@ describe('InstanceSettingsPage', () => {
       await waitFor(() =>
         expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', {
           body: { runRetentionDays: 10 },
+        }),
+      )
+    })
+  })
+
+  describe('Auto-archive inactive runs (auto-archive-runs)', () => {
+    it('shows the "Auto-archive inactive runs" card in the Data section', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', true, 0)
+      renderPage()
+      await screen.findByRole('switch', { name: /public project access/i })
+      expect(screen.getByText('Auto-archive inactive runs')).toBeInTheDocument()
+    })
+
+    it('highlights Off and shows the off message when the threshold is 0', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', true, 0)
+      renderPage()
+      await screen.findByRole('group', { name: 'Run auto-archive inactivity period' })
+      const offPill = within(screen.getByRole('group', { name: 'Run auto-archive inactivity period' })).getByRole('button', {
+        name: 'Off',
+      })
+      await waitFor(() => expect(offPill).toHaveAttribute('aria-pressed', 'true'))
+      expect(screen.getByText(/off — runs are never automatically archived/i)).toBeInTheDocument()
+    })
+
+    it('shows the armed message with the configured threshold', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', true, 60)
+      renderPage()
+      const input = await screen.findByRole('spinbutton', { name: /custom run auto-archive inactivity period/i })
+      expect(input).toHaveValue(60)
+      expect(screen.getByText(/closed runs older than 60 days are archived automatically/i)).toBeInTheDocument()
+    })
+
+    it('clicking a preset pill saves immediately', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', true, 0)
+      mockPATCH.mockResolvedValue({
+        data: {
+          publicProjectsEnabled: true,
+          runRetentionDays: 0,
+          autoArchiveInactiveDays: 0,
+          runAutoArchiveInactiveDays: 365,
+          sessionTimeoutDays: 30,
+          updatedAt: '',
+        },
+        response: { ok: true },
+      })
+      renderPage()
+      const group = await screen.findByRole('group', { name: 'Run auto-archive inactivity period' })
+      const pill = within(group).getByRole('button', { name: '365d' })
+
+      await userEvent.click(pill)
+
+      await waitFor(() =>
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', {
+          body: { runAutoArchiveInactiveDays: 365 },
         }),
       )
     })

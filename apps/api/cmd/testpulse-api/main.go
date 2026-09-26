@@ -94,6 +94,11 @@ func run() error {
 	// ctx.
 	go service.NewProjectAutoArchiveWorker(svc).Run(ctx)
 
+	// A fourth, independent background worker (auto-archive-runs design.md
+	// D4) — automatically archives closed, non-archived runs past the
+	// configured instance-wide age threshold. Same signal-cancelled ctx.
+	go service.NewRunAutoArchiveWorker(svc).Run(ctx)
+
 	srv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           server.New(logger, db.NewHealth(pool), svc, cfg.LoginRateLimitPerMinute, cfg.LoginRateLimitBurst, sso, cfg.MCPEnabled),

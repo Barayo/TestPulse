@@ -113,6 +113,8 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/", h.getRun)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromRun)).Post("/close", h.closeRun)
 		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRun)).Post("/reopen", h.reopenRun)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRun)).Post("/archive", h.archiveRun)
+		r.With(h.requirePermission(domain.PermManageProject, projectIDFromRun)).Post("/unarchive", h.unarchiveRun)
 		r.With(h.requirePermission(domain.PermRunDelete, projectIDFromRun)).Delete("/", h.deleteRun)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromRun)).Get("/items", h.listRunItems)
 		r.With(h.requirePermission(domain.PermRunCreate, projectIDFromRun)).Post("/items", h.addRunItem)
@@ -881,6 +883,16 @@ func (h *api) closeRun(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) reopenRun(w http.ResponseWriter, r *http.Request) {
 	err := h.svc.ReopenRun(r.Context(), resolvedID(r, "runKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) archiveRun(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.ArchiveRun(r.Context(), resolvedID(r, "runKey"))
+	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+func (h *api) unarchiveRun(w http.ResponseWriter, r *http.Request) {
+	err := h.svc.UnarchiveRun(r.Context(), resolvedID(r, "runKey"))
 	h.respond(w, http.StatusNoContent, nil, err)
 }
 

@@ -22,6 +22,7 @@ const run = {
   projectKey: 'p1',
   name: 'Sprint 1',
   status: 'open' as const,
+  archived: false,
   createdAt: '',
 }
 const pendingItem = {
@@ -723,6 +724,60 @@ describe('Run lifecycle (open/closed)', () => {
 
     expect(await screen.findByText(/^open$/i)).toBeInTheDocument()
     expect(mockGET.mock.calls.length).toBe(getCallsBeforeReopen)
+  })
+
+  // auto-archive-runs: Archive/Unarchive live beside Close/Reopen, gated by
+  // manageProject, shown regardless of run status (no precondition).
+  describe('Archive/Unarchive run (auto-archive-runs)', () => {
+    it('archives an open run', async () => {
+      mockRunAPI([pendingItem])
+      mockPOST.mockResolvedValue({ response: { ok: true } })
+      renderRun()
+      await userEvent.click(await screen.findByRole('button', { name: /^archive run$/i }))
+      await waitFor(() => {
+        expect(mockPOST).toHaveBeenCalledWith(
+          '/api/v1/runs/{runKey}/archive',
+          expect.objectContaining({ params: { path: { runKey: 'r1' } } }),
+        )
+      })
+      expect(await screen.findByText(/^archived$/i)).toBeInTheDocument()
+    })
+
+    it('unarchives an already-archived run', async () => {
+      mockRunAPI([pendingItem], undefined, { ...run, archived: true })
+      mockPOST.mockResolvedValue({ response: { ok: true } })
+      renderRun()
+      await userEvent.click(await screen.findByRole('button', { name: /^unarchive$/i }))
+      await waitFor(() => {
+        expect(mockPOST).toHaveBeenCalledWith(
+          '/api/v1/runs/{runKey}/unarchive',
+          expect.objectContaining({ params: { path: { runKey: 'r1' } } }),
+        )
+      })
+      expect(screen.queryByText(/^archived$/i)).not.toBeInTheDocument()
+    })
+
+    it('shows the Archive control on a closed run too (no status precondition)', async () => {
+      mockRunAPI([pendingItem], undefined, { ...run, status: 'closed' })
+      renderRun()
+      expect(await screen.findByRole('button', { name: /^archive run$/i })).toBeInTheDocument()
+    })
+
+    it('shows a generic error and re-enables the control on a failed archive', async () => {
+      mockRunAPI([pendingItem])
+      mockPOST.mockResolvedValue({ error: { error: 'forbidden' }, response: { ok: false } })
+      renderRun()
+      await userEvent.click(await screen.findByRole('button', { name: /^archive run$/i }))
+      expect(await screen.findByText(/could not archive/i)).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /^archive run$/i })).not.toBeDisabled()
+    })
+
+    it('hides Archive/Unarchive when the caller lacks manageProject', async () => {
+      mockRunAPI([pendingItem], undefined, undefined, undefined, { ...fullPermissions, manageProject: false })
+      renderRun()
+      await screen.findByRole('button', { name: /close run/i })
+      expect(screen.queryByRole('button', { name: /^archive run$/i })).not.toBeInTheDocument()
+    })
   })
 
   // add-data-retention design.md D5: Delete run lives beside Close/Reopen,

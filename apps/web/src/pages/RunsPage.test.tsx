@@ -15,6 +15,7 @@ type RunFixture = {
   projectId: string
   name: string
   status: 'open' | 'closed'
+  archived?: boolean
   passRate?: number | null
   createdAt: string
 }
@@ -25,6 +26,7 @@ function run(overrides: Partial<RunFixture> & { name: string }): RunFixture {
     key: `p1-${overrides.name}`,
     projectId: 'p1',
     status: 'open',
+    archived: false,
     passRate: null,
     createdAt: new Date().toISOString(),
     ...overrides,
@@ -164,6 +166,32 @@ describe('RunsPage', () => {
     expect(screen.getByText('1')).toBeInTheDocument()
     expect(screen.getByText(/closed/i)).toBeInTheDocument()
     expect(screen.getByText('2')).toBeInTheDocument()
+  })
+
+  it('excludes archived runs from Open/Closed and shows them in a collapsed Archived section (auto-archive-runs)', async () => {
+    mockRunsAPI([
+      run({ name: 'Nightly', status: 'open' }),
+      run({ name: 'Release 1.0', status: 'closed' }),
+      run({ name: 'Old Release', status: 'closed', archived: true }),
+    ])
+    renderRuns()
+    await screen.findByRole('link', { name: /nightly/i })
+
+    // Not counted in Open/Closed, and not rendered until expanded.
+    expect(screen.queryByRole('link', { name: /old release/i })).not.toBeInTheDocument()
+
+    const archivedToggle = screen.getByRole('button', { name: /expand archived/i })
+    expect(archivedToggle).toHaveTextContent('Archived · 1')
+
+    await userEvent.click(archivedToggle)
+    expect(await screen.findByRole('link', { name: /old release/i })).toBeInTheDocument()
+  })
+
+  it('hides the Archived section entirely when there are no archived runs', async () => {
+    mockRunsAPI([run({ name: 'Nightly', status: 'open' })])
+    renderRuns()
+    await screen.findByRole('link', { name: /nightly/i })
+    expect(screen.queryByRole('button', { name: /archived/i })).not.toBeInTheDocument()
   })
 
   it('shows a pass-rate health ring and relative date per row (redesign-runs-list-triage-view)', async () => {

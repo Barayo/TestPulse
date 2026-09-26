@@ -264,6 +264,7 @@ export default function RunPage() {
   const [lifecycleError, setLifecycleError] = useState<string>()
   const [isClosing, setIsClosing] = useState(false)
   const [isReopening, setIsReopening] = useState(false)
+  const [isArchiving, setIsArchiving] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [activeFilter, setActiveFilter] = useState<Status | null>(null)
   const [assigneeFilter, setAssigneeFilter] = useState<string | null>(null)
@@ -496,6 +497,21 @@ export default function RunPage() {
     bumpDataRevision()
   }
 
+  async function toggleArchive() {
+    if (!runKey || !run) return
+    setLifecycleError(undefined)
+    setIsArchiving(true)
+    const path = run.archived ? '/api/v1/runs/{runKey}/unarchive' : '/api/v1/runs/{runKey}/archive'
+    const { error } = await api.POST(path, { params: { path: { runKey } } })
+    setIsArchiving(false)
+    if (error) {
+      setLifecycleError('Could not archive/unarchive this run.')
+      return
+    }
+    setRun((r) => (r ? { ...r, archived: !r.archived } : r))
+    bumpDataRevision()
+  }
+
   async function confirmDeleteRun() {
     if (!runKey || !projectKey) return
     await api.DELETE('/api/v1/runs/{runKey}', { params: { path: { runKey } } })
@@ -712,6 +728,7 @@ export default function RunPage() {
                   </Button>
                 )}
                 <Badge variant={run.status === 'open' ? 'secondary' : 'outline'}>{run.status}</Badge>
+                {run.archived && <Badge variant="outline">Archived</Badge>}
                 {run.status === 'open'
                   ? canRecord && (
                       <Button size="sm" variant="outline" disabled={isClosing} onClick={() => void closeRun()}>
@@ -723,6 +740,11 @@ export default function RunPage() {
                         {isReopening ? 'Reopening…' : 'Reopen'}
                       </Button>
                     )}
+                {permissions?.manageProject && (
+                  <Button size="sm" variant="outline" disabled={isArchiving} onClick={() => void toggleArchive()}>
+                    {run.archived ? (isArchiving ? 'Unarchiving…' : 'Unarchive') : isArchiving ? 'Archiving…' : 'Archive run'}
+                  </Button>
+                )}
                 {permissions?.runDelete && (
                   <Button size="sm" variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
                     Delete run

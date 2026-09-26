@@ -88,9 +88,9 @@ above for incident triage (add-service-request-logging):
   SSRF-rejected delivery attempt logs the destination host and event type
   (never the full URL or payload body).
 - **Background worker failures** — a failed sweep/processing tick in
-  `ProjectAutoArchiveWorker`, `RunRetentionWorker`, or `ProjectDeletionWorker`
-  is logged instead of silently discarded; the worker retries on its next
-  tick regardless.
+  `ProjectAutoArchiveWorker`, `RunRetentionWorker`, `ProjectDeletionWorker`,
+  or `RunAutoArchiveWorker` is logged instead of silently discarded; the
+  worker retries on its next tick regardless.
 - **Audit log write failures** — a failed `audit()` append is logged
   instead of silently discarded.
 

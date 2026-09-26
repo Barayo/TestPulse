@@ -1507,6 +1507,26 @@ func (s *Service) ReopenRun(ctx context.Context, runID string) error {
 	return nil
 }
 
+// ArchiveRun hides a run from the project's active run list
+// (auto-archive-runs design.md D2) — reversible, no status precondition,
+// no webhook dispatch (not one of add-run-notifications' events).
+func (s *Service) ArchiveRun(ctx context.Context, runID string) error {
+	if err := s.store.Runs.Archive(ctx, runID); err != nil {
+		return err
+	}
+	s.audit(ctx, "archive", "run", runID)
+	return nil
+}
+
+// UnarchiveRun returns an archived run to the active run list.
+func (s *Service) UnarchiveRun(ctx context.Context, runID string) error {
+	if err := s.store.Runs.Unarchive(ctx, runID); err != nil {
+		return err
+	}
+	s.audit(ctx, "unarchive", "run", runID)
+	return nil
+}
+
 // runClosedAsConflict translates the store's closed-run sentinel into the
 // service's 409 ConflictError, leaving every other error (including
 // ErrNotFound) unchanged.

@@ -14,6 +14,7 @@ const unconfiguredSettings = {
   publicProjectsEnabled: true,
   runRetentionDays: 0,
   autoArchiveInactiveDays: 0,
+  runAutoArchiveInactiveDays: 0,
   colorTheme: 'teal' as const,
   updatedAt: '2026-01-01T00:00:00Z',
   oidcIssuer: '',

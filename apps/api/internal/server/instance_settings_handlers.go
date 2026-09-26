@@ -13,26 +13,27 @@ func (h *api) getInstanceSettings(w http.ResponseWriter, r *http.Request) {
 }
 
 type instanceSettingsUpdateInput struct {
-	PublicProjectsEnabled   *bool                 `json:"publicProjectsEnabled"`
-	RunRetentionDays        *int                  `json:"runRetentionDays"`
-	AutoArchiveInactiveDays *int                  `json:"autoArchiveInactiveDays"`
-	ColorTheme              *string               `json:"colorTheme"`
-	CustomPalette           *domain.CustomPalette `json:"customPalette"`
-	OIDCIssuer              *string               `json:"oidcIssuer"`
-	OIDCClientID            *string               `json:"oidcClientId"`
-	OIDCClientSecret        *string               `json:"oidcClientSecret"`
-	OIDCGroupClaim          *string               `json:"oidcGroupClaim"`
-	OIDCAdminClaimValues    *[]string             `json:"oidcAdminClaimValues"`
-	OIDCOnly                *bool                 `json:"oidcOnly"`
-	DisableSso              *bool                 `json:"disableSso"`
-	JiraSiteURL             *string               `json:"jiraSiteUrl"`
-	SessionTimeoutDays      *int                  `json:"sessionTimeoutDays"`
-	DefaultLandingView      *string               `json:"defaultLandingView"`
+	PublicProjectsEnabled      *bool                 `json:"publicProjectsEnabled"`
+	RunRetentionDays           *int                  `json:"runRetentionDays"`
+	AutoArchiveInactiveDays    *int                  `json:"autoArchiveInactiveDays"`
+	RunAutoArchiveInactiveDays *int                  `json:"runAutoArchiveInactiveDays"`
+	ColorTheme                 *string               `json:"colorTheme"`
+	CustomPalette              *domain.CustomPalette `json:"customPalette"`
+	OIDCIssuer                 *string               `json:"oidcIssuer"`
+	OIDCClientID               *string               `json:"oidcClientId"`
+	OIDCClientSecret           *string               `json:"oidcClientSecret"`
+	OIDCGroupClaim             *string               `json:"oidcGroupClaim"`
+	OIDCAdminClaimValues       *[]string             `json:"oidcAdminClaimValues"`
+	OIDCOnly                   *bool                 `json:"oidcOnly"`
+	DisableSso                 *bool                 `json:"disableSso"`
+	JiraSiteURL                *string               `json:"jiraSiteUrl"`
+	SessionTimeoutDays         *int                  `json:"sessionTimeoutDays"`
+	DefaultLandingView         *string               `json:"defaultLandingView"`
 }
 
 func (in instanceSettingsUpdateInput) empty() bool {
 	return in.PublicProjectsEnabled == nil && in.RunRetentionDays == nil &&
-		in.AutoArchiveInactiveDays == nil && in.ColorTheme == nil && in.CustomPalette == nil &&
+		in.AutoArchiveInactiveDays == nil && in.RunAutoArchiveInactiveDays == nil && in.ColorTheme == nil && in.CustomPalette == nil &&
 		in.OIDCIssuer == nil && in.OIDCClientID == nil && in.OIDCClientSecret == nil &&
 		in.OIDCGroupClaim == nil && in.OIDCAdminClaimValues == nil && in.OIDCOnly == nil && in.DisableSso == nil &&
 		in.JiraSiteURL == nil && in.SessionTimeoutDays == nil && in.DefaultLandingView == nil
@@ -127,19 +128,20 @@ func (h *api) buildProposedOIDCAuthenticator(ctx context.Context, in instanceSet
 
 func toInstanceSettingsUpdate(in instanceSettingsUpdateInput) domain.InstanceSettingsUpdate {
 	return domain.InstanceSettingsUpdate{
-		PublicProjectsEnabled:   in.PublicProjectsEnabled,
-		RunRetentionDays:        in.RunRetentionDays,
-		AutoArchiveInactiveDays: in.AutoArchiveInactiveDays,
-		ColorTheme:              in.ColorTheme,
-		CustomPalette:           in.CustomPalette,
-		OIDCIssuer:              in.OIDCIssuer,
-		OIDCClientID:            in.OIDCClientID,
-		OIDCClientSecret:        in.OIDCClientSecret,
-		OIDCGroupClaim:          in.OIDCGroupClaim,
-		OIDCAdminClaimValues:    in.OIDCAdminClaimValues,
-		OIDCOnly:                in.OIDCOnly,
-		JiraSiteURL:             in.JiraSiteURL,
-		SessionTimeoutDays:      in.SessionTimeoutDays,
-		DefaultLandingView:      in.DefaultLandingView,
+		PublicProjectsEnabled:      in.PublicProjectsEnabled,
+		RunRetentionDays:           in.RunRetentionDays,
+		AutoArchiveInactiveDays:    in.AutoArchiveInactiveDays,
+		RunAutoArchiveInactiveDays: in.RunAutoArchiveInactiveDays,
+		ColorTheme:                 in.ColorTheme,
+		CustomPalette:              in.CustomPalette,
+		OIDCIssuer:                 in.OIDCIssuer,
+		OIDCClientID:               in.OIDCClientID,
+		OIDCClientSecret:           in.OIDCClientSecret,
+		OIDCGroupClaim:             in.OIDCGroupClaim,
+		OIDCAdminClaimValues:       in.OIDCAdminClaimValues,
+		OIDCOnly:                   in.OIDCOnly,
+		JiraSiteURL:                in.JiraSiteURL,
+		SessionTimeoutDays:         in.SessionTimeoutDays,
+		DefaultLandingView:         in.DefaultLandingView,
 	}
 }

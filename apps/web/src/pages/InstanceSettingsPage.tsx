@@ -39,6 +39,7 @@ export default function InstanceSettingsPage() {
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState<boolean>()
   const [runRetentionDays, setRunRetentionDays] = useState<number>()
   const [autoArchiveInactiveDays, setAutoArchiveInactiveDays] = useState<number>()
+  const [runAutoArchiveInactiveDays, setRunAutoArchiveInactiveDays] = useState<number>()
   const [colorTheme, setColorTheme] = useState<string>()
   const [customPalette, setCustomPalette] = useState<CustomPalette>()
   const [showCustomEditor, setShowCustomEditor] = useState(false)
@@ -59,6 +60,7 @@ export default function InstanceSettingsPage() {
       setPublicProjectsEnabled(data.publicProjectsEnabled)
       setRunRetentionDays(data.runRetentionDays)
       setAutoArchiveInactiveDays(data.autoArchiveInactiveDays)
+      setRunAutoArchiveInactiveDays(data.runAutoArchiveInactiveDays)
       setColorTheme(data.colorTheme)
       setCustomPalette(data.customPalette ?? undefined)
       if (data.colorTheme === 'custom') setShowCustomEditor(true)
@@ -89,6 +91,11 @@ export default function InstanceSettingsPage() {
   async function selectAutoArchive(days: number) {
     const { data } = await api.PATCH('/api/v1/instance-settings', { body: { autoArchiveInactiveDays: days } })
     if (data) setAutoArchiveInactiveDays(data.autoArchiveInactiveDays)
+  }
+
+  async function selectRunAutoArchive(days: number) {
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { runAutoArchiveInactiveDays: days } })
+    if (data) setRunAutoArchiveInactiveDays(data.runAutoArchiveInactiveDays)
   }
 
   async function selectDefaultLandingView(view: LandingView) {
@@ -256,6 +263,33 @@ export default function InstanceSettingsPage() {
                 </p>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Auto-archive inactive runs</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">
+              Automatically archives a closed run once it crosses this age, counted from when the run was created —
+              same basis as run retention above. Open runs are never touched, no matter how old. Unlike run
+              retention, archiving never deletes anything: it only hides the run from the project&apos;s active
+              list, and any admin can reverse it any time from the run&apos;s own page.
+            </p>
+            <RetentionPillSelector
+              value={runAutoArchiveInactiveDays}
+              onSelect={selectRunAutoArchive}
+              ariaLabel="Run auto-archive inactivity period"
+              customAriaLabel="Custom run auto-archive inactivity period, in days"
+            />
+            <p className="text-xs text-muted-foreground">
+              {runAutoArchiveInactiveDays === undefined
+                ? null
+                : runAutoArchiveInactiveDays === 0
+                  ? 'Off — runs are never automatically archived.'
+                  : `Closed runs older than ${runAutoArchiveInactiveDays} day${runAutoArchiveInactiveDays === 1 ? '' : 's'} are archived automatically. Reversible any time from the run's own page.`}
+            </p>
           </CardContent>
         </Card>
 

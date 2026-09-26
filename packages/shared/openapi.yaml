@@ -1478,6 +1478,28 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/runs/{runKey}/archive:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: archiveRun
+      summary: Archive a run — hides it from the active run list, reversible, no status precondition
+      tags: [runs]
+      responses:
+        "204": { description: Archived }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/runs/{runKey}/unarchive:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: unarchiveRun
+      summary: Unarchive a run — returns it to the active run list
+      tags: [runs]
+      responses:
+        "204": { description: Unarchived }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/runs/{runKey}/items:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -3400,7 +3422,7 @@ components:
         name: { type: string }
     Run:
       type: object
-      required: [id, key, projectId, projectKey, name, status, createdAt]
+      required: [id, key, projectId, projectKey, name, status, archived, createdAt]
       properties:
         id: { type: string }
         key:
@@ -3427,6 +3449,9 @@ components:
           type: string
           nullable: true
           description: The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself.
+        archived:
+          type: boolean
+          description: Hides this run from the project's active run list by default (auto-archive-runs). Reversible; independent of status — an open or closed run may be archived.
     RunListPage:
       type: object
       required: [items, nextCursor]
@@ -4271,7 +4296,7 @@ components:
         dark: { $ref: '#/components/schemas/CustomPaletteMode' }
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, runAutoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView]
       properties:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays:
@@ -4289,6 +4314,14 @@ components:
             (in days) past which a non-exempt project is automatically
             archived. 0 (the default) means the policy is off. Archiving is
             reversible; unlike runRetentionDays, this never destroys data.
+        runAutoArchiveInactiveDays:
+          type: integer
+          minimum: 0
+          description: >
+            Instance-wide, Tenant-Admin-configurable age threshold (in days)
+            past which a closed, non-archived run is automatically archived
+            (auto-archive-runs). 0 (the default) means the policy is off.
+            Reversible; unlike runRetentionDays, this never destroys data.
         colorTheme:
           $ref: '#/components/schemas/ColorTheme'
         customPalette:
@@ -4345,6 +4378,7 @@ components:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays: { type: integer, minimum: 0 }
         autoArchiveInactiveDays: { type: integer, minimum: 0 }
+        runAutoArchiveInactiveDays: { type: integer, minimum: 0 }
         colorTheme:
           $ref: '#/components/schemas/ColorTheme'
         customPalette:

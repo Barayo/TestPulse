@@ -15,6 +15,7 @@ function run(overrides: Partial<Run> & { name: string }): Run {
     projectId: 'p1',
     projectKey: 'p1',
     status: 'open',
+    archived: false,
     suiteKey: null,
     passRate: null,
     createdAt: new Date().toISOString(),

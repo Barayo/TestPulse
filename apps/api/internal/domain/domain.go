@@ -536,6 +536,11 @@ type InstanceSettings struct {
 	// automatically archived by ProjectAutoArchiveWorker (design.md D9 of
 	// add-data-retention). 0 means the policy is off.
 	AutoArchiveInactiveDays int `json:"autoArchiveInactiveDays"`
+	// RunAutoArchiveInactiveDays is a Tenant-Admin-configurable,
+	// instance-wide age threshold (in days) past which a closed,
+	// non-archived run is automatically archived by RunAutoArchiveWorker
+	// (auto-archive-runs design.md D1). 0 means the policy is off.
+	RunAutoArchiveInactiveDays int `json:"runAutoArchiveInactiveDays"`
 	// ColorTheme is one of "teal" (default), "indigo", "ocean", "forest",
 	// or "custom" (add-color-theme-customization design.md).
 	ColorTheme    string         `json:"colorTheme"`
@@ -596,6 +601,9 @@ type InstanceSettingsUpdate struct {
 	JiraSiteURL          *string
 	SessionTimeoutDays   *int
 	DefaultLandingView   *string
+	// RunAutoArchiveInactiveDays (auto-archive-runs design.md D1) — same
+	// 0-means-off convention as RunRetentionDays/AutoArchiveInactiveDays.
+	RunAutoArchiveInactiveDays *int
 }
 
 // OIDCTeamMapping maps a single OIDC group-claim value to a Team
@@ -848,7 +856,12 @@ type Run struct {
 	// PassRate is this run's own items' pass rate (0-100), or nil if the
 	// run has no items yet (group-runs-by-status) — computed alongside the
 	// list query, not a per-run round trip.
-	PassRate  *int      `json:"passRate,omitempty"`
+	PassRate *int `json:"passRate,omitempty"`
+	// Archived hides this run from the project's active run list by
+	// default (auto-archive-runs) — reversible, set either manually or by
+	// RunAutoArchiveWorker. Independent of Status: an open or closed run
+	// may be archived.
+	Archived  bool      `json:"archived"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 

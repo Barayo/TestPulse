@@ -65,6 +65,9 @@ func (s *Service) UpdateInstanceSettings(ctx context.Context, upd domain.Instanc
 	if upd.AutoArchiveInactiveDays != nil && *upd.AutoArchiveInactiveDays < 0 {
 		return domain.InstanceSettings{}, invalid("autoArchiveInactiveDays must not be negative")
 	}
+	if upd.RunAutoArchiveInactiveDays != nil && *upd.RunAutoArchiveInactiveDays < 0 {
+		return domain.InstanceSettings{}, invalid("runAutoArchiveInactiveDays must not be negative")
+	}
 	if upd.SessionTimeoutDays != nil && (*upd.SessionTimeoutDays < 1 || *upd.SessionTimeoutDays > 90) {
 		return domain.InstanceSettings{}, invalid("sessionTimeoutDays must be between 1 and 90")
 	}
