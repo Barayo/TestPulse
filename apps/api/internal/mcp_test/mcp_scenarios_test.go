@@ -77,6 +77,85 @@ func TestMCPUpsertTestCaseCreatesThenEdits(t *testing.T) {
 	}
 }
 
+// TestMCPUpsertTestCaseCreateWithIdempotencyKeyReturnsOriginalOnRetry
+// covers add-mcp-idempotency-keys: a retried create with the same key
+// returns the original case, not a second one.
+func TestMCPUpsertTestCaseCreateWithIdempotencyKeyReturnsOriginalOnRetry(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-case-idem-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "case-idem-agent")
+	project, err := svc.CreateProject(context.Background(), service.ProjectInput{Name: "MCP Case Idempotency Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+
+	var first domain.TestCase
+	callTool(t, session, "upsert_test_case", map[string]any{
+		"projectKey":     project.Key,
+		"title":          "Idempotent create",
+		"priority":       "high",
+		"idempotencyKey": "case-key-1",
+	}, &first)
+
+	var second domain.TestCase
+	callTool(t, session, "upsert_test_case", map[string]any{
+		"projectKey":     project.Key,
+		"title":          "Idempotent create",
+		"priority":       "high",
+		"idempotencyKey": "case-key-1",
+	}, &second)
+
+	if second.Key != first.Key {
+		t.Errorf("retried create returned a different case: first = %q, second = %q", first.Key, second.Key)
+	}
+
+	cases, err := svc.ListCases(context.Background(), project.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	if len(cases) != 1 {
+		t.Errorf("ListCases = %d cases, want 1 (retry must not double-create)", len(cases))
+	}
+}
+
+// TestMCPUpsertTestCaseFailedCreateIsRetryableWithSameKey covers design.md
+// D2: only successful results are cached, so a failed attempt is always
+// safe to retry with the same key.
+func TestMCPUpsertTestCaseFailedCreateIsRetryableWithSameKey(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-case-idem-fail-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "case-idem-fail-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Case Idempotency Failure Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+
+	// First attempt: no title, expect a validation failure.
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "upsert_test_case", Arguments: map[string]any{
+		"projectKey": project.Key, "idempotencyKey": "case-key-retry",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("upsert_test_case with no title succeeded, want a validation error")
+	}
+
+	// Retry with the same key, now with valid fields: must succeed normally.
+	var created domain.TestCase
+	callTool(t, session, "upsert_test_case", map[string]any{
+		"projectKey": project.Key, "title": "Now valid", "priority": "high", "idempotencyKey": "case-key-retry",
+	}, &created)
+	if created.Key == "" {
+		t.Fatalf("retry after a failed attempt did not create a case: %+v", created)
+	}
+}
+
 func TestMCPUpsertTestCaseDeniedWithoutPermission(t *testing.T) {
 	ts, svc := testMCPServer(t)
 	ctx := context.Background()
@@ -330,6 +409,88 @@ func TestMCPBulkAddCasesRollsBackOnInvalidCase(t *testing.T) {
 	}
 	if len(all) != 0 {
 		t.Fatalf("project has %d cases after a rejected batch, want 0", len(all))
+	}
+}
+
+// TestMCPBulkAddCasesWithIdempotencyKeyReturnsOriginalOnRetry covers
+// add-mcp-idempotency-keys: a retried batch with the same key returns the
+// original cases, not a second batch.
+func TestMCPBulkAddCasesWithIdempotencyKeyReturnsOriginalOnRetry(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-bulk-idem-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "bulk-idem-agent")
+	project, err := svc.CreateProject(context.Background(), service.ProjectInput{Name: "MCP Bulk Idempotency Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	args := map[string]any{
+		"projectKey": project.Key,
+		"cases": []map[string]any{
+			{"title": "Case one", "priority": "high"},
+			{"title": "Case two", "priority": "medium"},
+		},
+		"idempotencyKey": "bulk-key-1",
+	}
+
+	var first mcp.BulkAddCasesOutput
+	callTool(t, session, "bulk_add_cases", args, &first)
+
+	var second mcp.BulkAddCasesOutput
+	callTool(t, session, "bulk_add_cases", args, &second)
+
+	if len(second.Cases) != len(first.Cases) || (len(first.Cases) > 0 && second.Cases[0].Key != first.Cases[0].Key) {
+		t.Errorf("retried batch returned different cases: first = %+v, second = %+v", first.Cases, second.Cases)
+	}
+
+	all, err := svc.ListCases(context.Background(), project.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	if len(all) != 2 {
+		t.Errorf("ListCases = %d cases, want 2 (retry must not double-create)", len(all))
+	}
+}
+
+// TestMCPCreateTestRunWithIdempotencyKeyReturnsOriginalOnRetry covers
+// add-mcp-idempotency-keys: a retried call with the same key returns the
+// original run, not a second one.
+func TestMCPCreateTestRunWithIdempotencyKeyReturnsOriginalOnRetry(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-run-idem-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "run-idem-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Run Idempotency Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Runnable case", Priority: domain.PriorityHigh})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	args := map[string]any{
+		"projectKey": project.Key, "name": "Smoke run", "caseKeys": []string{c.Key}, "idempotencyKey": "run-key-1",
+	}
+
+	var first domain.Run
+	callTool(t, session, "create_test_run", args, &first)
+
+	var second domain.Run
+	callTool(t, session, "create_test_run", args, &second)
+
+	if second.Key != first.Key {
+		t.Errorf("retried create returned a different run: first = %q, second = %q", first.Key, second.Key)
+	}
+
+	runs, err := svc.ListRuns(ctx, project.ID)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) != 1 {
+		t.Errorf("ListRuns = %d runs, want 1 (retry must not double-create)", len(runs))
 	}
 }
 

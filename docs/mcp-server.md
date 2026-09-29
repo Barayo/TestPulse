@@ -42,11 +42,11 @@ no delete tool is registered.
 
 | Tool | Description |
 |---|---|
-| `upsert_test_case` | Create a case (`projectKey` + fields), or edit one by `caseKey` (creates a new immutable version). A step entry's `action`/`expected` may be replaced with `groupKey` to reference an existing shared step group instead — resolved server-side to that group's current content, the same as the REST path (`add-reusable-steps`) |
+| `upsert_test_case` | Create a case (`projectKey` + fields), or edit one by `caseKey` (creates a new immutable version). A step entry's `action`/`expected` may be replaced with `groupKey` to reference an existing shared step group instead — resolved server-side to that group's current content, the same as the REST path (`add-reusable-steps`). The create path accepts an optional `idempotencyKey` (`add-mcp-idempotency-keys`) |
 | `upsert_step_group` | Create a shared step group (`projectKey` + `name` + `steps`), or edit one by `groupKey` — requires `manageProject`. Referenced from `upsert_test_case`/`bulk_add_cases` step input via `groupKey` (`add-reusable-steps`) |
 | `upsert_test_suite` | Create a suite (`projectKey` + `name`), or rename one by `suiteKey` |
-| `bulk_add_cases` | Create many cases in one project as a single atomic batch — one invalid case fails the whole call, none are created |
-| `create_test_run` | Create a run from a suite's cases and/or explicit `caseKeys`, optionally scoped to a Test Plan |
+| `bulk_add_cases` | Create many cases in one project as a single atomic batch — one invalid case fails the whole call, none are created. Accepts an optional `idempotencyKey` (`add-mcp-idempotency-keys`) |
+| `create_test_run` | Create a run from a suite's cases and/or explicit `caseKeys`, optionally scoped to a Test Plan. Accepts an optional `idempotencyKey` (`add-mcp-idempotency-keys`) |
 | `record_result` | Record a verdict (`pass`/`failed`/`skipped`/`blocked`) for a case within a run |
 | `update_run_item_status` | Update a run item's status directly (e.g. request a `retest`), independent of recording a verdict |
 | `search` | Cross-entity full-text search over cases, suites, runs, projects, releases, and test plans, restricted to projects you can access |
@@ -58,6 +58,19 @@ Every tool enforces the same permission model as REST: a scoped token can
 only act within its project and granted permissions; an unscoped token acts
 at its creator's current access, resolved fresh on every call — see
 [API: Authentication](api.md#authentication).
+
+### Retrying a create safely
+
+`upsert_test_case` (create path only, not edits), `bulk_add_cases`, and
+`create_test_run` accept an optional `idempotencyKey` string. If a call
+times out and you retry it with the same key, the server recognizes the
+retry and returns the original result instead of creating a second copy —
+useful over an unreliable connection. Keys are scoped per caller and per
+tool, expire after 24 hours, and only a *successful* call is ever cached:
+a failed attempt (validation error, permission error) creates nothing, so
+it's always safe to retry freely with the same key once the input is
+fixed. Omitting `idempotencyKey` entirely preserves the exact prior
+behavior — every call creates a new record, no dedup.
 
 ## Example: the flagship demo
 

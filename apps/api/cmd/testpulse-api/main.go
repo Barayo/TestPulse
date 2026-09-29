@@ -75,6 +75,9 @@ func run() error {
 	if err := svc.CleanupExpiredSessions(ctx); err != nil {
 		logger.Warn("clearing expired sessions at startup", "error", err)
 	}
+	if err := svc.CleanupExpiredIdempotencyKeys(ctx); err != nil {
+		logger.Warn("clearing expired MCP idempotency keys at startup", "error", err)
+	}
 
 	// The codebase's first background worker (add-data-retention design.md
 	// D6) — purges projects queued for permanent deletion. Runs for the

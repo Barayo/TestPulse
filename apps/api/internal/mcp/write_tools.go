@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -9,6 +10,37 @@ import (
 	"github.com/Barayo/TestPulse/apps/api/internal/domain"
 	"github.com/Barayo/TestPulse/apps/api/internal/service"
 )
+
+// idempotentResult checks for a prior successful call under key, scoped
+// to the calling actor and toolName (add-mcp-idempotency-keys design.md
+// D6). ok=false means no cached result exists — the caller should perform
+// the operation normally.
+func idempotentResult[T any](ctx context.Context, svc *service.Service, toolName, key string) (T, bool, error) {
+	var zero T
+	actor, ok := domain.ActorFromContext(ctx)
+	if !ok {
+		return zero, false, nil
+	}
+	raw, found, err := svc.IdempotentResult(ctx, actor.ID, toolName, key)
+	if err != nil || !found {
+		return zero, false, err
+	}
+	var result T
+	if err := json.Unmarshal(raw, &result); err != nil {
+		return zero, false, err
+	}
+	return result, true, nil
+}
+
+// saveIdempotentResult persists a successful call's result under key, for
+// idempotentResult to replay on a retry.
+func saveIdempotentResult(ctx context.Context, svc *service.Service, toolName, key string, result any) error {
+	actor, ok := domain.ActorFromContext(ctx)
+	if !ok {
+		return nil
+	}
+	return svc.SaveIdempotentResult(ctx, actor.ID, toolName, key, result)
+}
 
 // writeAnnotations is shared by every write tool here: none are destructive
 // (creates are always additive, edits always version forward, results are
@@ -109,6 +141,10 @@ type UpsertTestCaseInput struct {
 	CaseContentInput
 	ProjectKey string `json:"projectKey,omitempty" jsonschema:"project key; required when creating a new case (omit caseKey)"`
 	CaseKey    string `json:"caseKey,omitempty" jsonschema:"existing case key to edit; omit to create a new case in projectKey"`
+	// IdempotencyKey only protects the create path (add-mcp-idempotency-
+	// keys design.md Non-Goals) — a retried edit still creates a new
+	// version each time.
+	IdempotencyKey string `json:"idempotencyKey,omitempty" jsonschema:"optional, create path only: retrying with the same key returns the original case instead of creating a second one"`
 }
 
 func upsertTestCase(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestCaseInput, domain.TestCase] {
@@ -139,8 +175,23 @@ func upsertTestCase(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestCaseIn
 		if err := svc.Authorize(ctx, domain.PermCaseCreate, projectID); err != nil {
 			return nil, domain.TestCase{}, err
 		}
+		if in.IdempotencyKey != "" {
+			if cached, ok, err := idempotentResult[domain.TestCase](ctx, svc, "upsert_test_case", in.IdempotencyKey); err != nil {
+				return nil, domain.TestCase{}, err
+			} else if ok {
+				return nil, cached, nil
+			}
+		}
 		c, err := svc.CreateCase(ctx, projectID, "", content)
-		return nil, c, err
+		if err != nil {
+			return nil, domain.TestCase{}, err
+		}
+		if in.IdempotencyKey != "" {
+			if err := saveIdempotentResult(ctx, svc, "upsert_test_case", in.IdempotencyKey, c); err != nil {
+				return nil, domain.TestCase{}, err
+			}
+		}
+		return nil, c, nil
 	}
 }
 
@@ -225,6 +276,9 @@ func upsertStepGroup(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertStepGroup
 type BulkAddCasesInput struct {
 	ProjectKey string             `json:"projectKey" jsonschema:"project key to add all cases to"`
 	Cases      []CaseContentInput `json:"cases" jsonschema:"the batch of cases to create; all succeed or none are created"`
+	// IdempotencyKey: see UpsertTestCaseInput's own field for the shared
+	// contract (add-mcp-idempotency-keys).
+	IdempotencyKey string `json:"idempotencyKey,omitempty" jsonschema:"optional: retrying with the same key returns the original batch instead of creating a second one"`
 }
 
 // BulkAddCasesOutput wraps the created cases in a named field rather than
@@ -245,12 +299,28 @@ func bulkAddCases(svc *service.Service) sdkmcp.ToolHandlerFor[BulkAddCasesInput,
 		if err := svc.Authorize(ctx, domain.PermCaseCreate, projectID); err != nil {
 			return nil, BulkAddCasesOutput{}, err
 		}
+		if in.IdempotencyKey != "" {
+			if cached, ok, err := idempotentResult[BulkAddCasesOutput](ctx, svc, "bulk_add_cases", in.IdempotencyKey); err != nil {
+				return nil, BulkAddCasesOutput{}, err
+			} else if ok {
+				return nil, cached, nil
+			}
+		}
 		contents := make([]domain.CaseContent, len(in.Cases))
 		for i, c := range in.Cases {
 			contents[i] = c.toDomain()
 		}
 		cases, err := svc.BulkAddCases(ctx, projectID, "", contents)
-		return nil, BulkAddCasesOutput{Cases: cases}, err
+		if err != nil {
+			return nil, BulkAddCasesOutput{}, err
+		}
+		out := BulkAddCasesOutput{Cases: cases}
+		if in.IdempotencyKey != "" {
+			if err := saveIdempotentResult(ctx, svc, "bulk_add_cases", in.IdempotencyKey, out); err != nil {
+				return nil, BulkAddCasesOutput{}, err
+			}
+		}
+		return nil, out, nil
 	}
 }
 
@@ -260,6 +330,9 @@ type CreateTestRunInput struct {
 	SuiteKey    string   `json:"suiteKey,omitempty" jsonschema:"populate the run from this suite's cases"`
 	TestPlanKey string   `json:"testPlanKey,omitempty" jsonschema:"scope this run to a Test Plan"`
 	CaseKeys    []string `json:"caseKeys,omitempty" jsonschema:"explicit case keys to include, in addition to any suite's cases"`
+	// IdempotencyKey: see UpsertTestCaseInput's own field for the shared
+	// contract (add-mcp-idempotency-keys).
+	IdempotencyKey string `json:"idempotencyKey,omitempty" jsonschema:"optional: retrying with the same key returns the original run instead of creating a second one"`
 }
 
 func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInput, domain.Run] {
@@ -270,6 +343,13 @@ func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInpu
 		}
 		if err := svc.Authorize(ctx, domain.PermRunCreate, projectID); err != nil {
 			return nil, domain.Run{}, err
+		}
+		if in.IdempotencyKey != "" {
+			if cached, ok, err := idempotentResult[domain.Run](ctx, svc, "create_test_run", in.IdempotencyKey); err != nil {
+				return nil, domain.Run{}, err
+			} else if ok {
+				return nil, cached, nil
+			}
 		}
 
 		runInput := service.RunInput{Name: in.Name}
@@ -295,7 +375,15 @@ func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInpu
 			runInput.CaseIDs = append(runInput.CaseIDs, caseID)
 		}
 		run, err := svc.CreateRun(ctx, projectID, runInput)
-		return nil, run, err
+		if err != nil {
+			return nil, domain.Run{}, err
+		}
+		if in.IdempotencyKey != "" {
+			if err := saveIdempotentResult(ctx, svc, "create_test_run", in.IdempotencyKey, run); err != nil {
+				return nil, domain.Run{}, err
+			}
+		}
+		return nil, run, nil
 	}
 }
 
