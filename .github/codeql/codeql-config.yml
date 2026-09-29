@@ -1,0 +1,10 @@
+name: TestPulse CodeQL config
+
+# openspec/ never contains shipped application code — only spec markdown
+# and, occasionally, one-off static HTML design mockups used during
+# brainstorming (e.g. openspec/changes/archive/*/mockup.html) that are
+# never served or built. Excluding it here stops CodeQL from flagging
+# XSS-shaped patterns in throwaway design artifacts as if they were real
+# vulnerabilities in the product.
+paths-ignore:
+  - openspec/**
