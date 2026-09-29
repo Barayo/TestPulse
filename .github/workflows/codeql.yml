@@ -10,6 +10,7 @@ on:
   # convention).
   schedule:
     - cron: '17 3 * * 1' # every Monday at 03:17 UTC — off-the-hour to avoid the shared top-of-hour spike
+  workflow_dispatch: # manual on-demand run, e.g. to validate a scanning-config change
 
 permissions:
   contents: read
