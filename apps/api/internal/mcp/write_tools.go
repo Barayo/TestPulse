@@ -86,6 +86,11 @@ func registerWriteTools(srv *sdkmcp.Server, svc *service.Service) {
 		Description: "Update a run item's status directly (e.g. request a retest), independent of recording a verdict.",
 		Annotations: writeAnnotations(true), // setting the same status twice leaves the same end state
 	}, updateRunItemStatus(svc))
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "update_suite_membership",
+		Description: "Add an existing case to an existing suite, or remove it. Adding an already-member case, or removing a non-member case, both succeed as a no-op.",
+		Annotations: writeAnnotations(true), // repeating the same add/remove leaves the same end state
+	}, updateSuiteMembership(svc))
 }
 
 // StepInput mirrors domain.Step for MCP tool input. Set groupKey instead
@@ -460,5 +465,66 @@ func updateRunItemStatus(svc *service.Service) sdkmcp.ToolHandlerFor[UpdateRunIt
 		status := in.Status
 		err = svc.UpdateItem(ctx, itemID, service.ItemUpdate{Status: &status})
 		return nil, struct{}{}, err
+	}
+}
+
+type UpdateSuiteMembershipInput struct {
+	SuiteKey string `json:"suiteKey" jsonschema:"existing suite key"`
+	CaseKey  string `json:"caseKey" jsonschema:"existing case key, from the same project as the suite"`
+	Action   string `json:"action" jsonschema:"one of add, remove"`
+}
+
+// UpdateSuiteMembershipOutput returns the suite's resulting membership as
+// case keys, not internal case IDs (add-mcp-suite-membership-tool design.md
+// D3) — unlike domain.Suite.CaseIDs, which is not usable as MCP tool input.
+type UpdateSuiteMembershipOutput struct {
+	SuiteKey string   `json:"suiteKey"`
+	CaseKeys []string `json:"caseKeys"`
+}
+
+func updateSuiteMembership(svc *service.Service) sdkmcp.ToolHandlerFor[UpdateSuiteMembershipInput, UpdateSuiteMembershipOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpdateSuiteMembershipInput) (*sdkmcp.CallToolResult, UpdateSuiteMembershipOutput, error) {
+		suiteID, err := svc.SuiteIDByKey(ctx, in.SuiteKey)
+		if err != nil {
+			return nil, UpdateSuiteMembershipOutput{}, notFoundf("suite", in.SuiteKey, err)
+		}
+		projectID, err := svc.ProjectIDForSuite(ctx, suiteID)
+		if err != nil {
+			return nil, UpdateSuiteMembershipOutput{}, err
+		}
+		if err := svc.Authorize(ctx, domain.PermSuiteEditMembership, projectID); err != nil {
+			return nil, UpdateSuiteMembershipOutput{}, err
+		}
+		caseID, err := svc.CaseIDByKey(ctx, in.CaseKey)
+		if err != nil {
+			return nil, UpdateSuiteMembershipOutput{}, notFoundf("case", in.CaseKey, err)
+		}
+
+		switch in.Action {
+		case "add":
+			if err := svc.AddCaseToSuite(ctx, suiteID, caseID); err != nil {
+				return nil, UpdateSuiteMembershipOutput{}, err
+			}
+		case "remove":
+			if err := svc.RemoveCaseFromSuite(ctx, suiteID, caseID); err != nil {
+				return nil, UpdateSuiteMembershipOutput{}, err
+			}
+		default:
+			return nil, UpdateSuiteMembershipOutput{}, fmt.Errorf("action must be one of add, remove, got %q", in.Action)
+		}
+
+		suite, err := svc.GetSuite(ctx, suiteID)
+		if err != nil {
+			return nil, UpdateSuiteMembershipOutput{}, err
+		}
+		caseKeys := make([]string, len(suite.CaseIDs))
+		for i, id := range suite.CaseIDs {
+			c, err := svc.GetCase(ctx, id)
+			if err != nil {
+				return nil, UpdateSuiteMembershipOutput{}, err
+			}
+			caseKeys[i] = c.Key
+		}
+		return nil, UpdateSuiteMembershipOutput{SuiteKey: suite.Key, CaseKeys: caseKeys}, nil
 	}
 }

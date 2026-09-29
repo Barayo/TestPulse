@@ -45,6 +45,7 @@ no delete tool is registered.
 | `upsert_test_case` | Create a case (`projectKey` + fields), or edit one by `caseKey` (creates a new immutable version). A step entry's `action`/`expected` may be replaced with `groupKey` to reference an existing shared step group instead — resolved server-side to that group's current content, the same as the REST path (`add-reusable-steps`). The create path accepts an optional `idempotencyKey` (`add-mcp-idempotency-keys`) |
 | `upsert_step_group` | Create a shared step group (`projectKey` + `name` + `steps`), or edit one by `groupKey` — requires `manageProject`. Referenced from `upsert_test_case`/`bulk_add_cases` step input via `groupKey` (`add-reusable-steps`) |
 | `upsert_test_suite` | Create a suite (`projectKey` + `name`), or rename one by `suiteKey` |
+| `update_suite_membership` | Add an existing case to an existing suite, or remove it (`suiteKey` + `caseKey` + `action`: `add`/`remove`) — requires `manageProject`. Repeating the same add/remove is a no-op, not an error (`add-mcp-suite-membership-tool`) |
 | `bulk_add_cases` | Create many cases in one project as a single atomic batch — one invalid case fails the whole call, none are created. Accepts an optional `idempotencyKey` (`add-mcp-idempotency-keys`) |
 | `create_test_run` | Create a run from a suite's cases and/or explicit `caseKeys`, optionally scoped to a Test Plan. Accepts an optional `idempotencyKey` (`add-mcp-idempotency-keys`) |
 | `record_result` | Record a verdict (`pass`/`failed`/`skipped`/`blocked`) for a case within a run |

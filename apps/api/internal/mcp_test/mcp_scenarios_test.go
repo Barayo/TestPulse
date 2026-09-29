@@ -2,6 +2,7 @@ package mcp_test
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 
@@ -349,6 +350,199 @@ func TestMCPUpsertTestSuiteDeniedWithoutPermission(t *testing.T) {
 	}
 	if !result.IsError {
 		t.Fatal("upsert_test_suite with a read-only scoped token succeeded, want a permission error")
+	}
+}
+
+// --- Requirement: update_suite_membership tool ---
+
+func TestMCPUpdateSuiteMembershipAddCase(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suitemember-add-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "suitemember-add-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership Add Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project.ID, "Membership suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var updated mcp.UpdateSuiteMembershipOutput
+	callTool(t, session, "update_suite_membership", map[string]any{
+		"suiteKey": suite.Key, "caseKey": c.Key, "action": "add",
+	}, &updated)
+	if !slices.Contains(updated.CaseKeys, c.Key) {
+		t.Fatalf("updated.CaseKeys = %v, want it to contain %q", updated.CaseKeys, c.Key)
+	}
+}
+
+func TestMCPUpdateSuiteMembershipRemoveCase(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suitemember-remove-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "suitemember-remove-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership Remove Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project.ID, "Membership suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	if err := svc.AddCaseToSuite(ctx, suite.ID, c.ID); err != nil {
+		t.Fatalf("AddCaseToSuite: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var updated mcp.UpdateSuiteMembershipOutput
+	callTool(t, session, "update_suite_membership", map[string]any{
+		"suiteKey": suite.Key, "caseKey": c.Key, "action": "remove",
+	}, &updated)
+	if slices.Contains(updated.CaseKeys, c.Key) {
+		t.Fatalf("updated.CaseKeys = %v, want it to NOT contain %q", updated.CaseKeys, c.Key)
+	}
+}
+
+func TestMCPUpdateSuiteMembershipAddIsIdempotent(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suitemember-idem-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "suitemember-idem-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership Idempotent Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project.ID, "Membership suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	for i := 0; i < 2; i++ {
+		var updated mcp.UpdateSuiteMembershipOutput
+		callTool(t, session, "update_suite_membership", map[string]any{
+			"suiteKey": suite.Key, "caseKey": c.Key, "action": "add",
+		}, &updated)
+		count := 0
+		for _, k := range updated.CaseKeys {
+			if k == c.Key {
+				count++
+			}
+		}
+		if count != 1 {
+			t.Fatalf("call %d: case key %q appears %d times in %v, want exactly 1", i+1, c.Key, count, updated.CaseKeys)
+		}
+	}
+}
+
+func TestMCPUpdateSuiteMembershipRemoveNonMemberIsNoop(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suitemember-noop-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "suitemember-noop-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership Noop Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project.ID, "Membership suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var updated mcp.UpdateSuiteMembershipOutput
+	callTool(t, session, "update_suite_membership", map[string]any{
+		"suiteKey": suite.Key, "caseKey": c.Key, "action": "remove",
+	}, &updated)
+	if slices.Contains(updated.CaseKeys, c.Key) {
+		t.Fatalf("updated.CaseKeys = %v, want it to NOT contain %q", updated.CaseKeys, c.Key)
+	}
+}
+
+func TestMCPUpdateSuiteMembershipDeniedWithoutPermission(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suitemember-noperm-admin@example.com"))
+	owner, err := svc.CreateUser(ctx, "mcp-suitemember-noperm-owner@example.com", "correcthorse1", false)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership No-Perm Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project.ID, "Membership suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	readOnlyToken := mustCreateScopedToken(t, svc, admin, actorForUser(owner), project.ID, domain.Role{Name: "Suite Membership Read Only (mcp test)", CanRead: true})
+
+	session := mustConnectMCP(t, ts, readOnlyToken)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "update_suite_membership", Arguments: map[string]any{
+		"suiteKey": suite.Key, "caseKey": c.Key, "action": "add",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("update_suite_membership with a read-only scoped token succeeded, want a permission error")
+	}
+}
+
+func TestMCPUpdateSuiteMembershipRejectsCrossProjectCase(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suitemember-crossproj-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "suitemember-crossproj-agent")
+	project1, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership Cross-Project 1"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	project2, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership Cross-Project 2"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project1.ID, "Membership suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project2.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "update_suite_membership", Arguments: map[string]any{
+		"suiteKey": suite.Key, "caseKey": c.Key, "action": "add",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("update_suite_membership across projects succeeded, want a validation error")
 	}
 }
 
