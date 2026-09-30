@@ -108,6 +108,38 @@ func TestMCPUpsertTestCaseOutputHasNoRawProjectOrFolderID(t *testing.T) {
 	}
 }
 
+// TestMCPUpsertTestCaseResultHasReadableSummary covers
+// add-mcp-human-readable-results: a successful call's text content is a
+// human-readable summary, not the raw JSON dump.
+func TestMCPUpsertTestCaseResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-case-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "case-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Case Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "upsert_test_case", Arguments: map[string]any{
+		"projectKey": project.Key, "title": "Readable summary case", "priority": "high",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("upsert_test_case failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "Readable summary case") {
+		t.Errorf("content text = %q, want it to mention the case title", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
+
 // TestMCPUpsertTestCaseCreateWithIdempotencyKeyReturnsOriginalOnRetry
 // covers add-mcp-idempotency-keys: a retried create with the same key
 // returns the original case, not a second one.
@@ -286,6 +318,38 @@ func TestMCPUpsertStepGroupCreatesThenEdits(t *testing.T) {
 	}
 }
 
+// TestMCPUpsertStepGroupResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPUpsertStepGroupResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-stepgroup-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "stepgroup-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP StepGroup Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "upsert_step_group", Arguments: map[string]any{
+		"projectKey": project.Key, "name": "Readable step group",
+		"steps": []map[string]any{{"action": "open login page"}},
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("upsert_step_group failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "Readable step group") {
+		t.Errorf("content text = %q, want it to mention the step group name", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
+
 // TestMCPUpsertStepGroupOutputHasNoRawProjectID covers
 // fix-mcp-output-id-leaks: the returned step group identifies its project
 // by key, not internal ID.
@@ -357,6 +421,37 @@ func TestMCPUpsertTestSuiteCreates(t *testing.T) {
 	}, &suite)
 	if suite.Key == "" || suite.Name != "Regression suite" {
 		t.Fatalf("created suite = %+v", suite)
+	}
+}
+
+// TestMCPUpsertTestSuiteResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPUpsertTestSuiteResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suite-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "suite-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "upsert_test_suite", Arguments: map[string]any{
+		"projectKey": project.Key, "name": "Readable suite",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("upsert_test_suite failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "Readable suite") {
+		t.Errorf("content text = %q, want it to mention the suite name", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
 	}
 }
 
@@ -456,6 +551,45 @@ func TestMCPUpsertTestSuiteDeniedWithoutPermission(t *testing.T) {
 }
 
 // --- Requirement: update_suite_membership tool ---
+
+// TestMCPUpdateSuiteMembershipResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPUpdateSuiteMembershipResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-suitemember-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "suitemember-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Suite Membership Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project.ID, "Membership suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "update_suite_membership", Arguments: map[string]any{
+		"suiteKey": suite.Key, "caseKey": c.Key, "action": "add",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("update_suite_membership failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, c.Key) || !strings.Contains(text, suite.Key) {
+		t.Errorf("content text = %q, want it to mention both the case key and suite key", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
 
 func TestMCPUpdateSuiteMembershipAddCase(t *testing.T) {
 	ts, svc := testMCPServer(t)
@@ -650,6 +784,40 @@ func TestMCPUpdateSuiteMembershipRejectsCrossProjectCase(t *testing.T) {
 
 // --- Requirement: bulk_add_cases tool ---
 
+// TestMCPBulkAddCasesResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPBulkAddCasesResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-bulk-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "bulk-readable-agent")
+	project, err := svc.CreateProject(context.Background(), service.ProjectInput{Name: "MCP Bulk Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(context.Background(), &sdkmcp.CallToolParams{Name: "bulk_add_cases", Arguments: map[string]any{
+		"projectKey": project.Key,
+		"cases": []map[string]any{
+			{"title": "Case one", "priority": "high"},
+			{"title": "Case two", "priority": "medium"},
+		},
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("bulk_add_cases failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "2") || !strings.Contains(text, project.Key) {
+		t.Errorf("content text = %q, want it to mention the count (2) and project key", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
+
 func TestMCPBulkAddCasesCreatesAllInOneCall(t *testing.T) {
 	ts, svc := testMCPServer(t)
 	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-bulk-admin@example.com"))
@@ -791,6 +959,41 @@ func TestMCPBulkAddCasesWithIdempotencyKeyReturnsOriginalOnRetry(t *testing.T) {
 // TestMCPCreateTestRunWithIdempotencyKeyReturnsOriginalOnRetry covers
 // add-mcp-idempotency-keys: a retried call with the same key returns the
 // original run, not a second one.
+// TestMCPCreateTestRunResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPCreateTestRunResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-run-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "run-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Run Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "create_test_run", Arguments: map[string]any{
+		"projectKey": project.Key, "name": "Readable run", "caseKeys": []string{c.Key},
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("create_test_run failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "Readable run") {
+		t.Errorf("content text = %q, want it to mention the run name", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
+
 func TestMCPCreateTestRunWithIdempotencyKeyReturnsOriginalOnRetry(t *testing.T) {
 	ts, svc := testMCPServer(t)
 	ctx := context.Background()
@@ -830,6 +1033,48 @@ func TestMCPCreateTestRunWithIdempotencyKeyReturnsOriginalOnRetry(t *testing.T) 
 }
 
 // --- Requirement: create_test_run tool + get_run_progress tool ---
+
+// TestMCPGetRunProgressResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPGetRunProgressResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-runprogress-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "runprogress-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Run Progress Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityHigh})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "A run", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	session := mustConnectMCP(t, ts, token)
+	if _, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "record_result", Arguments: map[string]any{
+		"runKey": run.Key, "caseKey": c.Key, "verdict": "pass",
+	}}); err != nil {
+		t.Fatalf("CallTool(record_result): %v", err)
+	}
+
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "get_run_progress", Arguments: map[string]any{"runKey": run.Key}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("get_run_progress failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, run.Key) || !strings.Contains(text, "1") {
+		t.Errorf("content text = %q, want it to mention the run key and pass/total counts", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
 
 func TestMCPCreateTestRunAndGetRunProgress(t *testing.T) {
 	ts, svc := testMCPServer(t)
@@ -913,6 +1158,45 @@ func TestMCPCreateTestRunFromSuiteAndTestPlan(t *testing.T) {
 
 // --- Requirement: record_result tool + update_run_item_status tool ---
 
+// TestMCPRecordResultResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPRecordResultResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-result-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "result-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Result Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Result case", Priority: domain.PriorityHigh})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "Result run", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "record_result", Arguments: map[string]any{
+		"runKey": run.Key, "caseKey": c.Key, "verdict": "pass",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("record_result failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "pass") || !strings.Contains(text, c.Key) || !strings.Contains(text, run.Key) {
+		t.Errorf("content text = %q, want it to mention verdict, case key, and run key", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
+
 // TestMCPRecordResultOutputHasRunAndCaseKeyNotRunItemID covers
 // fix-mcp-output-id-leaks: the returned result identifies its run and
 // case by key (values the caller already supplied), not by internal run
@@ -948,6 +1232,42 @@ func TestMCPRecordResultOutputHasRunAndCaseKeyNotRunItemID(t *testing.T) {
 	}
 	if _, present := out["runItemId"]; present {
 		t.Errorf("out contains runItemId: %+v", out)
+	}
+}
+
+// TestMCPUpdateRunItemStatusResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPUpdateRunItemStatusResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-runitemstatus-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "runitemstatus-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Run Item Status Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityHigh})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "A run", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "update_run_item_status", Arguments: map[string]any{
+		"runKey": run.Key, "caseKey": c.Key, "status": "retest",
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("update_run_item_status failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "retest") || !strings.Contains(text, c.Key) || !strings.Contains(text, run.Key) {
+		t.Errorf("content text = %q, want it to mention the case key, run key, and status", text)
 	}
 }
 
@@ -1001,6 +1321,37 @@ func TestMCPRecordResultThenUpdateRunItemStatus(t *testing.T) {
 }
 
 // --- Requirement: search tool ---
+
+// TestMCPSearchResultHasReadableSummary covers add-mcp-human-readable-results.
+func TestMCPSearchResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-search-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "search-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Search Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if _, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Distinctivepenguin case", Priority: domain.PriorityMedium}); err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "search", Arguments: map[string]any{"query": "distinctivepenguin"}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("search failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "1") || !strings.Contains(text, "distinctivepenguin") {
+		t.Errorf("content text = %q, want it to mention the match count (1) and the query", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
 
 func TestMCPSearchFindsMatchesAndRespectsProjectScoping(t *testing.T) {
 	ts, svc := testMCPServer(t)
@@ -1085,6 +1436,41 @@ func TestMCPSearchOutputHasNoRawProjectID(t *testing.T) {
 }
 
 // --- Requirement: get_details tool ---
+
+// TestMCPGetDetailsResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPGetDetailsResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-getdetails-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "getdetails-readable-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP GetDetails Readable Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Detail case", Priority: domain.PriorityHigh})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "get_details", Arguments: map[string]any{
+		"entityType": "case", "key": c.Key,
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("get_details failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "case") || !strings.Contains(text, c.Key) {
+		t.Errorf("content text = %q, want it to mention the entity type and key", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
 
 func TestMCPGetDetailsFetchesByEntityTypeAndKey(t *testing.T) {
 	ts, svc := testMCPServer(t)
@@ -1265,6 +1651,34 @@ func TestMCPGetDetailsRejectsTypeKeyMismatch(t *testing.T) {
 }
 
 // --- Requirement: list_projects tool ---
+
+// TestMCPListProjectsResultHasReadableSummary covers
+// add-mcp-human-readable-results.
+func TestMCPListProjectsResultHasReadableSummary(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-listprojects-readable-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "listprojects-readable-agent")
+	if _, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP List Projects Readable Project"}); err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "list_projects", Arguments: struct{}{}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if result.IsError {
+		t.Fatalf("list_projects failed: %v", contentText(result))
+	}
+	text := contentText(result)
+	if !strings.Contains(text, "1") {
+		t.Errorf("content text = %q, want it to mention the project count", text)
+	}
+	if strings.HasPrefix(strings.TrimSpace(text), "{") {
+		t.Errorf("content text = %q, looks like a raw JSON dump, not a readable summary", text)
+	}
+}
 
 func TestMCPListProjectsScopedVsUnscoped(t *testing.T) {
 	ts, svc := testMCPServer(t)

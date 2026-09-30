@@ -43,6 +43,15 @@ func saveIdempotentResult(ctx context.Context, svc *service.Service, toolName, k
 	return svc.SaveIdempotentResult(ctx, actor.ID, toolName, key, result)
 }
 
+// textResult builds a short, human-readable summary for a tool's
+// CallToolResult.Content, so a human watching the transcript sees a
+// readable line instead of the SDK's default raw-JSON-dump fallback
+// (add-mcp-human-readable-results design.md D1) — StructuredContent (what
+// the calling model actually parses) is unaffected either way.
+func textResult(format string, args ...any) *sdkmcp.CallToolResult {
+	return &sdkmcp.CallToolResult{Content: []sdkmcp.Content{&sdkmcp.TextContent{Text: fmt.Sprintf(format, args...)}}}
+}
+
 // writeAnnotations is shared by every write tool here: none are destructive
 // (creates are always additive, edits always version forward, results are
 // append-only — there is no delete tool in this package at all) and none
@@ -202,7 +211,8 @@ func upsertTestCase(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestCaseIn
 			if err != nil {
 				return nil, TestCaseOutput{}, err
 			}
-			return nil, toTestCaseOutput(c, keys[projectID]), nil
+			out := toTestCaseOutput(c, keys[projectID])
+			return textResult("Edited case %s to version %d: %s", out.Key, out.CurrentVersion, out.Content.Title), out, nil
 		}
 		if in.ProjectKey == "" {
 			return nil, TestCaseOutput{}, fmt.Errorf("projectKey is required to create a new case")
@@ -218,7 +228,7 @@ func upsertTestCase(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestCaseIn
 			if cached, ok, err := idempotentResult[TestCaseOutput](ctx, svc, "upsert_test_case", in.IdempotencyKey); err != nil {
 				return nil, TestCaseOutput{}, err
 			} else if ok {
-				return nil, cached, nil
+				return textResult("Created case %s: %s", cached.Key, cached.Content.Title), cached, nil
 			}
 		}
 		c, err := svc.CreateCase(ctx, projectID, "", content)
@@ -231,7 +241,7 @@ func upsertTestCase(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestCaseIn
 				return nil, TestCaseOutput{}, err
 			}
 		}
-		return nil, out, nil
+		return textResult("Created case %s: %s", out.Key, out.Content.Title), out, nil
 	}
 }
 
@@ -304,7 +314,10 @@ func upsertTestSuite(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestSuite
 				return nil, SuiteOutput{}, err
 			}
 			out, err := toSuiteOutput(ctx, svc, s)
-			return nil, out, err
+			if err != nil {
+				return nil, SuiteOutput{}, err
+			}
+			return textResult("Renamed suite %s to %s", out.Key, out.Name), out, nil
 		}
 		if in.ProjectKey == "" {
 			return nil, SuiteOutput{}, fmt.Errorf("projectKey is required to create a new suite")
@@ -321,7 +334,10 @@ func upsertTestSuite(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestSuite
 			return nil, SuiteOutput{}, err
 		}
 		out, err := toSuiteOutput(ctx, svc, s)
-		return nil, out, err
+		if err != nil {
+			return nil, SuiteOutput{}, err
+		}
+		return textResult("Created suite %s: %s", out.Key, out.Name), out, nil
 	}
 }
 
@@ -373,7 +389,8 @@ func upsertStepGroup(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertStepGroup
 			if err != nil {
 				return nil, StepGroupOutput{}, err
 			}
-			return nil, toStepGroupOutput(g, keys[projectID]), nil
+			out := toStepGroupOutput(g, keys[projectID])
+			return textResult("Edited step group %s: %s (%d steps)", out.Key, out.Name, len(out.Steps)), out, nil
 		}
 		if in.ProjectKey == "" {
 			return nil, StepGroupOutput{}, fmt.Errorf("projectKey is required to create a new step group")
@@ -389,7 +406,8 @@ func upsertStepGroup(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertStepGroup
 		if err != nil {
 			return nil, StepGroupOutput{}, err
 		}
-		return nil, toStepGroupOutput(g, in.ProjectKey), nil
+		out := toStepGroupOutput(g, in.ProjectKey)
+		return textResult("Created step group %s: %s (%d steps)", out.Key, out.Name, len(out.Steps)), out, nil
 	}
 }
 
@@ -423,7 +441,7 @@ func bulkAddCases(svc *service.Service) sdkmcp.ToolHandlerFor[BulkAddCasesInput,
 			if cached, ok, err := idempotentResult[BulkAddCasesOutput](ctx, svc, "bulk_add_cases", in.IdempotencyKey); err != nil {
 				return nil, BulkAddCasesOutput{}, err
 			} else if ok {
-				return nil, cached, nil
+				return textResult("Created %d cases in %s", len(cached.Cases), in.ProjectKey), cached, nil
 			}
 		}
 		contents := make([]domain.CaseContent, len(in.Cases))
@@ -444,7 +462,7 @@ func bulkAddCases(svc *service.Service) sdkmcp.ToolHandlerFor[BulkAddCasesInput,
 				return nil, BulkAddCasesOutput{}, err
 			}
 		}
-		return nil, out, nil
+		return textResult("Created %d cases in %s", len(out.Cases), in.ProjectKey), out, nil
 	}
 }
 
@@ -472,7 +490,7 @@ func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInpu
 			if cached, ok, err := idempotentResult[domain.Run](ctx, svc, "create_test_run", in.IdempotencyKey); err != nil {
 				return nil, domain.Run{}, err
 			} else if ok {
-				return nil, cached, nil
+				return textResult("Created run %s: %s", cached.Key, cached.Name), cached, nil
 			}
 		}
 
@@ -507,7 +525,7 @@ func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInpu
 				return nil, domain.Run{}, err
 			}
 		}
-		return nil, run, nil
+		return textResult("Created run %s: %s", run.Key, run.Name), run, nil
 	}
 }
 
@@ -588,7 +606,8 @@ func recordResult(svc *service.Service) sdkmcp.ToolHandlerFor[RecordResultInput,
 		if err != nil {
 			return nil, ResultOutput{}, err
 		}
-		return nil, toResultOutput(result, in.RunKey, in.CaseKey), nil
+		out := toResultOutput(result, in.RunKey, in.CaseKey)
+		return textResult("Recorded %s for case %s in run %s", out.Verdict, out.CaseKey, out.RunKey), out, nil
 	}
 }
 
@@ -616,8 +635,10 @@ func updateRunItemStatus(svc *service.Service) sdkmcp.ToolHandlerFor[UpdateRunIt
 			return nil, struct{}{}, err
 		}
 		status := in.Status
-		err = svc.UpdateItem(ctx, itemID, service.ItemUpdate{Status: &status})
-		return nil, struct{}{}, err
+		if err := svc.UpdateItem(ctx, itemID, service.ItemUpdate{Status: &status}); err != nil {
+			return nil, struct{}{}, err
+		}
+		return textResult("Set case %s in run %s to status %s", in.CaseKey, in.RunKey, in.Status), struct{}{}, nil
 	}
 }
 
@@ -663,6 +684,17 @@ func updateSuiteMembership(svc *service.Service) sdkmcp.ToolHandlerFor[UpdateSui
 			return nil, SuiteOutput{}, err
 		}
 		out, err := toSuiteOutput(ctx, svc, suite)
-		return nil, out, err
+		if err != nil {
+			return nil, SuiteOutput{}, err
+		}
+		verb := "Added"
+		if in.Action == "remove" {
+			verb = "Removed"
+		}
+		preposition := "to"
+		if in.Action == "remove" {
+			preposition = "from"
+		}
+		return textResult("%s case %s %s suite %s (%d cases total)", verb, in.CaseKey, preposition, out.Key, len(out.CaseKeys)), out, nil
 	}
 }

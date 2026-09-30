@@ -88,7 +88,7 @@ func search(svc *service.Service) sdkmcp.ToolHandlerFor[SearchInput, SearchOutpu
 				ProjectKey: keys[r.ProjectID], Rank: r.Rank,
 			}
 		}
-		return nil, SearchOutput{Results: out}, nil
+		return textResult("Found %d match(es) for %q", len(out), in.Query), SearchOutput{Results: out}, nil
 	}
 }
 
@@ -151,30 +151,34 @@ func getDetails(svc *service.Service) sdkmcp.ToolHandlerFor[GetDetailsInput, any
 		// this entity type returns (fix-mcp-output-id-leaks D4). Run and
 		// Project are already clean (Context) and pass through unchanged;
 		// StepGroup is never a GetDetails dispatch target.
+		summary := textResult("Fetched %s %s", in.EntityType, in.Key)
 		switch v := result.(type) {
 		case domain.TestCase:
 			keys, err := svc.ProjectKeysByIDs(ctx, []string{projectID})
 			if err != nil {
 				return nil, nil, err
 			}
-			return nil, toTestCaseOutput(v, keys[projectID]), nil
+			return summary, toTestCaseOutput(v, keys[projectID]), nil
 		case domain.Suite:
 			out, err := toSuiteOutput(ctx, svc, v)
-			return nil, out, err
+			if err != nil {
+				return nil, nil, err
+			}
+			return summary, out, nil
 		case domain.Release:
 			keys, err := svc.ProjectKeysByIDs(ctx, []string{projectID})
 			if err != nil {
 				return nil, nil, err
 			}
-			return nil, toReleaseOutput(v, keys[projectID]), nil
+			return summary, toReleaseOutput(v, keys[projectID]), nil
 		case domain.TestPlan:
 			keys, err := svc.ProjectKeysByIDs(ctx, []string{projectID})
 			if err != nil {
 				return nil, nil, err
 			}
-			return nil, toTestPlanOutput(v, keys[projectID]), nil
+			return summary, toTestPlanOutput(v, keys[projectID]), nil
 		default:
-			return nil, result, nil
+			return summary, result, nil
 		}
 	}
 }
@@ -242,7 +246,10 @@ func getRunProgress(svc *service.Service) sdkmcp.ToolHandlerFor[GetRunProgressIn
 			return nil, domain.RunSummary{}, err
 		}
 		summary, err := svc.RunSummary(ctx, runID)
-		return nil, summary, err
+		if err != nil {
+			return nil, domain.RunSummary{}, err
+		}
+		return textResult("Run %s: %d/%d pass", in.RunKey, summary.Counts[domain.StatusPass], summary.Total), summary, nil
 	}
 }
 
@@ -258,6 +265,9 @@ type ListProjectsOutput struct {
 func listProjects(svc *service.Service) sdkmcp.ToolHandlerFor[ListProjectsInput, ListProjectsOutput] {
 	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, _ ListProjectsInput) (*sdkmcp.CallToolResult, ListProjectsOutput, error) {
 		projects, err := svc.AccessibleProjects(ctx)
-		return nil, ListProjectsOutput{Projects: projects}, err
+		if err != nil {
+			return nil, ListProjectsOutput{}, err
+		}
+		return textResult("Found %d accessible project(s)", len(projects)), ListProjectsOutput{Projects: projects}, nil
 	}
 }
