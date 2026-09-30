@@ -192,7 +192,7 @@ The system SHALL provide an `update_run_item_status` MCP tool that updates a run
 - **THEN** the run item's current status becomes `retest`
 
 ### Requirement: search tool
-The system SHALL provide a `search` MCP tool performing cross-entity full-text search over test cases, test suites, test runs, projects, releases, and test plans, backed by a Postgres `tsvector`+GIN index, returning only entities the caller's Actor has permission to see. Each result SHALL identify its project by `projectKey`, not internal project ID, resolved with at most one additional query per call regardless of result-set size. The tool SHALL accept optional `cursor`/`limit` parameters and return a `nextCursor` when more results are available beyond the current page.
+The system SHALL provide a `search` MCP tool performing cross-entity full-text search over test cases, test suites, test runs, projects, releases, and test plans, backed by a Postgres `tsvector`+GIN index, returning only entities the caller's Actor has permission to see. Each result SHALL identify its project by `projectKey`, not internal project ID, resolved with at most one additional query per call regardless of result-set size. The tool SHALL accept optional `cursor`/`limit` parameters and return a `nextCursor` when more results are available beyond the current page. The `query` parameter SHALL be optional: when omitted or empty, the tool SHALL list matching entities ordered by most-recently-created first instead of erroring or returning no results, with `rank` reported as `0` for every result in this mode. The tool SHALL accept an optional `entityType` parameter (one of `case`, `suite`, `run`, `project`, `release`, `testPlan`) restricting results to that entity type, usable together with either a keyword query or an empty (browse) query.
 
 #### Scenario: Search returns matches across entity types
 - **WHEN** an agent calls `search` with a query term matching both a test case title and a project name
@@ -209,6 +209,14 @@ The system SHALL provide a `search` MCP tool performing cross-entity full-text s
 #### Scenario: Pagination via cursor
 - **WHEN** an agent calls `search` with a `limit` smaller than the total number of matches
 - **THEN** the response includes a `nextCursor`, and a follow-up call with that cursor returns the next page of results
+
+#### Scenario: Empty query browses a project's contents
+- **WHEN** an agent calls `search` with an empty or omitted `query` against an accessible project
+- **THEN** the response lists that project's entities ordered by most-recently-created first, with `rank` reported as `0` for every result, instead of an error or an empty result set
+
+#### Scenario: entityType narrows either mode
+- **WHEN** an agent calls `search` with `entityType: "suite"` and either a keyword `query` or an empty `query`
+- **THEN** only suites are returned, with the same ranking (keyword mode) or recency ordering (browse mode) as an unfiltered call
 
 ### Requirement: get_details tool
 The system SHALL provide a `get_details` MCP tool that fetches the full record for a single entity given an explicit `entityType` and `key`, routing to the appropriate lookup for that type. For every entity type it can return, the record SHALL identify related entities by key, not internal ID, matching the output shape the corresponding dedicated tool (`upsert_test_case`, `upsert_test_suite`, `upsert_step_group`) returns for that same entity type.
