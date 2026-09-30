@@ -1650,6 +1650,134 @@ func TestMCPGetDetailsRejectsTypeKeyMismatch(t *testing.T) {
 	}
 }
 
+// --- Requirement: list_run_items tool ---
+
+func TestMCPListRunItemsListsItems(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-listrunitems-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "listrunitems-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP List Run Items Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c1, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Case one", Priority: domain.PriorityHigh})
+	if err != nil {
+		t.Fatalf("CreateCase c1: %v", err)
+	}
+	c2, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Case two", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase c2: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "A run", CaseIDs: []string{c1.ID, c2.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var out map[string]any
+	callTool(t, session, "list_run_items", map[string]any{"runKey": run.Key}, &out)
+	items, ok := out["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("out[items] = %+v, want a 2-element array", out["items"])
+	}
+	caseKeys := map[string]bool{}
+	for _, it := range items {
+		m, ok := it.(map[string]any)
+		if !ok {
+			t.Fatalf("item = %+v, want an object", it)
+		}
+		caseKeys[m["caseKey"].(string)] = true
+		if m["currentStatus"] != "pending" {
+			t.Errorf("item[currentStatus] = %v, want pending", m["currentStatus"])
+		}
+		for _, leaked := range []string{"id", "runId", "caseId"} {
+			if _, present := m[leaked]; present {
+				t.Errorf("item contains %s: %+v", leaked, m)
+			}
+		}
+	}
+	if !caseKeys[c1.Key] || !caseKeys[c2.Key] {
+		t.Errorf("caseKeys = %v, want both %q and %q", caseKeys, c1.Key, c2.Key)
+	}
+}
+
+func TestMCPListRunItemsPaginatesWithCursor(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-listrunitems-page-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "listrunitems-page-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP List Run Items Page Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	var caseIDs []string
+	for i := 0; i < 3; i++ {
+		c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Case", Priority: domain.PriorityMedium})
+		if err != nil {
+			t.Fatalf("CreateCase: %v", err)
+		}
+		caseIDs = append(caseIDs, c.ID)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "A run", CaseIDs: caseIDs})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var page1 map[string]any
+	callTool(t, session, "list_run_items", map[string]any{"runKey": run.Key, "limit": 2}, &page1)
+	items1, _ := page1["items"].([]any)
+	if len(items1) != 2 {
+		t.Fatalf("page1 items = %+v, want 2", page1["items"])
+	}
+	cursor, _ := page1["nextCursor"].(string)
+	if cursor == "" {
+		t.Fatalf("page1 nextCursor = %+v, want a non-empty cursor", page1["nextCursor"])
+	}
+
+	var page2 map[string]any
+	callTool(t, session, "list_run_items", map[string]any{"runKey": run.Key, "limit": 2, "cursor": cursor}, &page2)
+	items2, _ := page2["items"].([]any)
+	if len(items2) != 1 {
+		t.Fatalf("page2 items = %+v, want 1", page2["items"])
+	}
+	if nc, present := page2["nextCursor"]; present && nc != nil && nc != "" {
+		t.Errorf("page2 nextCursor = %v, want empty/absent (last page)", nc)
+	}
+}
+
+func TestMCPListRunItemsDeniedWithoutPermission(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-listrunitems-noperm-admin@example.com"))
+	owner, err := svc.CreateUser(ctx, "mcp-listrunitems-noperm-owner@example.com", "correcthorse1", false)
+	if err != nil {
+		t.Fatalf("CreateUser: %v", err)
+	}
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP List Run Items No-Perm Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "A run"})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+	noReadRole := domain.Role{Name: "No Read (mcp test)"}
+	noReadToken := mustCreateScopedToken(t, svc, admin, actorForUser(owner), project.ID, noReadRole)
+
+	session := mustConnectMCP(t, ts, noReadToken)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "list_run_items", Arguments: map[string]any{
+		"runKey": run.Key,
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatal("list_run_items without read permission succeeded, want a permission error")
+	}
+}
+
 // --- Requirement: list_projects tool ---
 
 // TestMCPListProjectsResultHasReadableSummary covers

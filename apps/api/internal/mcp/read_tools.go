@@ -36,6 +36,11 @@ func registerReadTools(srv *sdkmcp.Server, svc *service.Service) {
 		Description: "List projects visible to you.",
 		Annotations: readAnnotations,
 	}, listProjects(svc))
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "list_run_items",
+		Description: "List a run's items (case key + current status), cursor-paginated. Use this to discover which case keys still need a result, rather than requiring every case key to already be known.",
+		Annotations: readAnnotations,
+	}, listRunItems(svc))
 }
 
 type SearchInput struct {
@@ -269,5 +274,92 @@ func listProjects(svc *service.Service) sdkmcp.ToolHandlerFor[ListProjectsInput,
 			return nil, ListProjectsOutput{}, err
 		}
 		return textResult("Found %d accessible project(s)", len(projects)), ListProjectsOutput{Projects: projects}, nil
+	}
+}
+
+// AssigneeOutput mirrors domain.Assignee for MCP tool output, dropping ID
+// (the internal user/team ref — no MCP tool anywhere accepts an assignee
+// ID as input, and no assignee-key concept exists; the same dead-end-ID
+// shape as Result.RunItemID) (fix-mcp-output-id-leaks precedent).
+type AssigneeOutput struct {
+	Kind      domain.AssigneeKind `json:"kind"`
+	Name      string              `json:"name"`
+	AvatarKey *string             `json:"avatarKey,omitempty"`
+}
+
+// RunItemOutput mirrors domain.RunItem for MCP tool output, dropping ID,
+// RunID, and CaseID (add-mcp-list-run-items-tool design.md D3) — no
+// run-item-key concept exists anywhere (items are always addressed by the
+// composite runKey/caseKey pair), RunID has no sibling and the caller
+// already supplied runKey, and CaseKey is already present as CaseID's
+// sibling.
+type RunItemOutput struct {
+	CaseKey          string              `json:"caseKey"`
+	CaseVersion      int                 `json:"caseVersion"`
+	Assignee         *AssigneeOutput     `json:"assignee,omitempty"`
+	CurrentStatus    domain.Status       `json:"currentStatus"`
+	Content          domain.CaseContent  `json:"content"`
+	NewerVersion     bool                `json:"newerVersion"`
+	TestName         string              `json:"testName,omitempty"`
+	CreatedAt        time.Time           `json:"createdAt"`
+	JiraIssueKey     *string             `json:"jiraIssueKey,omitempty"`
+	JiraIssueSummary *string             `json:"jiraIssueSummary,omitempty"`
+	JiraIssueStatus  *string             `json:"jiraIssueStatus,omitempty"`
+	JiraLastSyncedAt *time.Time          `json:"jiraLastSyncedAt,omitempty"`
+	StepStates       []domain.StepResult `json:"stepStates,omitempty"`
+	TestDataRow      map[string]string   `json:"testDataRow,omitempty"`
+}
+
+func toRunItemOutput(it domain.RunItem) RunItemOutput {
+	var assignee *AssigneeOutput
+	if it.Assignee != nil {
+		assignee = &AssigneeOutput{Kind: it.Assignee.Kind, Name: it.Assignee.Name, AvatarKey: it.Assignee.AvatarKey}
+	}
+	return RunItemOutput{
+		CaseKey: it.CaseKey, CaseVersion: it.CaseVersion, Assignee: assignee,
+		CurrentStatus: it.CurrentStatus, Content: it.Content, NewerVersion: it.NewerVersion,
+		TestName: it.TestName, CreatedAt: it.CreatedAt,
+		JiraIssueKey: it.JiraIssueKey, JiraIssueSummary: it.JiraIssueSummary,
+		JiraIssueStatus: it.JiraIssueStatus, JiraLastSyncedAt: it.JiraLastSyncedAt,
+		StepStates: it.StepStates, TestDataRow: it.TestDataRow,
+	}
+}
+
+type ListRunItemsInput struct {
+	RunKey string `json:"runKey"`
+	Cursor string `json:"cursor,omitempty" jsonschema:"opaque pagination cursor from a prior call's nextCursor; omit for the first page"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"max items per page; defaults to 50, capped at 200"`
+}
+
+// ListRunItemsOutput mirrors REST's own pagePayload envelope shape
+// (add-mcp-list-run-items-tool design.md D2) — one pagination convention
+// across REST and MCP, not two.
+type ListRunItemsOutput struct {
+	Items      []RunItemOutput `json:"items"`
+	NextCursor string          `json:"nextCursor,omitempty"`
+}
+
+func listRunItems(svc *service.Service) sdkmcp.ToolHandlerFor[ListRunItemsInput, ListRunItemsOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in ListRunItemsInput) (*sdkmcp.CallToolResult, ListRunItemsOutput, error) {
+		runID, err := svc.RunIDByKey(ctx, in.RunKey)
+		if err != nil {
+			return nil, ListRunItemsOutput{}, notFoundf("run", in.RunKey, err)
+		}
+		projectID, err := svc.ProjectIDForRun(ctx, runID)
+		if err != nil {
+			return nil, ListRunItemsOutput{}, err
+		}
+		if err := svc.Authorize(ctx, domain.PermRead, projectID); err != nil {
+			return nil, ListRunItemsOutput{}, err
+		}
+		items, nextCursor, err := svc.RunItemsPage(ctx, runID, "", in.Cursor, in.Limit)
+		if err != nil {
+			return nil, ListRunItemsOutput{}, err
+		}
+		out := make([]RunItemOutput, len(items))
+		for i, it := range items {
+			out[i] = toRunItemOutput(it)
+		}
+		return textResult("Found %d item(s) in run %s", len(out), in.RunKey), ListRunItemsOutput{Items: out, NextCursor: nextCursor}, nil
 	}
 }

@@ -36,7 +36,7 @@ alongside Jira's, linking straight to token management.
 
 ## Tools
 
-Twelve coarse-grained, hybrid tools — not a CRUD mirror of every REST
+Thirteen coarse-grained, hybrid tools — not a CRUD mirror of every REST
 endpoint, and not a handful of workflow mega-tools. Deletes are REST-only;
 no delete tool is registered.
 
@@ -53,6 +53,7 @@ no delete tool is registered.
 | `search` | Cross-entity full-text search over cases, suites, runs, projects, releases, and test plans, restricted to projects you can access |
 | `get_details` | Fetch the full record for one entity by `entityType` (`case`/`suite`/`run`/`project`/`release`/`testPlan`) and `key` |
 | `get_run_progress` | A run's current status counts and pass rate |
+| `list_run_items` | List a run's items (case key + current status), cursor-paginated (`cursor`/`limit`, matching REST's own pagination envelope) — use to discover which case keys still need a result (`add-mcp-list-run-items-tool`) |
 | `list_projects` | Projects visible to you — a scoped token sees only its one project |
 
 Every tool's output identifies related entities by key, never by internal
