@@ -192,7 +192,7 @@ The system SHALL provide an `update_run_item_status` MCP tool that updates a run
 - **THEN** the run item's current status becomes `retest`
 
 ### Requirement: search tool
-The system SHALL provide a `search` MCP tool performing cross-entity full-text search over test cases, test suites, test runs, projects, releases, and test plans, backed by a Postgres `tsvector`+GIN index, returning only entities the caller's Actor has permission to see. Each result SHALL identify its project by `projectKey`, not internal project ID, resolved with at most one additional query per call regardless of result-set size.
+The system SHALL provide a `search` MCP tool performing cross-entity full-text search over test cases, test suites, test runs, projects, releases, and test plans, backed by a Postgres `tsvector`+GIN index, returning only entities the caller's Actor has permission to see. Each result SHALL identify its project by `projectKey`, not internal project ID, resolved with at most one additional query per call regardless of result-set size. The tool SHALL accept optional `cursor`/`limit` parameters and return a `nextCursor` when more results are available beyond the current page.
 
 #### Scenario: Search returns matches across entity types
 - **WHEN** an agent calls `search` with a query term matching both a test case title and a project name
@@ -205,6 +205,10 @@ The system SHALL provide a `search` MCP tool performing cross-entity full-text s
 #### Scenario: Returned results identify their project by key, not internal ID
 - **WHEN** an agent calls `search` and receives results spanning multiple projects
 - **THEN** each result includes `projectKey` and does not include a raw internal project ID
+
+#### Scenario: Pagination via cursor
+- **WHEN** an agent calls `search` with a `limit` smaller than the total number of matches
+- **THEN** the response includes a `nextCursor`, and a follow-up call with that cursor returns the next page of results
 
 ### Requirement: get_details tool
 The system SHALL provide a `get_details` MCP tool that fetches the full record for a single entity given an explicit `entityType` and `key`, routing to the appropriate lookup for that type. For every entity type it can return, the record SHALL identify related entities by key, not internal ID, matching the output shape the corresponding dedicated tool (`upsert_test_case`, `upsert_test_suite`, `upsert_step_group`) returns for that same entity type.
@@ -248,7 +252,7 @@ The system SHALL provide a `list_run_items` MCP tool that lists a run's items, c
 - **THEN** each returned item includes `caseKey` and does not include a raw internal run item ID, run ID, case ID, or assignee reference ID
 
 ### Requirement: list_projects tool
-The system SHALL provide a `list_projects` MCP tool listing projects visible to the caller's Actor, matching REST's project-listing visibility rules.
+The system SHALL provide a `list_projects` MCP tool listing projects visible to the caller's Actor, matching REST's project-listing visibility rules. The tool SHALL accept optional `cursor`/`limit` parameters and return a `nextCursor` when more projects are available beyond the current page.
 
 #### Scenario: Unscoped token lists all accessible projects
 - **WHEN** an agent with an unscoped token calls `list_projects`
@@ -257,6 +261,10 @@ The system SHALL provide a `list_projects` MCP tool listing projects visible to 
 #### Scenario: Scoped token lists only its project
 - **WHEN** an agent with a project-scoped token calls `list_projects`
 - **THEN** only that single scoped project is returned
+
+#### Scenario: Pagination via cursor
+- **WHEN** an agent calls `list_projects` with a `limit` smaller than the total number of accessible projects
+- **THEN** the response includes a `nextCursor`, and a follow-up call with that cursor returns the next page of projects
 
 ### Requirement: No delete operations via MCP
 The system SHALL NOT expose any delete/removal operation through MCP tools in v0.1; deletions remain REST-only.
