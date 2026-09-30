@@ -343,6 +343,13 @@ func (s *Service) ProjectIDByKey(ctx context.Context, key string) (string, error
 	return s.store.Projects.IDByKey(ctx, key)
 }
 
+// ProjectKeysByIDs resolves every one of ids to its key in a single batched
+// query (fix-mcp-output-id-leaks design.md D3) — a passthrough to
+// ProjectRepo.KeysByIDs.
+func (s *Service) ProjectKeysByIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	return s.store.Projects.KeysByIDs(ctx, ids)
+}
+
 func (s *Service) CaseIDByKey(ctx context.Context, key string) (string, error) {
 	return s.store.Cases.IDByKey(ctx, key)
 }

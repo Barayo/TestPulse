@@ -139,6 +139,27 @@ func (r *ProjectRepo) IDByKey(ctx context.Context, key string) (string, error) {
 	return id, err
 }
 
+// KeysByIDs resolves every one of ids to its key in a single batched query,
+// rather than one round trip per id (fix-mcp-output-id-leaks, mirroring
+// CaseRepo.IDsByKeys' shape). An id with no matching project row is simply
+// absent from the returned map.
+func (r *ProjectRepo) KeysByIDs(ctx context.Context, ids []string) (map[string]string, error) {
+	rows, err := r.pool.Query(ctx, `SELECT id, key FROM projects WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	byID := make(map[string]string, len(ids))
+	for rows.Next() {
+		var id, key string
+		if err := rows.Scan(&id, &key); err != nil {
+			return nil, err
+		}
+		byID[id] = key
+	}
+	return byID, rows.Err()
+}
+
 // IsArchived reports whether a project is archived, via a cheap
 // single-column lookup (mirroring checkRunOpen's style, runs.go) rather
 // than a full Get — this runs on every mutating request in the app once

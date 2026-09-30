@@ -1,0 +1,149 @@
+## MODIFIED Requirements
+
+### Requirement: upsert_test_case tool
+The system SHALL provide an `upsert_test_case` MCP tool that creates a new test case or edits an existing one (by key), producing a new immutable version on edit, enforcing the caller's project permissions. A step entry in the tool's `steps` input MAY reference an existing step group by key instead of supplying its own `action`/`expected` content; the tool SHALL resolve such entries server-side against the referenced step group's current content, via the same resolution path used by the REST case-write routes, and SHALL NOT accept pre-resolved step content for a group-reference entry from the caller. The create path (no existing case key supplied) MAY accept an optional `idempotencyKey`: if a prior successful create call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second case. The returned case SHALL identify its project by `projectKey`, not internal project ID, and SHALL NOT include a folder ID field.
+
+#### Scenario: Create a new case
+- **WHEN** an agent calls `upsert_test_case` with no existing case key and valid fields
+- **THEN** a new test case is created and its key and version are returned
+
+#### Scenario: Edit rejected without permission
+- **WHEN** an agent calls `upsert_test_case` for a project it does not have write access to
+- **THEN** the tool call fails with a permission error and no case is modified
+
+#### Scenario: A step entry can reference a shared step group by key
+- **WHEN** an agent calls `upsert_test_case` with a step entry referencing an existing step group's key instead of its own action/expected content
+- **THEN** the created or edited case version's step content includes that step group's full current step sequence at that position
+
+#### Scenario: A retried create with the same idempotency key returns the original case
+- **WHEN** an agent calls `upsert_test_case` to create a case with `idempotencyKey: "k1"`, then calls it again with no existing case key and the same `idempotencyKey: "k1"`
+- **THEN** the second call returns the same case created by the first call, and no second case is created
+
+#### Scenario: A failed create is always safe to retry with the same key
+- **WHEN** an agent calls `upsert_test_case` with an `idempotencyKey` and invalid fields, and the call fails validation
+- **THEN** retrying with the same `idempotencyKey` and corrected fields creates the case normally, unaffected by the earlier failure
+
+#### Scenario: Returned case identifies its project by key, not internal ID
+- **WHEN** an agent calls `upsert_test_case` to create or edit a case
+- **THEN** the returned record includes `projectKey` and does not include a raw internal project ID or folder ID field
+
+### Requirement: upsert_step_group tool
+The system SHALL provide an `upsert_step_group` MCP tool that creates a new project-scoped step group or edits an existing one (by key), enforcing the caller's `manageProject` permission on the target project. The returned step group SHALL identify its project by `projectKey`, not internal project ID.
+
+#### Scenario: Create a new step group
+- **WHEN** an agent with `manageProject` permission on a project calls `upsert_step_group` with no existing group key and a name plus one or more steps
+- **THEN** a new step group is created under that project and its key is returned
+
+#### Scenario: Edit an existing step group by key
+- **WHEN** an agent with `manageProject` permission calls `upsert_step_group` with an existing group's key and updated steps
+- **THEN** that step group's content is updated in place, not duplicated
+
+#### Scenario: Rejected without manageProject permission
+- **WHEN** an agent without `manageProject` permission on a project calls `upsert_step_group` for that project
+- **THEN** the tool call fails with a permission error and no step group is created or modified
+
+#### Scenario: Returned step group identifies its project by key, not internal ID
+- **WHEN** an agent calls `upsert_step_group` to create or edit a step group
+- **THEN** the returned record includes `projectKey` and does not include a raw internal project ID field
+
+### Requirement: upsert_test_suite tool
+The system SHALL provide an `upsert_test_suite` MCP tool that creates a new test suite or renames/edits an existing one (by key), enforcing the caller's project permissions. The returned suite SHALL identify its project by `projectKey` and its member cases by `caseKeys`, not internal IDs — the identical output shape `update_suite_membership` returns.
+
+#### Scenario: Create a new suite
+- **WHEN** an agent calls `upsert_test_suite` with no existing suite key and valid fields
+- **THEN** a new test suite is created and its key is returned
+
+#### Scenario: Returned suite identifies its project and cases by key, not internal ID
+- **WHEN** an agent calls `upsert_test_suite` to create or rename a suite
+- **THEN** the returned record includes `projectKey` and `caseKeys`, and does not include a raw internal project ID or case ID
+
+### Requirement: update_suite_membership tool
+The system SHALL provide an `update_suite_membership` MCP tool that adds a test case to a suite or removes it, enforcing the caller's `manageProject`-equivalent `PermSuiteEditMembership` permission on the suite's project. The tool accepts a suite key, a case key, and an `action` of `"add"` or `"remove"`. Adding a case already in the suite, or removing a case not in the suite, SHALL succeed as a no-op rather than failing. The tool SHALL return the suite's current membership as case keys, not internal case IDs — the identical output shape `upsert_test_suite` returns.
+
+#### Scenario: Add a case to a suite
+- **WHEN** an agent with `PermSuiteEditMembership` on a project calls `update_suite_membership` with an existing suite key, an existing case key from the same project, and `action: "add"`
+- **THEN** the case is added to the suite's membership and the returned membership list includes that case's key
+
+#### Scenario: Remove a case from a suite
+- **WHEN** an agent with `PermSuiteEditMembership` calls `update_suite_membership` with a suite key, a case key currently in that suite's membership, and `action: "remove"`
+- **THEN** the case is removed from the suite's membership and the returned membership list no longer includes that case's key
+
+#### Scenario: Adding an already-member case is a no-op
+- **WHEN** an agent calls `update_suite_membership` with `action: "add"` for a case already in the suite's membership
+- **THEN** the call succeeds, membership is unchanged, and no error is returned
+
+#### Scenario: Removing a non-member case is a no-op
+- **WHEN** an agent calls `update_suite_membership` with `action: "remove"` for a case not currently in the suite's membership
+- **THEN** the call succeeds, membership is unchanged, and no error is returned
+
+#### Scenario: Rejected without permission
+- **WHEN** an agent without `PermSuiteEditMembership` on a project calls `update_suite_membership` for a suite in that project
+- **THEN** the tool call fails with a permission error and suite membership is unchanged
+
+#### Scenario: Rejected when case belongs to a different project
+- **WHEN** an agent calls `update_suite_membership` with `action: "add"` for a suite and case that belong to different projects
+- **THEN** the tool call fails with a validation error and suite membership is unchanged
+
+#### Scenario: Suite membership changes do not affect already-created runs
+- **WHEN** a run has already been created from a suite's cases, and `update_suite_membership` subsequently changes that suite's membership
+- **THEN** the existing run's run items remain unchanged, still pinned to the case versions captured at run-creation time
+
+### Requirement: bulk_add_cases tool
+The system SHALL provide a `bulk_add_cases` MCP tool that creates multiple test cases in one call as a single atomic transaction: if any case in the batch is invalid, no case in the batch is created. The tool MAY accept an optional `idempotencyKey`: if a prior successful call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second batch. Each returned case SHALL identify its project by `projectKey`, not internal project ID, and SHALL NOT include a folder ID field — the identical per-case output shape `upsert_test_case` returns.
+
+#### Scenario: All cases valid
+- **WHEN** an agent calls `bulk_add_cases` with a batch of valid cases
+- **THEN** all cases are created and their keys are returned
+
+#### Scenario: One case invalid rolls back the whole batch
+- **WHEN** an agent calls `bulk_add_cases` with a batch where one case has an invalid field
+- **THEN** no case in the batch is created and the error identifies the specific failing case and field
+
+#### Scenario: A retried call with the same idempotency key returns the original batch
+- **WHEN** an agent calls `bulk_add_cases` with `idempotencyKey: "k1"`, then calls it again with the same `idempotencyKey: "k1"`
+- **THEN** the second call returns the same cases created by the first call, and no second batch is created
+
+### Requirement: record_result tool
+The system SHALL provide a `record_result` MCP tool that appends a result entry (verdict, comment, actor) to a run item's append-only result log, enforcing assignee/permission restrictions identical to REST. The returned result SHALL include the `runKey` and `caseKey` the caller supplied, and SHALL NOT include a raw internal run item ID.
+
+#### Scenario: Record a passing result
+- **WHEN** an agent calls `record_result` for a run item it is permitted to act on, with verdict `pass`
+- **THEN** a new result log entry is appended recording the agent as actor, and the run item's current status updates to `pass`
+
+#### Scenario: Recording blocked for unauthorized item
+- **WHEN** an agent calls `record_result` for a run item outside its scoped permissions
+- **THEN** the tool call fails with a permission error and no result entry is appended
+
+#### Scenario: Returned result identifies the run and case by key, not internal run item ID
+- **WHEN** an agent calls `record_result` successfully
+- **THEN** the returned record includes the `runKey` and `caseKey` supplied in the call, and does not include a raw internal run item ID
+
+### Requirement: search tool
+The system SHALL provide a `search` MCP tool performing cross-entity full-text search over test cases, test suites, test runs, projects, releases, and test plans, backed by a Postgres `tsvector`+GIN index, returning only entities the caller's Actor has permission to see. Each result SHALL identify its project by `projectKey`, not internal project ID, resolved with at most one additional query per call regardless of result-set size.
+
+#### Scenario: Search returns matches across entity types
+- **WHEN** an agent calls `search` with a query term matching both a test case title and a project name
+- **THEN** results include both the matching case and the matching project, ranked by relevance
+
+#### Scenario: Search respects project scoping
+- **WHEN** an agent with a project-scoped token calls `search` with a term matching entities in other projects
+- **THEN** only matches within the token's scoped project are returned
+
+#### Scenario: Returned results identify their project by key, not internal ID
+- **WHEN** an agent calls `search` and receives results spanning multiple projects
+- **THEN** each result includes `projectKey` and does not include a raw internal project ID
+
+### Requirement: get_details tool
+The system SHALL provide a `get_details` MCP tool that fetches the full record for a single entity given an explicit `entityType` and `key`, routing to the appropriate lookup for that type. For every entity type it can return, the record SHALL identify related entities by key, not internal ID, matching the output shape the corresponding dedicated tool (`upsert_test_case`, `upsert_test_suite`, `upsert_step_group`) returns for that same entity type.
+
+#### Scenario: Fetch an existing case by key
+- **WHEN** an agent calls `get_details` with `entityType: "case"` and a valid case key
+- **THEN** the full case record is returned
+
+#### Scenario: Type/key mismatch reported clearly
+- **WHEN** an agent calls `get_details` with `entityType: "run"` and a key belonging to a suite
+- **THEN** the tool call fails with an error indicating the key does not match the requested entity type
+
+#### Scenario: Fetched records identify related entities by key, not internal ID
+- **WHEN** an agent calls `get_details` for a case, suite, step group, release, or test plan
+- **THEN** the returned record identifies its project (and, for a test plan, its release) by key, not internal ID

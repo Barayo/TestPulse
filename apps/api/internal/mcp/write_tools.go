@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	sdkmcp "github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -142,6 +143,32 @@ func (c CaseContentInput) toDomain() domain.CaseContent {
 	}
 }
 
+// TestCaseOutput mirrors domain.TestCase for MCP tool output, substituting
+// ProjectKey for ProjectID and dropping FolderID entirely — no tool
+// accepts a raw project ID or folder ID as input, and no folder concept
+// exists anywhere in the MCP tool surface (fix-mcp-output-id-leaks D2).
+type TestCaseOutput struct {
+	Key              string             `json:"key"`
+	ProjectKey       string             `json:"projectKey"`
+	CurrentVersion   int                `json:"currentVersion"`
+	Content          domain.CaseContent `json:"content"`
+	CreatedAt        time.Time          `json:"createdAt"`
+	UpdatedAt        time.Time          `json:"updatedAt"`
+	JiraIssueKey     *string            `json:"jiraIssueKey,omitempty"`
+	JiraIssueSummary *string            `json:"jiraIssueSummary,omitempty"`
+	JiraIssueStatus  *string            `json:"jiraIssueStatus,omitempty"`
+	JiraLastSyncedAt *time.Time         `json:"jiraLastSyncedAt,omitempty"`
+}
+
+func toTestCaseOutput(c domain.TestCase, projectKey string) TestCaseOutput {
+	return TestCaseOutput{
+		Key: c.Key, ProjectKey: projectKey, CurrentVersion: c.CurrentVersion,
+		Content: c.Content, CreatedAt: c.CreatedAt, UpdatedAt: c.UpdatedAt,
+		JiraIssueKey: c.JiraIssueKey, JiraIssueSummary: c.JiraIssueSummary,
+		JiraIssueStatus: c.JiraIssueStatus, JiraLastSyncedAt: c.JiraLastSyncedAt,
+	}
+}
+
 type UpsertTestCaseInput struct {
 	CaseContentInput
 	ProjectKey string `json:"projectKey,omitempty" jsonschema:"project key; required when creating a new case (omit caseKey)"`
@@ -152,51 +179,59 @@ type UpsertTestCaseInput struct {
 	IdempotencyKey string `json:"idempotencyKey,omitempty" jsonschema:"optional, create path only: retrying with the same key returns the original case instead of creating a second one"`
 }
 
-func upsertTestCase(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestCaseInput, domain.TestCase] {
-	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpsertTestCaseInput) (*sdkmcp.CallToolResult, domain.TestCase, error) {
+func upsertTestCase(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestCaseInput, TestCaseOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpsertTestCaseInput) (*sdkmcp.CallToolResult, TestCaseOutput, error) {
 		content := in.toDomain()
 		if in.CaseKey != "" {
 			caseID, err := svc.CaseIDByKey(ctx, in.CaseKey)
 			if err != nil {
-				return nil, domain.TestCase{}, notFoundf("case", in.CaseKey, err)
+				return nil, TestCaseOutput{}, notFoundf("case", in.CaseKey, err)
 			}
 			projectID, err := svc.ProjectIDForCase(ctx, caseID)
 			if err != nil {
-				return nil, domain.TestCase{}, err
+				return nil, TestCaseOutput{}, err
 			}
 			if err := svc.Authorize(ctx, domain.PermCaseEdit, projectID); err != nil {
-				return nil, domain.TestCase{}, err
+				return nil, TestCaseOutput{}, err
 			}
 			c, err := svc.EditCase(ctx, caseID, content)
-			return nil, c, err
+			if err != nil {
+				return nil, TestCaseOutput{}, err
+			}
+			keys, err := svc.ProjectKeysByIDs(ctx, []string{projectID})
+			if err != nil {
+				return nil, TestCaseOutput{}, err
+			}
+			return nil, toTestCaseOutput(c, keys[projectID]), nil
 		}
 		if in.ProjectKey == "" {
-			return nil, domain.TestCase{}, fmt.Errorf("projectKey is required to create a new case")
+			return nil, TestCaseOutput{}, fmt.Errorf("projectKey is required to create a new case")
 		}
 		projectID, err := svc.ProjectIDByKey(ctx, in.ProjectKey)
 		if err != nil {
-			return nil, domain.TestCase{}, notFoundf("project", in.ProjectKey, err)
+			return nil, TestCaseOutput{}, notFoundf("project", in.ProjectKey, err)
 		}
 		if err := svc.Authorize(ctx, domain.PermCaseCreate, projectID); err != nil {
-			return nil, domain.TestCase{}, err
+			return nil, TestCaseOutput{}, err
 		}
 		if in.IdempotencyKey != "" {
-			if cached, ok, err := idempotentResult[domain.TestCase](ctx, svc, "upsert_test_case", in.IdempotencyKey); err != nil {
-				return nil, domain.TestCase{}, err
+			if cached, ok, err := idempotentResult[TestCaseOutput](ctx, svc, "upsert_test_case", in.IdempotencyKey); err != nil {
+				return nil, TestCaseOutput{}, err
 			} else if ok {
 				return nil, cached, nil
 			}
 		}
 		c, err := svc.CreateCase(ctx, projectID, "", content)
 		if err != nil {
-			return nil, domain.TestCase{}, err
+			return nil, TestCaseOutput{}, err
 		}
+		out := toTestCaseOutput(c, in.ProjectKey)
 		if in.IdempotencyKey != "" {
-			if err := saveIdempotentResult(ctx, svc, "upsert_test_case", in.IdempotencyKey, c); err != nil {
-				return nil, domain.TestCase{}, err
+			if err := saveIdempotentResult(ctx, svc, "upsert_test_case", in.IdempotencyKey, out); err != nil {
+				return nil, TestCaseOutput{}, err
 			}
 		}
-		return nil, c, nil
+		return nil, out, nil
 	}
 }
 
@@ -206,35 +241,87 @@ type UpsertTestSuiteInput struct {
 	Name       string `json:"name" jsonschema:"suite name"`
 }
 
-func upsertTestSuite(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestSuiteInput, domain.Suite] {
-	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpsertTestSuiteInput) (*sdkmcp.CallToolResult, domain.Suite, error) {
+// SuiteOutput mirrors domain.Suite for MCP tool output, substituting
+// ProjectKey for ProjectID and CaseKeys for CaseIDs (fix-mcp-output-id-leaks
+// D2) — the shared output shape for both upsert_test_suite and
+// update_suite_membership.
+type SuiteOutput struct {
+	Key        string     `json:"key"`
+	ProjectKey string     `json:"projectKey"`
+	Name       string     `json:"name"`
+	CaseKeys   []string   `json:"caseKeys"`
+	PassRate   *int       `json:"passRate"`
+	LastRunAt  *time.Time `json:"lastRunAt"`
+	CreatedAt  time.Time  `json:"createdAt"`
+}
+
+// toSuiteOutput resolves s's project key and maps its member case IDs to
+// case keys, one GetCase call per member — acceptable for v1 (design.md
+// Risks): a fresh full-membership fetch happens on every add/remove/rename
+// call, not a hot path at typical suite sizes.
+func toSuiteOutput(ctx context.Context, svc *service.Service, s domain.Suite) (SuiteOutput, error) {
+	keys, err := svc.ProjectKeysByIDs(ctx, []string{s.ProjectID})
+	if err != nil {
+		return SuiteOutput{}, err
+	}
+	caseKeys := make([]string, len(s.CaseIDs))
+	for i, id := range s.CaseIDs {
+		c, err := svc.GetCase(ctx, id)
+		if err != nil {
+			return SuiteOutput{}, err
+		}
+		caseKeys[i] = c.Key
+	}
+	return SuiteOutput{
+		Key: s.Key, ProjectKey: keys[s.ProjectID], Name: s.Name, CaseKeys: caseKeys,
+		PassRate: s.PassRate, LastRunAt: s.LastRunAt, CreatedAt: s.CreatedAt,
+	}, nil
+}
+
+func upsertTestSuite(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertTestSuiteInput, SuiteOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpsertTestSuiteInput) (*sdkmcp.CallToolResult, SuiteOutput, error) {
 		if in.SuiteKey != "" {
 			suiteID, err := svc.SuiteIDByKey(ctx, in.SuiteKey)
 			if err != nil {
-				return nil, domain.Suite{}, notFoundf("suite", in.SuiteKey, err)
+				return nil, SuiteOutput{}, notFoundf("suite", in.SuiteKey, err)
 			}
 			projectID, err := svc.ProjectIDForSuite(ctx, suiteID)
 			if err != nil {
-				return nil, domain.Suite{}, err
+				return nil, SuiteOutput{}, err
 			}
 			if err := svc.Authorize(ctx, domain.PermSuiteEditMembership, projectID); err != nil {
-				return nil, domain.Suite{}, err
+				return nil, SuiteOutput{}, err
 			}
-			s, err := svc.RenameSuite(ctx, suiteID, in.Name)
-			return nil, s, err
+			if _, err := svc.RenameSuite(ctx, suiteID, in.Name); err != nil {
+				return nil, SuiteOutput{}, err
+			}
+			// RenameSuite's own return value doesn't populate CaseIDs
+			// (SuiteRepo.Rename's UPDATE...RETURNING doesn't select it) —
+			// re-fetch via GetSuite for the real current membership,
+			// mirroring update_suite_membership's existing pattern below.
+			s, err := svc.GetSuite(ctx, suiteID)
+			if err != nil {
+				return nil, SuiteOutput{}, err
+			}
+			out, err := toSuiteOutput(ctx, svc, s)
+			return nil, out, err
 		}
 		if in.ProjectKey == "" {
-			return nil, domain.Suite{}, fmt.Errorf("projectKey is required to create a new suite")
+			return nil, SuiteOutput{}, fmt.Errorf("projectKey is required to create a new suite")
 		}
 		projectID, err := svc.ProjectIDByKey(ctx, in.ProjectKey)
 		if err != nil {
-			return nil, domain.Suite{}, notFoundf("project", in.ProjectKey, err)
+			return nil, SuiteOutput{}, notFoundf("project", in.ProjectKey, err)
 		}
 		if err := svc.Authorize(ctx, domain.PermSuiteCreate, projectID); err != nil {
-			return nil, domain.Suite{}, err
+			return nil, SuiteOutput{}, err
 		}
 		s, err := svc.CreateSuite(ctx, projectID, in.Name)
-		return nil, s, err
+		if err != nil {
+			return nil, SuiteOutput{}, err
+		}
+		out, err := toSuiteOutput(ctx, svc, s)
+		return nil, out, err
 	}
 }
 
@@ -245,36 +332,64 @@ type UpsertStepGroupInput struct {
 	Steps      []StepInput `json:"steps" jsonschema:"the group's ordered steps"`
 }
 
-func upsertStepGroup(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertStepGroupInput, domain.StepGroup] {
-	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpsertStepGroupInput) (*sdkmcp.CallToolResult, domain.StepGroup, error) {
+// StepGroupOutput mirrors domain.StepGroup for MCP tool output,
+// substituting ProjectKey for ProjectID (fix-mcp-output-id-leaks D2).
+type StepGroupOutput struct {
+	Key        string        `json:"key"`
+	ProjectKey string        `json:"projectKey"`
+	Name       string        `json:"name"`
+	Steps      []domain.Step `json:"steps"`
+	CreatedAt  time.Time     `json:"createdAt"`
+	UpdatedAt  time.Time     `json:"updatedAt"`
+}
+
+func toStepGroupOutput(g domain.StepGroup, projectKey string) StepGroupOutput {
+	return StepGroupOutput{
+		Key: g.Key, ProjectKey: projectKey, Name: g.Name,
+		Steps: g.Steps, CreatedAt: g.CreatedAt, UpdatedAt: g.UpdatedAt,
+	}
+}
+
+func upsertStepGroup(svc *service.Service) sdkmcp.ToolHandlerFor[UpsertStepGroupInput, StepGroupOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpsertStepGroupInput) (*sdkmcp.CallToolResult, StepGroupOutput, error) {
 		steps := toDomainSteps(in.Steps)
 		if in.GroupKey != "" {
 			groupID, err := svc.StepGroupIDByKey(ctx, in.GroupKey)
 			if err != nil {
-				return nil, domain.StepGroup{}, notFoundf("step group", in.GroupKey, err)
+				return nil, StepGroupOutput{}, notFoundf("step group", in.GroupKey, err)
 			}
 			projectID, err := svc.ProjectIDForStepGroup(ctx, groupID)
 			if err != nil {
-				return nil, domain.StepGroup{}, err
+				return nil, StepGroupOutput{}, err
 			}
 			if err := svc.Authorize(ctx, domain.PermManageProject, projectID); err != nil {
-				return nil, domain.StepGroup{}, err
+				return nil, StepGroupOutput{}, err
 			}
 			g, err := svc.UpdateStepGroup(ctx, groupID, in.Name, steps)
-			return nil, g, err
+			if err != nil {
+				return nil, StepGroupOutput{}, err
+			}
+			keys, err := svc.ProjectKeysByIDs(ctx, []string{projectID})
+			if err != nil {
+				return nil, StepGroupOutput{}, err
+			}
+			return nil, toStepGroupOutput(g, keys[projectID]), nil
 		}
 		if in.ProjectKey == "" {
-			return nil, domain.StepGroup{}, fmt.Errorf("projectKey is required to create a new step group")
+			return nil, StepGroupOutput{}, fmt.Errorf("projectKey is required to create a new step group")
 		}
 		projectID, err := svc.ProjectIDByKey(ctx, in.ProjectKey)
 		if err != nil {
-			return nil, domain.StepGroup{}, notFoundf("project", in.ProjectKey, err)
+			return nil, StepGroupOutput{}, notFoundf("project", in.ProjectKey, err)
 		}
 		if err := svc.Authorize(ctx, domain.PermManageProject, projectID); err != nil {
-			return nil, domain.StepGroup{}, err
+			return nil, StepGroupOutput{}, err
 		}
 		g, err := svc.CreateStepGroup(ctx, projectID, in.Name, steps)
-		return nil, g, err
+		if err != nil {
+			return nil, StepGroupOutput{}, err
+		}
+		return nil, toStepGroupOutput(g, in.ProjectKey), nil
 	}
 }
 
@@ -292,7 +407,7 @@ type BulkAddCasesInput struct {
 // though the Go SDK itself permits one per SEP-2106 — real-client
 // compatibility wins).
 type BulkAddCasesOutput struct {
-	Cases []domain.TestCase `json:"cases"`
+	Cases []TestCaseOutput `json:"cases"`
 }
 
 func bulkAddCases(svc *service.Service) sdkmcp.ToolHandlerFor[BulkAddCasesInput, BulkAddCasesOutput] {
@@ -319,7 +434,11 @@ func bulkAddCases(svc *service.Service) sdkmcp.ToolHandlerFor[BulkAddCasesInput,
 		if err != nil {
 			return nil, BulkAddCasesOutput{}, err
 		}
-		out := BulkAddCasesOutput{Cases: cases}
+		outCases := make([]TestCaseOutput, len(cases))
+		for i, c := range cases {
+			outCases[i] = toTestCaseOutput(c, in.ProjectKey)
+		}
+		out := BulkAddCasesOutput{Cases: outCases}
 		if in.IdempotencyKey != "" {
 			if err := saveIdempotentResult(ctx, svc, "bulk_add_cases", in.IdempotencyKey, out); err != nil {
 				return nil, BulkAddCasesOutput{}, err
@@ -417,25 +536,59 @@ type RecordResultInput struct {
 	Comment string `json:"comment,omitempty"`
 }
 
-func recordResult(svc *service.Service) sdkmcp.ToolHandlerFor[RecordResultInput, domain.Result] {
-	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in RecordResultInput) (*sdkmcp.CallToolResult, domain.Result, error) {
+// ResultOutput mirrors domain.Result for MCP tool output, dropping
+// RunItemID (no run-item-key concept exists anywhere — items are always
+// addressed by the composite runKey/caseKey pair) in favor of the
+// RunKey/CaseKey the caller already supplied as input (fix-mcp-output-id-
+// leaks D2/D5).
+type ResultOutput struct {
+	RunKey      string                 `json:"runKey"`
+	CaseKey     string                 `json:"caseKey"`
+	Actor       string                 `json:"actor"`
+	ActorKind   domain.ResultActorKind `json:"actorKind"`
+	Verdict     domain.Verdict         `json:"verdict"`
+	Comment     string                 `json:"comment"`
+	StartTime   *time.Time             `json:"startTime,omitempty"`
+	EndTime     *time.Time             `json:"endTime,omitempty"`
+	Platform    string                 `json:"platform,omitempty"`
+	Version     string                 `json:"version,omitempty"`
+	Tags        []string               `json:"tags,omitempty"`
+	Attachments []domain.Attachment    `json:"attachments,omitempty"`
+	StepResults []domain.StepResult    `json:"stepResults,omitempty"`
+	CreatedAt   time.Time              `json:"createdAt"`
+}
+
+func toResultOutput(r domain.Result, runKey, caseKey string) ResultOutput {
+	return ResultOutput{
+		RunKey: runKey, CaseKey: caseKey, Actor: r.Actor, ActorKind: r.ActorKind,
+		Verdict: r.Verdict, Comment: r.Comment, StartTime: r.StartTime, EndTime: r.EndTime,
+		Platform: r.Platform, Version: r.Version, Tags: r.Tags,
+		Attachments: r.Attachments, StepResults: r.StepResults, CreatedAt: r.CreatedAt,
+	}
+}
+
+func recordResult(svc *service.Service) sdkmcp.ToolHandlerFor[RecordResultInput, ResultOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in RecordResultInput) (*sdkmcp.CallToolResult, ResultOutput, error) {
 		runID, err := svc.RunIDByKey(ctx, in.RunKey)
 		if err != nil {
-			return nil, domain.Result{}, notFoundf("run", in.RunKey, err)
+			return nil, ResultOutput{}, notFoundf("run", in.RunKey, err)
 		}
 		projectID, err := svc.ProjectIDForRun(ctx, runID)
 		if err != nil {
-			return nil, domain.Result{}, err
+			return nil, ResultOutput{}, err
 		}
 		if err := svc.Authorize(ctx, domain.PermRunRecordResult, projectID); err != nil {
-			return nil, domain.Result{}, err
+			return nil, ResultOutput{}, err
 		}
 		itemID, err := findRunItemByCaseKey(ctx, svc, runID, in.CaseKey)
 		if err != nil {
-			return nil, domain.Result{}, err
+			return nil, ResultOutput{}, err
 		}
 		result, err := svc.RecordResult(ctx, itemID, domain.NewResult{Verdict: domain.Verdict(in.Verdict), Comment: in.Comment})
-		return nil, result, err
+		if err != nil {
+			return nil, ResultOutput{}, err
+		}
+		return nil, toResultOutput(result, in.RunKey, in.CaseKey), nil
 	}
 }
 
@@ -474,57 +627,42 @@ type UpdateSuiteMembershipInput struct {
 	Action   string `json:"action" jsonschema:"one of add, remove"`
 }
 
-// UpdateSuiteMembershipOutput returns the suite's resulting membership as
-// case keys, not internal case IDs (add-mcp-suite-membership-tool design.md
-// D3) — unlike domain.Suite.CaseIDs, which is not usable as MCP tool input.
-type UpdateSuiteMembershipOutput struct {
-	SuiteKey string   `json:"suiteKey"`
-	CaseKeys []string `json:"caseKeys"`
-}
-
-func updateSuiteMembership(svc *service.Service) sdkmcp.ToolHandlerFor[UpdateSuiteMembershipInput, UpdateSuiteMembershipOutput] {
-	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpdateSuiteMembershipInput) (*sdkmcp.CallToolResult, UpdateSuiteMembershipOutput, error) {
+func updateSuiteMembership(svc *service.Service) sdkmcp.ToolHandlerFor[UpdateSuiteMembershipInput, SuiteOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in UpdateSuiteMembershipInput) (*sdkmcp.CallToolResult, SuiteOutput, error) {
 		suiteID, err := svc.SuiteIDByKey(ctx, in.SuiteKey)
 		if err != nil {
-			return nil, UpdateSuiteMembershipOutput{}, notFoundf("suite", in.SuiteKey, err)
+			return nil, SuiteOutput{}, notFoundf("suite", in.SuiteKey, err)
 		}
 		projectID, err := svc.ProjectIDForSuite(ctx, suiteID)
 		if err != nil {
-			return nil, UpdateSuiteMembershipOutput{}, err
+			return nil, SuiteOutput{}, err
 		}
 		if err := svc.Authorize(ctx, domain.PermSuiteEditMembership, projectID); err != nil {
-			return nil, UpdateSuiteMembershipOutput{}, err
+			return nil, SuiteOutput{}, err
 		}
 		caseID, err := svc.CaseIDByKey(ctx, in.CaseKey)
 		if err != nil {
-			return nil, UpdateSuiteMembershipOutput{}, notFoundf("case", in.CaseKey, err)
+			return nil, SuiteOutput{}, notFoundf("case", in.CaseKey, err)
 		}
 
 		switch in.Action {
 		case "add":
 			if err := svc.AddCaseToSuite(ctx, suiteID, caseID); err != nil {
-				return nil, UpdateSuiteMembershipOutput{}, err
+				return nil, SuiteOutput{}, err
 			}
 		case "remove":
 			if err := svc.RemoveCaseFromSuite(ctx, suiteID, caseID); err != nil {
-				return nil, UpdateSuiteMembershipOutput{}, err
+				return nil, SuiteOutput{}, err
 			}
 		default:
-			return nil, UpdateSuiteMembershipOutput{}, fmt.Errorf("action must be one of add, remove, got %q", in.Action)
+			return nil, SuiteOutput{}, fmt.Errorf("action must be one of add, remove, got %q", in.Action)
 		}
 
 		suite, err := svc.GetSuite(ctx, suiteID)
 		if err != nil {
-			return nil, UpdateSuiteMembershipOutput{}, err
+			return nil, SuiteOutput{}, err
 		}
-		caseKeys := make([]string, len(suite.CaseIDs))
-		for i, id := range suite.CaseIDs {
-			c, err := svc.GetCase(ctx, id)
-			if err != nil {
-				return nil, UpdateSuiteMembershipOutput{}, err
-			}
-			caseKeys[i] = c.Key
-		}
-		return nil, UpdateSuiteMembershipOutput{SuiteKey: suite.Key, CaseKeys: caseKeys}, nil
+		out, err := toSuiteOutput(ctx, svc, suite)
+		return nil, out, err
 	}
 }

@@ -55,6 +55,11 @@ no delete tool is registered.
 | `get_run_progress` | A run's current status counts and pass rate |
 | `list_projects` | Projects visible to you — a scoped token sees only its one project |
 
+Every tool's output identifies related entities by key, never by internal
+ID — if you need an entity's key from another tool's result, it's already
+there under a `*Key` field (e.g. `projectKey`, `caseKeys`), not something
+you need to look up separately (`fix-mcp-output-id-leaks`).
+
 Every tool enforces the same permission model as REST: a scoped token can
 only act within its project and granted permissions; an unscoped token acts
 at its creator's current access, resolved fresh on every call — see
