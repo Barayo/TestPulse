@@ -50,7 +50,7 @@ no delete tool is registered.
 | `create_test_run` | Create a run from a suite's cases and/or explicit `caseKeys`, optionally scoped to a Test Plan. Accepts an optional `idempotencyKey` (`add-mcp-idempotency-keys`) |
 | `record_result` | Record a verdict (`pass`/`failed`/`skipped`/`blocked`) for a case within a run |
 | `update_run_item_status` | Update a run item's status directly (e.g. request a `retest`), independent of recording a verdict |
-| `search` | Cross-entity full-text search over cases, suites, runs, projects, releases, and test plans, restricted to projects you can access. Cursor-paginated (`cursor`/`limit`) (`add-mcp-search-listprojects-pagination`) |
+| `search` | Cross-entity full-text search over cases, suites, runs, projects, releases, and test plans, restricted to projects you can access. Cursor-paginated (`cursor`/`limit`) (`add-mcp-search-listprojects-pagination`). `query` is optional — omit it to browse matching entities by recency instead of searching by keyword (`rank` is `0` in this mode); an optional `entityType` filter (`case`/`suite`/`run`/`project`/`release`/`testPlan`) narrows either mode to one kind of entity (`add-mcp-search-browse-mode`) |
 | `get_details` | Fetch the full record for one entity by `entityType` (`case`/`suite`/`run`/`project`/`release`/`testPlan`) and `key` |
 | `get_run_progress` | A run's current status counts and pass rate |
 | `list_run_items` | List a run's items (case key + current status), cursor-paginated (`cursor`/`limit`, matching REST's own pagination envelope) — use to discover which case keys still need a result (`add-mcp-list-run-items-tool`) |

@@ -19,17 +19,19 @@ func searchTestService(t *testing.T) *service.Service {
 // full-text search over cases, suites, runs, projects, releases, and test
 // plans, restricted to the caller's accessible projects).
 
-func TestSearchRequiresQuery(t *testing.T) {
+// TestSearchAllowsEmptyQuery covers add-mcp-search-browse-mode: an empty
+// query is a valid browse-mode request, not a validation error.
+func TestSearchAllowsEmptyQuery(t *testing.T) {
 	s := service.New(nil)
-	_, _, err := s.Search(context.Background(), "", []string{"p1"}, "", 0)
-	if err == nil {
-		t.Fatal("expected validation error for empty query, got nil")
+	_, _, err := s.Search(context.Background(), "", nil, "", "", 0)
+	if err != nil {
+		t.Fatalf("Search with empty query: %v, want no error", err)
 	}
 }
 
 func TestSearchReturnsNoResultsWithoutAccessibleProjects(t *testing.T) {
 	s := service.New(nil)
-	results, _, err := s.Search(context.Background(), "login", nil, "", 0)
+	results, _, err := s.Search(context.Background(), "login", nil, "", "", 0)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -57,7 +59,7 @@ func TestSearchFindsMatchesAcrossEntityTypes(t *testing.T) {
 		t.Fatalf("CreateSuite: %v", err)
 	}
 
-	results, _, err := s.Search(ctx, "checkout", []string{project.ID}, "", 0)
+	results, _, err := s.Search(ctx, "checkout", []string{project.ID}, "", "", 0)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -108,7 +110,7 @@ func TestSearchOnlyMatchesWithinGivenProjects(t *testing.T) {
 		t.Fatalf("CreateSuite (hidden): %v", err)
 	}
 
-	results, _, err := s.Search(ctx, "shared keyword", []string{visible.ID}, "", 0)
+	results, _, err := s.Search(ctx, "shared keyword", []string{visible.ID}, "", "", 0)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

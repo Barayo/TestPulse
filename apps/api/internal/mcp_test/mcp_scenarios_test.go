@@ -1393,6 +1393,37 @@ func TestMCPSearchPaginatesWithCursor(t *testing.T) {
 	}
 }
 
+// TestMCPSearchBrowsesWithoutQuery covers add-mcp-search-browse-mode: an
+// empty query lists a project's entities instead of erroring, and
+// entityType narrows the listing to one entity type.
+func TestMCPSearchBrowsesWithoutQuery(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-search-browse-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "search-browse-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Search Browse Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	if _, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Browsable case", Priority: domain.PriorityMedium}); err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	suite, err := svc.CreateSuite(ctx, project.ID, "Browsable suite")
+	if err != nil {
+		t.Fatalf("CreateSuite: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var out mcp.SearchOutput
+	callTool(t, session, "search", map[string]any{"entityType": "suite"}, &out)
+	if len(out.Results) != 1 || out.Results[0].Key != suite.Key {
+		t.Fatalf("results = %+v, want exactly the one suite", out.Results)
+	}
+	if out.Results[0].Rank != 0 {
+		t.Errorf("Rank = %v, want 0 in browse mode", out.Results[0].Rank)
+	}
+}
+
 func TestMCPSearchFindsMatchesAndRespectsProjectScoping(t *testing.T) {
 	ts, svc := testMCPServer(t)
 	ctx := context.Background()

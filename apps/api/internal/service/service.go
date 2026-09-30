@@ -8,7 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/Barayo/TestPulse/apps/api/internal/attachmentimage"
@@ -298,15 +297,16 @@ func (s *Service) GetDetails(ctx context.Context, entityType, key string) (any, 
 // cursor/limit and the returned nextCursor are opaque strings passed
 // straight through to the store layer, which owns the actual offset
 // encoding (design.md D2); Service does no cursor handling of its own,
-// matching AccessibleProjectsPage's identical division of labor.
-func (s *Service) Search(ctx context.Context, query string, projectIDs []string, cursor string, limit int) ([]domain.SearchResult, string, error) {
-	if strings.TrimSpace(query) == "" {
-		return nil, "", invalid("query is required")
-	}
+// matching AccessibleProjectsPage's identical division of labor. An empty
+// query is a valid browse-mode request, not a validation error
+// (add-mcp-search-browse-mode design.md D3) — the store layer owns the
+// mode switch entirely, so this method is a pure passthrough of query,
+// entityType, cursor, and limit.
+func (s *Service) Search(ctx context.Context, query string, projectIDs []string, entityType, cursor string, limit int) ([]domain.SearchResult, string, error) {
 	if len(projectIDs) == 0 {
 		return []domain.SearchResult{}, "", nil
 	}
-	return s.store.Search.Search(ctx, query, projectIDs, cursor, limit)
+	return s.store.Search.Search(ctx, query, projectIDs, entityType, cursor, limit)
 }
 
 // ProjectUpdate carries optional changes; nil fields are left untouched.

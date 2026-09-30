@@ -18,7 +18,7 @@ var readAnnotations = &sdkmcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHin
 func registerReadTools(srv *sdkmcp.Server, svc *service.Service) {
 	sdkmcp.AddTool(srv, &sdkmcp.Tool{
 		Name:        "search",
-		Description: "Cross-entity full-text search over test cases, suites, runs, projects, releases, and test plans, restricted to projects you can access. Start here to find real keys before calling a tool that needs one.",
+		Description: "Cross-entity full-text search over test cases, suites, runs, projects, releases, and test plans, restricted to projects you can access. Start here to find real keys before calling a tool that needs one. Omit query to browse by recency instead of searching by keyword; pair with entityType to list just one kind of entity.",
 		Annotations: readAnnotations,
 	}, search(svc))
 	sdkmcp.AddTool(srv, &sdkmcp.Tool{
@@ -44,9 +44,10 @@ func registerReadTools(srv *sdkmcp.Server, svc *service.Service) {
 }
 
 type SearchInput struct {
-	Query  string `json:"query" jsonschema:"free-text search query"`
-	Cursor string `json:"cursor,omitempty" jsonschema:"opaque pagination cursor from a prior call's nextCursor; omit for the first page"`
-	Limit  int    `json:"limit,omitempty" jsonschema:"max results per page; defaults to 50, capped at 200"`
+	Query      string `json:"query,omitempty" jsonschema:"free-text search query; omit to browse by recency instead of searching by keyword"`
+	EntityType string `json:"entityType,omitempty" jsonschema:"one of case, suite, run, project, release, testPlan; omit for no filter"`
+	Cursor     string `json:"cursor,omitempty" jsonschema:"opaque pagination cursor from a prior call's nextCursor; omit for the first page"`
+	Limit      int    `json:"limit,omitempty" jsonschema:"max results per page; defaults to 50, capped at 200"`
 }
 
 // SearchOutput wraps results in a named field — see BulkAddCasesOutput's
@@ -69,11 +70,16 @@ type SearchResultOutput struct {
 
 func search(svc *service.Service) sdkmcp.ToolHandlerFor[SearchInput, SearchOutput] {
 	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in SearchInput) (*sdkmcp.CallToolResult, SearchOutput, error) {
+		switch in.EntityType {
+		case "", "case", "suite", "run", "project", "release", "testPlan":
+		default:
+			return nil, SearchOutput{}, fmt.Errorf("unknown entityType %q: must be one of case, suite, run, project, release, testPlan", in.EntityType)
+		}
 		projectIDs, err := svc.AccessibleProjectIDs(ctx)
 		if err != nil {
 			return nil, SearchOutput{}, err
 		}
-		results, nextCursor, err := svc.Search(ctx, in.Query, projectIDs, in.Cursor, in.Limit)
+		results, nextCursor, err := svc.Search(ctx, in.Query, projectIDs, in.EntityType, in.Cursor, in.Limit)
 		if err != nil {
 			return nil, SearchOutput{}, err
 		}
@@ -99,6 +105,9 @@ func search(svc *service.Service) sdkmcp.ToolHandlerFor[SearchInput, SearchOutpu
 		suffix := ""
 		if nextCursor != "" {
 			suffix = " (more available)"
+		}
+		if in.Query == "" {
+			return textResult("Listed %d entities%s", len(out), suffix), SearchOutput{Results: out, NextCursor: nextCursor}, nil
 		}
 		return textResult("Found %d match(es) for %q%s", len(out), in.Query, suffix), SearchOutput{Results: out, NextCursor: nextCursor}, nil
 	}
