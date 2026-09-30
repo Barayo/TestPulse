@@ -1271,6 +1271,110 @@ func TestMCPUpdateRunItemStatusResultHasReadableSummary(t *testing.T) {
 	}
 }
 
+// TestMCPRecordResultWithStepResults covers add-mcp-step-level-results:
+// record_result's optional stepResults input is forwarded through to the
+// same service-layer logic REST's NewResult.stepResults already exercises
+// (add-step-level-results) — the snapshot on the returned result and the
+// run item's live per-step state both reflect it.
+func TestMCPRecordResultWithStepResults(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-result-steps-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "result-steps-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Result Steps Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{
+		Title:    "Multi-step case",
+		Priority: domain.PriorityHigh,
+		Steps: []domain.Step{
+			{Action: "open login page", Expected: "form visible"},
+			{Action: "submit credentials", Expected: "dashboard loads"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "Result steps run", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var result domain.Result
+	callTool(t, session, "record_result", map[string]any{
+		"runKey": run.Key, "caseKey": c.Key, "verdict": "failed",
+		"stepResults": []map[string]any{
+			{"stepIndex": 0, "verdict": "pass"},
+			{"stepIndex": 1, "verdict": "failed"},
+		},
+	}, &result)
+	if len(result.StepResults) != 2 {
+		t.Fatalf("result.StepResults = %+v, want 2 entries", result.StepResults)
+	}
+	if result.StepResults[0].Verdict != domain.VerdictPass || result.StepResults[1].Verdict != domain.VerdictFailed {
+		t.Errorf("result.StepResults = %+v, want [pass, failed]", result.StepResults)
+	}
+
+	items, err := svc.RunItems(ctx, run.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	if len(items) != 1 || len(items[0].StepStates) != 2 {
+		t.Fatalf("run item step states = %+v, want 2 live step states", items)
+	}
+	if items[0].StepStates[0].Verdict != domain.VerdictPass || items[0].StepStates[1].Verdict != domain.VerdictFailed {
+		t.Errorf("run item StepStates = %+v, want [pass, failed]", items[0].StepStates)
+	}
+}
+
+// TestMCPRecordResultRejectsOutOfBoundsStepIndex covers
+// add-mcp-step-level-results: the same server-side bounds-check REST
+// already enforces (checkStepIndicesInBounds) rejects an MCP call too.
+func TestMCPRecordResultRejectsOutOfBoundsStepIndex(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-result-steps-oob-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "result-steps-oob-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Result Steps OOB Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{
+		Title:    "Single-step case",
+		Priority: domain.PriorityHigh,
+		Steps:    []domain.Step{{Action: "do the one thing", Expected: "it works"}},
+	})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "Result steps OOB run", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	result, err := session.CallTool(ctx, &sdkmcp.CallToolParams{Name: "record_result", Arguments: map[string]any{
+		"runKey": run.Key, "caseKey": c.Key, "verdict": "failed",
+		"stepResults": []map[string]any{{"stepIndex": 5, "verdict": "failed"}},
+	}})
+	if err != nil {
+		t.Fatalf("CallTool: protocol error: %v", err)
+	}
+	if !result.IsError {
+		t.Fatalf("record_result with out-of-bounds stepIndex succeeded, want an error: %v", contentText(result))
+	}
+
+	items, err := svc.RunItems(ctx, run.ID, "")
+	if err != nil {
+		t.Fatalf("RunItems: %v", err)
+	}
+	if len(items) != 1 || items[0].CurrentStatus != domain.StatusPending {
+		t.Fatalf("run item after rejected call = %+v, want status still pending (no result appended)", items)
+	}
+}
+
 func TestMCPRecordResultThenUpdateRunItemStatus(t *testing.T) {
 	ts, svc := testMCPServer(t)
 	ctx := context.Background()

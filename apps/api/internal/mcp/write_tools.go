@@ -88,7 +88,7 @@ func registerWriteTools(srv *sdkmcp.Server, svc *service.Service) {
 	}, createTestRun(svc))
 	sdkmcp.AddTool(srv, &sdkmcp.Tool{
 		Name:        "record_result",
-		Description: "Record a verdict (pass/failed/skipped/blocked) for a case within a run. Appends to that run item's result log — never overwrites a prior result.",
+		Description: "Record a verdict (pass/failed/skipped/blocked) for a case within a run. Appends to that run item's result log — never overwrites a prior result. Optionally accepts stepResults to report per-step verdicts atomically with the overall one.",
 		Annotations: writeAnnotations(false),
 	}, recordResult(svc))
 	sdkmcp.AddTool(srv, &sdkmcp.Tool{
@@ -547,11 +547,34 @@ func findRunItemByCaseKey(ctx context.Context, svc *service.Service, runID, case
 	return "", fmt.Errorf("case %q is not part of this run", caseKey)
 }
 
+// StepResultInput mirrors domain.StepResult for MCP tool input (add-mcp-
+// step-level-results), following the same pattern as StepInput/
+// toDomainSteps: every MCP input type gets its own jsonschema-documented
+// struct rather than reusing the domain type directly.
+type StepResultInput struct {
+	StepIndex int    `json:"stepIndex" jsonschema:"0-based index into the case's steps array"`
+	Verdict   string `json:"verdict" jsonschema:"one of pass, failed, skipped, blocked"`
+}
+
+func toDomainStepResults(steps []StepResultInput) []domain.StepResult {
+	out := make([]domain.StepResult, len(steps))
+	for i, s := range steps {
+		out[i] = domain.StepResult{StepIndex: s.StepIndex, Verdict: domain.Verdict(s.Verdict)}
+	}
+	return out
+}
+
 type RecordResultInput struct {
 	RunKey  string `json:"runKey"`
 	CaseKey string `json:"caseKey" jsonschema:"case key identifying which run item to record a result for"`
 	Verdict string `json:"verdict" jsonschema:"one of pass, failed, skipped, blocked"`
 	Comment string `json:"comment,omitempty"`
+	// StepResults optionally submits step-level verdicts atomically with
+	// the overall verdict (add-mcp-step-level-results), forwarded verbatim
+	// to Service.RecordResult — the same field REST's NewResult.stepResults
+	// already validates, bounds-checks, and syncs to the run item's live
+	// state (add-step-level-results).
+	StepResults []StepResultInput `json:"stepResults,omitempty" jsonschema:"optional per-step verdicts, submitted atomically with the overall verdict; stepIndex matches the case's pinned steps array"`
 }
 
 // ResultOutput mirrors domain.Result for MCP tool output, dropping
@@ -602,7 +625,10 @@ func recordResult(svc *service.Service) sdkmcp.ToolHandlerFor[RecordResultInput,
 		if err != nil {
 			return nil, ResultOutput{}, err
 		}
-		result, err := svc.RecordResult(ctx, itemID, domain.NewResult{Verdict: domain.Verdict(in.Verdict), Comment: in.Comment})
+		result, err := svc.RecordResult(ctx, itemID, domain.NewResult{
+			Verdict: domain.Verdict(in.Verdict), Comment: in.Comment,
+			StepResults: toDomainStepResults(in.StepResults),
+		})
 		if err != nil {
 			return nil, ResultOutput{}, err
 		}
