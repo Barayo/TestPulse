@@ -44,13 +44,16 @@ func registerReadTools(srv *sdkmcp.Server, svc *service.Service) {
 }
 
 type SearchInput struct {
-	Query string `json:"query" jsonschema:"free-text search query"`
+	Query  string `json:"query" jsonschema:"free-text search query"`
+	Cursor string `json:"cursor,omitempty" jsonschema:"opaque pagination cursor from a prior call's nextCursor; omit for the first page"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"max results per page; defaults to 50, capped at 200"`
 }
 
 // SearchOutput wraps results in a named field — see BulkAddCasesOutput's
 // comment: MCP tool outputSchema must be an "object" at the root.
 type SearchOutput struct {
-	Results []SearchResultOutput `json:"results"`
+	Results    []SearchResultOutput `json:"results"`
+	NextCursor string               `json:"nextCursor,omitempty"`
 }
 
 // SearchResultOutput mirrors domain.SearchResult for MCP tool output,
@@ -70,7 +73,7 @@ func search(svc *service.Service) sdkmcp.ToolHandlerFor[SearchInput, SearchOutpu
 		if err != nil {
 			return nil, SearchOutput{}, err
 		}
-		results, err := svc.Search(ctx, in.Query, projectIDs)
+		results, nextCursor, err := svc.Search(ctx, in.Query, projectIDs, in.Cursor, in.Limit)
 		if err != nil {
 			return nil, SearchOutput{}, err
 		}
@@ -93,7 +96,11 @@ func search(svc *service.Service) sdkmcp.ToolHandlerFor[SearchInput, SearchOutpu
 				ProjectKey: keys[r.ProjectID], Rank: r.Rank,
 			}
 		}
-		return textResult("Found %d match(es) for %q", len(out), in.Query), SearchOutput{Results: out}, nil
+		suffix := ""
+		if nextCursor != "" {
+			suffix = " (more available)"
+		}
+		return textResult("Found %d match(es) for %q%s", len(out), in.Query, suffix), SearchOutput{Results: out, NextCursor: nextCursor}, nil
 	}
 }
 
@@ -258,22 +265,26 @@ func getRunProgress(svc *service.Service) sdkmcp.ToolHandlerFor[GetRunProgressIn
 	}
 }
 
-type ListProjectsInput struct{}
+type ListProjectsInput struct {
+	Cursor string `json:"cursor,omitempty" jsonschema:"opaque pagination cursor from a prior call's nextCursor; omit for the first page"`
+	Limit  int    `json:"limit,omitempty" jsonschema:"max projects per page; defaults to 50, capped at 200"`
+}
 
 // ListProjectsOutput wraps projects in a named field — see
 // BulkAddCasesOutput's comment: MCP tool outputSchema must be an "object"
 // at the root.
 type ListProjectsOutput struct {
-	Projects []domain.Project `json:"projects"`
+	Projects   []domain.Project `json:"projects"`
+	NextCursor string           `json:"nextCursor,omitempty"`
 }
 
 func listProjects(svc *service.Service) sdkmcp.ToolHandlerFor[ListProjectsInput, ListProjectsOutput] {
-	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, _ ListProjectsInput) (*sdkmcp.CallToolResult, ListProjectsOutput, error) {
-		projects, err := svc.AccessibleProjects(ctx)
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in ListProjectsInput) (*sdkmcp.CallToolResult, ListProjectsOutput, error) {
+		projects, nextCursor, err := svc.AccessibleProjectsPage(ctx, in.Cursor, in.Limit)
 		if err != nil {
 			return nil, ListProjectsOutput{}, err
 		}
-		return textResult("Found %d accessible project(s)", len(projects)), ListProjectsOutput{Projects: projects}, nil
+		return textResult("Found %d accessible project(s)", len(projects)), ListProjectsOutput{Projects: projects, NextCursor: nextCursor}, nil
 	}
 }
 

@@ -21,7 +21,7 @@ func searchTestService(t *testing.T) *service.Service {
 
 func TestSearchRequiresQuery(t *testing.T) {
 	s := service.New(nil)
-	_, err := s.Search(context.Background(), "", []string{"p1"})
+	_, _, err := s.Search(context.Background(), "", []string{"p1"}, "", 0)
 	if err == nil {
 		t.Fatal("expected validation error for empty query, got nil")
 	}
@@ -29,7 +29,7 @@ func TestSearchRequiresQuery(t *testing.T) {
 
 func TestSearchReturnsNoResultsWithoutAccessibleProjects(t *testing.T) {
 	s := service.New(nil)
-	results, err := s.Search(context.Background(), "login", nil)
+	results, _, err := s.Search(context.Background(), "login", nil, "", 0)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestSearchFindsMatchesAcrossEntityTypes(t *testing.T) {
 		t.Fatalf("CreateSuite: %v", err)
 	}
 
-	results, err := s.Search(ctx, "checkout", []string{project.ID})
+	results, _, err := s.Search(ctx, "checkout", []string{project.ID}, "", 0)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestSearchOnlyMatchesWithinGivenProjects(t *testing.T) {
 		t.Fatalf("CreateSuite (hidden): %v", err)
 	}
 
-	results, err := s.Search(ctx, "shared keyword", []string{visible.ID})
+	results, _, err := s.Search(ctx, "shared keyword", []string{visible.ID}, "", 0)
 	if err != nil {
 		t.Fatalf("Search: %v", err)
 	}

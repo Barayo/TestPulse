@@ -199,6 +199,55 @@ func (r *ProjectRepo) List(ctx context.Context) ([]domain.Project, error) {
 	return projects, rows.Err()
 }
 
+// ListPage is List, cursor-paginated (add-mcp-search-listprojects-pagination,
+// mirroring add-cursor-pagination's established *Page shape) — backs
+// list_projects' MCP tool for an unscoped/Tenant-Admin caller. List itself
+// is untouched; REST's existing project listing still needs the complete
+// set.
+func (r *ProjectRepo) ListPage(ctx context.Context, cursor string, limit int) ([]domain.Project, string, error) {
+	limit = clampLimit(limit)
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, key, name, archived, description, is_sample, public_access, created_at
+		 FROM projects
+		 WHERE deleting_at IS NULL
+		   AND ($1::timestamptz IS NULL OR (created_at, id) > ($1, $2))
+		 ORDER BY created_at ASC, id ASC
+		 LIMIT $3`, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	projects := []domain.Project{}
+	for rows.Next() {
+		var p domain.Project
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt); err != nil {
+			return nil, "", err
+		}
+		projects = append(projects, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(projects) > limit {
+		last := projects[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		projects = projects[:limit]
+	}
+	return projects, nextCursor, nil
+}
+
 // ListForMember returns every project userID has an effective role on —
 // directly assigned or via a team — for non-Tenant-Admins, whose project
 // list is scoped to membership (design.md D6). Tenant Admins use List
@@ -229,6 +278,59 @@ func (r *ProjectRepo) ListForMember(ctx context.Context, userID string) ([]domai
 		projects = append(projects, p)
 	}
 	return projects, rows.Err()
+}
+
+// ListForMemberPage is ListForMember, cursor-paginated
+// (add-mcp-search-listprojects-pagination) — backs list_projects' MCP
+// tool for a scoped/non-admin caller.
+func (r *ProjectRepo) ListForMemberPage(ctx context.Context, userID, cursor string, limit int) ([]domain.Project, string, error) {
+	limit = clampLimit(limit)
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT DISTINCT p.id, p.key, p.name, p.archived, p.description, p.is_sample, p.public_access, p.created_at
+		 FROM projects p
+		 WHERE p.deleting_at IS NULL
+		   AND (p.id IN (SELECT project_id FROM project_members WHERE user_id = $1)
+		    OR p.id IN (
+		        SELECT ptr.project_id FROM project_team_roles ptr
+		        JOIN team_members tm ON tm.team_id = ptr.team_id
+		        WHERE tm.user_id = $1
+		    ))
+		   AND ($2::timestamptz IS NULL OR (p.created_at, p.id) > ($2, $3))
+		 ORDER BY p.created_at ASC, p.id ASC
+		 LIMIT $4`, userID, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	projects := []domain.Project{}
+	for rows.Next() {
+		var p domain.Project
+		if err := rows.Scan(&p.ID, &p.Key, &p.Name, &p.Archived, &p.Description, &p.IsSample, &p.PublicAccess, &p.CreatedAt); err != nil {
+			return nil, "", err
+		}
+		projects = append(projects, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(projects) > limit {
+		last := projects[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		projects = projects[:limit]
+	}
+	return projects, nextCursor, nil
 }
 
 // ListPublic returns every non-archived project with public_access = true —

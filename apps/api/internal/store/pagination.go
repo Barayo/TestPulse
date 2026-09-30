@@ -96,6 +96,43 @@ func decodeCursorWithRank(cursor string) (rank int, createdAt time.Time, id stri
 	return payload.Rank, payload.CreatedAt, payload.ID, nil
 }
 
+type offsetCursorPayload struct {
+	Offset int `json:"offset"`
+}
+
+// encodeOffsetCursor/decodeOffsetCursor wrap a plain integer offset in the
+// same opaque-base64-JSON shape as encodeCursor, for search's pagination
+// (add-mcp-search-listprojects-pagination design.md D2) — search's
+// rank-ordered results across a UNION ALL of heterogeneous tables aren't a
+// good fit for true (rank, id) keyset pagination (a floating-point rank
+// tiebreak across independently-computed ts_rank values), so this is a
+// deliberately simpler offset internally, kept opaque externally so the
+// MCP tool's interface still matches every *Page-backed tool's cursor
+// shape.
+func encodeOffsetCursor(offset int) string {
+	payload := offsetCursorPayload{Offset: offset}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		panic(fmt.Sprintf("encodeOffsetCursor: %v", err))
+	}
+	return base64.URLEncoding.EncodeToString(data)
+}
+
+func decodeOffsetCursor(cursor string) (int, error) {
+	data, err := base64.URLEncoding.DecodeString(cursor)
+	if err != nil {
+		return 0, fmt.Errorf("invalid cursor encoding: %w: %w", ErrInvalidCursor, err)
+	}
+	var payload offsetCursorPayload
+	if err := json.Unmarshal(data, &payload); err != nil {
+		return 0, fmt.Errorf("invalid cursor payload: %w: %w", ErrInvalidCursor, err)
+	}
+	if payload.Offset <= 0 {
+		return 0, fmt.Errorf("invalid cursor: missing or non-positive offset: %w", ErrInvalidCursor)
+	}
+	return payload.Offset, nil
+}
+
 // clampLimit enforces DefaultPageLimit/MaxPageLimit: non-positive falls
 // back to the default, anything over the max is capped to it — never an
 // error, matching this codebase's existing silently-cap-don't-reject

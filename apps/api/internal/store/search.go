@@ -15,10 +15,29 @@ type SearchRepo struct{ pool *pgxpool.Pool }
 // 00012_mcp_search_index.sql (add-mcp-server design.md). Results are
 // restricted to projectIDs — the caller (the MCP tool layer) has already
 // resolved which projects the requesting actor may see — and ranked by
-// relevance, highest first.
-func (r *SearchRepo) Search(ctx context.Context, query string, projectIDs []string) ([]domain.SearchResult, error) {
+// relevance, highest first. Offset-paginated (add-mcp-search-listprojects-
+// pagination design.md D2): unlike every other *Page store method's true
+// (created_at, id) keyset pagination, this is a plain LIMIT/OFFSET
+// internally — a stable keyset tiebreak isn't practical across a UNION ALL
+// of independently-computed, floating-point ts_rank values from 6
+// different tables, and search results aren't append-only growing data
+// the way paginated lists elsewhere are. The offset is still wrapped in an
+// opaque cursor (encodeOffsetCursor/decodeOffsetCursor) so the caller-
+// facing interface matches every *Page method's cursor shape exactly.
+// This is Search's only call site (the MCP search tool), so its signature
+// is extended directly rather than adding a parallel unpaginated method.
+func (r *SearchRepo) Search(ctx context.Context, query string, projectIDs []string, cursor string, limit int) ([]domain.SearchResult, string, error) {
 	if len(projectIDs) == 0 {
-		return []domain.SearchResult{}, nil
+		return []domain.SearchResult{}, "", nil
+	}
+	limit = clampLimit(limit)
+	offset := 0
+	if cursor != "" {
+		decoded, err := decodeOffsetCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		offset = decoded
 	}
 	rows, err := r.pool.Query(ctx, `
 		WITH q AS (SELECT plainto_tsquery('english', $1) AS tsq)
@@ -48,9 +67,9 @@ func (r *SearchRepo) Search(ctx context.Context, query string, projectIDs []stri
 		FROM test_plans tp CROSS JOIN q
 		WHERE tp.project_id = ANY($2) AND tp.search_vector @@ q.tsq
 		ORDER BY rank DESC
-		LIMIT 50`, query, projectIDs)
+		LIMIT $3 OFFSET $4`, query, projectIDs, limit+1, offset)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer rows.Close()
 
@@ -58,12 +77,18 @@ func (r *SearchRepo) Search(ctx context.Context, query string, projectIDs []stri
 	for rows.Next() {
 		var res domain.SearchResult
 		if err := rows.Scan(&res.EntityType, &res.Key, &res.Name, &res.ProjectID, &res.Rank); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		results = append(results, res)
 	}
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	return results, nil
+
+	nextCursor := ""
+	if len(results) > limit {
+		nextCursor = encodeOffsetCursor(offset + limit)
+		results = results[:limit]
+	}
+	return results, nextCursor, nil
 }

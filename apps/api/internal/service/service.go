@@ -294,14 +294,19 @@ func (s *Service) GetDetails(ctx context.Context, entityType, key string) (any, 
 // projectIDs must already be resolved to the caller's accessible projects —
 // this method does no permission resolution of its own, matching every
 // other project-scoped service method's division of labor with its caller.
-func (s *Service) Search(ctx context.Context, query string, projectIDs []string) ([]domain.SearchResult, error) {
+// Search is cursor-paginated (add-mcp-search-listprojects-pagination) —
+// cursor/limit and the returned nextCursor are opaque strings passed
+// straight through to the store layer, which owns the actual offset
+// encoding (design.md D2); Service does no cursor handling of its own,
+// matching AccessibleProjectsPage's identical division of labor.
+func (s *Service) Search(ctx context.Context, query string, projectIDs []string, cursor string, limit int) ([]domain.SearchResult, string, error) {
 	if strings.TrimSpace(query) == "" {
-		return nil, invalid("query is required")
+		return nil, "", invalid("query is required")
 	}
 	if len(projectIDs) == 0 {
-		return []domain.SearchResult{}, nil
+		return []domain.SearchResult{}, "", nil
 	}
-	return s.store.Search.Search(ctx, query, projectIDs)
+	return s.store.Search.Search(ctx, query, projectIDs, cursor, limit)
 }
 
 // ProjectUpdate carries optional changes; nil fields are left untouched.

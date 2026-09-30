@@ -118,6 +118,28 @@ func (s *Service) AccessibleProjects(ctx context.Context) ([]domain.Project, err
 	return s.ListProjects(ctx)
 }
 
+// AccessibleProjectsPage is AccessibleProjects, cursor-paginated
+// (add-mcp-search-listprojects-pagination) — backs list_projects' MCP
+// tool. A scoped token's single project is never paginated (there's
+// exactly one, so no cursor is ever returned).
+func (s *Service) AccessibleProjectsPage(ctx context.Context, cursor string, limit int) ([]domain.Project, string, error) {
+	actor, ok := domain.ActorFromContext(ctx)
+	if !ok {
+		return nil, "", unauthorized("authentication required")
+	}
+	if actor.ScopedProjectID != nil {
+		p, err := s.GetProject(ctx, *actor.ScopedProjectID)
+		if err != nil {
+			return nil, "", err
+		}
+		return []domain.Project{p}, "", nil
+	}
+	if actor.IsTenantAdmin {
+		return s.store.Projects.ListPage(ctx, cursor, limit)
+	}
+	return s.store.Projects.ListForMemberPage(ctx, actor.EffectiveUserID, cursor, limit)
+}
+
 // AccessibleProjectIDs is AccessibleProjects, mapped to ids — the form
 // Search needs.
 func (s *Service) AccessibleProjectIDs(ctx context.Context) ([]string, error) {

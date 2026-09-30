@@ -1353,6 +1353,46 @@ func TestMCPSearchResultHasReadableSummary(t *testing.T) {
 	}
 }
 
+// TestMCPSearchPaginatesWithCursor covers
+// add-mcp-search-listprojects-pagination.
+func TestMCPSearchPaginatesWithCursor(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-search-page-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "search-page-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Search Page Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	for i := 0; i < 3; i++ {
+		if _, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Distinctiveotter case", Priority: domain.PriorityMedium}); err != nil {
+			t.Fatalf("CreateCase: %v", err)
+		}
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var page1 map[string]any
+	callTool(t, session, "search", map[string]any{"query": "distinctiveotter", "limit": 2}, &page1)
+	results1, _ := page1["results"].([]any)
+	if len(results1) != 2 {
+		t.Fatalf("page1 results = %+v, want 2", page1["results"])
+	}
+	cursor, _ := page1["nextCursor"].(string)
+	if cursor == "" {
+		t.Fatalf("page1 nextCursor = %+v, want a non-empty cursor", page1["nextCursor"])
+	}
+
+	var page2 map[string]any
+	callTool(t, session, "search", map[string]any{"query": "distinctiveotter", "limit": 2, "cursor": cursor}, &page2)
+	results2, _ := page2["results"].([]any)
+	if len(results2) != 1 {
+		t.Fatalf("page2 results = %+v, want 1", page2["results"])
+	}
+	if nc, present := page2["nextCursor"]; present && nc != nil && nc != "" {
+		t.Errorf("page2 nextCursor = %v, want empty/absent (last page)", nc)
+	}
+}
+
 func TestMCPSearchFindsMatchesAndRespectsProjectScoping(t *testing.T) {
 	ts, svc := testMCPServer(t)
 	ctx := context.Background()
@@ -1831,6 +1871,42 @@ func TestMCPListProjectsScopedVsUnscoped(t *testing.T) {
 	projects := out.Projects
 	if len(projects) != 1 || projects[0].ID != scoped.ID {
 		t.Fatalf("projects = %+v, want exactly [%s]", projects, scoped.ID)
+	}
+}
+
+// TestMCPListProjectsPaginatesWithCursor covers
+// add-mcp-search-listprojects-pagination.
+func TestMCPListProjectsPaginatesWithCursor(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-listprojects-page-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "listprojects-page-agent")
+	for i := 0; i < 3; i++ {
+		if _, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP List Page Project"}); err != nil {
+			t.Fatalf("CreateProject: %v", err)
+		}
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var page1 map[string]any
+	callTool(t, session, "list_projects", map[string]any{"limit": 2}, &page1)
+	projects1, _ := page1["projects"].([]any)
+	if len(projects1) != 2 {
+		t.Fatalf("page1 projects = %+v, want 2", page1["projects"])
+	}
+	cursor, _ := page1["nextCursor"].(string)
+	if cursor == "" {
+		t.Fatalf("page1 nextCursor = %+v, want a non-empty cursor", page1["nextCursor"])
+	}
+
+	var page2 map[string]any
+	callTool(t, session, "list_projects", map[string]any{"limit": 2, "cursor": cursor}, &page2)
+	projects2, _ := page2["projects"].([]any)
+	if len(projects2) != 1 {
+		t.Fatalf("page2 projects = %+v, want 1", page2["projects"])
+	}
+	if nc, present := page2["nextCursor"]; present && nc != nil && nc != "" {
+		t.Errorf("page2 nextCursor = %v, want empty/absent (last page)", nc)
 	}
 }
 

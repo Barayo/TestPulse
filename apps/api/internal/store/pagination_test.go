@@ -34,7 +34,7 @@ func TestDecodeCursorRejectsMalformedInput(t *testing.T) {
 	for _, bad := range []string{
 		"",
 		"not-base64!!!",
-		"aGVsbG8=",          // valid base64, but not JSON
+		"aGVsbG8=",             // valid base64, but not JSON
 		"eyJmb28iOiJiYXIifQ==", // valid base64 JSON, but missing createdAt/id
 	} {
 		if _, _, err := decodeCursor(bad); err == nil {
@@ -71,6 +71,32 @@ func TestDecodeCursorWithRankRejectsMalformedInput(t *testing.T) {
 	for _, bad := range []string{"", "not-base64!!!", "aGVsbG8="} {
 		if _, _, _, err := decodeCursorWithRank(bad); err == nil {
 			t.Errorf("decodeCursorWithRank(%q) = nil error, want an error", bad)
+		}
+	}
+}
+
+// TestOffsetCursorRoundTrips covers add-mcp-search-listprojects-pagination
+// design.md D2: search's offset-based pagination, wrapped in an opaque
+// cursor for interface consistency with the keyset-based *Page methods.
+func TestOffsetCursorRoundTrips(t *testing.T) {
+	cursor := encodeOffsetCursor(50)
+	if cursor == "" {
+		t.Fatal("encodeOffsetCursor returned empty string")
+	}
+
+	got, err := decodeOffsetCursor(cursor)
+	if err != nil {
+		t.Fatalf("decodeOffsetCursor: %v", err)
+	}
+	if got != 50 {
+		t.Errorf("decoded offset = %d, want 50", got)
+	}
+}
+
+func TestDecodeOffsetCursorRejectsMalformedInput(t *testing.T) {
+	for _, bad := range []string{"", "not-base64!!!", "aGVsbG8="} {
+		if _, err := decodeOffsetCursor(bad); err == nil {
+			t.Errorf("decodeOffsetCursor(%q) = nil error, want an error", bad)
 		}
 	}
 }
