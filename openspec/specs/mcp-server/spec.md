@@ -37,7 +37,7 @@ The system SHALL authenticate MCP connections using the same `Authorization: Bea
 - **THEN** the connection is rejected the same way an equivalent REST request would be rejected
 
 ### Requirement: upsert_test_case tool
-The system SHALL provide an `upsert_test_case` MCP tool that creates a new test case or edits an existing one (by key), producing a new immutable version on edit, enforcing the caller's project permissions. A step entry in the tool's `steps` input MAY reference an existing step group by key instead of supplying its own `action`/`expected` content; the tool SHALL resolve such entries server-side against the referenced step group's current content, via the same resolution path used by the REST case-write routes, and SHALL NOT accept pre-resolved step content for a group-reference entry from the caller. The create path (no existing case key supplied) MAY accept an optional `idempotencyKey`: if a prior successful create call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second case.
+The system SHALL provide an `upsert_test_case` MCP tool that creates a new test case or edits an existing one (by key), producing a new immutable version on edit, enforcing the caller's project permissions. A step entry in the tool's `steps` input MAY reference an existing step group by key instead of supplying its own `action`/`expected` content; the tool SHALL resolve such entries server-side against the referenced step group's current content, via the same resolution path used by the REST case-write routes, and SHALL NOT accept pre-resolved step content for a group-reference entry from the caller. The create path (no existing case key supplied) MAY accept an optional `idempotencyKey`: if a prior successful create call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second case. The returned case SHALL identify its project by `projectKey`, not internal project ID, and SHALL NOT include a folder ID field.
 
 #### Scenario: Create a new case
 - **WHEN** an agent calls `upsert_test_case` with no existing case key and valid fields
@@ -59,8 +59,12 @@ The system SHALL provide an `upsert_test_case` MCP tool that creates a new test 
 - **WHEN** an agent calls `upsert_test_case` with an `idempotencyKey` and invalid fields, and the call fails validation
 - **THEN** retrying with the same `idempotencyKey` and corrected fields creates the case normally, unaffected by the earlier failure
 
+#### Scenario: Returned case identifies its project by key, not internal ID
+- **WHEN** an agent calls `upsert_test_case` to create or edit a case
+- **THEN** the returned record includes `projectKey` and does not include a raw internal project ID or folder ID field
+
 ### Requirement: upsert_step_group tool
-The system SHALL provide an `upsert_step_group` MCP tool that creates a new project-scoped step group or edits an existing one (by key), enforcing the caller's `manageProject` permission on the target project.
+The system SHALL provide an `upsert_step_group` MCP tool that creates a new project-scoped step group or edits an existing one (by key), enforcing the caller's `manageProject` permission on the target project. The returned step group SHALL identify its project by `projectKey`, not internal project ID.
 
 #### Scenario: Create a new step group
 - **WHEN** an agent with `manageProject` permission on a project calls `upsert_step_group` with no existing group key and a name plus one or more steps
@@ -74,15 +78,23 @@ The system SHALL provide an `upsert_step_group` MCP tool that creates a new proj
 - **WHEN** an agent without `manageProject` permission on a project calls `upsert_step_group` for that project
 - **THEN** the tool call fails with a permission error and no step group is created or modified
 
+#### Scenario: Returned step group identifies its project by key, not internal ID
+- **WHEN** an agent calls `upsert_step_group` to create or edit a step group
+- **THEN** the returned record includes `projectKey` and does not include a raw internal project ID field
+
 ### Requirement: upsert_test_suite tool
-The system SHALL provide an `upsert_test_suite` MCP tool that creates a new test suite or renames/edits an existing one (by key), enforcing the caller's project permissions.
+The system SHALL provide an `upsert_test_suite` MCP tool that creates a new test suite or renames/edits an existing one (by key), enforcing the caller's project permissions. The returned suite SHALL identify its project by `projectKey` and its member cases by `caseKeys`, not internal IDs — the identical output shape `update_suite_membership` returns.
 
 #### Scenario: Create a new suite
 - **WHEN** an agent calls `upsert_test_suite` with no existing suite key and valid fields
 - **THEN** a new test suite is created and its key is returned
 
+#### Scenario: Returned suite identifies its project and cases by key, not internal ID
+- **WHEN** an agent calls `upsert_test_suite` to create or rename a suite
+- **THEN** the returned record includes `projectKey` and `caseKeys`, and does not include a raw internal project ID or case ID
+
 ### Requirement: update_suite_membership tool
-The system SHALL provide an `update_suite_membership` MCP tool that adds a test case to a suite or removes it, enforcing the caller's `manageProject`-equivalent `PermSuiteEditMembership` permission on the suite's project. The tool accepts a suite key, a case key, and an `action` of `"add"` or `"remove"`. Adding a case already in the suite, or removing a case not in the suite, SHALL succeed as a no-op rather than failing. The tool SHALL return the suite's current membership as case keys, not internal case IDs.
+The system SHALL provide an `update_suite_membership` MCP tool that adds a test case to a suite or removes it, enforcing the caller's `manageProject`-equivalent `PermSuiteEditMembership` permission on the suite's project. The tool accepts a suite key, a case key, and an `action` of `"add"` or `"remove"`. Adding a case already in the suite, or removing a case not in the suite, SHALL succeed as a no-op rather than failing. The tool SHALL return the suite's current membership as case keys, not internal case IDs — the identical output shape `upsert_test_suite` returns.
 
 #### Scenario: Add a case to a suite
 - **WHEN** an agent with `PermSuiteEditMembership` on a project calls `update_suite_membership` with an existing suite key, an existing case key from the same project, and `action: "add"`
@@ -113,7 +125,7 @@ The system SHALL provide an `update_suite_membership` MCP tool that adds a test 
 - **THEN** the existing run's run items remain unchanged, still pinned to the case versions captured at run-creation time
 
 ### Requirement: bulk_add_cases tool
-The system SHALL provide a `bulk_add_cases` MCP tool that creates multiple test cases in one call as a single atomic transaction: if any case in the batch is invalid, no case in the batch is created. The tool MAY accept an optional `idempotencyKey`: if a prior successful call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second batch.
+The system SHALL provide a `bulk_add_cases` MCP tool that creates multiple test cases in one call as a single atomic transaction: if any case in the batch is invalid, no case in the batch is created. The tool MAY accept an optional `idempotencyKey`: if a prior successful call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second batch. Each returned case SHALL identify its project by `projectKey`, not internal project ID, and SHALL NOT include a folder ID field — the identical per-case output shape `upsert_test_case` returns.
 
 #### Scenario: All cases valid
 - **WHEN** an agent calls `bulk_add_cases` with a batch of valid cases
@@ -139,7 +151,7 @@ The system SHALL provide a `create_test_run` MCP tool that creates a test run, p
 - **THEN** the second call returns the same run created by the first call, and no second run is created
 
 ### Requirement: record_result tool
-The system SHALL provide a `record_result` MCP tool that appends a result entry (verdict, comment, actor) to a run item's append-only result log, enforcing assignee/permission restrictions identical to REST.
+The system SHALL provide a `record_result` MCP tool that appends a result entry (verdict, comment, actor) to a run item's append-only result log, enforcing assignee/permission restrictions identical to REST. The returned result SHALL include the `runKey` and `caseKey` the caller supplied, and SHALL NOT include a raw internal run item ID.
 
 #### Scenario: Record a passing result
 - **WHEN** an agent calls `record_result` for a run item it is permitted to act on, with verdict `pass`
@@ -149,6 +161,10 @@ The system SHALL provide a `record_result` MCP tool that appends a result entry 
 - **WHEN** an agent calls `record_result` for a run item outside its scoped permissions
 - **THEN** the tool call fails with a permission error and no result entry is appended
 
+#### Scenario: Returned result identifies the run and case by key, not internal run item ID
+- **WHEN** an agent calls `record_result` successfully
+- **THEN** the returned record includes the `runKey` and `caseKey` supplied in the call, and does not include a raw internal run item ID
+
 ### Requirement: update_run_item_status tool
 The system SHALL provide an `update_run_item_status` MCP tool that updates a run item's status (e.g. requesting `retest`, marking `blocked`) independent of recording a verdict-bearing result.
 
@@ -157,7 +173,7 @@ The system SHALL provide an `update_run_item_status` MCP tool that updates a run
 - **THEN** the run item's current status becomes `retest`
 
 ### Requirement: search tool
-The system SHALL provide a `search` MCP tool performing cross-entity full-text search over test cases, test suites, test runs, projects, releases, and test plans, backed by a Postgres `tsvector`+GIN index, returning only entities the caller's Actor has permission to see.
+The system SHALL provide a `search` MCP tool performing cross-entity full-text search over test cases, test suites, test runs, projects, releases, and test plans, backed by a Postgres `tsvector`+GIN index, returning only entities the caller's Actor has permission to see. Each result SHALL identify its project by `projectKey`, not internal project ID, resolved with at most one additional query per call regardless of result-set size.
 
 #### Scenario: Search returns matches across entity types
 - **WHEN** an agent calls `search` with a query term matching both a test case title and a project name
@@ -167,8 +183,12 @@ The system SHALL provide a `search` MCP tool performing cross-entity full-text s
 - **WHEN** an agent with a project-scoped token calls `search` with a term matching entities in other projects
 - **THEN** only matches within the token's scoped project are returned
 
+#### Scenario: Returned results identify their project by key, not internal ID
+- **WHEN** an agent calls `search` and receives results spanning multiple projects
+- **THEN** each result includes `projectKey` and does not include a raw internal project ID
+
 ### Requirement: get_details tool
-The system SHALL provide a `get_details` MCP tool that fetches the full record for a single entity given an explicit `entityType` and `key`, routing to the appropriate lookup for that type.
+The system SHALL provide a `get_details` MCP tool that fetches the full record for a single entity given an explicit `entityType` and `key`, routing to the appropriate lookup for that type. For every entity type it can return, the record SHALL identify related entities by key, not internal ID, matching the output shape the corresponding dedicated tool (`upsert_test_case`, `upsert_test_suite`, `upsert_step_group`) returns for that same entity type.
 
 #### Scenario: Fetch an existing case by key
 - **WHEN** an agent calls `get_details` with `entityType: "case"` and a valid case key
@@ -177,6 +197,10 @@ The system SHALL provide a `get_details` MCP tool that fetches the full record f
 #### Scenario: Type/key mismatch reported clearly
 - **WHEN** an agent calls `get_details` with `entityType: "run"` and a key belonging to a suite
 - **THEN** the tool call fails with an error indicating the key does not match the requested entity type
+
+#### Scenario: Fetched records identify related entities by key, not internal ID
+- **WHEN** an agent calls `get_details` for a case, suite, step group, release, or test plan
+- **THEN** the returned record identifies its project (and, for a test plan, its release) by key, not internal ID
 
 ### Requirement: get_run_progress tool
 The system SHALL provide a `get_run_progress` MCP tool returning a run's status summary (counts per status, pass rate), enforcing the caller's project permissions.
