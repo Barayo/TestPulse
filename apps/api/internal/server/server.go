@@ -80,6 +80,7 @@ func New(logger *slog.Logger, readiness ReadinessChecker, svc *service.Service, 
 			mountOIDCTeamMappings(r, h)
 			r.With(requireTenantAdmin).Get("/instance-settings", h.getInstanceSettings)
 			r.With(requireTenantAdmin).Patch("/instance-settings", h.updateInstanceSettings)
+			r.Post("/client-errors", h.recordClientError)
 		})
 	})
 

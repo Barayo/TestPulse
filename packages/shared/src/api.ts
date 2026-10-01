@@ -85,6 +85,26 @@ export interface paths {
         patch: operations["updateInstanceSettings"];
         trace?: never;
     };
+    "/api/v1/client-errors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report a frontend crash or failed API call for server-side logging
+         * @description Pure visibility (add-frontend-error-reporting): the report is logged via the server's structured logger, never persisted or surfaced in any UI.
+         */
+        post: operations["recordClientError"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects": {
         parameters: {
             query?: never;
@@ -3338,6 +3358,24 @@ export interface components {
             sessionTimeoutDays?: number;
             defaultLandingView?: components["schemas"]["LandingView"];
         };
+        /** @description A frontend crash or failed API call, reported for server-side logging only (add-frontend-error-reporting) — never persisted. */
+        ClientErrorReport: {
+            /** @enum {string} */
+            kind: "crash" | "apiError";
+            message: string;
+            /** @description JS stack trace, when available. Only meaningful for kind=crash. */
+            stack?: string;
+            /** @description React's component stack, set only for kind=crash. */
+            componentStack?: string;
+            /** @description The page path where this occurred. */
+            url?: string;
+            /** @description The failed request's HTTP method. Only set for kind=apiError. */
+            method?: string;
+            /** @description The failed request's OpenAPI schema path (not the raw interpolated URL, to avoid leaking IDs). Only set for kind=apiError. */
+            path?: string;
+            /** @description The failed response's HTTP status. Absent for a network-level failure. Only set for kind=apiError. */
+            status?: number;
+        };
         User: {
             id: string;
             email: string;
@@ -3754,6 +3792,30 @@ export interface operations {
                 };
             };
             403: components["responses"]["Forbidden"];
+        };
+    };
+    recordClientError: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientErrorReport"];
+            };
+        };
+        responses: {
+            /** @description Report logged */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["ValidationError"];
+            401: components["responses"]["Unauthorized"];
         };
     };
     listProjects: {

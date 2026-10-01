@@ -1095,6 +1095,22 @@ type FlakyCase struct {
 	Rate           int    `json:"rate"`
 }
 
+// ClientErrorReport is a frontend crash or failed API call, reported for
+// server-side logging only (add-frontend-error-reporting) — never
+// persisted. Kind is "crash" (Stack/ComponentStack meaningful) or
+// "apiError" (Method/Path/Status meaningful); Status is absent for a
+// network-level failure.
+type ClientErrorReport struct {
+	Kind           string `json:"kind"`
+	Message        string `json:"message"`
+	Stack          string `json:"stack,omitempty"`
+	ComponentStack string `json:"componentStack,omitempty"`
+	URL            string `json:"url,omitempty"`
+	Method         string `json:"method,omitempty"`
+	Path           string `json:"path,omitempty"`
+	Status         int    `json:"status,omitempty"`
+}
+
 // CustomFieldType is the fixed set of custom field types
 // (add-case-custom-fields) — chosen at creation, never changed afterward.
 type CustomFieldType string

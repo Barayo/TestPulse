@@ -94,6 +94,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/InstanceSettings" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/client-errors:
+    post:
+      operationId: recordClientError
+      summary: Report a frontend crash or failed API call for server-side logging
+      description: >-
+        Pure visibility (add-frontend-error-reporting): the report is logged
+        via the server's structured logger, never persisted or surfaced in
+        any UI.
+      tags: [system]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientErrorReport" }
+      responses:
+        "204": { description: Report logged }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v1/projects:
     get:
       operationId: listProjects
@@ -4411,6 +4429,40 @@ components:
           description: Sliding session expiry window in days (add-session-timeout-setting), 1-90.
         defaultLandingView:
           $ref: '#/components/schemas/LandingView'
+    ClientErrorReport:
+      type: object
+      required: [kind, message]
+      description: >-
+        A frontend crash or failed API call, reported for server-side
+        logging only (add-frontend-error-reporting) — never persisted.
+      properties:
+        kind:
+          type: string
+          enum: [crash, apiError]
+        message: { type: string }
+        stack:
+          type: string
+          description: JS stack trace, when available. Only meaningful for kind=crash.
+        componentStack:
+          type: string
+          description: React's component stack, set only for kind=crash.
+        url:
+          type: string
+          description: The page path where this occurred.
+        method:
+          type: string
+          description: The failed request's HTTP method. Only set for kind=apiError.
+        path:
+          type: string
+          description: >-
+            The failed request's OpenAPI schema path (not the raw
+            interpolated URL, to avoid leaking IDs). Only set for
+            kind=apiError.
+        status:
+          type: integer
+          description: >-
+            The failed response's HTTP status. Absent for a network-level
+            failure. Only set for kind=apiError.
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]
