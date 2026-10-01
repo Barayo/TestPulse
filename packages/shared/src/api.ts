@@ -2267,6 +2267,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tokens/instance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List every API token across every user in the instance, Tenant-Admin-only (add-instance-token-listing) */
+        get: operations["listInstanceTokens"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/audit": {
         parameters: {
             query?: never;
@@ -3590,6 +3607,28 @@ export interface components {
         ApiTokenCreated: components["schemas"]["ApiToken"] & {
             /** @description The full secret token value. Shown only in this response, never again. */
             token: string;
+        };
+        /** @description One token in the instance-wide listing (add-instance-token-listing) — owner/project/role already resolved server-side, never raw internal ids. */
+        ApiTokenWithOwner: {
+            id: string;
+            ownerEmail: string;
+            ownerDisplayName?: string | null;
+            name: string;
+            /** @description Short, non-secret prefix of the token, for identification only. */
+            prefix: string;
+            /** @description Null for an unscoped (full-access) token. */
+            projectKey?: string | null;
+            /** @description Null for an unscoped (full-access) token. */
+            roleName?: string | null;
+            /** Format: date-time */
+            revokedAt?: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ApiTokenWithOwnerListPage: {
+            items: components["schemas"]["ApiTokenWithOwner"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
         };
         TokenInput: {
             name: string;
@@ -7698,6 +7737,33 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    listInstanceTokens: {
+        parameters: {
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of tokens, owner/scope already resolved */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenWithOwnerListPage"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listAuditEntries: {

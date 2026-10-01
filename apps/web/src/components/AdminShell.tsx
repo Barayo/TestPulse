@@ -1,15 +1,20 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
-import { UsersIcon, ShieldCheckIcon, SettingsIcon } from 'lucide-react'
+import { UsersIcon, ShieldCheckIcon, SettingsIcon, KeyRoundIcon } from 'lucide-react'
 
-// Persistent tab strip shared by the three Administration pages
-// (redesign-admin-shell) — replaces the old dropdown-only navigation
-// between them, which offered no way to move between pages once inside
-// one. Tokens deliberately stays outside this shell: it only ever shows
-// the caller's own tokens, so there is nothing "admin" about it to fold in.
+// Persistent tab strip shared by the four Administration pages
+// (redesign-admin-shell, extended by add-instance-token-listing) —
+// replaces the old dropdown-only navigation between them, which offered
+// no way to move between pages once inside one. The personal
+// /settings/tokens page still stays outside this shell: it only ever
+// shows the caller's own tokens, so there is nothing "admin" about it to
+// fold in. Agent Tokens here is a different, genuinely admin-scoped
+// resource — every user's tokens, Tenant-Admin-only — so it belongs in
+// the shell even though the personal page doesn't.
 const TABS = [
   { to: '/settings/people', label: 'People', icon: UsersIcon },
   { to: '/settings/roles', label: 'Roles', icon: ShieldCheckIcon },
+  { to: '/settings/agent-tokens', label: 'Agent Tokens', icon: KeyRoundIcon },
   { to: '/settings/instance', label: 'Instance', icon: SettingsIcon },
 ] as const
 

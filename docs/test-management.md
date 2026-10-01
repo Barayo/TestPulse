@@ -57,10 +57,15 @@ Access to a project is opt-in. A **Tenant Admin** (instance-wide) creates projec
 
 A Tenant Admin reaches Administration via the header's **Admin** link — a direct door
 into `/settings/people`, not a menu to pick from. Once inside, a persistent
-**People / Roles / Instance** tab strip stays visible across all three pages, so moving
-between them never requires going back out. API tokens (below) stay outside this
-shell: a token page only ever shows its own creator's tokens, so it's reached from
-the account menu (Profile) instead, not treated as instance administration.
+**People / Roles / Agent Tokens / Instance** tab strip stays visible across all four pages, so
+moving between them never requires going back out. **Agent Tokens**
+(`/settings/agent-tokens`) is an instance-wide, read-only listing of every API
+token across every user — owner, name/prefix, scope, and created date, never
+the token secret — for auditing agent integrations across the tenant
+(`add-instance-token-listing`). It's distinct from the *personal* API tokens
+page described below: that one only ever shows its own creator's tokens, so
+it's reached from the account menu (Profile) instead, not treated as instance
+administration.
 
 Roles are fully custom and instance-wide, managed by the Tenant Admin at `/settings/roles`: create, rename, or delete a role, and toggle thirteen independent, concrete permission flags on it — **Read**; **Create/Edit/Delete Case**; **Create/Edit/Delete Section** (Edit Section gates moving/reparenting a section, `add-library-folder-selection`); **Create Suite**; **Edit Suite Membership** (add/remove a case from a suite); **Create Run**; **Record Result** (log a verdict or mark retest); **Manage Project** (edit the project's own settings — rename, description, archive; also gates a run's reopen, archive, and unarchive actions); and, separately, **Delete Run** and **Delete Project** (`add-data-retention` — permanently and irreversibly remove a run, or an already-archived project). The last two are kept independent of Manage Project/Create Run deliberately: a role that can rename or archive a project, or create and seal runs, doesn't automatically gain the power to permanently destroy one. Each flag names one concrete action rather than a broad bucket, so a role can (for example) create cases without being able to delete them, or run tests without being able to author suites. A `rank` field is a display/sort order only; there is no fixed hierarchy between roles. A fresh instance is seeded with three default roles that reproduce the previous fixed model's net behavior exactly, so an instance that never visits `/settings/roles` sees no behavior change:
 

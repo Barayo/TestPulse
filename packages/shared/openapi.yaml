@@ -2619,6 +2619,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/tokens/instance:
+    get:
+      operationId: listInstanceTokens
+      summary: >-
+        List every API token across every user in the instance,
+        Tenant-Admin-only (add-instance-token-listing)
+      tags: [tokens]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of tokens, owner/scope already resolved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiTokenWithOwnerListPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/audit:
     get:
       operationId: listAuditEntries
@@ -4821,6 +4839,47 @@ components:
             token:
               type: string
               description: The full secret token value. Shown only in this response, never again.
+    ApiTokenWithOwner:
+      type: object
+      required: [id, ownerEmail, name, prefix, createdAt]
+      description: >-
+        One token in the instance-wide listing (add-instance-token-listing)
+        — owner/project/role already resolved server-side, never raw
+        internal ids.
+      properties:
+        id: { type: string }
+        ownerEmail: { type: string }
+        ownerDisplayName:
+          type: string
+          nullable: true
+        name: { type: string }
+        prefix:
+          type: string
+          description: Short, non-secret prefix of the token, for identification only.
+        projectKey:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
+        roleName:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+    ApiTokenWithOwnerListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ApiTokenWithOwner" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     TokenInput:
       type: object
       required: [name]

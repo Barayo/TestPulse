@@ -33,6 +33,7 @@ import RequiredPasswordChangePage from '@/pages/RequiredPasswordChangePage'
 import PeoplePage from '@/pages/PeoplePage'
 import RolesPage from '@/pages/RolesPage'
 import TokensPage from '@/pages/TokensPage'
+import InstanceTokensPage from '@/pages/InstanceTokensPage'
 import ProfilePage from '@/pages/ProfilePage'
 import ProjectMembersPage from '@/pages/ProjectMembersPage'
 import ProjectSettingsPage from '@/pages/ProjectSettingsPage'
@@ -151,6 +152,7 @@ const ACCOUNT_ONLY_ROUTES: RouteEntry[] = [
   { path: '/projects/:projectKey/settings', element: <ProjectSettingsPage /> },
   { path: '/settings/people', element: <PeoplePage /> },
   { path: '/settings/roles', element: <RolesPage /> },
+  { path: '/settings/agent-tokens', element: <InstanceTokensPage /> },
   { path: '/settings/tokens', element: <TokensPage /> },
   { path: '/settings/instance', element: <InstanceSettingsPage /> },
   { path: '/settings/profile', element: <ProfilePage /> },

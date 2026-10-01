@@ -1255,6 +1255,50 @@ func TestNonAdminCannotListAnothersTokens(t *testing.T) {
 	}
 }
 
+// TestListAllTokensPageRequiresTenantAdmin covers add-instance-token-
+// listing: a non-Tenant-Admin actor is rejected before any store call.
+func TestListAllTokensPageRequiresTenantAdmin(t *testing.T) {
+	s := testService(t)
+	nonAdmin := mustCreateUser(t, s, "non-admin@example.com", "correcthorse", false)
+
+	_, _, err := s.ListAllTokensPage(context.Background(), actorFor(nonAdmin), "", 0)
+	var ferr *service.ForbiddenError
+	if !asForbidden(err, &ferr) {
+		t.Errorf("err = %v, want ForbiddenError", err)
+	}
+}
+
+// TestListAllTokensPageReturnsAllUsersTokensForTenantAdmin covers
+// add-instance-token-listing: a Tenant Admin sees every user's tokens, not
+// just their own.
+func TestListAllTokensPageReturnsAllUsersTokensForTenantAdmin(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-lister@example.com", "correcthorse", true)
+	other := mustCreateUser(t, s, "other-owner@example.com", "correcthorse", false)
+
+	if _, _, err := s.CreateToken(context.Background(), actorFor(admin), "admin-agent", nil, nil); err != nil {
+		t.Fatalf("CreateToken (admin): %v", err)
+	}
+	if _, _, err := s.CreateToken(context.Background(), actorFor(other), "other-agent", nil, nil); err != nil {
+		t.Fatalf("CreateToken (other): %v", err)
+	}
+
+	tokens, _, err := s.ListAllTokensPage(context.Background(), actorFor(admin), "", 0)
+	if err != nil {
+		t.Fatalf("ListAllTokensPage: %v", err)
+	}
+	if len(tokens) != 2 {
+		t.Fatalf("tokens = %+v, want 2 (both users' tokens)", tokens)
+	}
+	owners := map[string]bool{}
+	for _, tok := range tokens {
+		owners[tok.OwnerEmail] = true
+	}
+	if !owners["admin-lister@example.com"] || !owners["other-owner@example.com"] {
+		t.Errorf("tokens = %+v, want entries owned by both users", tokens)
+	}
+}
+
 // --- Audit wiring (task 3.4) ---
 
 func TestCreateUserRecordsAuditEntryWhenActorPresent(t *testing.T) {

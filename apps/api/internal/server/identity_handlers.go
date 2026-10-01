@@ -75,6 +75,7 @@ func mountIdentity(r chi.Router, h *api) {
 		r.Get("/", h.listTokens)
 		r.Post("/", h.createToken)
 		r.Delete("/{tokenId}", h.revokeToken)
+		r.With(requireTenantAdmin).Get("/instance", h.listInstanceTokens)
 	})
 	r.With(h.requirePermission(domain.PermRead, projectIDFromAuditEntity)).Get("/audit", h.listAuditEntries)
 }
@@ -453,6 +454,16 @@ func (h *api) revokeToken(w http.ResponseWriter, r *http.Request) {
 	tokenID := chi.URLParam(r, "tokenId")
 	err := h.svc.RevokeToken(r.Context(), actor, tokenID)
 	h.respond(w, http.StatusNoContent, nil, err)
+}
+
+// listInstanceTokens backs the instance-wide, Tenant-Admin-only token
+// listing (add-instance-token-listing) — route-gated by requireTenantAdmin
+// and re-checked in Service.ListAllTokensPage (defense-in-depth).
+func (h *api) listInstanceTokens(w http.ResponseWriter, r *http.Request) {
+	actor, _ := domain.ActorFromContext(r.Context())
+	cursor, limit := parsePageParams(r)
+	tokens, nextCursor, err := h.svc.ListAllTokensPage(r.Context(), actor, cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(tokens, nextCursor), err)
 }
 
 // --- Audit ---

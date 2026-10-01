@@ -767,6 +767,18 @@ func (s *Service) ListTokensForUser(ctx context.Context, actor domain.Actor, use
 	return s.store.ApiTokens.ListByCreator(ctx, userID)
 }
 
+// ListAllTokensPage returns every API token across every user, instance-
+// wide — Tenant-Admin-only, re-checked here (defense-in-depth,
+// add-instance-token-listing design.md D3) rather than relying solely on
+// the route's requireTenantAdmin middleware, matching ListTokensForUser's
+// existing style for this domain.
+func (s *Service) ListAllTokensPage(ctx context.Context, actor domain.Actor, cursor string, limit int) ([]domain.ApiTokenWithOwner, string, error) {
+	if !actor.IsTenantAdmin {
+		return nil, "", forbidden("instance-wide token listing is Tenant Admin only")
+	}
+	return s.store.ApiTokens.ListAllPage(ctx, cursor, limit)
+}
+
 // RevokeToken allows a token's own creator, or a Tenant Admin, to revoke it.
 func (s *Service) RevokeToken(ctx context.Context, actor domain.Actor, tokenID string) error {
 	tok, err := s.store.ApiTokens.Get(ctx, tokenID)

@@ -83,6 +83,57 @@ func (r *ApiTokenRepo) Get(ctx context.Context, id string) (domain.ApiToken, err
 	return t, nil
 }
 
+// ListAllPage returns every API token across every user, instance-wide
+// (add-instance-token-listing) — owner/project/role resolved via LEFT
+// JOINs (nullable since project_id/role_id are nil for an unscoped
+// token), same (created_at, id) keyset-cursor template as
+// UserRepo.ListPage.
+func (r *ApiTokenRepo) ListAllPage(ctx context.Context, cursor string, limit int) ([]domain.ApiTokenWithOwner, string, error) {
+	limit = clampLimit(limit)
+	var cursorCreatedAt any
+	var cursorID any
+	if cursor != "" {
+		createdAt, id, err := decodeCursor(cursor)
+		if err != nil {
+			return nil, "", err
+		}
+		cursorCreatedAt, cursorID = createdAt, id
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT t.id, u.email, u.display_name, t.name, t.token_prefix, p.key, r.name, t.revoked_at, t.created_at
+		 FROM api_tokens t
+		 LEFT JOIN users u ON u.id = t.created_by
+		 LEFT JOIN projects p ON p.id = t.project_id
+		 LEFT JOIN roles r ON r.id = t.role_id
+		 WHERE $1::timestamptz IS NULL OR (t.created_at, t.id) > ($1, $2)
+		 ORDER BY t.created_at ASC, t.id ASC
+		 LIMIT $3`, cursorCreatedAt, cursorID, limit+1)
+	if err != nil {
+		return nil, "", err
+	}
+	defer rows.Close()
+
+	tokens := []domain.ApiTokenWithOwner{}
+	for rows.Next() {
+		var t domain.ApiTokenWithOwner
+		if err := rows.Scan(&t.ID, &t.OwnerEmail, &t.OwnerDisplayName, &t.Name, &t.Prefix, &t.ProjectKey, &t.RoleName, &t.RevokedAt, &t.CreatedAt); err != nil {
+			return nil, "", err
+		}
+		tokens = append(tokens, t)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
+	}
+
+	nextCursor := ""
+	if len(tokens) > limit {
+		last := tokens[limit-1]
+		nextCursor = encodeCursor(last.CreatedAt, last.ID)
+		tokens = tokens[:limit]
+	}
+	return tokens, nextCursor, nil
+}
+
 func (r *ApiTokenRepo) Revoke(ctx context.Context, id string) error {
 	tag, err := r.pool.Exec(ctx, `UPDATE api_tokens SET revoked_at = now() WHERE id = $1`, id)
 	if err != nil {

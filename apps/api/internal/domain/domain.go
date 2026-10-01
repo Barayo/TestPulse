@@ -1589,6 +1589,23 @@ type ApiToken struct {
 	CreatedAt time.Time  `json:"createdAt"`
 }
 
+// ApiTokenWithOwner is one token in the instance-wide, Tenant-Admin-only
+// listing (add-instance-token-listing) — owner/project/role are resolved
+// server-side in the same query, never raw internal ids, so the frontend
+// doesn't need to cross-reference separate user/project/role lists the
+// way the personal tokens page already does locally.
+type ApiTokenWithOwner struct {
+	ID               string     `json:"id"`
+	OwnerEmail       string     `json:"ownerEmail"`
+	OwnerDisplayName *string    `json:"ownerDisplayName"`
+	Name             string     `json:"name"`
+	Prefix           string     `json:"prefix"`
+	ProjectKey       *string    `json:"projectKey"`
+	RoleName         *string    `json:"roleName"`
+	RevokedAt        *time.Time `json:"revokedAt"`
+	CreatedAt        time.Time  `json:"createdAt"`
+}
+
 func ValidateTokenName(name string) error {
 	if name == "" {
 		return fmt.Errorf("name is required")
