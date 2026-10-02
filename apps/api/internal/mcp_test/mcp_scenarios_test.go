@@ -1032,6 +1032,42 @@ func TestMCPCreateTestRunWithIdempotencyKeyReturnsOriginalOnRetry(t *testing.T) 
 	}
 }
 
+// TestMCPCreateTestRunOutputHasProjectKeyNotRawIDs covers
+// fix-mcp-run-output-id-leak: create_test_run's structured result must not
+// leak the run's internal id or its project's internal id — only key/
+// projectKey, matching every other create/get_details-reachable entity
+// type's already-fixed output shape.
+func TestMCPCreateTestRunOutputHasProjectKeyNotRawIDs(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-run-idleak-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "run-idleak-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Run ID Leak Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var out map[string]any
+	callTool(t, session, "create_test_run", map[string]any{
+		"projectKey": project.Key, "name": "ID-safe run", "caseKeys": []string{c.Key},
+	}, &out)
+
+	if out["projectKey"] != project.Key {
+		t.Errorf("out[projectKey] = %v, want %q", out["projectKey"], project.Key)
+	}
+	if _, present := out["id"]; present {
+		t.Errorf("out contains id: %+v", out)
+	}
+	if _, present := out["projectId"]; present {
+		t.Errorf("out contains projectId: %+v", out)
+	}
+}
+
 // --- Requirement: create_test_run tool + get_run_progress tool ---
 
 // TestMCPGetRunProgressResultHasReadableSummary covers
@@ -1147,7 +1183,14 @@ func TestMCPCreateTestRunFromSuiteAndTestPlan(t *testing.T) {
 		t.Fatalf("run = %+v, want it scoped to test plan %q", run, plan.Key)
 	}
 
-	items, err := svc.RunItems(ctx, run.ID, "")
+	// create_test_run's MCP output no longer carries the raw run ID
+	// (fix-mcp-run-output-id-leak) — resolve it by key, same as any real
+	// caller would.
+	runID, err := svc.RunIDByKey(ctx, run.Key)
+	if err != nil {
+		t.Fatalf("RunIDByKey: %v", err)
+	}
+	items, err := svc.RunItems(ctx, runID, "")
 	if err != nil {
 		t.Fatalf("RunItems: %v", err)
 	}
@@ -1778,6 +1821,42 @@ func TestMCPGetDetailsTestPlanHasNoRawProjectOrReleaseID(t *testing.T) {
 	}
 	if _, present := out["releaseId"]; present {
 		t.Errorf("out contains releaseId: %+v", out)
+	}
+}
+
+// TestMCPGetDetailsRunHasNoRawProjectOrRunID covers
+// fix-mcp-run-output-id-leak: a run fetched via get_details identifies its
+// project by key and does not leak either the run's own internal ID or
+// its project's — the same shape create_test_run returns.
+func TestMCPGetDetailsRunHasNoRawProjectOrRunID(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-getdetails-run-idleak-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "getdetails-run-idleak-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP GetDetails Run ID Leak Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "A case", Priority: domain.PriorityMedium})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+	run, err := svc.CreateRun(ctx, project.ID, service.RunInput{Name: "A run", CaseIDs: []string{c.ID}})
+	if err != nil {
+		t.Fatalf("CreateRun: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var out map[string]any
+	callTool(t, session, "get_details", map[string]any{"entityType": "run", "key": run.Key}, &out)
+	if out["projectKey"] != project.Key {
+		t.Errorf("out[projectKey] = %v, want %q", out["projectKey"], project.Key)
+	}
+	if _, present := out["id"]; present {
+		t.Errorf("out contains id: %+v", out)
+	}
+	if _, present := out["projectId"]; present {
+		t.Errorf("out contains projectId: %+v", out)
 	}
 }
 

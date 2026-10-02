@@ -466,6 +466,32 @@ func bulkAddCases(svc *service.Service) sdkmcp.ToolHandlerFor[BulkAddCasesInput,
 	}
 }
 
+// RunOutput mirrors domain.Run for MCP tool output, dropping ID and
+// ProjectID — ProjectKey is already present on domain.Run and sufficient
+// (fix-mcp-run-output-id-leak, closing the gap fix-mcp-output-id-leaks
+// left open: Run was judged "already clean" there for having ProjectKey/
+// SuiteKey/TestPlanKey siblings, but ID/ProjectID were still present on
+// the same struct and still leaked).
+type RunOutput struct {
+	Key         string           `json:"key"`
+	ProjectKey  string           `json:"projectKey"`
+	Name        string           `json:"name"`
+	Status      domain.RunStatus `json:"status"`
+	SuiteKey    *string          `json:"suiteKey,omitempty"`
+	TestPlanKey *string          `json:"testPlanKey,omitempty"`
+	PassRate    *int             `json:"passRate,omitempty"`
+	Archived    bool             `json:"archived"`
+	CreatedAt   time.Time        `json:"createdAt"`
+}
+
+func toRunOutput(r domain.Run) RunOutput {
+	return RunOutput{
+		Key: r.Key, ProjectKey: r.ProjectKey, Name: r.Name, Status: r.Status,
+		SuiteKey: r.SuiteKey, TestPlanKey: r.TestPlanKey, PassRate: r.PassRate,
+		Archived: r.Archived, CreatedAt: r.CreatedAt,
+	}
+}
+
 type CreateTestRunInput struct {
 	ProjectKey  string   `json:"projectKey"`
 	Name        string   `json:"name"`
@@ -477,18 +503,18 @@ type CreateTestRunInput struct {
 	IdempotencyKey string `json:"idempotencyKey,omitempty" jsonschema:"optional: retrying with the same key returns the original run instead of creating a second one"`
 }
 
-func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInput, domain.Run] {
-	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in CreateTestRunInput) (*sdkmcp.CallToolResult, domain.Run, error) {
+func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInput, RunOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in CreateTestRunInput) (*sdkmcp.CallToolResult, RunOutput, error) {
 		projectID, err := svc.ProjectIDByKey(ctx, in.ProjectKey)
 		if err != nil {
-			return nil, domain.Run{}, notFoundf("project", in.ProjectKey, err)
+			return nil, RunOutput{}, notFoundf("project", in.ProjectKey, err)
 		}
 		if err := svc.Authorize(ctx, domain.PermRunCreate, projectID); err != nil {
-			return nil, domain.Run{}, err
+			return nil, RunOutput{}, err
 		}
 		if in.IdempotencyKey != "" {
-			if cached, ok, err := idempotentResult[domain.Run](ctx, svc, "create_test_run", in.IdempotencyKey); err != nil {
-				return nil, domain.Run{}, err
+			if cached, ok, err := idempotentResult[RunOutput](ctx, svc, "create_test_run", in.IdempotencyKey); err != nil {
+				return nil, RunOutput{}, err
 			} else if ok {
 				return textResult("Created run %s: %s", cached.Key, cached.Name), cached, nil
 			}
@@ -498,34 +524,35 @@ func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInpu
 		if in.SuiteKey != "" {
 			suiteID, err := svc.SuiteIDByKey(ctx, in.SuiteKey)
 			if err != nil {
-				return nil, domain.Run{}, notFoundf("suite", in.SuiteKey, err)
+				return nil, RunOutput{}, notFoundf("suite", in.SuiteKey, err)
 			}
 			runInput.SuiteID = suiteID
 		}
 		if in.TestPlanKey != "" {
 			planID, err := svc.TestPlanIDByKey(ctx, in.TestPlanKey)
 			if err != nil {
-				return nil, domain.Run{}, notFoundf("test plan", in.TestPlanKey, err)
+				return nil, RunOutput{}, notFoundf("test plan", in.TestPlanKey, err)
 			}
 			runInput.TestPlanID = planID
 		}
 		for _, key := range in.CaseKeys {
 			caseID, err := svc.CaseIDByKey(ctx, key)
 			if err != nil {
-				return nil, domain.Run{}, notFoundf("case", key, err)
+				return nil, RunOutput{}, notFoundf("case", key, err)
 			}
 			runInput.CaseIDs = append(runInput.CaseIDs, caseID)
 		}
 		run, err := svc.CreateRun(ctx, projectID, runInput)
 		if err != nil {
-			return nil, domain.Run{}, err
+			return nil, RunOutput{}, err
 		}
+		out := toRunOutput(run)
 		if in.IdempotencyKey != "" {
-			if err := saveIdempotentResult(ctx, svc, "create_test_run", in.IdempotencyKey, run); err != nil {
-				return nil, domain.Run{}, err
+			if err := saveIdempotentResult(ctx, svc, "create_test_run", in.IdempotencyKey, out); err != nil {
+				return nil, RunOutput{}, err
 			}
 		}
-		return textResult("Created run %s: %s", run.Key, run.Name), run, nil
+		return textResult("Created run %s: %s", out.Key, out.Name), out, nil
 	}
 }
 

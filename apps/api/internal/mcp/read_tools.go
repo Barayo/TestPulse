@@ -169,9 +169,10 @@ func getDetails(svc *service.Service) sdkmcp.ToolHandlerFor[GetDetailsInput, any
 			return nil, nil, err
 		}
 		// Convert to the same ID-safe output shape the dedicated tool for
-		// this entity type returns (fix-mcp-output-id-leaks D4). Run and
-		// Project are already clean (Context) and pass through unchanged;
-		// StepGroup is never a GetDetails dispatch target.
+		// this entity type returns (fix-mcp-output-id-leaks D4,
+		// fix-mcp-run-output-id-leak for Run specifically). Project is
+		// already clean (Context) and passes through unchanged; StepGroup
+		// is never a GetDetails dispatch target.
 		summary := textResult("Fetched %s %s", in.EntityType, in.Key)
 		switch v := result.(type) {
 		case domain.TestCase:
@@ -198,6 +199,8 @@ func getDetails(svc *service.Service) sdkmcp.ToolHandlerFor[GetDetailsInput, any
 				return nil, nil, err
 			}
 			return summary, toTestPlanOutput(v, keys[projectID]), nil
+		case domain.Run:
+			return summary, toRunOutput(v), nil
 		default:
 			return summary, result, nil
 		}
