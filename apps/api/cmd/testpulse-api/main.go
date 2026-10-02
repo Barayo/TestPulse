@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -25,6 +26,20 @@ func main() {
 		fmt.Fprintf(os.Stderr, "testpulse-api: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+// serve runs srv on the already-bound listener ln — TLS when
+// cfg.TLSCertFile is set (add-https-tls-support D1/D2), plain HTTP
+// otherwise. Takes a pre-bound net.Listener rather than calling
+// ListenAndServe(TLS) directly (which bind their own listener and never
+// report back which port they chose) so the actual port is known to the
+// caller — production passes a listener bound to cfg.Addr; tests pass one
+// bound to an ephemeral port to learn where to connect.
+func serve(ln net.Listener, srv *http.Server, cfg config.Config) error {
+	if cfg.TLSCertFile != "" {
+		return srv.ServeTLS(ln, cfg.TLSCertFile, cfg.TLSKeyFile)
+	}
+	return srv.Serve(ln)
 }
 
 func run() error {
@@ -108,10 +123,19 @@ func run() error {
 		ReadHeaderTimeout: 10 * time.Second,
 	}
 
+	ln, err := net.Listen("tcp", cfg.Addr)
+	if err != nil {
+		return fmt.Errorf("listening on %s: %w", cfg.Addr, err)
+	}
+
 	errCh := make(chan error, 1)
 	go func() {
-		logger.Info("api listening", "addr", cfg.Addr)
-		errCh <- srv.ListenAndServe()
+		if cfg.TLSCertFile != "" {
+			logger.Info("api listening", "addr", cfg.Addr, "tls", true)
+		} else {
+			logger.Info("api listening", "addr", cfg.Addr, "tls", false)
+		}
+		errCh <- serve(ln, srv, cfg)
 	}()
 
 	select {

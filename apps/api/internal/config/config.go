@@ -44,6 +44,14 @@
 //	                        (default "true") mounts the MCP server at /mcp
 //	                        (add-mcp-server) when true. Set to "false" to
 //	                        disable it entirely for a deployment.
+//	TESTPULSE_TLS_CERT_FILE, TESTPULSE_TLS_KEY_FILE
+//	                        (optional, both required together) when set,
+//	                        the API terminates TLS directly, serving HTTPS
+//	                        instead of plain HTTP (add-https-tls-support).
+//	                        No automatic certificate issuance/renewal — the
+//	                        operator supplies and rotates these files. For
+//	                        reverse-proxy-terminated TLS instead, leave both
+//	                        unset — see docs/deployment.md.
 package config
 
 import (
@@ -68,6 +76,8 @@ type Config struct {
 	AllowMissingMigrations  bool
 	EncryptionKey           string
 	MCPEnabled              bool
+	TLSCertFile             string
+	TLSKeyFile              string
 }
 
 // PasswordResetEnabled reports whether enough is configured to send a
@@ -103,11 +113,25 @@ func Load(getenv func(string) string) (Config, error) {
 		// MCP is the stated core differentiator and should work out of the
 		// box, including against the Sample Project — an operator who wants
 		// it off sets TESTPULSE_MCP_ENABLED=false explicitly.
-		MCPEnabled: getenv("TESTPULSE_MCP_ENABLED") != "false",
+		MCPEnabled:  getenv("TESTPULSE_MCP_ENABLED") != "false",
+		TLSCertFile: getenv("TESTPULSE_TLS_CERT_FILE"),
+		TLSKeyFile:  getenv("TESTPULSE_TLS_KEY_FILE"),
 	}
 
 	if cfg.DatabaseURL == "" {
 		return Config{}, fmt.Errorf("missing required environment variable TESTPULSE_DATABASE_URL")
+	}
+
+	// Native TLS termination (add-https-tls-support D1) is a security-
+	// relevant pair — unlike the admin-bootstrap pair, which silently
+	// no-ops downstream if incomplete, an incomplete TLS config must fail
+	// fast rather than risk the operator believing HTTPS is active when
+	// the server actually started on plain HTTP.
+	switch {
+	case cfg.TLSCertFile != "" && cfg.TLSKeyFile == "":
+		return Config{}, fmt.Errorf("missing required environment variable TESTPULSE_TLS_KEY_FILE (TESTPULSE_TLS_CERT_FILE is set)")
+	case cfg.TLSKeyFile != "" && cfg.TLSCertFile == "":
+		return Config{}, fmt.Errorf("missing required environment variable TESTPULSE_TLS_CERT_FILE (TESTPULSE_TLS_KEY_FILE is set)")
 	}
 
 	perMinute, err := parseFloatWithDefault(getenv("TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE"), 5, "TESTPULSE_LOGIN_RATE_LIMIT_PER_MINUTE")

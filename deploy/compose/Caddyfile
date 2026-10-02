@@ -1,0 +1,23 @@
+# TLS-terminating reverse proxy for the TestPulse compose stack
+# (add-https-tls-support) — paired with docker-compose.tls.yml.
+#
+# Local/dev testing: `tls internal` below gives Caddy's own internally-
+# issued certificate — no external dependencies, but browsers will warn
+# until you trust Caddy's local root CA (see Caddy's docs for your OS), or
+# just click through the warning for manual testing.
+#
+# Production: replace `localhost` with your real, DNS-resolvable domain
+# and remove the `tls internal` line entirely — Caddy then automatically
+# obtains and renews a real Let's Encrypt certificate with no other
+# configuration needed.
+
+localhost {
+	tls internal
+
+	reverse_proxy app:8080 {
+		# Caddy sets this automatically when terminating TLS, but it's made
+		# explicit here since it's the one header TestPulse's session cookie
+		# Secure-detection logic (requestIsHTTPS) actually depends on.
+		header_up X-Forwarded-Proto {scheme}
+	}
+}

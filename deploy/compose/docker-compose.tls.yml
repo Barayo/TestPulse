@@ -1,0 +1,36 @@
+# TLS-terminating reverse proxy example for the TestPulse compose stack
+# (add-https-tls-support) — the documented reverse-proxy path, as an
+# alternative to the app's own optional native TLS (TESTPULSE_TLS_CERT_FILE/
+# TESTPULSE_TLS_KEY_FILE — see docs/deployment.md). Run alongside the base
+# compose file, from the repository root:
+#
+#   docker compose -f deploy/compose/docker-compose.yml \
+#     -f deploy/compose/docker-compose.tls.yml up
+#
+# Caddy terminates TLS and reverse-proxies to the app over the compose
+# network's internal DNS (app:8080) — the app itself still serves plain
+# HTTP, unaware it's behind TLS, exactly like any reverse-proxy deployment.
+# This file doesn't remove the base file's app:8080 host port mapping —
+# for a production deployment, restrict that via your own compose/firewall
+# customization so only Caddy's 443 is reachable externally.
+name: testpulse
+
+services:
+  app:
+    environment:
+      TESTPULSE_PUBLIC_URL: https://localhost
+
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "443:443"
+      - "80:80" # required for Let's Encrypt's HTTP-01 challenge in production; unused by local `tls internal` testing
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - testpulse-caddy-data:/data
+    depends_on:
+      app:
+        condition: service_started
+
+volumes:
+  testpulse-caddy-data:

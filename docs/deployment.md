@@ -16,6 +16,7 @@ apply under compose, Helm, or a bare binary.
 | `TESTPULSE_ALLOW_MISSING_MIGRATIONS` | no | `false` | Recovery escape hatch for a migration-history gap — see [Database](database.md). Only set temporarily to unblock a startup after that specific failure; leave off otherwise |
 | `TESTPULSE_ENCRYPTION_KEY` | no | — | Encrypts the OIDC/SSO client secret at rest (add-sso-oidc) — required only once a Tenant Admin actually saves one via Instance Settings' "Single sign-on" card. Treat it like any other production secret: back it up, don't rotate casually. Losing or changing it means re-entering the client secret (issuer/client ID/claim mappings are unaffected) |
 | `TESTPULSE_MCP_ENABLED` | no | `true` | Mounts the MCP server at `/mcp` (add-mcp-server) — see [MCP server](mcp-server.md). Set to `false` to disable it entirely for a deployment |
+| `TESTPULSE_TLS_CERT_FILE`, `TESTPULSE_TLS_KEY_FILE` | no | — | Both required together. When set, the API terminates TLS directly and serves HTTPS instead of plain HTTP (add-https-tls-support). No automatic certificate issuance/renewal — you supply and rotate these files yourself. Startup fails immediately, naming the missing variable, if only one is set. Leave both unset to use a reverse proxy instead — see "TLS termination" below |
 
 The process exits immediately with an error naming the variable if a required
 value is missing. Pending migrations (`apps/api/internal/db/migrations/` —
@@ -161,9 +162,91 @@ restart — this is intentional.
 
 - Run PostgreSQL with real operational backing (managed service or an
   operator); the bundled StatefulSet is for evaluation.
-- Put TLS at the ingress/load balancer; the app itself serves plain HTTP.
+- Terminate TLS either at a reverse proxy/ingress/load balancer in front of
+  the app (the traditional path — see "TLS termination" below), or natively
+  in the Go process via `TESTPULSE_TLS_CERT_FILE`/`TESTPULSE_TLS_KEY_FILE`
+  (add-https-tls-support) — see the configuration table above.
 - The app is stateless — all state is in PostgreSQL, so backup/restore is
   entirely a database concern.
+
+## TLS termination
+
+TestPulse supports two ways to serve HTTPS — pick whichever fits your
+deployment:
+
+**Reverse proxy (recommended for most deployments)** — a TLS-terminating
+proxy sits in front of the app, which keeps serving plain HTTP behind it.
+This is what `testpulse.fly.dev`'s own Fly.io deployment does, and what the
+Helm chart's `ingress.tls` field already supports out of the box via any
+cert-manager-compatible ingress controller. A runnable example for the
+compose stack, using [Caddy](https://caddyserver.com/) (automatic
+Let's Encrypt for a real domain, zero extra configuration):
+
+```bash
+docker compose -f deploy/compose/docker-compose.yml \
+  -f deploy/compose/docker-compose.tls.yml up
+```
+
+See `deploy/compose/docker-compose.tls.yml` and `deploy/compose/Caddyfile`
+— for local testing it uses Caddy's `tls internal` (a locally-issued cert,
+no external dependencies); for production, swap in your real domain and
+delete that line, and Caddy handles certificate issuance and renewal
+automatically.
+
+Equivalent nginx configuration:
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name testpulse.example.com;
+
+    ssl_certificate     /etc/nginx/certs/fullchain.pem;
+    ssl_certificate_key /etc/nginx/certs/privkey.pem;
+
+    location / {
+        proxy_pass http://app:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Equivalent Traefik configuration (dynamic file provider):
+
+```yaml
+http:
+  routers:
+    testpulse:
+      rule: "Host(`testpulse.example.com`)"
+      service: testpulse
+      tls:
+        certResolver: letsencrypt
+  services:
+    testpulse:
+      loadBalancer:
+        servers:
+          - url: "http://app:8080"
+```
+
+Traefik sets `X-Forwarded-Proto` automatically for TLS-terminated routes; no
+extra configuration needed for that part.
+
+**Whichever proxy you use, it must set `X-Forwarded-Proto: https`** — this
+is the one header TestPulse's session-cookie `Secure`-detection logic
+(`requestIsHTTPS`) depends on when TLS is terminated externally. nginx,
+Caddy, Traefik, Fly, and every common ingress controller do this by
+default; confirm a bespoke setup does too.
+
+**Native TLS (simple deployments without a proxy)** — set
+`TESTPULSE_TLS_CERT_FILE`/`TESTPULSE_TLS_KEY_FILE` to a certificate/key pair
+and the API serves HTTPS directly, no proxy required. No automatic
+certificate issuance or renewal is built in — you supply and rotate the
+files yourself (a short cron job calling `docker compose restart app` after
+replacing the files works fine for most setups). Startup fails immediately,
+naming the missing variable, if only one of the pair is set — this is a
+deliberate fail-fast: an incomplete TLS config falling back to silent plain
+HTTP would be far worse than refusing to start.
 
 ## Security status
 
@@ -184,28 +267,27 @@ a Tenant Admin can disable the whole capability instance-wide (see
 [Public project access](test-management.md#public-project-access)). OIDC
 SSO is v0.2.
 
-**The app itself never terminates TLS** (tracked as backlog: "Add HTTPS/TLS
-support") — it always serves plain HTTP, per "Put TLS at the
-ingress/load balancer" above. The session cookie is `HttpOnly` and becomes
-`Secure` whenever the request reached the app over HTTPS, detected two
-ways: the app's own connection is TLS (only relevant if you terminate TLS
-in the Go process directly, which this project doesn't ship a way to do),
-or a reverse proxy in front sets `X-Forwarded-Proto: https` (the normal
-case — this is what a TLS-terminating ingress/load balancer/CDN is
-expected to set, and what `testpulse.fly.dev`'s own Fly.io deployment
-relies on). **If you put a reverse proxy in front of TestPulse that
-terminates TLS but does not set `X-Forwarded-Proto`, the session cookie
-silently loses `Secure`** — confirm your proxy sets this header (nginx,
-Caddy, Fly, and every common ingress controller do by default; a bespoke
-setup might not).
+**The app can terminate TLS itself, or serve plain HTTP behind a proxy that
+does** (add-https-tls-support) — see "TLS termination" above for both
+paths. The session cookie is `HttpOnly` and becomes `Secure` whenever the
+request reached the app over HTTPS, detected two ways: the app's own
+connection is TLS (when `TESTPULSE_TLS_CERT_FILE`/`_KEY_FILE` are set), or
+a reverse proxy in front sets `X-Forwarded-Proto: https` (the proxy path —
+this is what `testpulse.fly.dev`'s own Fly.io deployment relies on).
+**If you put a reverse proxy in front of TestPulse that terminates TLS but
+does not set `X-Forwarded-Proto`, the session cookie silently loses
+`Secure`** — confirm your proxy sets this header (nginx, Caddy, Traefik,
+Fly, and every common ingress controller do by default; a bespoke setup
+might not).
 
-**Do not expose a TestPulse instance to an untrusted network without a
-TLS-terminating proxy in front of it that sets `X-Forwarded-Proto`.** For
-local evaluation (docker-compose on localhost, or a Helm install behind a
-private network/VPN) plain HTTP is fine; on the public internet or an
-untrusted shared network, session cookies and credentials travel in clear
-text and are interceptable without TLS in front, exactly like any other
-auth mechanism would be on an unencrypted connection.
+**Do not expose a TestPulse instance to an untrusted network without TLS —
+either native (`TESTPULSE_TLS_CERT_FILE`/`_KEY_FILE`) or a terminating
+proxy in front of it that sets `X-Forwarded-Proto`.** For local evaluation
+(docker-compose on localhost, or a Helm install behind a private
+network/VPN) plain HTTP is fine; on the public internet or an untrusted
+shared network, session cookies and credentials travel in clear text and
+are interceptable without TLS, exactly like any other auth mechanism would
+be on an unencrypted connection.
 
 **Every response carries a `Content-Security-Policy` header** (backlog
 #189, `securityHeaders` in `apps/api/internal/server/middleware.go`),

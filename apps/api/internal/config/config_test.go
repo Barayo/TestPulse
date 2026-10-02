@@ -296,3 +296,55 @@ func TestLoadEncryptionKeySet(t *testing.T) {
 		t.Errorf("EncryptionKey = %q", cfg.EncryptionKey)
 	}
 }
+
+func TestLoadTLSUnsetByDefault(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TLSCertFile != "" || cfg.TLSKeyFile != "" {
+		t.Errorf("TLSCertFile/TLSKeyFile = %q/%q, want both empty by default", cfg.TLSCertFile, cfg.TLSKeyFile)
+	}
+}
+
+func TestLoadTLSBothSet(t *testing.T) {
+	cfg, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":  "postgres://localhost/testpulse",
+		"TESTPULSE_TLS_CERT_FILE": "/etc/testpulse/tls.crt",
+		"TESTPULSE_TLS_KEY_FILE":  "/etc/testpulse/tls.key",
+	}))
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TLSCertFile != "/etc/testpulse/tls.crt" || cfg.TLSKeyFile != "/etc/testpulse/tls.key" {
+		t.Errorf("TLSCertFile/TLSKeyFile = %q/%q", cfg.TLSCertFile, cfg.TLSKeyFile)
+	}
+}
+
+func TestLoadTLSCertFileOnlyNamesMissingKeyVariable(t *testing.T) {
+	_, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL":  "postgres://localhost/testpulse",
+		"TESTPULSE_TLS_CERT_FILE": "/etc/testpulse/tls.crt",
+	}))
+	if err == nil {
+		t.Fatal("expected error when only TESTPULSE_TLS_CERT_FILE is set")
+	}
+	if !strings.Contains(err.Error(), "TESTPULSE_TLS_KEY_FILE") {
+		t.Errorf("error %q does not name the missing variable", err)
+	}
+}
+
+func TestLoadTLSKeyFileOnlyNamesMissingCertVariable(t *testing.T) {
+	_, err := Load(envStub(map[string]string{
+		"TESTPULSE_DATABASE_URL": "postgres://localhost/testpulse",
+		"TESTPULSE_TLS_KEY_FILE": "/etc/testpulse/tls.key",
+	}))
+	if err == nil {
+		t.Fatal("expected error when only TESTPULSE_TLS_KEY_FILE is set")
+	}
+	if !strings.Contains(err.Error(), "TESTPULSE_TLS_CERT_FILE") {
+		t.Errorf("error %q does not name the missing variable", err)
+	}
+}
