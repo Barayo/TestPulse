@@ -159,7 +159,7 @@ The system SHALL provide a `bulk_add_cases` MCP tool that creates multiple test 
 - **THEN** the second call returns the same cases created by the first call, and no second batch is created
 
 ### Requirement: create_test_run tool
-The system SHALL provide a `create_test_run` MCP tool that creates a test run, pinning each included case to its latest version at creation time, enforcing the caller's project permissions. The tool MAY accept an optional `idempotencyKey`: if a prior successful call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second run.
+The system SHALL provide a `create_test_run` MCP tool that creates a test run, pinning each included case to its latest version at creation time, enforcing the caller's project permissions. The tool MAY accept an optional `idempotencyKey`: if a prior successful call from the same caller supplied the same key, the tool SHALL return that prior result instead of creating a second run. The returned run SHALL identify its project by `projectKey`, not internal project ID, and SHALL NOT include a raw internal run ID.
 
 #### Scenario: Create a run from selected cases
 - **WHEN** an agent calls `create_test_run` with a project and a list of case keys
@@ -168,6 +168,10 @@ The system SHALL provide a `create_test_run` MCP tool that creates a test run, p
 #### Scenario: A retried call with the same idempotency key returns the original run
 - **WHEN** an agent calls `create_test_run` with `idempotencyKey: "k1"`, then calls it again with the same `idempotencyKey: "k1"`
 - **THEN** the second call returns the same run created by the first call, and no second run is created
+
+#### Scenario: Returned run identifies its project by key, not internal ID
+- **WHEN** an agent calls `create_test_run` to create a run
+- **THEN** the returned record includes `projectKey` and does not include a raw internal run ID or project ID
 
 ### Requirement: record_result tool
 The system SHALL provide a `record_result` MCP tool that appends a result entry (verdict, comment, actor) to a run item's append-only result log, enforcing assignee/permission restrictions identical to REST. The returned result SHALL include the `runKey` and `caseKey` the caller supplied, and SHALL NOT include a raw internal run item ID. The tool SHALL accept an optional `stepResults` array of `stepIndex`/`verdict` pairs, submitted atomically with the overall verdict; when supplied, these become the result's step-verdict snapshot and the run item's new live step verdicts, identically to REST's equivalent `stepResults` field, including server-side bounds-checking against the case's pinned step count.
@@ -227,11 +231,15 @@ The system SHALL provide a `search` MCP tool performing cross-entity full-text s
 - **THEN** only suites are returned, with the same ranking (keyword mode) or recency ordering (browse mode) as an unfiltered call
 
 ### Requirement: get_details tool
-The system SHALL provide a `get_details` MCP tool that fetches the full record for a single entity given an explicit `entityType` and `key`, routing to the appropriate lookup for that type. For every entity type it can return, the record SHALL identify related entities by key, not internal ID, matching the output shape the corresponding dedicated tool (`upsert_test_case`, `upsert_test_suite`, `upsert_step_group`) returns for that same entity type.
+The system SHALL provide a `get_details` MCP tool that fetches the full record for a single entity given an explicit `entityType` and `key`, routing to the appropriate lookup for that type. For every entity type it can return, the record SHALL identify related entities by key, not internal ID, matching the output shape the corresponding dedicated tool (`upsert_test_case`, `upsert_test_suite`, `upsert_step_group`, `create_test_run`) returns for that same entity type.
 
 #### Scenario: Fetch an existing case by key
 - **WHEN** an agent calls `get_details` with `entityType: "case"` and a valid case key
 - **THEN** the full case record is returned
+
+#### Scenario: Fetched run identifies its project by key, not internal ID
+- **WHEN** an agent calls `get_details` with `entityType: "run"` and a valid run key
+- **THEN** the returned record includes `projectKey` and does not include a raw internal run ID or project ID, the same shape `create_test_run` returns
 
 #### Scenario: Type/key mismatch reported clearly
 - **WHEN** an agent calls `get_details` with `entityType: "run"` and a key belonging to a suite
