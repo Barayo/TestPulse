@@ -981,6 +981,19 @@ type Attachment struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+// CaseAttachment is a reference file (image or PDF) attached to a test
+// case's identity, not to any specific CaseVersion (add-case-reference-
+// attachments design.md D1) — it survives case edits the same way
+// JiraIssueKey does. Independent of Attachment, which belongs to run
+// execution evidence.
+type CaseAttachment struct {
+	ID          string    `json:"id"`
+	CaseID      string    `json:"caseId"`
+	Filename    string    `json:"filename"`
+	ContentType string    `json:"contentType"`
+	CreatedAt   time.Time `json:"createdAt"`
+}
+
 // NewAttachment is an inline, base64-encoded attachment submitted alongside
 // a NewResult or an import request, created atomically with the result(s)
 // it belongs to (add-run-item-screenshot-attachments design.md).

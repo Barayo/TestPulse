@@ -634,6 +634,72 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/CaseExecution" }
         "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/cases/{caseKey}/attachments:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCaseAttachments
+      summary: A case's reference attachments (images/PDFs), oldest first
+      tags: [cases]
+      responses:
+        "200":
+          description: Case attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseAttachment" }
+    post:
+      operationId: uploadCaseAttachment
+      summary: >-
+        Attach a reference file to this case — an image (PNG/JPEG/WebP), a
+        PDF document, or a plain-text file (.txt/.log), max 5MB. Belongs to
+        the case's identity, not a specific version; survives case edits.
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        "201":
+          description: Created case attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaseAttachment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/case-attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getCaseAttachment
+      summary: The raw file bytes for a case attachment
+      tags: [cases]
+      responses:
+        "200":
+          description: Case attachment file
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+            text/plain: { schema: { type: string, format: binary } }
+        "304": { description: Not modified (matched If-None-Match) }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteCaseAttachment
+      summary: Delete a case attachment
+      tags: [cases]
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/projects/{projectKey}/flaky-cases:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -2115,6 +2181,22 @@ paths:
                 items: { $ref: "#/components/schemas/CaseExecution" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}/attachments:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCaseAttachments
+      summary: A case's reference attachments, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Case attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseAttachment" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/suites/{suiteKey}:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
@@ -2237,6 +2319,23 @@ paths:
             image/png: { schema: { type: string, format: binary } }
             image/jpeg: { schema: { type: string, format: binary } }
             image/webp: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/case-attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicCaseAttachment
+      summary: The raw file bytes for a case attachment, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Case attachment file
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+            text/plain: { schema: { type: string, format: binary } }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/auth/login:
     post:
@@ -3784,6 +3883,15 @@ components:
         resultId:
           type: string
           description: Absent when staged but not yet linked to a result.
+        filename: { type: string }
+        contentType: { type: string }
+        createdAt: { type: string, format: date-time }
+    CaseAttachment:
+      type: object
+      required: [id, caseId, filename, contentType, createdAt]
+      properties:
+        id: { type: string }
+        caseId: { type: string }
         filename: { type: string }
         contentType: { type: string }
         createdAt: { type: string, format: date-time }

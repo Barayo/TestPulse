@@ -97,6 +97,8 @@ function mockDetailAPI(options?: {
   // add-requirements-traceability: the project's full requirement list —
   // caseIds determines which show as linked on this case.
   requirements?: unknown[]
+  // add-case-reference-attachments: the case's reference attachments.
+  caseAttachments?: unknown[]
 }) {
   const anon = options?.anonymous ?? false
   mockGET.mockImplementation((path: string, opts?: { params?: { path?: Record<string, string> } }) => {
@@ -116,6 +118,7 @@ function mockDetailAPI(options?: {
       ? '/api/v1/public/projects/{projectKey}/custom-fields'
       : '/api/v1/projects/{projectKey}/custom-fields'
     const requirementsPath = '/api/v1/projects/{projectKey}/requirements'
+    const caseAttachmentsPath = anon ? '/api/v1/public/cases/{caseKey}/attachments' : '/api/v1/cases/{caseKey}/attachments'
     if (path === projectPath)
       return Promise.resolve({ data: { id: 'p1', name: 'Banca Móvil', archived: false, createdAt: '' }, response: { ok: true } })
     if (path === foldersPath)
@@ -164,6 +167,8 @@ function mockDetailAPI(options?: {
     if (path === customFieldsPath) return Promise.resolve({ data: options?.customFields ?? [], response: { ok: true } })
     if (path === requirementsPath && !anon)
       return Promise.resolve({ data: options?.requirements ?? [], response: { ok: true } })
+    if (path === caseAttachmentsPath)
+      return Promise.resolve({ data: options?.caseAttachments ?? [], response: { ok: true } })
     if (path === '/api/v1/users' && !anon)
       return Promise.resolve({ data: { items: options?.users ?? [], nextCursor: null }, response: { ok: true } })
     if (path === '/api/v1/projects/{projectKey}/permissions' && !anon) {
@@ -870,6 +875,69 @@ describe('CaseDetailPage', () => {
     renderDetail()
     await screen.findByRole('heading', { name: 'Daily transfer limit' })
     expect(screen.queryByText(/show \d+ more/i)).not.toBeInTheDocument()
+  })
+
+  it('shows a case\'s reference attachments in the Properties sidebar', async () => {
+    mockDetailAPI({
+      caseAttachments: [
+        { id: 'ca1', caseId: 'c1', filename: 'mock.png', contentType: 'image/png', createdAt: '2026-01-01T00:00:00Z' },
+        { id: 'ca2', caseId: 'c1', filename: 'spec.pdf', contentType: 'application/pdf', createdAt: '2026-01-01T00:00:00Z' },
+      ],
+    })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.getByText('Attachments')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /open attachment mock\.png/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /open spec\.pdf/i })).toBeInTheDocument()
+  })
+
+  it('shows no Attachments row for a read-only viewer when a case has no attachments', async () => {
+    mockDetailAPI({ permissions: noPermissions, caseAttachments: [] })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.queryByText('Attachments')).not.toBeInTheDocument()
+  })
+
+  it('shows an "Attach reference file" affordance for an editor when a case has no attachments', async () => {
+    mockDetailAPI({ caseAttachments: [] })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+    expect(screen.getByRole('button', { name: /attach reference file/i })).toBeInTheDocument()
+  })
+
+  it('uploads a case attachment via the Attachments field', async () => {
+    mockDetailAPI({ caseAttachments: [] })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+    const created = { id: 'ca9', caseId: 'c1', filename: 'mock.png', contentType: 'image/png', createdAt: '2026-01-01T00:00:00Z' }
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve(created),
+    } as Response)
+
+    const input = document.querySelector('input[type="file"]') as HTMLInputElement
+    const file = new File(['x'], 'mock.png', { type: 'image/png' })
+    await userEvent.upload(input, file)
+
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/cases/c1/attachments', expect.objectContaining({ method: 'POST' }))
+    expect(await screen.findByRole('button', { name: /open attachment mock\.png/i })).toBeInTheDocument()
+  })
+
+  it('removes a case attachment via the Attachments field', async () => {
+    mockDetailAPI({
+      caseAttachments: [
+        { id: 'ca1', caseId: 'c1', filename: 'mock.png', contentType: 'image/png', createdAt: '2026-01-01T00:00:00Z' },
+      ],
+    })
+    renderDetail()
+    await screen.findByRole('heading', { name: 'Daily transfer limit' })
+
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({ ok: true, json: () => Promise.resolve({}) } as Response)
+    await userEvent.click(screen.getByRole('button', { name: /remove mock\.png/i }))
+
+    expect(fetchSpy).toHaveBeenCalledWith('/api/v1/case-attachments/ca1', expect.objectContaining({ method: 'DELETE' }))
+    expect(screen.queryByRole('button', { name: /open attachment mock\.png/i })).not.toBeInTheDocument()
   })
 
   it('entering edit mode keeps Results and Version History visible, and Properties stays the same rows with inline edit controls', async () => {

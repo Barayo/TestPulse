@@ -331,6 +331,10 @@ func (s *Service) ProjectIDForAttachment(ctx context.Context, attachmentID strin
 	return s.store.Attachments.ProjectID(ctx, attachmentID)
 }
 
+func (s *Service) ProjectIDForCaseAttachment(ctx context.Context, attachmentID string) (string, error) {
+	return s.store.CaseAttachments.ProjectID(ctx, attachmentID)
+}
+
 func (s *Service) ProjectIDForCustomField(ctx context.Context, fieldID string) (string, error) {
 	return s.store.CustomFields.ProjectID(ctx, fieldID)
 }

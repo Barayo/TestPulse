@@ -1,6 +1,7 @@
 package server_test
 
 import (
+	"fmt"
 	"testing"
 )
 
@@ -128,6 +129,59 @@ func TestPublicProject_ResourceScopedToItsOwnProjectNotURLProject(t *testing.T) 
 	// The suite belongs to the PRIVATE project, so it must stay hidden even
 	// though a public project exists on the instance.
 	callAs(t, handler, "", "GET", "/api/v1/public/suites/"+suiteKey, nil, 404, nil)
+}
+
+// TestPublicProject_CaseAttachmentsReadableWhenOwningProjectIsPublic covers
+// add-case-reference-attachments design.md D7: a public project's cases'
+// reference attachments are readable the same way their content/versions/
+// executions already are.
+func TestPublicProject_CaseAttachmentsReadableWhenOwningProjectIsPublic(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "Public Attachments"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+	callAs(t, handler, admin, "PATCH", "/api/v1/projects/"+projectKey, jmap{"publicAccess": true}, 200, nil)
+	var c jmap
+	callAs(t, handler, admin, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", projectKey), jmap{"title": "case one"}, 201, &c)
+	caseKey, _ := c["key"].(string)
+
+	var att jmap
+	uploadCaseFileAs(t, handler, admin, fmt.Sprintf("/api/v1/cases/%s/attachments", caseKey), "mock.png", caseAttachmentFixture(t, "sample.png"), 201, &att)
+	attachmentID, _ := att["id"].(string)
+
+	var list []jmap
+	callAs(t, handler, "", "GET", fmt.Sprintf("/api/v1/public/cases/%s/attachments", caseKey), nil, 200, &list)
+	if len(list) != 1 {
+		t.Fatalf("public case attachment list = %d, want 1", len(list))
+	}
+
+	callAs(t, handler, "", "GET", "/api/v1/public/case-attachments/"+attachmentID, nil, 200, nil)
+}
+
+// TestPublicProject_CaseAttachmentWritesRejected covers design.md D7: no
+// upload/delete route exists on the public API regardless of project
+// visibility.
+func TestPublicProject_CaseAttachmentWritesRejected(t *testing.T) {
+	handler, _ := apiServerWithAdmin(t, "admin@example.com", "correcthorse")
+	admin := loginCookie(t, handler, "admin@example.com", "correcthorse")
+
+	var p jmap
+	callAs(t, handler, admin, "POST", "/api/v1/projects", jmap{"name": "Public Attachments Write"}, 201, &p)
+	projectKey, _ := p["key"].(string)
+	callAs(t, handler, admin, "PATCH", "/api/v1/projects/"+projectKey, jmap{"publicAccess": true}, 200, nil)
+	var c jmap
+	callAs(t, handler, admin, "POST", fmt.Sprintf("/api/v1/projects/%s/cases", projectKey), jmap{"title": "case one"}, 201, &c)
+	caseKey, _ := c["key"].(string)
+
+	var errBody jmap
+	uploadCaseFileAs(t, handler, "", fmt.Sprintf("/api/v1/public/cases/%s/attachments", caseKey), "mock.png", caseAttachmentFixture(t, "sample.png"), 404, &errBody)
+
+	var att jmap
+	uploadCaseFileAs(t, handler, admin, fmt.Sprintf("/api/v1/cases/%s/attachments", caseKey), "mock.png", caseAttachmentFixture(t, "sample.png"), 201, &att)
+	attachmentID, _ := att["id"].(string)
+	callAs(t, handler, "", "DELETE", "/api/v1/public/case-attachments/"+attachmentID, nil, 404, nil)
 }
 
 // TestListPublicProjects covers add-public-project-discovery: an

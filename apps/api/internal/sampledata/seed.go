@@ -212,6 +212,12 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	if err != nil {
 		return fmt.Errorf("sampledata: %w", err)
 	}
+	// Showcases add-case-reference-attachments: a reference mock attached to
+	// the case's own definition, distinct from login-failure.png below
+	// (which is run-result evidence, attached to a result, not a case).
+	if _, err := svc.AttachCaseFile(ctx, login.ID, "login-form-mock.png", samplePlaceholderPNG); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
 	badPassword, err := svc.CreateCase(ctx, p.ID, auth.ID, domain.CaseContent{
 		Title:    "Login is rejected for the wrong password",
 		Steps:    []domain.Step{{Action: "Enter a valid email and an incorrect password", Expected: "An error message is shown and the user stays on the login page"}},

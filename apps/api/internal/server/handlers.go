@@ -92,6 +92,8 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/folder", h.moveCase)
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/jira-link", h.setCaseJiraLink)
 		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Put("/jira-sync", h.setCaseJiraSync)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromCase)).Get("/attachments", h.listCaseAttachments)
+		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCase)).Post("/attachments", h.uploadCaseAttachment)
 	})
 	r.With(h.requirePermission(domain.PermSectionEdit, projectIDFromFolder)).Put("/folders/{folderID}", h.moveFolder)
 	r.With(h.requirePermission(domain.PermSectionDelete, projectIDFromFolder)).Delete("/folders/{folderID}", h.deleteFolder)
@@ -170,6 +172,10 @@ func mountAPI(r chi.Router, h *api) {
 	r.Route("/attachments/{attachmentID}", func(r chi.Router) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromAttachment)).Get("/", h.getAttachment)
 		r.With(h.requirePermission(domain.PermRunRecordResult, projectIDFromAttachment)).Delete("/", h.deleteAttachment)
+	})
+	r.Route("/case-attachments/{attachmentID}", func(r chi.Router) {
+		r.With(h.requirePermission(domain.PermRead, projectIDFromCaseAttachment)).Get("/", h.getCaseAttachment)
+		r.With(h.requirePermission(domain.PermCaseEdit, projectIDFromCaseAttachment)).Delete("/", h.deleteCaseAttachment)
 	})
 }
 

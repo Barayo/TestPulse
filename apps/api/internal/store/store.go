@@ -28,6 +28,7 @@ type Store struct {
 	ProjectMembers      *ProjectMemberRepo
 	Roles               *RoleRepo
 	Attachments         *AttachmentRepo
+	CaseAttachments     *CaseAttachmentRepo
 	InstanceSettings    *InstanceSettingsRepo
 	PasswordResetTokens *PasswordResetTokenRepo
 	CustomFields        *CustomFieldRepo
@@ -59,6 +60,7 @@ func New(pool *pgxpool.Pool) *Store {
 		ProjectMembers:      &ProjectMemberRepo{pool: pool},
 		Roles:               &RoleRepo{pool: pool},
 		Attachments:         &AttachmentRepo{pool: pool},
+		CaseAttachments:     &CaseAttachmentRepo{pool: pool},
 		InstanceSettings:    &InstanceSettingsRepo{pool: pool},
 		PasswordResetTokens: &PasswordResetTokenRepo{pool: pool},
 		CustomFields:        &CustomFieldRepo{pool: pool},

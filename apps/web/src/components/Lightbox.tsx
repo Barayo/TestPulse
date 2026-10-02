@@ -1,8 +1,10 @@
 import { useEffect } from 'react'
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react'
-import type { components } from '@testpulse/shared/api'
 
-type Attachment = components['schemas']['Attachment']
+// Only id/filename are used, so any attachment-shaped schema (run-result
+// Attachment, CaseAttachment, ...) satisfies this without a cast
+// (add-case-reference-attachments).
+type LightboxAttachment = { id: string; filename: string }
 
 export function Lightbox({
   attachments,
@@ -10,12 +12,14 @@ export function Lightbox({
   onClose,
   onNavigate,
   captionExtra,
+  basePath = '/api/v1/attachments',
 }: {
-  attachments: Attachment[]
+  attachments: LightboxAttachment[]
   index: number
   onClose: () => void
   onNavigate: (index: number) => void
   captionExtra?: string
+  basePath?: string
 }) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
@@ -63,7 +67,7 @@ export function Lightbox({
       )}
 
       <img
-        src={`/api/v1/attachments/${current.id}`}
+        src={`${basePath}/${current.id}`}
         alt={current.filename}
         className="max-h-[70vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
       />
@@ -86,7 +90,7 @@ export function Lightbox({
                 i === index ? 'border-primary' : 'border-white/20'
               }`}
             >
-              <img src={`/api/v1/attachments/${att.id}`} alt="" className="size-full object-cover" />
+              <img src={`${basePath}/${att.id}`} alt="" className="size-full object-cover" />
             </button>
           ))}
         </div>

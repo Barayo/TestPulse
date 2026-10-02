@@ -58,6 +58,7 @@ func mountPublicAPI(r chi.Router, h *api) {
 			r.With(h.requirePublicProject(projectIDFromCase)).Get("/", h.getCase)
 			r.With(h.requirePublicProject(projectIDFromCase)).Get("/versions", h.listCaseVersions)
 			r.With(h.requirePublicProject(projectIDFromCase)).Get("/executions", h.listCaseExecutions)
+			r.With(h.requirePublicProject(projectIDFromCase)).Get("/attachments", h.listCaseAttachments)
 		})
 		r.Route("/suites/{suiteKey}", func(r chi.Router) {
 			r.Use(h.resolveKey("suiteKey", h.svc.SuiteIDByKey))
@@ -79,6 +80,9 @@ func mountPublicAPI(r chi.Router, h *api) {
 		})
 		r.Route("/attachments/{attachmentID}", func(r chi.Router) {
 			r.With(h.requirePublicProject(projectIDFromAttachment)).Get("/", h.getAttachment)
+		})
+		r.Route("/case-attachments/{attachmentID}", func(r chi.Router) {
+			r.With(h.requirePublicProject(projectIDFromCaseAttachment)).Get("/", h.getCaseAttachment)
 		})
 	})
 }

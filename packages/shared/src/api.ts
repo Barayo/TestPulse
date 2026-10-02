@@ -477,6 +477,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cases/{caseKey}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        /** A case's reference attachments (images/PDFs), oldest first */
+        get: operations["listCaseAttachments"];
+        put?: never;
+        /** Attach a reference file to this case — an image (PNG/JPEG/WebP), a PDF document, or a plain-text file (.txt/.log), max 5MB. Belongs to the case's identity, not a specific version; survives case edits. */
+        post: operations["uploadCaseAttachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/case-attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /** The raw file bytes for a case attachment */
+        get: operations["getCaseAttachment"];
+        put?: never;
+        post?: never;
+        /** Delete a case attachment */
+        delete: operations["deleteCaseAttachment"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/flaky-cases": {
         parameters: {
             query?: never;
@@ -1764,6 +1804,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/cases/{caseKey}/attachments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        /** A case's reference attachments, from a public project */
+        get: operations["listPublicCaseAttachments"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/public/suites/{suiteKey}": {
         parameters: {
             query?: never;
@@ -1912,6 +1971,25 @@ export interface paths {
         };
         /** The raw image bytes for an attachment, from a public project */
         get: operations["getPublicAttachment"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/case-attachments/{attachmentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        /** The raw file bytes for a case attachment, from a public project */
+        get: operations["getPublicCaseAttachment"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2991,6 +3069,14 @@ export interface components {
             runItemId: string;
             /** @description Absent when staged but not yet linked to a result. */
             resultId?: string;
+            filename: string;
+            contentType: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CaseAttachment: {
+            id: string;
+            caseId: string;
             filename: string;
             contentType: string;
             /** Format: date-time */
@@ -4605,6 +4691,116 @@ export interface operations {
                 };
             };
             400: components["responses"]["ValidationError"];
+        };
+    };
+    listCaseAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Case attachments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseAttachment"][];
+                };
+            };
+        };
+    };
+    uploadCaseAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /** Format: binary */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Created case attachment */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseAttachment"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getCaseAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Case attachment file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                    "application/pdf": string;
+                    "text/plain": string;
+                };
+            };
+            /** @description Not modified (matched If-None-Match) */
+            304: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteCaseAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     listFlakyCases: {
@@ -6970,6 +7166,29 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    listPublicCaseAttachments: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                caseKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Case attachments */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CaseAttachment"][];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
     getPublicSuite: {
         parameters: {
             query?: never;
@@ -7160,6 +7379,33 @@ export interface operations {
                     "image/png": string;
                     "image/jpeg": string;
                     "image/webp": string;
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getPublicCaseAttachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Case attachment file */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                    "image/webp": string;
+                    "application/pdf": string;
+                    "text/plain": string;
                 };
             };
             404: components["responses"]["NotFound"];

@@ -21,6 +21,9 @@ import { CaseParametersView } from '@/components/CaseParametersView'
 import { PRIORITIES, type Priority, type CustomField } from '@/components/ClassificationEditor'
 import { ClassificationPills, AutomationPill } from '@/components/Pills'
 import { JiraLinkBadge } from '@/components/JiraLinkBadge'
+import { CaseAttachmentField } from '@/components/CaseAttachmentField'
+import { Lightbox } from '@/components/Lightbox'
+import type { FailedUpload } from '@/components/AttachmentField'
 import { FolderPicker } from '@/components/FolderPicker'
 import { RowActionMenu, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { CaseFormatEditor } from '@/components/CaseFormatEditor'
@@ -41,6 +44,10 @@ type Suite = components['schemas']['Suite']
 type Requirement = components['schemas']['Requirement']
 type Step = components['schemas']['Step']
 type CaseParameters = components['schemas']['CaseParameters']
+type CaseAttachment = components['schemas']['CaseAttachment']
+
+const MAX_CASE_ATTACHMENT_UPLOAD_BYTES = 5 * 1024 * 1024
+const ACCEPTED_CASE_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'application/pdf', 'text/plain']
 
 function firstNameOf(displayName: string): string {
   return displayName.split(' ')[0]
@@ -94,6 +101,12 @@ export default function CaseDetailPage() {
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [restoringVersion, setRestoringVersion] = useState<number | null>(null)
 
+  const [caseAttachments, setCaseAttachments] = useState<CaseAttachment[]>([])
+  const [failedCaseUploads, setFailedCaseUploads] = useState<FailedUpload[]>([])
+  const [lastCaseAttachError, setLastCaseAttachError] = useState<{ filename: string; reason: string } | null>(null)
+  const [isUploadingCaseAttachment, setIsUploadingCaseAttachment] = useState(false)
+  const [caseLightboxIndex, setCaseLightboxIndex] = useState<number | null>(null)
+
   const load = useCallback(async () => {
     // Waits for the session check and confirmed project read access before
     // firing either branch (design.md D2/D11, unify-authenticated-and-public-views)
@@ -102,7 +115,7 @@ export default function CaseDetailPage() {
     if (!projectKey || !caseKey || access === 'loading') return
     setNotFound(false)
     if (access === 'member') {
-      const [{ data: p }, f, { data: c }, { data: v }, s, users, { data: execs }, { data: fields }, { data: reqs }] = await Promise.all([
+      const [{ data: p }, f, { data: c }, { data: v }, s, users, { data: execs }, { data: fields }, { data: reqs }, { data: atts }] = await Promise.all([
         api.GET('/api/v1/projects/{projectKey}', { params: { path: { projectKey } } }),
         fetchAllPages((cursor) =>
           api.GET('/api/v1/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
@@ -120,6 +133,7 @@ export default function CaseDetailPage() {
         }),
         api.GET('/api/v1/projects/{projectKey}/custom-fields', { params: { path: { projectKey } } }),
         api.GET('/api/v1/projects/{projectKey}/requirements', { params: { path: { projectKey } } }),
+        api.GET('/api/v1/cases/{caseKey}/attachments', { params: { path: { caseKey } } }),
       ])
       if (!p || !c) {
         setNotFound(true)
@@ -133,6 +147,7 @@ export default function CaseDetailPage() {
       setResultsData(toResultsData(execs ?? []))
       setCustomFieldDefs(fields ?? [])
       setRequirements(reqs ?? [])
+      setCaseAttachments(atts ?? [])
       setUserIdentities(
         Object.fromEntries(
           users.items.map((u) => [u.id, { displayName: u.displayName ?? u.email, avatarKey: u.avatarKey }]),
@@ -143,7 +158,7 @@ export default function CaseDetailPage() {
     // Anonymous: GET /api/v1/users has no public equivalent and never
     // gets one (design.md D1/D10) — version-history rows simply show no
     // author name, since userIdentities stays empty here.
-    const [{ data: p }, f, { data: c }, { data: v }, s, { data: execs }, { data: fields }] = await Promise.all([
+    const [{ data: p }, f, { data: c }, { data: v }, s, { data: execs }, { data: fields }, { data: atts }] = await Promise.all([
       api.GET('/api/v1/public/projects/{projectKey}', { params: { path: { projectKey } } }),
       fetchAllPages((cursor) =>
         api.GET('/api/v1/public/projects/{projectKey}/folders', { params: { path: { projectKey }, query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
@@ -157,6 +172,7 @@ export default function CaseDetailPage() {
         params: { path: { caseKey }, query: { order: 'recent', limit: RECENT_EXECUTIONS_LIMIT } },
       }),
       api.GET('/api/v1/public/projects/{projectKey}/custom-fields', { params: { path: { projectKey } } }),
+      api.GET('/api/v1/public/cases/{caseKey}/attachments', { params: { path: { caseKey } } }),
     ])
     if (!p || !c) {
       setNotFound(true)
@@ -169,6 +185,7 @@ export default function CaseDetailPage() {
     setSuites(s.items)
     setResultsData(toResultsData(execs ?? []))
     setCustomFieldDefs(fields ?? [])
+    setCaseAttachments(atts ?? [])
     setUserIdentities({})
   }, [projectKey, caseKey, access])
 
@@ -270,6 +287,56 @@ export default function CaseDetailPage() {
       body: { jiraIssueKey },
     })
     await load()
+  }
+
+  function rejectCaseAttachment(file: File): string | null {
+    const looksLikeTextByName = /\.(txt|log)$/i.test(file.name)
+    const typeAccepted = ACCEPTED_CASE_ATTACHMENT_TYPES.includes(file.type) || (looksLikeTextByName && (file.type === '' || file.type === 'text/plain'))
+    if (!typeAccepted) {
+      return "isn't a PNG, JPEG, WebP image, PDF, or plain-text (.txt/.log) file. Try a different file."
+    }
+    if (file.size > MAX_CASE_ATTACHMENT_UPLOAD_BYTES) {
+      return `is ${(file.size / (1024 * 1024)).toFixed(1)}MB — the limit is 5MB. Try a smaller file.`
+    }
+    return null
+  }
+
+  // Immediate action, not folded into isEditing/saveEdit — attachments
+  // aren't versioned content, so staging them behind Save/Cancel would
+  // misleadingly imply Cancel reverts them (design.md D1).
+  async function uploadCaseAttachment(file: File) {
+    if (!caseKey) return
+    const reason = rejectCaseAttachment(file)
+    if (reason) {
+      setLastCaseAttachError({ filename: file.name, reason })
+      setFailedCaseUploads((prev) => [...prev, { id: `${file.name}-${Date.now()}`, filename: file.name }])
+      return
+    }
+    setLastCaseAttachError(null)
+    setIsUploadingCaseAttachment(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await fetch(`/api/v1/cases/${caseKey}/attachments`, {
+        method: 'POST',
+        body: formData,
+        credentials: 'include',
+      })
+      if (!res.ok) {
+        setLastCaseAttachError({ filename: file.name, reason: 'failed to upload. Try again.' })
+        setFailedCaseUploads((prev) => [...prev, { id: `${file.name}-${Date.now()}`, filename: file.name }])
+        return
+      }
+      const created = (await res.json()) as CaseAttachment
+      setCaseAttachments((prev) => [...prev, created])
+    } finally {
+      setIsUploadingCaseAttachment(false)
+    }
+  }
+
+  async function removeCaseAttachment(id: string) {
+    setCaseAttachments((prev) => prev.filter((a) => a.id !== id))
+    await fetch(`/api/v1/case-attachments/${id}`, { method: 'DELETE', credentials: 'include' })
   }
 
   async function confirmDeleteCase() {
@@ -625,6 +692,16 @@ export default function CaseDetailPage() {
               }
               wrap
             />
+            <CaseAttachmentField
+              attachments={caseAttachments}
+              failed={failedCaseUploads}
+              lastError={lastCaseAttachError}
+              uploading={isUploadingCaseAttachment}
+              canEdit={canEdit}
+              onSelectFile={(file) => void uploadCaseAttachment(file)}
+              onRemove={(id) => void removeCaseAttachment(id)}
+              onOpenLightbox={setCaseLightboxIndex}
+            />
             {customFieldDefs.length > 0 &&
               (() => {
                 const values = isEditing ? customFieldValues : (testCase.content.customFields ?? {})
@@ -771,6 +848,16 @@ export default function CaseDetailPage() {
             </CaseSidebarSection>
         </div>
       </div>
+
+      {caseLightboxIndex !== null && (
+        <Lightbox
+          attachments={caseAttachments.filter((a) => a.contentType.startsWith('image/'))}
+          index={caseLightboxIndex}
+          onNavigate={setCaseLightboxIndex}
+          onClose={() => setCaseLightboxIndex(null)}
+          basePath="/api/v1/case-attachments"
+        />
+      )}
 
       {viewingVersion !== null && (
         <VersionDetailDialog

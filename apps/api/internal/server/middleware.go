@@ -274,6 +274,10 @@ func projectIDFromAttachment(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForAttachment(r.Context(), chi.URLParam(r, "attachmentID"))
 }
 
+func projectIDFromCaseAttachment(h *api, r *http.Request) (string, error) {
+	return h.svc.ProjectIDForCaseAttachment(r.Context(), chi.URLParam(r, "attachmentID"))
+}
+
 func projectIDFromRelease(h *api, r *http.Request) (string, error) {
 	return h.svc.ProjectIDForRelease(r.Context(), resolvedID(r, "releaseKey"))
 }

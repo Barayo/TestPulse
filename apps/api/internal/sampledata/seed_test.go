@@ -367,6 +367,46 @@ func TestSeedFlagshipCaseShowcasesMultipleVerdictColors(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesCaseReferenceAttachment covers
+// add-case-reference-attachments: the login case carries a reference
+// attachment, distinct from the run-result screenshot attachment seeded
+// elsewhere (login-failure.png, attached to a result, not a case).
+func TestSeedContentShowcasesCaseReferenceAttachment(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	cases, err := svc.ListCases(actorCtx, p.ID)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	var login *domain.TestCase
+	for i, c := range cases {
+		if c.Content.Title == "User can log in with valid credentials" {
+			login = &cases[i]
+		}
+	}
+	if login == nil {
+		t.Fatal("no case titled \"User can log in with valid credentials\" seeded")
+	}
+
+	atts, err := svc.ListCaseAttachments(actorCtx, login.ID)
+	if err != nil {
+		t.Fatalf("ListCaseAttachments: %v", err)
+	}
+	if len(atts) == 0 {
+		t.Fatal("login case has no reference attachments, want at least one")
+	}
+	if atts[0].ContentType != "image/png" {
+		t.Errorf("attachment ContentType = %q, want image/png", atts[0].ContentType)
+	}
+}
+
 // TestSeedContentSurfacesAFlakyCase covers add-flaky-test-detection's
 // showcase: the same seeded flaky version (checkoutValid — passes in three
 // runs, fails in a fourth, all on its one and only version) must also
