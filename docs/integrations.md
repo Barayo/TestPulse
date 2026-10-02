@@ -1,6 +1,22 @@
 # Integrations
 
+## Adding a new vendor integration
+
+Before shipping an integration that names a third-party vendor (an
+importer, a connector, anything that says "Import from X" or syncs with
+X): fetch that vendor's current published trademark policy, add a
+disclaimer to this file matching the pattern used by every section below,
+and dispatch David (`.claude/agents/david.md`) against the change's
+design.md as a gating review step — the same checkpoint Luis/Jose/Pepe
+already sit at for security/architecture/UX. Never put a vendor's name
+into the tool's own name (`tools/import-connector`'s `--source=<vendor>`
+flag is the established pattern); never use a vendor's logo.
+
 ## Jira connector
+
+> Independent, unofficial integration — not affiliated with, endorsed by,
+> or sponsored by Atlassian. "Jira" is a trademark of Atlassian
+> Corporation Plc. No Jira logo is used anywhere in TestPulse's docs or UI.
 
 The Jira connector (`add-jira-connector`) links test cases and run items to
 Jira issues and keeps a cached summary/status in sync — TestPulse's first

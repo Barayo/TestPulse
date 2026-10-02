@@ -1,4 +1,4 @@
-.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down seed-demo
+.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down seed-demo license-report
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -73,3 +73,6 @@ compose-up: ## Start the full stack with docker compose
 
 compose-down: ## Stop the compose stack
 	docker compose -f deploy/compose/docker-compose.yml down
+
+license-report: ## Regenerate THIRD-PARTY-LICENSES from the npm workspace and all Go modules
+	node scripts/license-report.mjs > THIRD-PARTY-LICENSES

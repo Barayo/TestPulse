@@ -182,6 +182,40 @@ jobs:
       - name: Build
         run: npm -w web run build
 
+  license-check:
+    name: Dependency license check
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: apps/api/go.mod
+      - name: Install
+        run: npm ci
+      - name: THIRD-PARTY-LICENSES is current, and no disallowed license is present
+        # trademark-license-review design.md D2/D3 — scripts/license-report.mjs
+        # is the single source of truth for both checks: a drift check (the
+        # committed file must match a fresh scan) and a disallowed/unknown
+        # license check (GPL-2.0-only, the LGPL family, BSL-1.1, SSPL-1.0,
+        # Elastic-2.0 are all incompatible with TestPulse's own AGPL-3.0-only
+        # license; an unrecognized license fails closed rather than passing
+        # an unreviewable dependency silently).
+        run: |
+          node scripts/license-report.mjs > /tmp/license-report.txt
+          if ! diff -u THIRD-PARTY-LICENSES /tmp/license-report.txt; then
+            echo "THIRD-PARTY-LICENSES is stale — run 'make license-report' and commit the result"
+            exit 1
+          fi
+          if grep -E ': (GPL-2\.0|LGPL-2\.0|LGPL-2\.1|LGPL-3\.0|BSL-1\.1|SSPL-1\.0|Elastic-2\.0|UNKNOWN)' /tmp/license-report.txt; then
+            echo "Disallowed or unrecognized license found above"
+            exit 1
+          fi
+
   e2e:
     name: E2E (Playwright vs compose stack)
     runs-on: ubuntu-latest
