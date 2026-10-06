@@ -2210,3 +2210,45 @@ func TestSeedContentShowcasesWebhookDestinationConfiguration(t *testing.T) {
 		t.Errorf("destination URL = %q, want the documented placeholder", destinations[0].URL)
 	}
 }
+
+// Showcases add-ui-i18n's per-user language override (design.md D8): the
+// instance-wide toggle is on, the default language is untouched (so the
+// Sample Project doesn't surprise-render in a non-English language for
+// most evaluators), and the one seeded demo user who opted in actually has
+// a personal language set.
+func TestSeedContentShowcasesPerUserLanguage(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+
+	settings, err := svc.InstanceSettings(actorCtx)
+	if err != nil {
+		t.Fatalf("InstanceSettings: %v", err)
+	}
+	if !settings.PerUserLanguageEnabled {
+		t.Error("PerUserLanguageEnabled = false, want true — the capability should be visible/working in the Sample Project's Instance Settings")
+	}
+	if settings.DefaultLanguage != "en" {
+		t.Errorf("DefaultLanguage = %q, want unchanged \"en\" — the instance default should not surprise-render in another language", settings.DefaultLanguage)
+	}
+
+	users, err := svc.ListUsers(actorCtx)
+	if err != nil {
+		t.Fatalf("ListUsers: %v", err)
+	}
+	var julia domain.User
+	for _, u := range users {
+		if u.Email == "julia@example.com" {
+			julia = u
+		}
+	}
+	if julia.ID == "" {
+		t.Fatal("seeded demo user julia@example.com not found")
+	}
+	if julia.Language == nil || *julia.Language != "es" {
+		t.Errorf("julia@example.com Language = %v, want \"es\" — showcases the per-user override actually taking effect", julia.Language)
+	}
+}

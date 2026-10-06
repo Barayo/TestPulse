@@ -1,5 +1,6 @@
 import { XIcon } from 'lucide-react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 
 // A small, dependency-free stand-in for toast infrastructure the app
 // doesn't have (rework-runs-list-ux design.md) — two call sites don't
@@ -17,6 +18,7 @@ export function ConfirmBanner({
   linkLabel?: string
   onDismiss: () => void
 }) {
+  const { t } = useTranslation()
   return (
     <div
       role="status"
@@ -36,7 +38,7 @@ export function ConfirmBanner({
       <button
         type="button"
         onClick={onDismiss}
-        aria-label="Dismiss"
+        aria-label={t('ConfirmBanner.dismissAriaLabel')}
         className="mt-0.5 shrink-0 text-muted-foreground hover:text-foreground"
       >
         <XIcon className="size-4" aria-hidden="true" />

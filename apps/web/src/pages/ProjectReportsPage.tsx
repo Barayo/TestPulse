@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
@@ -16,6 +17,7 @@ type ProjectStatusSummary = components['schemas']['ProjectStatusSummary']
 type FlakyCase = components['schemas']['FlakyCase']
 
 export default function ProjectReportsPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const { user, loading: authLoading } = useAuth()
@@ -57,7 +59,10 @@ export default function ProjectReportsPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {t('ProjectReportsPage.notFoundMessage')}{' '}
+        <Link to="/" className="underline">
+          {t('ProjectReportsPage.goToProjectsLink')}
+        </Link>
       </p>
     )
   }
@@ -67,36 +72,36 @@ export default function ProjectReportsPage() {
       <Breadcrumbs
         segments={trimProjectBreadcrumb(
           [
-            { label: 'Projects', href: '/' },
+            { label: t('ProjectReportsPage.projectsBreadcrumb'), href: '/' },
             { label: project?.name ?? '', href: `/projects/${projectKey}` },
-            { label: 'Reports' },
+            { label: t('ProjectReportsPage.reportsBreadcrumb') },
           ],
-          'Reports',
+          t('ProjectReportsPage.reportsBreadcrumb'),
         )}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Status breakdown</CardTitle>
+          <CardTitle className="tp-heading">{t('ProjectReportsPage.statusBreakdownHeading')}</CardTitle>
         </CardHeader>
         <CardContent>
           <RunStatusBreakdown
             total={summary?.total ?? 0}
             counts={summary?.counts ?? {}}
-            emptyMessage="No runs yet in this project — its status breakdown will appear here once one exists."
+            emptyMessage={t('ProjectReportsPage.statusBreakdownEmptyMessage')}
           />
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Flaky cases</CardTitle>
+          <CardTitle className="tp-heading">{t('ProjectReportsPage.flakyCasesHeading')}</CardTitle>
         </CardHeader>
         <CardContent>
           {flaky.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No flaky cases right now.</p>
+            <p className="text-sm text-muted-foreground">{t('ProjectReportsPage.noFlakyCasesMessage')}</p>
           ) : (
-            <ul aria-label="Flaky cases" className="divide-y rounded-md border text-sm">
+            <ul aria-label={t('ProjectReportsPage.flakyCasesAriaLabel')} className="divide-y rounded-md border text-sm">
               {flaky.map((f) => (
                 <li key={f.caseKey} className="flex items-center gap-3 px-3 py-2">
                   <Link
@@ -107,7 +112,7 @@ export default function ProjectReportsPage() {
                   </Link>
                   <span className="shrink-0 text-xs text-muted-foreground">{f.caseKey}</span>
                   <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                    v{f.currentVersion}
+                    {t('ProjectReportsPage.versionLabel', { version: f.currentVersion })}
                   </span>
                   <FlakyPill />
                   <span className="shrink-0 text-xs font-semibold tabular-nums">{f.rate}%</span>
@@ -120,11 +125,11 @@ export default function ProjectReportsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Compare runs</CardTitle>
+          <CardTitle className="tp-heading">{t('ProjectReportsPage.compareRunsHeading')}</CardTitle>
         </CardHeader>
         <CardContent>
           <Button type="button" onClick={() => navigate(`/projects/${projectKey}/runs/compare`)}>
-            Compare runs
+            {t('ProjectReportsPage.compareRunsButton')}
           </Button>
         </CardContent>
       </Card>

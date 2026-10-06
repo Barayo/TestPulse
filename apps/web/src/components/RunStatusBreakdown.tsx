@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import type { TFunction, ParseKeys } from 'i18next'
 import type { components } from '@testpulse/shared/api'
 
 type Status = components['schemas']['Status']
@@ -19,13 +21,22 @@ export const STATUS_COLOR: Record<Status, string> = {
 export const RETEST_TEXTURE =
   'repeating-linear-gradient(135deg, transparent, transparent 3px, color-mix(in srgb, var(--background) 45%, transparent) 3px, color-mix(in srgb, var(--background) 45%, transparent) 6px)'
 
-export const STATUS_LABEL: Record<Status, string> = {
-  pending: 'Pending',
-  pass: 'Pass',
-  failed: 'Failed',
-  skipped: 'Skipped',
-  blocked: 'Blocked',
-  retest: 'Retest',
+// Was a plain Record<Status, string> constant (STATUS_LABEL) before the
+// i18n retrofit (add-ui-i18n) — every call site now already has a `t` in
+// scope (all four consuming files are components/hook-bodies), so this
+// became a small function taking `t` explicitly rather than a module-level
+// constant, which can't call useTranslation() itself.
+const STATUS_LABEL_KEYS: Record<Status, ParseKeys> = {
+  pending: 'RunStatusBreakdown.statusPending',
+  pass: 'RunStatusBreakdown.statusPass',
+  failed: 'RunStatusBreakdown.statusFailed',
+  skipped: 'RunStatusBreakdown.statusSkipped',
+  blocked: 'RunStatusBreakdown.statusBlocked',
+  retest: 'RunStatusBreakdown.statusRetest',
+}
+
+export function statusLabel(status: Status, t: TFunction): string {
+  return t(STATUS_LABEL_KEYS[status])
 }
 
 // Bad-outcome-first reading order: pass anchors the bar, then the two
@@ -35,12 +46,14 @@ export const STATUS_ORDER: Status[] = ['pass', 'failed', 'blocked', 'skipped', '
 export function RunStatusBreakdown({
   total,
   counts,
-  emptyMessage = 'No items yet — add cases to this run to see its status breakdown here.',
+  emptyMessage,
 }: {
   total: number
   counts: Partial<Record<Status, number>>
   emptyMessage?: string
 }) {
+  const { t } = useTranslation()
+  const effectiveEmptyMessage = emptyMessage ?? t('RunStatusBreakdown.defaultEmptyMessage')
   if (total === 0) {
     return (
       <div className="space-y-2">
@@ -49,7 +62,7 @@ export function RunStatusBreakdown({
           aria-hidden="true"
           className="block h-2.5 w-full rounded-full border-[1.5px] border-dashed border-muted-foreground/30"
         />
-        <p className="text-sm text-muted-foreground">{emptyMessage}</p>
+        <p className="text-sm text-muted-foreground">{effectiveEmptyMessage}</p>
       </div>
     )
   }
@@ -60,14 +73,14 @@ export function RunStatusBreakdown({
     <div className="space-y-2">
       <div className="flex items-baseline gap-2">
         <span className="text-2xl font-black tracking-tight">{passRate}%</span>
-        <span className="text-xs text-muted-foreground">pass · {total} items</span>
+        <span className="text-xs text-muted-foreground">{t('RunStatusBreakdown.passRateCaption', { count: total })}</span>
       </div>
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-border">
         {STATUS_ORDER.filter((status) => (counts[status] ?? 0) > 0).map((status) => (
           <span
             key={status}
             data-testid={`run-status-segment-${status}`}
-            title={`${STATUS_LABEL[status]} · ${counts[status]}`}
+            title={`${statusLabel(status, t)} · ${counts[status]}`}
             className="h-full"
             style={{
               width: `${((counts[status] ?? 0) / total) * 100}%`,
@@ -77,7 +90,7 @@ export function RunStatusBreakdown({
           />
         ))}
       </div>
-      <ul aria-label="Status breakdown" className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+      <ul aria-label={t('RunStatusBreakdown.statusBreakdownAriaLabel')} className="flex flex-wrap gap-3 text-xs text-muted-foreground">
         {STATUS_ORDER.map((status) => (
           <li key={status} className="flex items-center gap-1.5">
             <span
@@ -88,7 +101,7 @@ export function RunStatusBreakdown({
                 backgroundImage: status === 'retest' ? RETEST_TEXTURE : undefined,
               }}
             />
-            <span>{STATUS_LABEL[status]}</span>
+            <span>{statusLabel(status, t)}</span>
             <span>{counts[status] ?? 0}</span>
           </li>
         ))}

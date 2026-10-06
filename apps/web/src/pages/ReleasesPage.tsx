@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { PackageIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -25,6 +26,7 @@ type RollupRow = { runCount: number; passRate: number | null }
 type ReleaseRow = Release & { rollup: RollupRow; planCount: number }
 
 function ReleaseCard({ release, projectKey }: { release: ReleaseRow; projectKey: string }) {
+  const { t } = useTranslation()
   const rate = release.rollup.passRate
   return (
     <li className="relative">
@@ -49,8 +51,12 @@ function ReleaseCard({ release, projectKey }: { release: ReleaseRow; projectKey:
         </span>
         <ProgressBar rate={rate} />
         <span className="text-xs text-muted-foreground">
-          {release.planCount} test plan{release.planCount === 1 ? '' : 's'} · {release.rollup.runCount} run
-          {release.rollup.runCount === 1 ? '' : 's'}
+          {t('ReleasesPage.planRunSummary', {
+            planCount: release.planCount,
+            planPlural: release.planCount === 1 ? '' : 's',
+            runCount: release.rollup.runCount,
+            runPlural: release.rollup.runCount === 1 ? '' : 's',
+          })}
         </span>
       </Link>
     </li>
@@ -58,6 +64,7 @@ function ReleaseCard({ release, projectKey }: { release: ReleaseRow; projectKey:
 }
 
 export default function ReleasesPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
@@ -108,38 +115,39 @@ export default function ReleasesPage() {
       <Breadcrumbs
         segments={trimProjectBreadcrumb(
           [
-            { label: 'Projects', href: '/' },
+            { label: t('ReleasesPage.projectsBreadcrumb'), href: '/' },
             { label: project?.name ?? '', href: `/projects/${projectKey}` },
-            { label: 'Releases' },
+            { label: t('ReleasesPage.releasesBreadcrumb') },
           ],
-          'Releases',
+          t('ReleasesPage.releasesBreadcrumb'),
         )}
       />
 
       <div className="flex items-center justify-between">
-        <h1 className="tp-heading text-2xl">Releases</h1>
+        <h1 className="tp-heading text-2xl">{t('ReleasesPage.title')}</h1>
         {permissions?.manageProject && (
           <Button type="button" onClick={() => setCreating(true)}>
-            + New release
+            {t('ReleasesPage.newReleaseButton')}
           </Button>
         )}
       </div>
 
       {releases.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center">
-          <p className="mb-1 text-sm font-medium">No releases yet</p>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Releases group Test Plans and Runs under a supported version (e.g. "2026.1"). Skip this entirely if your
-            project doesn't need it.
-          </p>
+          <p className="mb-1 text-sm font-medium">{t('ReleasesPage.emptyTitle')}</p>
+          <p className="mb-4 text-sm text-muted-foreground">{t('ReleasesPage.emptyDescription')}</p>
           {permissions?.manageProject && (
             <Button type="button" onClick={() => setCreating(true)}>
-              + New release
+              {t('ReleasesPage.newReleaseButton')}
             </Button>
           )}
         </div>
       ) : (
-        <ul aria-label="Releases" className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))' }}>
+        <ul
+          aria-label={t('ReleasesPage.releasesListAriaLabel')}
+          className="grid gap-4"
+          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))' }}
+        >
           {releases.map((r) => (
             <ReleaseCard key={r.id} release={r} projectKey={projectKey} />
           ))}
@@ -148,28 +156,34 @@ export default function ReleasesPage() {
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>New release</DialogTitle>
+          <DialogTitle>{t('ReleasesPage.newReleaseDialogTitle')}</DialogTitle>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor="release-name">Name</Label>
-              <Input id="release-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="2026.2" />
+              <Label htmlFor="release-name">{t('ReleasesPage.nameLabel')}</Label>
+              <Input
+                id="release-name"
+                autoFocus
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('ReleasesPage.namePlaceholder')}
+              />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="release-description">Description</Label>
+              <Label htmlFor="release-description">{t('ReleasesPage.descriptionLabel')}</Label>
               <Textarea
                 id="release-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What's shipping in this release…"
+                placeholder={t('ReleasesPage.descriptionPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreating(false)}>
-              Cancel
+              {t('ReleasesPage.cancelButton')}
             </Button>
             <Button disabled={!name.trim()} onClick={() => void handleCreate()}>
-              Create
+              {t('ReleasesPage.createButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

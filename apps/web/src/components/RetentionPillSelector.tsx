@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { ParseKeys } from 'i18next'
 import { Input } from '@/components/ui/input'
 
 // Preset thresholds, in days — the values most admins reach for (mirrors
@@ -7,12 +9,12 @@ import { Input } from '@/components/ui/input'
 // instance-wide day-threshold control (Run retention, Auto-archive
 // inactive projects — add-data-retention design.md D8/D9).
 const PRESETS = [30, 90, 365]
-const SEGMENTS: { label: string; value: number | 'custom' }[] = [
-  { label: 'Off', value: 0 },
-  { label: '30d', value: 30 },
-  { label: '90d', value: 90 },
-  { label: '365d', value: 365 },
-  { label: 'Custom', value: 'custom' },
+const SEGMENTS: { labelKey: ParseKeys; value: number | 'custom' }[] = [
+  { labelKey: 'RetentionPillSelector.off', value: 0 },
+  { labelKey: 'RetentionPillSelector.days30', value: 30 },
+  { labelKey: 'RetentionPillSelector.days90', value: 90 },
+  { labelKey: 'RetentionPillSelector.days365', value: 365 },
+  { labelKey: 'RetentionPillSelector.custom', value: 'custom' },
 ]
 
 interface RetentionPillSelectorProps {
@@ -27,6 +29,7 @@ interface RetentionPillSelectorProps {
 }
 
 export function RetentionPillSelector({ value, onSelect, ariaLabel, customAriaLabel }: RetentionPillSelectorProps) {
+  const { t } = useTranslation()
   // showCustom/customInput are UI-only: whether the inline "days" field is
   // revealed, and its live (uncommitted) text. Kept separate from value
   // (the saved threshold) so clicking "Custom" can reveal the field before
@@ -59,7 +62,7 @@ export function RetentionPillSelector({ value, onSelect, ariaLabel, customAriaLa
           const active = seg.value === 'custom' ? showCustom : !showCustom && value === seg.value
           return (
             <button
-              key={seg.label}
+              key={seg.labelKey}
               type="button"
               aria-pressed={active}
               onClick={() => (seg.value === 'custom' ? setShowCustom(true) : void onSelect(seg.value))}
@@ -67,7 +70,7 @@ export function RetentionPillSelector({ value, onSelect, ariaLabel, customAriaLa
                 active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              {seg.label}
+              {t(seg.labelKey)}
             </button>
           )
         })}

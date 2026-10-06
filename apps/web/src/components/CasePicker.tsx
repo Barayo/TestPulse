@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CheckIcon } from 'lucide-react'
 import { PRIORITIES, type Priority } from '@/components/ClassificationEditor'
 import { ClassificationPills, distinctValues, tagPills } from '@/components/Pills'
@@ -6,12 +7,6 @@ import { ResizeHandle } from '@/components/ResizeHandle'
 import { useResizableWidth } from '@/lib/useResizableWidth'
 import { isEditableElementFocused } from '@/lib/keyboardShortcutGuard'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
-
-const CASE_PICKER_SHORTCUTS: ShortcutEntry[] = [
-  { keys: 'J/K · ↑/↓', label: 'Move focus' },
-  { keys: 'Space', label: 'Select focused case' },
-  { keys: 'Shift+Space', label: 'Extend selection' },
-]
 
 export type CasePickerFolder = { id: string; name: string; parentFolderId?: string }
 
@@ -120,6 +115,7 @@ function TreeNode({
   scope: string | null
   onSelectScope: (id: string) => void
 }) {
+  const { t } = useTranslation()
   const folder = tree.byId.get(folderId)
   if (!folder) return null
   const kids = tree.childrenOf.get(folderId) ?? []
@@ -130,7 +126,7 @@ function TreeNode({
       <div
         role="treeitem"
         aria-selected={isSelected}
-        aria-label={`${folder.name} (${count} ${count === 1 ? 'case' : 'cases'})`}
+        aria-label={t('CasePicker.folderAriaLabel', { name: folder.name, count, unit: count === 1 ? t('CasePicker.case') : t('CasePicker.cases') })}
         tabIndex={0}
         className={`flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-sm ${isSelected ? 'bg-accent font-medium text-primary' : 'hover:bg-accent'}`}
         style={{ paddingLeft: 8 + depth * 14 }}
@@ -193,6 +189,12 @@ export function CasePicker({
   // (unify-authenticated-and-public-views tasks.md 2.2).
   readOnly?: boolean
 }) {
+  const { t } = useTranslation()
+  const CASE_PICKER_SHORTCUTS: ShortcutEntry[] = [
+    { keys: 'J/K · ↑/↓', label: t('CasePicker.shortcutMoveFocus') },
+    { keys: 'Space', label: t('CasePicker.shortcutSelectFocused') },
+    { keys: 'Shift+Space', label: t('CasePicker.shortcutExtendSelection') },
+  ]
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [search, setSearch] = useState('')
   const [lastToggledId, setLastToggledId] = useState<string | null>(null)
@@ -336,8 +338,8 @@ export function CasePicker({
         <div className="relative min-w-[180px] flex-1">
           <input
             type="text"
-            aria-label="Search case titles"
-            placeholder="Search case titles…"
+            aria-label={t('CasePicker.searchAriaLabel')}
+            placeholder={t('CasePicker.searchPlaceholder')}
             className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
             value={search}
             onChange={(e) => {
@@ -347,7 +349,7 @@ export function CasePicker({
           />
         </div>
         <select
-          aria-label="Tag"
+          aria-label={t('CasePicker.tagAriaLabel')}
           className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           value={filters.tag}
           onChange={(e) => {
@@ -355,7 +357,7 @@ export function CasePicker({
             resetScroll()
           }}
         >
-          <option value="">All tags</option>
+          <option value="">{t('CasePicker.allTags')}</option>
           {tagOptions.map((v) => (
             <option key={v} value={v}>
               {capitalize(v)}
@@ -363,7 +365,7 @@ export function CasePicker({
           ))}
         </select>
         <select
-          aria-label="Priority"
+          aria-label={t('CasePicker.priorityAriaLabel')}
           className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           value={filters.priority}
           onChange={(e) => {
@@ -371,7 +373,7 @@ export function CasePicker({
             resetScroll()
           }}
         >
-          <option value="">All priorities</option>
+          <option value="">{t('CasePicker.allPriorities')}</option>
           {PRIORITIES.map((v) => (
             <option key={v} value={v}>
               {capitalize(v)}
@@ -379,7 +381,7 @@ export function CasePicker({
           ))}
         </select>
         <select
-          aria-label="Platform"
+          aria-label={t('CasePicker.platformAriaLabel')}
           className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           value={filters.platform}
           onChange={(e) => {
@@ -387,7 +389,7 @@ export function CasePicker({
             resetScroll()
           }}
         >
-          <option value="">All platforms</option>
+          <option value="">{t('CasePicker.allPlatforms')}</option>
           {platformOptions.map((v) => (
             <option key={v} value={v}>
               {capitalize(v)}
@@ -395,7 +397,7 @@ export function CasePicker({
           ))}
         </select>
         <select
-          aria-label="Test type"
+          aria-label={t('CasePicker.testTypeAriaLabel')}
           className="rounded-md border border-input bg-background px-2 py-1.5 text-sm"
           value={filters.testType}
           onChange={(e) => {
@@ -403,7 +405,7 @@ export function CasePicker({
             resetScroll()
           }}
         >
-          <option value="">All test types</option>
+          <option value="">{t('CasePicker.allTestTypes')}</option>
           {testTypeOptions.map((v) => (
             <option key={v} value={v}>
               {capitalize(v)}
@@ -419,7 +421,7 @@ export function CasePicker({
             resetScroll()
           }}
         >
-          Clear filters
+          {t('CasePicker.clearFilters')}
         </button>
         <button
           type="button"
@@ -430,23 +432,23 @@ export function CasePicker({
             resetScroll()
           }}
         >
-          Selected only ({selected.size})
+          {t('CasePicker.selectedOnly', { count: selected.size })}
         </button>
       </div>
 
       <div className="flex items-center justify-between text-xs text-muted-foreground">
         <span>
-          Scope: <span className="font-medium text-foreground">{scope ? tree.byId.get(scope)?.name : 'All sections'}</span>
+          {t('CasePicker.scopeLabel')} <span className="font-medium text-foreground">{scope ? tree.byId.get(scope)?.name : t('CasePicker.allSections')}</span>
         </span>
         {scope && (
           <button type="button" className="text-primary underline underline-offset-2" onClick={clearScope}>
-            Clear scope
+            {t('CasePicker.clearScope')}
           </button>
         )}
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Showing <span className="font-medium text-foreground">{visible.length}</span> of {cases.length} cases
+        {t('CasePicker.showingPrefix')} <span className="font-medium text-foreground">{visible.length}</span> {t('CasePicker.showingSuffix', { count: cases.length })}
       </p>
 
       <div className="flex overflow-hidden rounded-md border">
@@ -454,16 +456,16 @@ export function CasePicker({
           <>
             <div className="shrink-0 border-r" style={{ width: railWidth.width }}>
               <div className="flex items-center justify-between px-2 py-1.5">
-                <span className="tp-label">Sections</span>
+                <span className="tp-label">{t('CasePicker.sections')}</span>
                 <button type="button" className="text-xs text-primary" onClick={() => setRailCollapsed(true)}>
-                  Hide
+                  {t('CasePicker.hide')}
                 </button>
               </div>
-              <div role="tree" aria-label="Sections" className="max-h-96 overflow-y-auto px-1 pb-2">
+              <div role="tree" aria-label={t('CasePicker.sections')} className="max-h-96 overflow-y-auto px-1 pb-2">
                 <div
                   role="treeitem"
                   aria-selected={scope === null}
-                  aria-label={`All sections (${cases.length} ${cases.length === 1 ? 'case' : 'cases'})`}
+                  aria-label={t('CasePicker.folderAriaLabel', { name: t('CasePicker.allSections'), count: cases.length, unit: cases.length === 1 ? t('CasePicker.case') : t('CasePicker.cases') })}
                   tabIndex={0}
                   className={`flex cursor-pointer items-center justify-between gap-2 rounded px-2 py-1 text-sm font-medium ${scope === null ? 'bg-accent text-primary' : 'hover:bg-accent'}`}
                   onClick={clearScope}
@@ -474,7 +476,7 @@ export function CasePicker({
                     }
                   }}
                 >
-                  <span aria-hidden="true">All sections</span>
+                  <span aria-hidden="true">{t('CasePicker.allSections')}</span>
                   <span className="text-xs text-muted-foreground" aria-hidden="true">
                     {cases.length}
                   </span>
@@ -500,15 +502,15 @@ export function CasePicker({
             style={{ writingMode: 'vertical-rl' }}
             onClick={() => setRailCollapsed(false)}
           >
-            Show sections
+            {t('CasePicker.showSections')}
           </button>
         )}
 
         <div className="min-w-0 flex-1">
           {visible.length === 0 ? (
             <div className="p-8 text-center text-sm text-muted-foreground">
-              <p className="mb-1 font-medium text-foreground">No cases match these filters</p>
-              <p>Try a different combination, or clear the filters/scope to see all cases.</p>
+              <p className="mb-1 font-medium text-foreground">{t('CasePicker.noCasesMatch')}</p>
+              <p>{t('CasePicker.noCasesHint')}</p>
             </div>
           ) : (
             <div

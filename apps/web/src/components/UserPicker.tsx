@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 
@@ -16,6 +17,7 @@ type Props = {
 // checkbox-grid (rework-suite-membership-ux) once one-at-a-time selection
 // stopped scaling.
 export function UserPicker({ users, onSelect }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -35,21 +37,21 @@ export function UserPicker({ users, onSelect }: Props) {
         className="w-full rounded-md border border-dashed px-3 py-1.5 text-left text-sm text-muted-foreground hover:border-foreground hover:text-foreground"
         onClick={() => setOpen(true)}
       >
-        + Add member…
+        {t('UserPicker.addMemberButton')}
       </button>
 
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle className="sr-only">Add a member</DialogTitle>
+          <DialogTitle className="sr-only">{t('UserPicker.addMemberDialogTitle')}</DialogTitle>
           <Input
             autoFocus
-            placeholder="Search users…"
+            placeholder={t('UserPicker.searchUsersPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
           <ul className="max-h-80 space-y-1 overflow-y-auto">
             {filtered.length === 0 ? (
-              <li className="p-2 text-sm text-muted-foreground">No matching users.</li>
+              <li className="p-2 text-sm text-muted-foreground">{t('UserPicker.noMatchingUsers')}</li>
             ) : (
               filtered.map((u) => (
                 <li key={u.id}>

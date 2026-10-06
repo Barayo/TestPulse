@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ListChecksIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -16,6 +17,7 @@ type Requirement = components['schemas']['Requirement']
 type Project = components['schemas']['Project']
 
 function RequirementCard({ requirement, projectKey }: { requirement: Requirement; projectKey: string }) {
+  const { t } = useTranslation()
   return (
     <li className="relative">
       <Link
@@ -31,7 +33,10 @@ function RequirementCard({ requirement, projectKey }: { requirement: Requirement
         <span className="tp-label">{requirement.key}</span>
         {requirement.description && <p className="line-clamp-2 text-sm text-muted-foreground">{requirement.description}</p>}
         <span className="text-xs text-muted-foreground">
-          {requirement.caseIds.length} case{requirement.caseIds.length === 1 ? '' : 's'} linked
+          {t('RequirementsPage.caseCountLinked', {
+            count: requirement.caseIds.length,
+            plural: requirement.caseIds.length === 1 ? '' : 's',
+          })}
         </span>
       </Link>
     </li>
@@ -39,6 +44,7 @@ function RequirementCard({ requirement, projectKey }: { requirement: Requirement
 }
 
 export default function RequirementsPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
@@ -81,39 +87,36 @@ export default function RequirementsPage() {
       <Breadcrumbs
         segments={trimProjectBreadcrumb(
           [
-            { label: 'Projects', href: '/' },
+            { label: t('RequirementsPage.projectsBreadcrumb'), href: '/' },
             { label: project?.name ?? '', href: `/projects/${projectKey}` },
-            { label: 'Requirements' },
+            { label: t('RequirementsPage.requirementsBreadcrumb') },
           ],
-          'Requirements',
+          t('RequirementsPage.requirementsBreadcrumb'),
         )}
       />
 
       <div className="flex items-center justify-between">
-        <h1 className="tp-heading text-2xl">Requirements</h1>
+        <h1 className="tp-heading text-2xl">{t('RequirementsPage.title')}</h1>
         {permissions?.manageProject && (
           <Button type="button" onClick={() => setCreating(true)}>
-            + New requirement
+            {t('RequirementsPage.newRequirementButton')}
           </Button>
         )}
       </div>
 
       {requirements.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center">
-          <p className="mb-1 text-sm font-medium">No requirements yet</p>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Requirements link test cases to what they cover, so a Release's coverage matrix can show what's proven and
-            what isn't.
-          </p>
+          <p className="mb-1 text-sm font-medium">{t('RequirementsPage.emptyTitle')}</p>
+          <p className="mb-4 text-sm text-muted-foreground">{t('RequirementsPage.emptyDescription')}</p>
           {permissions?.manageProject && (
             <Button type="button" onClick={() => setCreating(true)}>
-              + New requirement
+              {t('RequirementsPage.newRequirementButton')}
             </Button>
           )}
         </div>
       ) : (
         <ul
-          aria-label="Requirements"
+          aria-label={t('RequirementsPage.requirementsListAriaLabel')}
           className="grid gap-4"
           style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))' }}
         >
@@ -125,43 +128,43 @@ export default function RequirementsPage() {
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>New requirement</DialogTitle>
+          <DialogTitle>{t('RequirementsPage.newRequirementDialogTitle')}</DialogTitle>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor="requirement-name">Name</Label>
+              <Label htmlFor="requirement-name">{t('RequirementsPage.nameLabel')}</Label>
               <Input
                 id="requirement-name"
                 autoFocus
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Guest checkout"
+                placeholder={t('RequirementsPage.namePlaceholder')}
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="requirement-description">Description</Label>
+              <Label htmlFor="requirement-description">{t('RequirementsPage.descriptionLabel')}</Label>
               <Textarea
                 id="requirement-description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="What this requirement covers…"
+                placeholder={t('RequirementsPage.descriptionPlaceholder')}
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="requirement-external-ref">External reference</Label>
+              <Label htmlFor="requirement-external-ref">{t('RequirementsPage.externalRefLabel')}</Label>
               <Input
                 id="requirement-external-ref"
                 value={externalRef}
                 onChange={(e) => setExternalRef(e.target.value)}
-                placeholder="JIRA-123 (optional)"
+                placeholder={t('RequirementsPage.externalRefPlaceholder')}
               />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreating(false)}>
-              Cancel
+              {t('RequirementsPage.cancelButton')}
             </Button>
             <Button disabled={!name.trim()} onClick={() => void handleCreate()}>
-              Create
+              {t('RequirementsPage.createButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

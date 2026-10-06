@@ -1,8 +1,9 @@
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App, { PROJECT_CONTENT_ROUTES, ACCOUNT_ONLY_ROUTES } from './App'
 import { api } from '@/lib/api'
+import i18next from '@/i18n/index.ts'
 
 // Route-manifest test (design.md D9, unify-authenticated-and-public-views):
 // every route in the app is registered from exactly one of these two
@@ -532,5 +533,58 @@ describe('legacy /public* redirects', () => {
     window.history.pushState({}, '', '/public')
     render(<App />)
     await waitFor(() => expect(window.location.pathname).toBe('/'))
+  })
+})
+
+// add-ui-i18n design.md D4: the active i18next locale follows
+// resolveLanguage()'s resolution order once AuthProvider's /meta and
+// /users/me fetches settle.
+describe('App language resolution', () => {
+  // i18next is a true module-level singleton, shared across every test
+  // file in this run (registered once in src/test/setup.ts) — reset it
+  // after each test here so a changed language never leaks into an
+  // unrelated test elsewhere that renders English text unconditionally.
+  afterEach(() => {
+    void i18next.changeLanguage('en')
+  })
+
+  function mockMetaAndUser(meta: Record<string, unknown>, user: Record<string, unknown> | null) {
+    mockGET.mockImplementation((path: string) => {
+      if (path === '/readyz') return Promise.resolve({ response: { ok: true } })
+      if (path === '/api/v1/meta') {
+        return Promise.resolve({
+          response: { ok: true },
+          data: { name: 'TestPulse', version: '0.0.1', ...meta },
+        })
+      }
+      if (path === '/api/v1/users/me') {
+        return Promise.resolve(user ? { response: { ok: true }, data: user } : { response: { ok: false } })
+      }
+      return Promise.resolve({ response: { ok: true }, data: [] })
+    })
+  }
+
+  it('uses the instance default when per-user customization is disabled, even if the user has a personal language', async () => {
+    mockMetaAndUser(
+      { defaultLanguage: 'es', perUserLanguageEnabled: false },
+      { id: 'u1', email: 'a@example.com', isTenantAdmin: true, language: 'fr' },
+    )
+    render(<App />)
+    await waitFor(() => expect(i18next.language).toBe('es'))
+  })
+
+  it("uses the user's personal language when per-user customization is enabled and they have one set", async () => {
+    mockMetaAndUser(
+      { defaultLanguage: 'en', perUserLanguageEnabled: true },
+      { id: 'u1', email: 'a@example.com', isTenantAdmin: true, language: 'de' },
+    )
+    render(<App />)
+    await waitFor(() => expect(i18next.language).toBe('de'))
+  })
+
+  it('uses the instance default for an anonymous visitor regardless of the per-user setting', async () => {
+    mockMetaAndUser({ defaultLanguage: 'pt', perUserLanguageEnabled: true }, null)
+    render(<App />)
+    await waitFor(() => expect(i18next.language).toBe('pt'))
   })
 })

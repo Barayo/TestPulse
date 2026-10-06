@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate } from 'react-router'
 import { KeyRoundIcon, LockIcon, ChevronRightIcon, UploadIcon, Loader2Icon, TriangleAlertIcon } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -14,8 +15,28 @@ import { ChangePasswordForm } from '@/components/ChangePasswordForm'
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { useTheme } from '@/lib/ThemeProvider'
 import type { Theme } from '@/lib/theme'
+import { Pill } from '@/components/ui/Pill'
 
 const THEME_LABELS = ['System', 'Light', 'Dark'] as const
+const THEME_LABEL_KEYS = {
+  System: 'ProfilePage.themeSystem',
+  Light: 'ProfilePage.themeLight',
+  Dark: 'ProfilePage.themeDark',
+} as const satisfies Record<(typeof THEME_LABELS)[number], string>
+
+// Shared with InstanceSettingsPage.tsx's default-language picker (add-ui-i18n,
+// Pepe design review) — the six locale names are identity labels, not
+// per-page copy, so both surfaces read the same `Languages.*` keys rather
+// than forking two copies of the same six strings.
+const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'zh'] as const
+const LANGUAGE_LABEL_KEYS = {
+  en: 'Languages.en',
+  es: 'Languages.es',
+  fr: 'Languages.fr',
+  de: 'Languages.de',
+  pt: 'Languages.pt',
+  zh: 'Languages.zh',
+} as const satisfies Record<(typeof SUPPORTED_LANGUAGES)[number], string>
 
 // Mirrors avatarimage.MaxUploadBytes / the format allowlist on the server
 // (add-custom-avatar-upload design.md) — a client-side precheck is a
@@ -25,12 +46,14 @@ const MAX_AVATAR_UPLOAD_BYTES = 500 * 1024
 const ACCEPTED_AVATAR_TYPES = ['image/jpeg', 'image/png', 'image/webp']
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth()
+  const { t } = useTranslation()
+  const { user, refreshUser, perUserLanguageEnabled } = useAuth()
   const navigate = useNavigate()
   const [, setThemeOverride, themeOverride] = useTheme()
   const [displayName, setDisplayName] = useState('')
   const [avatarKey, setAvatarKey] = useState<string | null>(null)
   const [timezone, setTimezone] = useState('')
+  const [language, setLanguage] = useState<(typeof SUPPORTED_LANGUAGES)[number] | null>(null)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [uploading, setUploading] = useState(false)
@@ -48,6 +71,7 @@ export default function ProfilePage() {
     setDisplayName(user.displayName ?? '')
     setAvatarKey(user.avatarKey ?? null)
     setTimezone(user.timezone ?? '')
+    setLanguage((user.language as (typeof SUPPORTED_LANGUAGES)[number] | null | undefined) ?? null)
   }, [user])
 
   async function handleSave(e: FormEvent) {
@@ -56,7 +80,12 @@ export default function ProfilePage() {
     setSaved(false)
     try {
       await api.PATCH('/api/v1/users/me', {
-        body: { displayName: displayName || null, avatarKey, timezone: timezone || null },
+        body: {
+          displayName: displayName || null,
+          avatarKey,
+          timezone: timezone || null,
+          ...(perUserLanguageEnabled ? { language } : {}),
+        },
       })
       await refreshUser()
       setSaved(true)
@@ -72,11 +101,11 @@ export default function ProfilePage() {
     setUploadError(null)
 
     if (!ACCEPTED_AVATAR_TYPES.includes(file.type)) {
-      setUploadError(`${file.name} isn't a JPEG, PNG, or WebP image. Try a different photo.`)
+      setUploadError(t('ProfilePage.invalidFileTypeError', { fileName: file.name }))
       return
     }
     if (file.size > MAX_AVATAR_UPLOAD_BYTES) {
-      setUploadError(`${file.name} is ${(file.size / 1024).toFixed(0)}KB — the limit is 500KB. Try a smaller image.`)
+      setUploadError(t('ProfilePage.fileTooLargeError', { fileName: file.name, sizeKb: (file.size / 1024).toFixed(0) }))
       return
     }
 
@@ -94,7 +123,7 @@ export default function ProfilePage() {
         credentials: 'include',
       })
       if (!res.ok) {
-        setUploadError('Upload failed. Try again.')
+        setUploadError(t('ProfilePage.uploadFailedError'))
         return
       }
       const updated = await res.json()
@@ -122,12 +151,12 @@ export default function ProfilePage() {
 
   return (
     <div className="max-w-2xl space-y-4">
-      <Breadcrumbs segments={[{ label: 'Profile' }]} />
-      <h1 className="tp-heading text-xl">Profile</h1>
+      <Breadcrumbs segments={[{ label: t('ProfilePage.heading') }]} />
+      <h1 className="tp-heading text-xl">{t('ProfilePage.heading')}</h1>
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Your details</CardTitle>
+          <CardTitle className="tp-heading">{t('ProfilePage.yourDetailsTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-4">
@@ -139,7 +168,7 @@ export default function ProfilePage() {
                 className="size-12 rounded-full text-base"
               />
               <div className="flex-1 space-y-1">
-                <Label htmlFor="display-name">Display name</Label>
+                <Label htmlFor="display-name">{t('ProfilePage.displayNameLabel')}</Label>
                 <Input
                   id="display-name"
                   value={displayName}
@@ -150,16 +179,16 @@ export default function ProfilePage() {
             </div>
 
             <fieldset className="space-y-2">
-              <legend className="text-sm font-medium">Avatar</legend>
-              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label="Avatar">
-                <label className="flex flex-col items-center gap-1" title="Generated default">
+              <legend className="text-sm font-medium">{t('ProfilePage.avatarLegend')}</legend>
+              <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t('ProfilePage.avatarLegend')}>
+                <label className="flex flex-col items-center gap-1" title={t('ProfilePage.generatedDefaultLabel')}>
                   <input
                     type="radio"
                     name="avatar"
                     className="sr-only"
                     checked={avatarKey === null}
                     onChange={() => setAvatarKey(null)}
-                    aria-label="Generated default"
+                    aria-label={t('ProfilePage.generatedDefaultLabel')}
                   />
                   <span
                     className={`flex size-10 items-center justify-center rounded-full border-2 text-xs font-bold ${
@@ -172,14 +201,14 @@ export default function ProfilePage() {
                   </span>
                 </label>
                 {avatarKey === 'custom' ? (
-                  <label className="flex flex-col items-center gap-1" title="Your uploaded photo">
+                  <label className="flex flex-col items-center gap-1" title={t('ProfilePage.uploadedPhotoLabel')}>
                     <input
                       type="radio"
                       name="avatar"
                       className="sr-only"
                       checked
                       onChange={() => setAvatarKey('custom')}
-                      aria-label="Your uploaded photo"
+                      aria-label={t('ProfilePage.uploadedPhotoLabel')}
                     />
                     <Avatar
                       seed={displayName || user.email}
@@ -193,8 +222,8 @@ export default function ProfilePage() {
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
-                    title="Upload a photo"
-                    aria-label="Upload a photo"
+                    title={t('ProfilePage.uploadPhotoLabel')}
+                    aria-label={t('ProfilePage.uploadPhotoLabel')}
                     className="flex size-10 items-center justify-center rounded-full border-2 border-dashed border-muted-foreground/40 text-muted-foreground transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed"
                   >
                     {uploading ? (
@@ -238,7 +267,7 @@ export default function ProfilePage() {
                 >
                   <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
                   <div>
-                    <p className="text-sm font-medium">Couldn&apos;t upload that file</p>
+                    <p className="text-sm font-medium">{t('ProfilePage.uploadFailedTitle')}</p>
                     <p className="text-sm text-muted-foreground">{uploadError}</p>
                   </div>
                 </div>
@@ -246,34 +275,51 @@ export default function ProfilePage() {
               {avatarKey === 'custom' && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <span className="size-1.5 shrink-0 rounded-full bg-primary" aria-hidden="true" />
-                  <span>Using your uploaded photo</span>
+                  <span>{t('ProfilePage.usingUploadedPhotoNote')}</span>
                   <button
                     type="button"
                     onClick={handleRemoveAvatar}
                     disabled={uploading}
                     className="font-medium text-foreground underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    Remove
+                    {t('ProfilePage.removeButton')}
                   </button>
                 </div>
               )}
             </fieldset>
 
             <div className="space-y-1">
-              <Label htmlFor="timezone">Timezone</Label>
+              <Label htmlFor="timezone">{t('ProfilePage.timezoneLabel')}</Label>
               <Input
                 id="timezone"
                 value={timezone}
                 onChange={(e) => setTimezone(e.target.value)}
-                placeholder="Europe/Madrid"
+                placeholder={t('ProfilePage.timezonePlaceholder')}
               />
             </div>
 
+            {perUserLanguageEnabled && (
+              <div className="space-y-1">
+                <Label>{t('ProfilePage.languageLabel')}</Label>
+                <p className="text-xs text-muted-foreground">{t('ProfilePage.languageDescription')}</p>
+                <div role="group" aria-label={t('ProfilePage.languageLabel')} className="flex flex-wrap gap-2">
+                  <Pill active={language === null} onClick={() => setLanguage(null)}>
+                    {t('ProfilePage.languageInstanceDefaultOption')}
+                  </Pill>
+                  {SUPPORTED_LANGUAGES.map((lang) => (
+                    <Pill key={lang} active={language === lang} onClick={() => setLanguage(lang)}>
+                      {t(LANGUAGE_LABEL_KEYS[lang])}
+                    </Pill>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               <Button type="submit" disabled={saving}>
-                {saving ? 'Saving…' : 'Save'}
+                {saving ? t('ProfilePage.saving') : t('ProfilePage.save')}
               </Button>
-              {saved && <span className="text-sm text-muted-foreground">Saved</span>}
+              {saved && <span className="text-sm text-muted-foreground">{t('ProfilePage.savedLabel')}</span>}
             </div>
           </form>
         </CardContent>
@@ -281,17 +327,17 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Appearance</CardTitle>
+          <CardTitle className="tp-heading">{t('ProfilePage.appearanceTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium">Theme</p>
+              <p className="text-sm font-medium">{t('ProfilePage.themeLabel')}</p>
               <p className="text-xs text-muted-foreground">
-                Follow your system, or choose light or dark.
+                {t('ProfilePage.themeDescription')}
               </p>
             </div>
-            <div role="group" aria-label="Theme" className="flex gap-0.5 rounded-full bg-muted p-1">
+            <div role="group" aria-label={t('ProfilePage.themeLabel')} className="flex gap-0.5 rounded-full bg-muted p-1">
               {THEME_LABELS.map((label) => {
                 const value: Theme | null = label === 'System' ? null : (label.toLowerCase() as Theme)
                 const active = themeOverride === value
@@ -305,7 +351,7 @@ export default function ProfilePage() {
                       active ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                     }`}
                   >
-                    {label}
+                    {t(THEME_LABEL_KEYS[label])}
                   </button>
                 )
               })}
@@ -316,7 +362,7 @@ export default function ProfilePage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Account</CardTitle>
+          <CardTitle className="tp-heading">{t('ProfilePage.accountTitle')}</CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="rounded-lg border">
@@ -329,8 +375,8 @@ export default function ProfilePage() {
                   <KeyRoundIcon className="size-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">API tokens</span>
-                  <span className="block text-xs text-muted-foreground">Manage tokens for CI and integrations</span>
+                  <span className="block text-sm font-medium">{t('ProfilePage.apiTokensLabel')}</span>
+                  <span className="block text-xs text-muted-foreground">{t('ProfilePage.manageTokensDescription')}</span>
                 </span>
                 <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </Link>
@@ -345,8 +391,8 @@ export default function ProfilePage() {
                   <LockIcon className="size-4" aria-hidden="true" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block text-sm font-medium">Change password</span>
-                  <span className="block text-xs text-muted-foreground">Set a new password for your account</span>
+                  <span className="block text-sm font-medium">{t('ProfilePage.changePasswordLabel')}</span>
+                  <span className="block text-xs text-muted-foreground">{t('ProfilePage.setNewPasswordDescription')}</span>
                 </span>
                 <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               </button>
@@ -357,7 +403,7 @@ export default function ProfilePage() {
 
       <Dialog open={changePasswordOpen} onOpenChange={(open) => !open && closeChangePasswordDialog()}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Change password</DialogTitle>
+          <DialogTitle>{t('ProfilePage.changePasswordLabel')}</DialogTitle>
           <ChangePasswordForm
             onSuccess={() => navigate('/login', { replace: true, state: { passwordReset: true } })}
             onCancel={closeChangePasswordDialog}

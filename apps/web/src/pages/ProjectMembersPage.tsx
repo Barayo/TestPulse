@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useParams } from 'react-router'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
@@ -26,6 +27,7 @@ type Team = { id: string; name: string }
 // PeoplePage, even though the backend already permits Tester+ to read
 // GET /projects/{projectKey}/members per the project-membership spec.
 export default function ProjectMembersPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const { user: me } = useAuth()
   const [projectName, setProjectName] = useState('')
@@ -64,7 +66,7 @@ export default function ProjectMembersPage() {
   }, [me, projectKey])
 
   if (!me?.isTenantAdmin) {
-    return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
+    return <p className="text-sm text-muted-foreground">{t('ProjectMembersPage.notAuthorized')}</p>
   }
   if (!projectKey) return null
 
@@ -113,21 +115,21 @@ export default function ProjectMembersPage() {
       <Breadcrumbs
         segments={trimProjectBreadcrumb(
           [
-            { label: 'Projects', href: '/' },
+            { label: t('ProjectMembersPage.projectsBreadcrumb'), href: '/' },
             { label: projectName, href: `/projects/${projectKey}` },
-            { label: 'Members' },
+            { label: t('ProjectMembersPage.membersBreadcrumb') },
           ],
-          'Members',
+          t('ProjectMembersPage.membersBreadcrumb'),
         )}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Members</CardTitle>
+          <CardTitle className="tp-heading">{t('ProjectMembersPage.membersTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {membership.users.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No users directly assigned yet.</p>
+            <p className="text-sm text-muted-foreground">{t('ProjectMembersPage.noUsersAssigned')}</p>
           ) : (
             <ul className="divide-y rounded-md border text-sm">
               {membership.users.map((m) => {
@@ -146,7 +148,7 @@ export default function ProjectMembersPage() {
                     </span>
                     <div className="flex items-center gap-2">
                       <select
-                        aria-label={`Role for ${label}`}
+                        aria-label={t('ProjectMembersPage.roleForAriaLabel', { label })}
                         className="h-8 rounded-md border bg-background px-2 text-sm"
                         value={m.roleId}
                         onChange={(e) => void setMemberRole(m.userId, e.target.value)}
@@ -164,10 +166,10 @@ export default function ProjectMembersPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        aria-label={`Remove ${label}`}
+                        aria-label={t('ProjectMembersPage.removeMemberAriaLabel', { label })}
                         onClick={() => setRemoveMemberTarget({ userId: m.userId, label })}
                       >
-                        Remove
+                        {t('ProjectMembersPage.remove')}
                       </Button>
                     </div>
                   </li>
@@ -181,16 +183,16 @@ export default function ProjectMembersPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Teams</CardTitle>
+          <CardTitle className="tp-heading">{t('ProjectMembersPage.teamsTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           {membership.teams.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No teams assigned yet.</p>
+            <p className="text-sm text-muted-foreground">{t('ProjectMembersPage.noTeamsAssigned')}</p>
           ) : (
             <ul className="divide-y rounded-md border text-sm">
               {membership.teams.map((m) => {
-                const t = teams.find((x) => x.id === m.teamId)
-                const label = t?.name ?? m.teamId
+                const team = teams.find((x) => x.id === m.teamId)
+                const label = team?.name ?? m.teamId
                 return (
                   <li key={m.teamId} className="flex items-center justify-between gap-2 px-3 py-2">
                     <span className="flex min-w-0 items-center gap-2">
@@ -204,7 +206,7 @@ export default function ProjectMembersPage() {
                     </span>
                     <div className="flex items-center gap-2">
                       <select
-                        aria-label={`Role for ${label}`}
+                        aria-label={t('ProjectMembersPage.roleForAriaLabel', { label })}
                         className="h-8 rounded-md border bg-background px-2 text-sm"
                         value={m.roleId}
                         onChange={(e) => void setTeamRole(m.teamId, e.target.value)}
@@ -218,10 +220,10 @@ export default function ProjectMembersPage() {
                       <Button
                         size="sm"
                         variant="ghost"
-                        aria-label={`Remove ${label}`}
+                        aria-label={t('ProjectMembersPage.removeMemberAriaLabel', { label })}
                         onClick={() => setRemoveTeamTarget({ teamId: m.teamId, label })}
                       >
-                        Remove
+                        {t('ProjectMembersPage.remove')}
                       </Button>
                     </div>
                   </li>
@@ -230,10 +232,10 @@ export default function ProjectMembersPage() {
             </ul>
           )}
           {addableTeams.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No more teams to add.</p>
+            <p className="text-sm text-muted-foreground">{t('ProjectMembersPage.noMoreTeamsToAdd')}</p>
           ) : (
             <select
-              aria-label="Add team"
+              aria-label={t('ProjectMembersPage.addTeamAriaLabel')}
               className="h-9 rounded-md border bg-background px-2 text-sm"
               value=""
               onChange={(e) => {
@@ -241,7 +243,7 @@ export default function ProjectMembersPage() {
               }}
             >
               <option value="" disabled>
-                + Add team…
+                {t('ProjectMembersPage.addTeamOption')}
               </option>
               {addableTeams.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -255,17 +257,16 @@ export default function ProjectMembersPage() {
 
       <Dialog open={removeMemberTarget !== null} onOpenChange={(open) => !open && setRemoveMemberTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Remove {removeMemberTarget?.label}?</DialogTitle>
+          <DialogTitle>{t('ProjectMembersPage.removeMemberDialogTitle', { label: removeMemberTarget?.label })}</DialogTitle>
           <DialogDescription>
-            They immediately lose whatever access this role grants on this project. This does not affect their
-            account or any other project.
+            {t('ProjectMembersPage.removeMemberDialogDescription')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveMemberTarget(null)}>
-              Cancel
+              {t('ProjectMembersPage.cancel')}
             </Button>
             <Button variant="destructive" onClick={() => void removeMember()}>
-              Remove
+              {t('ProjectMembersPage.remove')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -273,17 +274,16 @@ export default function ProjectMembersPage() {
 
       <Dialog open={removeTeamTarget !== null} onOpenChange={(open) => !open && setRemoveTeamTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Remove {removeTeamTarget?.label}?</DialogTitle>
+          <DialogTitle>{t('ProjectMembersPage.removeTeamDialogTitle', { label: removeTeamTarget?.label })}</DialogTitle>
           <DialogDescription>
-            Every member of this team immediately loses whatever access this role grants on this project. This
-            does not affect the team itself or any other project.
+            {t('ProjectMembersPage.removeTeamDialogDescription')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveTeamTarget(null)}>
-              Cancel
+              {t('ProjectMembersPage.cancel')}
             </Button>
             <Button variant="destructive" onClick={() => void removeTeamRole()}>
-              Remove
+              {t('ProjectMembersPage.remove')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Trash2Icon, Loader2Icon, PowerIcon, PencilIcon, TriangleAlertIcon, MailIcon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
@@ -49,6 +50,7 @@ const ADD_RESULTS_CAP = 8
 const MAX_DRAIN_PAGES = 25
 
 export default function PeoplePage() {
+  const { t } = useTranslation()
   const { user: me } = useAuth()
 
   const [users, setUsers] = useState<User[]>([])
@@ -183,7 +185,7 @@ export default function PeoplePage() {
   }
 
   if (!me?.isTenantAdmin) {
-    return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
+    return <p className="text-sm text-muted-foreground">{t('PeoplePage.notAuthorized')}</p>
   }
 
   const filteredUsers = userSearch
@@ -194,12 +196,12 @@ export default function PeoplePage() {
     e.preventDefault()
     setCreateUserError(undefined)
     if (!isValidEmail(email)) {
-      setCreateUserError('Enter a valid email address')
+      setCreateUserError(t('PeoplePage.invalidEmail'))
       return
     }
     const { error: apiError } = await api.POST('/api/v1/users', { body: { email, password, isTenantAdmin } })
     if (apiError) {
-      setCreateUserError((apiError as { error?: string }).error ?? 'failed to create user')
+      setCreateUserError((apiError as { error?: string }).error ?? t('PeoplePage.createUserError'))
       return
     }
     setEmail('')
@@ -229,7 +231,7 @@ export default function PeoplePage() {
       params: { path: { userId: editTarget.id } },
     })
     if (apiError) {
-      setEditError((apiError as { error?: string }).error ?? 'Could not send the reset email.')
+      setEditError((apiError as { error?: string }).error ?? t('PeoplePage.sendResetEmailError'))
       return
     }
     setResetEmailSentTo(editTarget.email)
@@ -242,7 +244,7 @@ export default function PeoplePage() {
       params: { path: { userId: editTarget.id } },
     })
     if (apiError || !data) {
-      setEditError((apiError as { error?: string })?.error ?? 'Could not generate a temporary password.')
+      setEditError((apiError as { error?: string })?.error ?? t('PeoplePage.generateTempPasswordError'))
       return
     }
     setTemporaryPassword(data.password)
@@ -264,7 +266,7 @@ export default function PeoplePage() {
     if (!editTarget) return
     setEditError(undefined)
     if (!isValidEmail(editEmail)) {
-      setEditError('Enter a valid email address')
+      setEditError(t('PeoplePage.invalidEmail'))
       return
     }
     const body: { email?: string; requirePasswordChange?: boolean } = {}
@@ -281,7 +283,7 @@ export default function PeoplePage() {
       body,
     })
     if (apiError) {
-      setEditError((apiError as { error?: string }).error ?? 'failed to update user')
+      setEditError((apiError as { error?: string }).error ?? t('PeoplePage.updateUserError'))
       return
     }
     setEditTarget(null)
@@ -354,10 +356,10 @@ export default function PeoplePage() {
     await load()
   }
 
-  async function openDeleteTeamDialog(t: Team) {
-    setDeleteTeamTarget(t)
+  async function openDeleteTeamDialog(team: Team) {
+    setDeleteTeamTarget(team)
     setTeamDeletePreview(undefined)
-    const { data } = await api.GET('/api/v1/teams/{teamId}/deletion-preview', { params: { path: { teamId: t.id } } })
+    const { data } = await api.GET('/api/v1/teams/{teamId}/deletion-preview', { params: { path: { teamId: team.id } } })
     if (data) setTeamDeletePreview(data)
   }
 
@@ -378,37 +380,37 @@ export default function PeoplePage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h1 className="tp-heading text-xl">
-            Teams<span className="ml-2 text-sm font-normal text-muted-foreground">{teams.length}</span>
+            {t('PeoplePage.teamsHeading')}<span className="ml-2 text-sm font-normal text-muted-foreground">{teams.length}</span>
           </h1>
           <Button size="sm" onClick={() => setTeamFormOpen((open) => !open)}>
-            + New team
+            {t('PeoplePage.newTeamButton')}
           </Button>
         </div>
 
         {teamFormOpen && (
           <Card>
             <CardHeader>
-              <CardTitle className="tp-heading">New team</CardTitle>
+              <CardTitle className="tp-heading">{t('PeoplePage.newTeamCardTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateTeam} className="flex items-end gap-3">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="team-name">Team name</Label>
-                  <Input id="team-name" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder="QA Core" />
+                  <Label htmlFor="team-name">{t('PeoplePage.teamNameLabel')}</Label>
+                  <Input id="team-name" value={teamName} onChange={(e) => setTeamName(e.target.value)} placeholder={t('PeoplePage.teamNamePlaceholder')} />
                 </div>
-                <Button type="submit">Create team</Button>
+                <Button type="submit">{t('PeoplePage.createTeamButton')}</Button>
               </form>
             </CardContent>
           </Card>
         )}
 
         {teams.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No teams yet.</p>
+          <p className="text-sm text-muted-foreground">{t('PeoplePage.noTeamsYet')}</p>
         ) : (
           <ul className="space-y-3">
-            {teams.map((t) => {
-              const expanded = expandedTeamId === t.id
-              const memberUsers = t.memberIds.map(
+            {teams.map((team) => {
+              const expanded = expandedTeamId === team.id
+              const memberUsers = team.memberIds.map(
                 (id) => users.find((u) => u.id === id) ?? { id, email: id, avatarKey: null },
               )
               // Filtering existing members and searching the directory to
@@ -421,7 +423,7 @@ export default function PeoplePage() {
                 : memberUsers
               const visibleMembers = filteredMemberUsers.slice(0, visibleCount)
               const remainingCount = filteredMemberUsers.length - visibleMembers.length
-              const addableUsers = users.filter((u) => !t.memberIds.includes(u.id))
+              const addableUsers = users.filter((u) => !team.memberIds.includes(u.id))
               const matchingAddable = addSearch
                 ? addableUsers.filter((u) => u.email.toLowerCase().includes(addSearch.toLowerCase()))
                 : []
@@ -429,30 +431,30 @@ export default function PeoplePage() {
               const hiddenAddableCount = matchingAddable.length - visibleAddable.length
 
               return (
-                <li key={t.id} className="overflow-hidden rounded-lg border">
+                <li key={team.id} className="overflow-hidden rounded-lg border">
                   <div className={`flex items-center gap-2 ${expanded ? 'border-b' : ''}`}>
                     <button
                       type="button"
                       aria-expanded={expanded}
                       className="flex min-w-0 flex-1 items-center gap-3 px-4 py-2 text-left hover:bg-accent"
-                      onClick={() => toggleExpand(t.id)}
+                      onClick={() => toggleExpand(team.id)}
                     >
                       <span
                         className="flex size-7 shrink-0 items-center justify-center rounded-md text-xs font-bold"
-                        style={avatarStyle(t.name)}
+                        style={avatarStyle(team.name)}
                       >
-                        {initialsFor(t.name)}
+                        {initialsFor(team.name)}
                       </span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{t.name}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold">{team.name}</span>
                       <span className="text-sm text-muted-foreground">
-                        {t.memberIds.length} {t.memberIds.length === 1 ? 'member' : 'members'}
+                        {team.memberIds.length} {team.memberIds.length === 1 ? t('PeoplePage.member') : t('PeoplePage.members')}
                       </span>
                     </button>
                     <button
                       type="button"
-                      aria-label={`Delete ${t.name}`}
+                      aria-label={t('PeoplePage.deleteTeamAriaLabel', { name: team.name })}
                       className="mr-3 text-muted-foreground hover:text-destructive"
-                      onClick={() => void openDeleteTeamDialog(t)}
+                      onClick={() => void openDeleteTeamDialog(team)}
                     >
                       <Trash2Icon className="size-4" aria-hidden="true" />
                     </button>
@@ -465,7 +467,7 @@ export default function PeoplePage() {
                           visible before scrolling and stays put as "Show
                           more" grows the list beneath it. */}
                       <Input
-                        placeholder="Filter members…"
+                        placeholder={t('PeoplePage.filterMembersPlaceholder')}
                         value={memberFilter}
                         onChange={(e) => {
                           setMemberFilter(e.target.value)
@@ -474,9 +476,9 @@ export default function PeoplePage() {
                       />
 
                       {memberUsers.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No members yet in this team.</p>
+                        <p className="text-sm text-muted-foreground">{t('PeoplePage.noMembersYet')}</p>
                       ) : filteredMemberUsers.length === 0 ? (
-                        <p className="text-sm text-muted-foreground">No members match "{memberFilter}".</p>
+                        <p className="text-sm text-muted-foreground">{t('PeoplePage.noMembersMatch', { filter: memberFilter })}</p>
                       ) : (
                         <>
                           <ul className="divide-y rounded-md border text-sm">
@@ -497,9 +499,9 @@ export default function PeoplePage() {
                                     pattern as user deactivation. */}
                                 <button
                                   type="button"
-                                  aria-label={`Remove ${u.email}`}
+                                  aria-label={t('PeoplePage.removeMemberAriaLabel', { email: u.email })}
                                   className="text-muted-foreground hover:text-destructive"
-                                  onClick={() => setRemoveTarget({ teamId: t.id, user: u })}
+                                  onClick={() => setRemoveTarget({ teamId: team.id, user: u })}
                                 >
                                   <Trash2Icon className="size-4" aria-hidden="true" />
                                 </button>
@@ -513,7 +515,7 @@ export default function PeoplePage() {
                               size="sm"
                               onClick={() => setVisibleCount((c) => c + MEMBER_BATCH_SIZE)}
                             >
-                              Show {Math.min(remainingCount, MEMBER_BATCH_SIZE)} more
+                              {t('PeoplePage.showMoreButton', { count: Math.min(remainingCount, MEMBER_BATCH_SIZE) })}
                             </Button>
                           )}
                         </>
@@ -528,7 +530,7 @@ export default function PeoplePage() {
                         <div className="space-y-1">
                           <Input
                             autoFocus
-                            placeholder="Search directory…"
+                            placeholder={t('PeoplePage.searchDirectoryPlaceholder')}
                             value={addSearch}
                             onChange={(e) => setAddSearch(e.target.value)}
                           />
@@ -536,14 +538,14 @@ export default function PeoplePage() {
                             <div className="rounded-md border text-sm">
                               <ul className="max-h-40 overflow-y-auto">
                                 {visibleAddable.length === 0 ? (
-                                  <li className="p-2 text-muted-foreground">No matching users.</li>
+                                  <li className="p-2 text-muted-foreground">{t('PeoplePage.noMatchingUsers')}</li>
                                 ) : (
                                   visibleAddable.map((u) => (
                                     <li key={u.id}>
                                       <button
                                         type="button"
                                         className="w-full rounded-md px-2 py-1.5 text-left hover:bg-accent"
-                                        onClick={() => void handleAddMember(t.id, u.id)}
+                                        onClick={() => void handleAddMember(team.id, u.id)}
                                       >
                                         {u.email}
                                       </button>
@@ -553,7 +555,7 @@ export default function PeoplePage() {
                               </ul>
                               {hiddenAddableCount > 0 && (
                                 <p className="border-t px-2 py-1.5 text-muted-foreground">
-                                  {hiddenAddableCount} more — keep typing to narrow it down
+                                  {t('PeoplePage.hiddenAddableCount', { count: hiddenAddableCount })}
                                 </p>
                               )}
                             </div>
@@ -569,7 +571,7 @@ export default function PeoplePage() {
                             void ensureAllUsersLoaded()
                           }}
                         >
-                          + Add member
+                          {t('PeoplePage.addMemberButton')}
                         </Button>
                       )}
                     </div>
@@ -586,34 +588,34 @@ export default function PeoplePage() {
       <section className="space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="tp-heading text-xl">
-            Users<span className="ml-2 text-sm font-normal text-muted-foreground">{users.length}</span>
+            {t('PeoplePage.usersHeading')}<span className="ml-2 text-sm font-normal text-muted-foreground">{users.length}</span>
           </h2>
           <Button size="sm" onClick={() => setUserFormOpen((open) => !open)}>
-            + New user
+            {t('PeoplePage.newUserButton')}
           </Button>
         </div>
 
         {userFormOpen && (
           <Card>
             <CardHeader>
-              <CardTitle className="tp-heading">New user</CardTitle>
+              <CardTitle className="tp-heading">{t('PeoplePage.newUserCardTitle')}</CardTitle>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleCreateUser} className="space-y-3">
                 <div className="flex items-end gap-3">
                   <div className="space-y-1">
-                    <Label htmlFor="new-user-email">Email</Label>
+                    <Label htmlFor="new-user-email">{t('PeoplePage.emailLabel')}</Label>
                     <Input id="new-user-email" value={email} onChange={(e) => setEmail(e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <div className="flex items-center justify-between">
-                      <Label htmlFor="new-user-password">Password</Label>
+                      <Label htmlFor="new-user-password">{t('PeoplePage.passwordLabel')}</Label>
                       <button
                         type="button"
                         className="text-xs font-bold text-primary"
                         onClick={handleGeneratePassword}
                       >
-                        Generate
+                        {t('PeoplePage.generateButton')}
                       </button>
                     </div>
                     <Input
@@ -632,9 +634,9 @@ export default function PeoplePage() {
                       onChange={(e) => setIsTenantAdmin(e.target.checked)}
                       className="size-4"
                     />
-                    <Label htmlFor="new-user-tenant-admin">Tenant Admin</Label>
+                    <Label htmlFor="new-user-tenant-admin">{t('PeoplePage.tenantAdminLabel')}</Label>
                   </div>
-                  <Button type="submit">Create</Button>
+                  <Button type="submit">{t('PeoplePage.createButton')}</Button>
                 </div>
                 {revealedPassword && password === revealedPassword && (
                   <GeneratedPasswordChip value={revealedPassword} />
@@ -646,7 +648,7 @@ export default function PeoplePage() {
         )}
 
         <Input
-          placeholder="Search by email…"
+          placeholder={t('PeoplePage.searchByEmailPlaceholder')}
           value={userSearch}
           onChange={(e) => {
             const value = e.target.value
@@ -660,12 +662,12 @@ export default function PeoplePage() {
         {drainingUsers && (
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Loader2Icon className="size-3 animate-spin" aria-hidden="true" />
-            Loading remaining users to search accurately…
+            {t('PeoplePage.loadingRemainingUsers')}
           </p>
         )}
         {usersTruncated && !drainingUsers && (
           <p className="text-xs text-muted-foreground">
-            This tenant has more users than can be searched at once — some matches may not be shown.
+            {t('PeoplePage.usersTruncatedNote')}
           </p>
         )}
 
@@ -687,15 +689,15 @@ export default function PeoplePage() {
             independent grid, not one shared table grid. */}
         <div className="overflow-hidden rounded-lg border">
           <div className="grid grid-cols-[1fr_200px] items-center gap-3 border-b px-4 py-2 sm:grid-cols-[1fr_140px_120px_200px]">
-            <span className="tp-label">Person</span>
-            <span className="tp-label hidden sm:block">Access</span>
-            <span className="tp-label hidden sm:block">Status</span>
+            <span className="tp-label">{t('PeoplePage.personColumn')}</span>
+            <span className="tp-label hidden sm:block">{t('PeoplePage.accessColumn')}</span>
+            <span className="tp-label hidden sm:block">{t('PeoplePage.statusColumn')}</span>
             <span />
           </div>
           {filteredUsers.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground">No users match "{userSearch}".</p>
+            <p className="p-4 text-sm text-muted-foreground">{t('PeoplePage.noUsersMatch', { search: userSearch })}</p>
           ) : (
-          <ul aria-label="Users" className="text-sm">
+          <ul aria-label={t('PeoplePage.usersListAriaLabel')} className="text-sm">
             {filteredUsers.map((u) => (
               <li
                 key={u.id}
@@ -717,15 +719,15 @@ export default function PeoplePage() {
                 <div className="hidden text-muted-foreground sm:block">
                   {u.isTenantAdmin ? (
                     <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
-                      Tenant Admin
+                      {t('PeoplePage.tenantAdminLabel')}
                     </span>
                   ) : (
-                    'Member'
+                    t('PeoplePage.memberRoleLabel')
                   )}
                 </div>
                 <div className="hidden items-center gap-1.5 text-muted-foreground sm:flex">
                   <span className={`size-1.5 rounded-full ${u.deactivatedAt ? 'bg-border' : 'bg-primary'}`} />
-                  {u.deactivatedAt ? 'Deactivated' : 'Active'}
+                  {u.deactivatedAt ? t('PeoplePage.deactivatedLabel') : t('PeoplePage.activeLabel')}
                 </div>
                 <div className="flex justify-end">
                   {u.deactivatedAt ? (
@@ -735,7 +737,7 @@ export default function PeoplePage() {
                         className="text-xs font-bold text-foreground hover:underline"
                         onClick={() => openEditDialog(u)}
                       >
-                        Edit
+                        {t('PeoplePage.editButton')}
                       </button>
                       <span className="text-muted-foreground" aria-hidden="true">
                         &middot;
@@ -745,7 +747,7 @@ export default function PeoplePage() {
                         className="text-xs font-bold text-primary"
                         onClick={() => void handleReactivate(u.id)}
                       >
-                        Reactivate
+                        {t('PeoplePage.reactivateButton')}
                       </button>
                       {u.id !== me.id && (
                         <>
@@ -754,11 +756,11 @@ export default function PeoplePage() {
                           </span>
                           <button
                             type="button"
-                            aria-label={`Delete ${u.email}`}
+                            aria-label={t('PeoplePage.deleteUserAriaLabel', { email: u.email })}
                             className="text-xs font-bold text-destructive hover:underline"
                             onClick={() => void openDeleteDialog(u)}
                           >
-                            Delete
+                            {t('PeoplePage.deleteButton')}
                           </button>
                         </>
                       )}
@@ -767,8 +769,8 @@ export default function PeoplePage() {
                     <div className="flex justify-end gap-1">
                       <button
                         type="button"
-                        aria-label={`Edit ${u.email}`}
-                        title={`Edit ${u.email}`}
+                        aria-label={t('PeoplePage.editUserAriaLabel', { email: u.email })}
+                        title={t('PeoplePage.editUserAriaLabel', { email: u.email })}
                         className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
                         onClick={() => openEditDialog(u)}
                       >
@@ -777,8 +779,8 @@ export default function PeoplePage() {
                       {u.id !== me.id && (
                         <button
                           type="button"
-                          aria-label={`Deactivate ${u.email}`}
-                          title={`Deactivate ${u.email}`}
+                          aria-label={t('PeoplePage.deactivateUserAriaLabel', { email: u.email })}
+                          title={t('PeoplePage.deactivateUserAriaLabel', { email: u.email })}
                           className="flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
                           onClick={() => setDeactivateTarget(u)}
                         >
@@ -800,11 +802,11 @@ export default function PeoplePage() {
 
       <Dialog open={editTarget !== null} onOpenChange={(open) => !open && setEditTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Edit user</DialogTitle>
-          <DialogDescription>Change this account's email, or manage its password.</DialogDescription>
+          <DialogTitle>{t('PeoplePage.editUserDialogTitle')}</DialogTitle>
+          <DialogDescription>{t('PeoplePage.editUserDialogDescription')}</DialogDescription>
           <form onSubmit={handleEditUser} className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor="edit-user-email">Email</Label>
+              <Label htmlFor="edit-user-email">{t('PeoplePage.emailLabel')}</Label>
               <Input id="edit-user-email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} />
             </div>
 
@@ -817,10 +819,10 @@ export default function PeoplePage() {
                   onClick={() => void handleSendPasswordResetEmail()}
                 >
                   <MailIcon className="size-3.5" aria-hidden="true" />
-                  Send password reset email
+                  {t('PeoplePage.sendPasswordResetEmailButton')}
                 </Button>
                 {resetEmailSentTo && (
-                  <p className="text-sm text-muted-foreground">Reset email sent to {resetEmailSentTo}.</p>
+                  <p className="text-sm text-muted-foreground">{t('PeoplePage.resetEmailSentNote', { email: resetEmailSentTo })}</p>
                 )}
                 <div className="flex items-center gap-2 pt-1">
                   <input
@@ -831,14 +833,14 @@ export default function PeoplePage() {
                     className="size-4"
                   />
                   <Label htmlFor="edit-user-require-password-change">
-                    Require a password change at next login
+                    {t('PeoplePage.requirePasswordChangeLabel')}
                   </Label>
                 </div>
               </div>
             ) : (
               <div className="space-y-2 rounded-lg border p-2.5">
                 <p className="text-xs text-muted-foreground">
-                  Email isn't configured on this instance, so this account can't receive a reset link.
+                  {t('PeoplePage.emailNotConfiguredNote')}
                 </p>
                 <Button
                   type="button"
@@ -846,7 +848,7 @@ export default function PeoplePage() {
                   size="sm"
                   onClick={() => void handleGenerateTemporaryPasswordForTarget()}
                 >
-                  Generate a temporary password
+                  {t('PeoplePage.generateTempPasswordButton')}
                 </Button>
                 {temporaryPassword && (
                   <div className="space-y-2">
@@ -858,11 +860,10 @@ export default function PeoplePage() {
                       />
                       <div>
                         <p className="text-sm font-medium">
-                          {editTarget?.id === me.id ? 'This signs you out everywhere' : 'This signs them out everywhere'}
+                          {editTarget?.id === me.id ? t('PeoplePage.signsYouOutEverywhere') : t('PeoplePage.signsThemOutEverywhere')}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Every active session for this account ends immediately, and they must set a real
-                          password of their own the next time they log in.
+                          {t('PeoplePage.sessionsEndImmediatelyNote')}
                         </p>
                       </div>
                     </div>
@@ -873,9 +874,9 @@ export default function PeoplePage() {
             {editError && <p className="text-sm text-destructive">{editError}</p>}
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setEditTarget(null)}>
-                Cancel
+                {t('PeoplePage.cancelButton')}
               </Button>
-              <Button type="submit">Save</Button>
+              <Button type="submit">{t('PeoplePage.saveButton')}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
@@ -883,17 +884,16 @@ export default function PeoplePage() {
 
       <Dialog open={deactivateTarget !== null} onOpenChange={(open) => !open && setDeactivateTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Deactivate "{deactivateTarget?.email}"?</DialogTitle>
+          <DialogTitle>{t('PeoplePage.deactivateDialogTitle', { email: deactivateTarget?.email })}</DialogTitle>
           <DialogDescription>
-            They immediately lose access to every project until reactivated. This does not delete their account
-            or history.
+            {t('PeoplePage.deactivateDialogDescription')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeactivateTarget(null)}>
-              Cancel
+              {t('PeoplePage.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void handleDeactivate()}>
-              Deactivate
+              {t('PeoplePage.deactivateButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -901,25 +901,29 @@ export default function PeoplePage() {
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete "{deleteTarget?.email}"?</DialogTitle>
+          <DialogTitle>{t('PeoplePage.deleteUserDialogTitle', { email: deleteTarget?.email })}</DialogTitle>
           <DialogDescription>
-            Removes them from {deletePreview?.teamCount ?? 0} team{deletePreview?.teamCount === 1 ? '' : 's'},{' '}
-            {deletePreview?.projectCount ?? 0} project{deletePreview?.projectCount === 1 ? '' : 's'}, and revokes{' '}
+            {t('PeoplePage.deleteUserDialogBody', {
+              teamCount: deletePreview?.teamCount ?? 0,
+              teamUnit: (deletePreview?.teamCount ?? 0) === 1 ? t('PeoplePage.team') : t('PeoplePage.teams'),
+              projectCount: deletePreview?.projectCount ?? 0,
+              projectUnit: (deletePreview?.projectCount ?? 0) === 1 ? t('PeoplePage.project') : t('PeoplePage.projects'),
+            })}
             {deletePreview === undefined ? (
               <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
             ) : (
               <>
-                {deletePreview.tokenCount} API token{deletePreview.tokenCount === 1 ? '' : 's'}
+                {deletePreview.tokenCount} {deletePreview.tokenCount === 1 ? t('PeoplePage.apiToken') : t('PeoplePage.apiTokens')}
               </>
             )}
-            . This cannot be undone.
+            {t('PeoplePage.deleteUserDialogSuffix')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
+              {t('PeoplePage.cancelButton')}
             </Button>
             <Button variant="destructive" disabled={deletePreview === undefined} onClick={() => void handleDelete()}>
-              Delete
+              {t('PeoplePage.deleteButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -927,16 +931,16 @@ export default function PeoplePage() {
 
       <Dialog open={removeTarget !== null} onOpenChange={(open) => !open && setRemoveTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Remove {removeTarget?.user.email}?</DialogTitle>
+          <DialogTitle>{t('PeoplePage.removeMemberDialogTitle', { email: removeTarget?.user.email })}</DialogTitle>
           <DialogDescription>
-            They immediately lose whatever access this team grants them on any project it's assigned to.
+            {t('PeoplePage.removeMemberDialogDescription')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRemoveTarget(null)}>
-              Cancel
+              {t('PeoplePage.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void handleRemoveMember()}>
-              Remove
+              {t('PeoplePage.removeButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -944,30 +948,33 @@ export default function PeoplePage() {
 
       <Dialog open={deleteTeamTarget !== null} onOpenChange={(open) => !open && setDeleteTeamTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete "{deleteTeamTarget?.name}"?</DialogTitle>
+          <DialogTitle>{t('PeoplePage.deleteTeamDialogTitle', { name: deleteTeamTarget?.name })}</DialogTitle>
           <DialogDescription>
-            Currently has{' '}
+            {t('PeoplePage.deleteTeamDialogPrefix')}
             {teamDeletePreview === undefined ? (
               <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
             ) : (
               <>
-                {teamDeletePreview.memberCount} member{teamDeletePreview.memberCount === 1 ? '' : 's'}, with access on{' '}
-                {teamDeletePreview.projectCount} project{teamDeletePreview.projectCount === 1 ? '' : 's'}
+                {t('PeoplePage.deleteTeamDialogBody', {
+                  memberCount: teamDeletePreview.memberCount,
+                  memberUnit: teamDeletePreview.memberCount === 1 ? t('PeoplePage.member') : t('PeoplePage.members'),
+                  projectCount: teamDeletePreview.projectCount,
+                  projectUnit: teamDeletePreview.projectCount === 1 ? t('PeoplePage.project') : t('PeoplePage.projects'),
+                })}
               </>
             )}
-            . Deleting it removes those members and revokes that project access too, not just the team itself. This
-            cannot be undone.
+            {t('PeoplePage.deleteTeamDialogSuffix')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTeamTarget(null)}>
-              Cancel
+              {t('PeoplePage.cancelButton')}
             </Button>
             <Button
               variant="destructive"
               disabled={teamDeletePreview === undefined}
               onClick={() => void handleDeleteTeam()}
             >
-              Delete team
+              {t('PeoplePage.deleteTeamButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

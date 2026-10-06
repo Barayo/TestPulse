@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { useAuth } from '@/lib/useAuth'
@@ -6,6 +7,7 @@ import { useAuth } from '@/lib/useAuth'
 type SystemStatus = 'checking' | 'ready' | 'unavailable'
 
 export function HealthBadge() {
+  const { t } = useTranslation()
   const [status, setStatus] = useState<SystemStatus>('checking')
   const [version, setVersion] = useState<string>()
   const { mcpEnabled } = useAuth()
@@ -26,24 +28,26 @@ export function HealthBadge() {
 
   return (
     <div className="flex items-center gap-2">
-      {version && <span className="text-sm text-muted-foreground">v{version}</span>}
+      {version && (
+        <span className="text-sm text-muted-foreground">{t('HealthBadge.versionLabel', { version })}</span>
+      )}
       <Badge
         variant={
           status === 'ready' ? 'default' : status === 'checking' ? 'secondary' : 'destructive'
         }
       >
         {status === 'ready'
-          ? 'System ready'
+          ? t('HealthBadge.systemReadyLabel')
           : status === 'checking'
-            ? 'Checking…'
-            : 'API unavailable'}
+            ? t('HealthBadge.checkingLabel')
+            : t('HealthBadge.apiUnavailableLabel')}
       </Badge>
       {mcpEnabled && (
         <Badge
           className="border-transparent bg-primary/10 text-primary"
-          title="This instance exposes an MCP server for AI agents at /mcp."
+          title={t('HealthBadge.mcpBadgeTitle')}
         >
-          MCP
+          {t('HealthBadge.mcpBadgeLabel')}
         </Badge>
       )}
     </div>

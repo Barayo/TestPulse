@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent } from '@/components/ui/card'
 import type { components } from '@testpulse/shared/api'
 
@@ -8,11 +9,12 @@ type CaseParameters = components['schemas']['CaseParameters']
 // only when the case actually has rows — substitution only ever happens
 // at the run-item level, where a concrete row is known.
 export function CaseParametersView({ parameters }: { parameters: CaseParameters }) {
+  const { t } = useTranslation()
   const otherColumns = parameters.columns.filter((c) => c !== 'Name')
 
   return (
     <div>
-      <p className="tp-label mb-2">Test Data</p>
+      <p className="tp-label mb-2">{t('CaseParametersView.testData')}</p>
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full border-collapse text-sm">

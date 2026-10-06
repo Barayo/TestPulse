@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent, type KeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { GripVerticalIcon, Loader2Icon, PencilIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -26,6 +27,7 @@ function moveAdjacent<T>(arr: T[], index: number, direction: -1 | 1): T[] {
 }
 
 function OptionsEditor({ field, onChanged }: { field: CustomField; onChanged: () => void }) {
+  const { t } = useTranslation()
   const [newOption, setNewOption] = useState('')
   const options = field.options ?? []
 
@@ -103,15 +105,15 @@ function OptionsEditor({ field, onChanged }: { field: CustomField; onChanged: ()
             </span>
             <span>{o.value}</span>
             <RowActionMenu
-              label={`Actions for option ${o.value}`}
+              label={t('CustomFieldsCard.actionsForOption', { value: o.value })}
               items={[
-                { label: 'Move up', onSelect: () => moveOption(i, -1), disabled: i === 0 },
-                { label: 'Move down', onSelect: () => moveOption(i, 1), disabled: i === options.length - 1 },
+                { label: t('CustomFieldsCard.moveUp'), onSelect: () => moveOption(i, -1), disabled: i === 0 },
+                { label: t('CustomFieldsCard.moveDown'), onSelect: () => moveOption(i, 1), disabled: i === options.length - 1 },
               ]}
             />
             <button
               type="button"
-              aria-label={`Remove ${o.value}`}
+              aria-label={t('CustomFieldsCard.removeOption', { value: o.value })}
               className="text-muted-foreground hover:text-destructive"
               onClick={() => void removeOption(o.id)}
             >
@@ -122,7 +124,7 @@ function OptionsEditor({ field, onChanged }: { field: CustomField; onChanged: ()
       </ul>
       <form onSubmit={(e) => void addOption(e)}>
         <Input
-          placeholder="Add option…"
+          placeholder={t('CustomFieldsCard.addOptionPlaceholder')}
           value={newOption}
           onChange={(e) => setNewOption(e.target.value)}
           className="h-7 max-w-48 text-xs"
@@ -145,6 +147,7 @@ function FieldRow({
   onChanged: () => void
   onMove: (index: number, direction: -1 | 1) => void
 }) {
+  const { t } = useTranslation()
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(field.name)
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -205,22 +208,22 @@ function FieldRow({
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">{field.fieldType}</span>
         <button
           type="button"
-          aria-label={`Rename ${field.name}`}
+          aria-label={t('CustomFieldsCard.renameField', { name: field.name })}
           className="text-muted-foreground hover:text-foreground"
           onClick={() => setRenaming(true)}
         >
           <PencilIcon className="size-4" aria-hidden="true" />
         </button>
         <RowActionMenu
-          label={`Actions for ${field.name}`}
+          label={t('CustomFieldsCard.actionsForField', { name: field.name })}
           items={[
-            { label: 'Move up', onSelect: () => onMove(index, -1), disabled: index === 0 },
-            { label: 'Move down', onSelect: () => onMove(index, 1), disabled: index === total - 1 },
+            { label: t('CustomFieldsCard.moveUp'), onSelect: () => onMove(index, -1), disabled: index === 0 },
+            { label: t('CustomFieldsCard.moveDown'), onSelect: () => onMove(index, 1), disabled: index === total - 1 },
           ]}
         />
         <button
           type="button"
-          aria-label={`Delete ${field.name}`}
+          aria-label={t('CustomFieldsCard.deleteField', { name: field.name })}
           className="text-muted-foreground hover:text-destructive"
           onClick={() => void openDelete()}
         >
@@ -231,24 +234,25 @@ function FieldRow({
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete "{field.name}"?</DialogTitle>
+          <DialogTitle>{t('CustomFieldsCard.deleteFieldQuestion', { name: field.name })}</DialogTitle>
           <DialogDescription>
             {deletePreview === undefined ? (
               <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
             ) : (
-              <>
-                {deletePreview.caseCount} case{deletePreview.caseCount === 1 ? '' : 's'} currently{' '}
-                {deletePreview.caseCount === 1 ? 'has' : 'have'} a value set for this field.
-              </>
+              t('CustomFieldsCard.deletePreviewText', {
+                count: deletePreview.caseCount,
+                suffix: deletePreview.caseCount === 1 ? '' : 's',
+                hasHave: deletePreview.caseCount === 1 ? t('CustomFieldsCard.has') : t('CustomFieldsCard.have'),
+              })
             )}{' '}
-            This cannot be undone.
+            {t('CustomFieldsCard.cannotBeUndone')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-              Cancel
+              {t('CustomFieldsCard.cancel')}
             </Button>
             <Button variant="destructive" disabled={deletePreview === undefined} onClick={() => void confirmDelete()}>
-              Delete field
+              {t('CustomFieldsCard.deleteFieldButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -263,6 +267,7 @@ function FieldRow({
 // the whole page on manageProject, so this card needs no permission
 // check of its own.
 export function CustomFieldsCard({ projectKey }: { projectKey: string }) {
+  const { t } = useTranslation()
   const [fields, setFields] = useState<CustomField[]>([])
   const [creating, setCreating] = useState(false)
   const [newName, setNewName] = useState('')
@@ -307,39 +312,39 @@ export function CustomFieldsCard({ projectKey }: { projectKey: string }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Custom fields</CardTitle>
+        <CardTitle>{t('CustomFieldsCard.title')}</CardTitle>
         <Button size="sm" variant="outline" onClick={() => setCreating((c) => !c)}>
-          + New field
+          {t('CustomFieldsCard.newField')}
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         {creating && (
           <form onSubmit={(e) => void createField(e)} className="flex items-end gap-2 rounded-md border p-3">
             <div className="space-y-1">
-              <Label htmlFor="new-field-name">Field name</Label>
-              <Input id="new-field-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Component" />
+              <Label htmlFor="new-field-name">{t('CustomFieldsCard.fieldNameLabel')}</Label>
+              <Input id="new-field-name" value={newName} onChange={(e) => setNewName(e.target.value)} placeholder={t('CustomFieldsCard.fieldNamePlaceholder')} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="new-field-type">Type</Label>
+              <Label htmlFor="new-field-type">{t('CustomFieldsCard.typeLabel')}</Label>
               <select
                 id="new-field-type"
-                aria-label="Field type"
+                aria-label={t('CustomFieldsCard.fieldTypeAriaLabel')}
                 value={newType}
                 onChange={(e) => setNewType(e.target.value as CustomFieldType)}
                 className="h-9 rounded-md border border-input bg-background px-2 text-sm"
               >
-                <option value="text">Text</option>
-                <option value="select">Select</option>
+                <option value="text">{t('CustomFieldsCard.typeText')}</option>
+                <option value="select">{t('CustomFieldsCard.typeSelect')}</option>
               </select>
             </div>
             <Button type="submit" size="sm">
-              Create field
+              {t('CustomFieldsCard.createField')}
             </Button>
           </form>
         )}
 
         {fields.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No custom fields yet.</p>
+          <p className="text-sm text-muted-foreground">{t('CustomFieldsCard.noFieldsYet')}</p>
         ) : (
           <ul
             className="space-y-2"

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { HealthBar } from '@/components/HealthBar'
@@ -29,12 +30,13 @@ export const SECTION_CAP = 10
 // inside a role="option" element instead of a Link — an anchor's navigation
 // semantics don't belong inside a selection control.
 export function RunRowContent({ run }: { run: Run }) {
+  const { t } = useTranslation()
   return (
     <>
       <span className="min-w-0 flex-1 truncate font-medium">{run.name}</span>
       <span className="w-20 shrink-0">
         {run.passRate === null || run.passRate === undefined ? (
-          <span className="text-xs text-muted-foreground">not run yet</span>
+          <span className="text-xs text-muted-foreground">{t('RunList.notRunYet')}</span>
         ) : (
           <HealthBar rate={run.passRate} />
         )}
@@ -53,6 +55,7 @@ export function RunRow({
   projectKey?: string
   showActions?: boolean
 }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const menuRef = useRef<RowActionMenuHandle>(null)
   const showMenu = showActions && Boolean(projectKey) && run.status === 'closed'
@@ -60,7 +63,7 @@ export function RunRow({
   const menuItems: RowActionMenuItem[] = showMenu
     ? [
         {
-          label: 'Compare…',
+          label: t('RunList.compareLabel'),
           onSelect: () =>
             navigate(`/projects/${projectKey}/runs/compare`, { state: { seedRunKey: run.key } }),
         },
@@ -83,7 +86,7 @@ export function RunRow({
       >
         <RunRowContent run={run} />
       </Link>
-      {showMenu && <RowActionMenu ref={menuRef} label={`Actions for ${run.name}`} items={menuItems} />}
+      {showMenu && <RowActionMenu ref={menuRef} label={t('RunList.actionsForRunAriaLabel', { name: run.name })} items={menuItems} />}
     </div>
   )
 }
@@ -103,6 +106,7 @@ export function RunSection({
   recessed?: boolean
   projectKey?: string
 }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? runs : runs.slice(0, SECTION_CAP)
   const remaining = runs.length - visible.length
@@ -127,7 +131,9 @@ export function RunSection({
       {remaining > 0 && (
         <div className="flex justify-center pt-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(true)}>
-            Show {remaining} more {title.toLowerCase()} run{remaining === 1 ? '' : 's'}
+            {remaining === 1
+              ? t('RunList.showMoreRunsSingular', { count: remaining, title: title.toLowerCase() })
+              : t('RunList.showMoreRunsPlural', { count: remaining, title: title.toLowerCase() })}
           </Button>
         </div>
       )}

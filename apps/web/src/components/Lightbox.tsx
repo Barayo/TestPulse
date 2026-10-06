@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from 'lucide-react'
 
 // Only id/filename are used, so any attachment-shaped schema (run-result
@@ -21,6 +22,7 @@ export function Lightbox({
   captionExtra?: string
   basePath?: string
 }) {
+  const { t } = useTranslation()
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === 'Escape') onClose()
@@ -38,7 +40,7 @@ export function Lightbox({
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-3 bg-black/85 p-6">
       <button
         type="button"
-        aria-label="Close"
+        aria-label={t('Lightbox.close')}
         onClick={onClose}
         className="absolute top-4 right-4 flex size-8 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
       >
@@ -48,7 +50,7 @@ export function Lightbox({
       {index > 0 && (
         <button
           type="button"
-          aria-label="Previous"
+          aria-label={t('Lightbox.previous')}
           onClick={() => onNavigate(index - 1)}
           className="absolute left-4 flex size-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
         >
@@ -58,7 +60,7 @@ export function Lightbox({
       {index < attachments.length - 1 && (
         <button
           type="button"
-          aria-label="Next"
+          aria-label={t('Lightbox.next')}
           onClick={() => onNavigate(index + 1)}
           className="absolute right-4 flex size-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20"
         >
@@ -73,7 +75,7 @@ export function Lightbox({
       />
 
       <p className="text-center text-xs text-white/70">
-        {index + 1} of {attachments.length} · {current.filename}
+        {t('Lightbox.counter', { current: index + 1, total: attachments.length })} · {current.filename}
         {captionExtra ? ` · ${captionExtra}` : ''}
       </p>
 
@@ -83,7 +85,7 @@ export function Lightbox({
             <button
               key={att.id}
               type="button"
-              aria-label={`Show ${att.filename}`}
+              aria-label={t('Lightbox.showAttachment', { filename: att.filename })}
               aria-current={i === index}
               onClick={() => onNavigate(i)}
               className={`size-9 shrink-0 overflow-hidden rounded border ${

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Button } from '@/components/ui/button'
@@ -40,6 +41,7 @@ function toGridCase(c: TestCase): CasePickerCase {
 }
 
 export default function NewRunPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const location = useLocation()
@@ -216,7 +218,7 @@ export default function NewRunPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {t('NewRunPage.projectNotFound')} <Link to="/" className="underline">{t('NewRunPage.goToProjects')}</Link>
       </p>
     )
   }
@@ -226,7 +228,7 @@ export default function NewRunPage() {
   // false "denied" flash before their permissions resolve
   // (unify-authenticated-and-public-views tasks.md 2.8).
   if (permissions !== undefined && !permissions.runCreate) {
-    return <p className="text-sm text-muted-foreground">You don&apos;t have permission to create a run in this project.</p>
+    return <p className="text-sm text-muted-foreground">{t('NewRunPage.noPermission')}</p>
   }
 
   const gridCases = cases.map(toGridCase)
@@ -236,48 +238,48 @@ export default function NewRunPage() {
     <div className="space-y-6">
       <Breadcrumbs
         segments={[
-          { label: 'Projects', href: '/' },
+          { label: t('NewRunPage.projectsBreadcrumb'), href: '/' },
           { label: project?.name ?? '', href: `/projects/${projectKey}` },
-          { label: 'Runs', href: `/projects/${projectKey}/runs` },
-          { label: 'New run' },
+          { label: t('NewRunPage.runsBreadcrumb'), href: `/projects/${projectKey}/runs` },
+          { label: t('NewRunPage.newRunBreadcrumb') },
         ]}
       />
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">New run</CardTitle>
+          <CardTitle className="tp-heading">{t('NewRunPage.heading')}</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreateRun} className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-3">
               <div className="space-y-1">
-                <Label htmlFor="run-name">Name</Label>
+                <Label htmlFor="run-name">{t('NewRunPage.nameLabel')}</Label>
                 <Input
                   id="run-name"
                   ref={nameInputRef}
                   value={runName}
                   onChange={(e) => setRunName(e.target.value)}
-                  placeholder="Sprint 1"
+                  placeholder={t('NewRunPage.namePlaceholder')}
                 />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="run-suite">Suite (optional)</Label>
+                <Label htmlFor="run-suite">{t('NewRunPage.suiteLabel')}</Label>
                 <select
                   id="run-suite"
                   className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                   value={selectedSuiteKey}
                   onChange={(e) => handleSuiteChange(e.target.value)}
                 >
-                  <option value="">No suite — ad hoc run</option>
+                  <option value="">{t('NewRunPage.noSuiteOption')}</option>
                   {suites.map((s) => (
                     <option key={s.key} value={s.key}>
-                      {s.name} ({s.caseIds.length} {s.caseIds.length === 1 ? 'case' : 'cases'})
+                      {s.name} ({s.caseIds.length} {s.caseIds.length === 1 ? t('NewRunPage.caseSingular') : t('NewRunPage.casePlural')})
                     </option>
                   ))}
                 </select>
               </div>
               <div className="space-y-1">
-                <Label htmlFor="run-default-assignee">Default assignee (optional)</Label>
+                <Label htmlFor="run-default-assignee">{t('NewRunPage.defaultAssigneeLabel')}</Label>
                 <div className="flex items-center gap-2">
                   <Button
                     id="run-default-assignee"
@@ -286,17 +288,17 @@ export default function NewRunPage() {
                     className="w-full justify-start font-normal"
                     onClick={() => setAssignDialogOpen(true)}
                   >
-                    {defaultAssignee ? defaultAssignee.label : 'Assign every item to…'}
+                    {defaultAssignee ? defaultAssignee.label : t('NewRunPage.assignEveryItemPlaceholder')}
                   </Button>
                   {defaultAssignee && (
                     <Button
                       type="button"
                       variant="ghost"
                       size="sm"
-                      aria-label="Clear default assignee"
+                      aria-label={t('NewRunPage.clearDefaultAssigneeAriaLabel')}
                       onClick={() => setDefaultAssignee(null)}
                     >
-                      Clear
+                      {t('NewRunPage.clearButton')}
                     </Button>
                   )}
                 </div>
@@ -305,21 +307,22 @@ export default function NewRunPage() {
 
             {selectedSuiteKey && (
               <p className="text-sm text-muted-foreground">
-                Pre-filled from <span className="font-medium text-foreground">{seededFromSuiteName}</span> — adjust the
-                selection below as needed.
+                {t('NewRunPage.preFilledFromLabel')}{' '}
+                <span className="font-medium text-foreground">{seededFromSuiteName}</span>{' '}
+                {t('NewRunPage.preFilledFromSuiteSuffix')}
               </p>
             )}
 
             {plans.length > 0 && (
               <div className="max-w-70 space-y-1">
-                <Label htmlFor="run-test-plan">Test Plan (optional)</Label>
+                <Label htmlFor="run-test-plan">{t('NewRunPage.testPlanLabel')}</Label>
                 <select
                   id="run-test-plan"
                   className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-sm"
                   value={selectedTestPlanKey}
                   onChange={(e) => handleTestPlanChange(e.target.value)}
                 >
-                  <option value="">No test plan — ad hoc run</option>
+                  <option value="">{t('NewRunPage.noTestPlanOption')}</option>
                   {releases.map((release) => {
                     const releasePlans = plans.filter((p) => p.releaseKey === release.key)
                     if (releasePlans.length === 0) return null
@@ -339,8 +342,9 @@ export default function NewRunPage() {
 
             {seededFromTestPlanName && (
               <p className="text-sm text-muted-foreground">
-                Pre-filled from <span className="font-medium text-foreground">{seededFromTestPlanName}</span> — adjust
-                as needed.
+                {t('NewRunPage.preFilledFromLabel')}{' '}
+                <span className="font-medium text-foreground">{seededFromTestPlanName}</span>{' '}
+                {t('NewRunPage.preFilledFromPlanSuffix')}
               </p>
             )}
 
@@ -354,10 +358,10 @@ export default function NewRunPage() {
 
             <div className="flex items-center justify-between rounded-md border bg-accent px-4 py-2.5">
               <span className="text-sm font-medium">
-                {selected.size === 0 ? 'No cases selected' : `${selected.size} selected`}
+                {selected.size === 0 ? t('NewRunPage.noCasesSelected') : t('NewRunPage.selectedCount', { count: selected.size })}
               </span>
               <Button type="submit" disabled={!canCreate}>
-                Create run
+                {t('NewRunPage.createRunButton')}
               </Button>
             </div>
           </form>
@@ -368,7 +372,7 @@ export default function NewRunPage() {
         open={assignDialogOpen}
         onOpenChange={setAssignDialogOpen}
         projectKey={projectKey}
-        title="Default assignee…"
+        title={t('NewRunPage.defaultAssigneeDialogTitle')}
         onAssign={setDefaultAssignee}
       />
     </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 
 export type Crumb = { label: string; href?: string }
@@ -15,6 +16,7 @@ function Separator() {
 }
 
 function HiddenSegmentsMenu({ segments }: { segments: Crumb[] }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
 
@@ -41,7 +43,7 @@ function HiddenSegmentsMenu({ segments }: { segments: Crumb[] }) {
         type="button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Show ${segments.length} hidden path segments`}
+        aria-label={t('Breadcrumbs.showHiddenPathSegmentsAriaLabel', { count: segments.length })}
         className="hover:text-foreground"
         onClick={() => setOpen((o) => !o)}
       >
@@ -50,7 +52,7 @@ function HiddenSegmentsMenu({ segments }: { segments: Crumb[] }) {
       {open && (
         <span
           role="menu"
-          aria-label="Hidden path segments"
+          aria-label={t('Breadcrumbs.hiddenPathSegmentsAriaLabel')}
           className="absolute top-full left-0 z-50 mt-1 max-h-64 min-w-40 overflow-y-auto rounded-md border bg-card py-1 text-sm normal-case shadow-lg"
         >
           {segments.map((s, i) => (
@@ -75,6 +77,7 @@ function HiddenSegmentsMenu({ segments }: { segments: Crumb[] }) {
 // renders: some pages (the Library explorer at its root) have no other
 // heading announcing where you are, so a lone segment is never suppressed.
 export function Breadcrumbs({ segments }: { segments: Crumb[] }) {
+  const { t } = useTranslation()
   if (segments.length === 0) return null
 
   if (segments.length === 1) {
@@ -89,13 +92,13 @@ export function Breadcrumbs({ segments }: { segments: Crumb[] }) {
     const [only] = segments
     if (!only.href) {
       return (
-        <nav aria-label="Breadcrumb" className="tp-label flex items-center gap-1">
+        <nav aria-label={t('Breadcrumbs.breadcrumbAriaLabel')} className="tp-label flex items-center gap-1">
           <span>{only.label}</span>
         </nav>
       )
     }
     return (
-      <nav aria-label="Breadcrumb" className="tp-label flex items-center gap-1">
+      <nav aria-label={t('Breadcrumbs.breadcrumbAriaLabel')} className="tp-label flex items-center gap-1">
         <Link to={only.href} className="flex items-center gap-1 hover:text-foreground">
           <span aria-hidden="true">‹</span>
           {only.label}
@@ -106,7 +109,7 @@ export function Breadcrumbs({ segments }: { segments: Crumb[] }) {
 
   if (segments.length <= MAX_VISIBLE_SEGMENTS) {
     return (
-      <nav aria-label="Breadcrumb" className="tp-label flex flex-nowrap items-center gap-2 overflow-x-auto">
+      <nav aria-label={t('Breadcrumbs.breadcrumbAriaLabel')} className="tp-label flex flex-nowrap items-center gap-2 overflow-x-auto">
         {segments.map((segment, i) => {
           const isLast = i === segments.length - 1
           return (
@@ -139,7 +142,7 @@ export function Breadcrumbs({ segments }: { segments: Crumb[] }) {
   const [parent, current] = segments.slice(-2)
 
   return (
-    <nav aria-label="Breadcrumb" className="tp-label flex flex-nowrap items-center gap-2 overflow-x-auto">
+    <nav aria-label={t('Breadcrumbs.breadcrumbAriaLabel')} className="tp-label flex flex-nowrap items-center gap-2 overflow-x-auto">
       <span className="flex shrink-0 items-center gap-2">
         {first.href ? (
           <Link to={first.href} className="max-w-32 truncate hover:text-foreground">

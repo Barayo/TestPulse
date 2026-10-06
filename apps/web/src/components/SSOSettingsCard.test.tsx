@@ -25,6 +25,8 @@ const unconfiguredSettings = {
   oidcOnly: false,
   sessionTimeoutDays: 30,
   defaultLandingView: 'dashboard' as const,
+  defaultLanguage: 'en' as const,
+  perUserLanguageEnabled: false,
 }
 
 beforeEach(() => {

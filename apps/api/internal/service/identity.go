@@ -556,6 +556,9 @@ func (s *Service) UpdateOwnProfile(ctx context.Context, actor domain.Actor, upda
 	if update.AvatarKey != nil && *update.AvatarKey != "" && !domain.AvatarPresetKeys[*update.AvatarKey] {
 		return domain.User{}, invalid("unknown avatar key %q", *update.AvatarKey)
 	}
+	if update.Language != nil && !domain.IsSupportedLanguage(*update.Language) {
+		return domain.User{}, invalid("unsupported language %q", *update.Language)
+	}
 	user, err := s.store.Users.UpdateProfile(ctx, actor.ID, update)
 	if err != nil {
 		return domain.User{}, err

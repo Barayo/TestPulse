@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -26,6 +27,7 @@ export function ExtractStepGroupDialog({
   selectedSteps: Step[]
   onExtracted: (group: StepGroup) => void
 }) {
+  const { t } = useTranslation()
   const [name, setName] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string>()
@@ -39,7 +41,7 @@ export function ExtractStepGroupDialog({
         body: { name: name.trim(), steps: selectedSteps.map((s) => ({ action: s.action, expected: s.expected })) },
       })
       if (!response.ok || !data) {
-        setError((apiError as { error?: string })?.error ?? 'Could not create the group.')
+        setError((apiError as { error?: string })?.error ?? t('ExtractStepGroupDialog.createFailed'))
         return
       }
       setError(undefined)
@@ -53,29 +55,28 @@ export function ExtractStepGroupDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
-        <DialogTitle>Extract as shared step group</DialogTitle>
+        <DialogTitle>{t('ExtractStepGroupDialog.title')}</DialogTitle>
         <DialogDescription>
-          Creates a new shared group from the {selectedSteps.length} selected step{selectedSteps.length === 1 ? '' : 's'} and
-          replaces them here with a reference to it.
+          {t('ExtractStepGroupDialog.description', { count: selectedSteps.length, suffix: selectedSteps.length === 1 ? '' : 's' })}
         </DialogDescription>
         <div className="space-y-1">
-          <Label htmlFor="extract-group-name">Group name</Label>
-          <Input id="extract-group-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Log in as admin" />
+          <Label htmlFor="extract-group-name">{t('ExtractStepGroupDialog.groupNameLabel')}</Label>
+          <Input id="extract-group-name" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={t('ExtractStepGroupDialog.groupNamePlaceholder')} />
         </div>
         <div className="rounded-lg border bg-background p-2.5">
           <ul className="list-disc space-y-1 pl-4 text-sm text-muted-foreground">
             {selectedSteps.map((s, i) => (
-              <li key={i}>{s.action || '(empty step)'}</li>
+              <li key={i}>{s.action || t('ExtractStepGroupDialog.emptyStep')}</li>
             ))}
           </ul>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            Cancel
+            {t('ExtractStepGroupDialog.cancel')}
           </Button>
           <Button disabled={!name.trim() || submitting} onClick={() => void create()}>
-            Create group
+            {t('ExtractStepGroupDialog.createGroup')}
           </Button>
         </DialogFooter>
       </DialogContent>

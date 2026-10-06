@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FolderIcon, LayersIcon, CirclePlayIcon, ChevronRightIcon, BarChartIcon, PackageIcon, ActivityIcon, BotIcon, UserIcon } from 'lucide-react'
 import type { LandingFolder, LandingSuite, LandingRun } from '@/lib/useProjectLanding'
 import { HealthBar, StatusPill, healthColorVar, statusBorderClass } from '@/components/HealthBar'
@@ -74,6 +75,7 @@ function FolderRow({
   maxCaseCount: number
   onSelectFolder: (folderId: string) => void
 }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const hasChildren = folder.subsectionCount > 0
   const isEmptySection = folder.caseCount === 0
@@ -102,7 +104,7 @@ function FolderRow({
         {hasChildren && (
           <button
             type="button"
-            aria-label={expanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
+            aria-label={expanded ? t('ProjectLandingPanels.collapseAriaLabel', { name: folder.name }) : t('ProjectLandingPanels.expandAriaLabel', { name: folder.name })}
             className="flex size-4 shrink-0 items-center justify-center text-muted-foreground"
             onClick={(e) => {
               e.stopPropagation()
@@ -125,19 +127,19 @@ function FolderRow({
           </span>
           {hasChildren && (
             <span className="shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-semibold text-muted-foreground">
-              {folder.subsectionCount} subsection{folder.subsectionCount === 1 ? '' : 's'}
+              {t('ProjectLandingPanels.subsectionCount', { count: folder.subsectionCount, plural: folder.subsectionCount === 1 ? '' : 's' })}
             </span>
           )}
         </span>
         {isEmptySection ? (
-          <span className="shrink-0 text-xs text-muted-foreground italic">No cases yet</span>
+          <span className="shrink-0 text-xs text-muted-foreground italic">{t('ProjectLandingPanels.noCasesYet')}</span>
         ) : (
           <span className="flex shrink-0 items-center gap-2">
             <span className="h-1 w-11 overflow-hidden rounded-full bg-muted">
               <span data-fill className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
             </span>
             <span className="text-xs whitespace-nowrap text-muted-foreground">
-              {folder.caseCount} case{folder.caseCount === 1 ? '' : 's'}
+              {t('ProjectLandingPanels.caseCount', { count: folder.caseCount, plural: folder.caseCount === 1 ? '' : 's' })}
             </span>
           </span>
         )}
@@ -158,7 +160,7 @@ function FolderRow({
                     <span className="block h-full rounded-full bg-primary" style={{ width: `${childPct}%` }} />
                   </span>
                   <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">
-                    {child.caseCount} case{child.caseCount === 1 ? '' : 's'}
+                    {t('ProjectLandingPanels.caseCount', { count: child.caseCount, plural: child.caseCount === 1 ? '' : 's' })}
                   </span>
                 </button>
               </li>
@@ -187,16 +189,21 @@ export function FoldersPanel({
   onSeeAll: () => void
   onSelectFolder: (folderId: string) => void
 }) {
+  const { t } = useTranslation()
   const maxCaseCount = Math.max(1, ...folders.map((f) => f.caseCount))
   return (
     <PanelShell
       icon={<FolderIcon className="size-4" aria-hidden="true" />}
-      title="Library"
-      seeAllLabel={totalCount > 0 ? `see all ${totalCount}${truncated ? '+' : ''} ›` : 'go to Library ›'}
-      seeAllAriaLabel="Go to Library"
+      title={t('ProjectLandingPanels.libraryTitle')}
+      seeAllLabel={
+        totalCount > 0
+          ? t('ProjectLandingPanels.seeAllCount', { count: totalCount, truncatedSuffix: truncated ? '+' : '' })
+          : t('ProjectLandingPanels.goToLibrary')
+      }
+      seeAllAriaLabel={t('ProjectLandingPanels.goToLibraryAriaLabel')}
       onSeeAll={onSeeAll}
       isEmpty={folders.length === 0}
-      emptyLabel="No sections yet · create the first one to organize your test cases."
+      emptyLabel={t('ProjectLandingPanels.foldersEmptyLabel')}
     >
       {folders.map((f) => (
         <FolderRow key={f.id} folder={f} maxCaseCount={maxCaseCount} onSelectFolder={onSelectFolder} />
@@ -218,15 +225,20 @@ export function SuitesPanel({
   onSeeAll: () => void
   onSelectSuite: (suiteId: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <PanelShell
       icon={<LayersIcon className="size-4" aria-hidden="true" />}
-      title="Suites"
-      seeAllLabel={totalCount > 0 ? `see all ${totalCount}${truncated ? '+' : ''} ›` : 'go to Suites ›'}
-      seeAllAriaLabel="Go to Suites"
+      title={t('ProjectLandingPanels.suitesTitle')}
+      seeAllLabel={
+        totalCount > 0
+          ? t('ProjectLandingPanels.seeAllCount', { count: totalCount, truncatedSuffix: truncated ? '+' : '' })
+          : t('ProjectLandingPanels.goToSuites')
+      }
+      seeAllAriaLabel={t('ProjectLandingPanels.goToSuitesAriaLabel')}
       onSeeAll={onSeeAll}
       isEmpty={suites.length === 0}
-      emptyLabel="No suites yet · create the first one to group test cases."
+      emptyLabel={t('ProjectLandingPanels.suitesEmptyLabel')}
     >
       {suites.map((s) => (
         <li key={s.id} className="border-b border-border px-4 py-2.5 text-sm last:border-b-0">
@@ -238,11 +250,11 @@ export function SuitesPanel({
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="truncate font-medium">{s.name}</span>
               <span className="text-xs text-muted-foreground">
-                {s.caseCount} case{s.caseCount === 1 ? '' : 's'}
+                {t('ProjectLandingPanels.caseCount', { count: s.caseCount, plural: s.caseCount === 1 ? '' : 's' })}
               </span>
             </span>
             {s.passRate === null ? (
-              <span className="shrink-0 text-xs text-muted-foreground italic">Never run</span>
+              <span className="shrink-0 text-xs text-muted-foreground italic">{t('ProjectLandingPanels.suiteNeverRun')}</span>
             ) : (
               <span className="shrink-0">
                 <HealthBar rate={s.passRate} />
@@ -266,15 +278,16 @@ export function RunsPanel({
   onSeeAll: () => void
   onSelectRun: (runId: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <PanelShell
       icon={<CirclePlayIcon className="size-4" aria-hidden="true" />}
-      title="Recent runs"
-      seeAllLabel={totalCount > 0 ? 'see all ›' : 'go to Runs ›'}
-      seeAllAriaLabel="Go to Runs"
+      title={t('ProjectLandingPanels.recentRunsTitle')}
+      seeAllLabel={totalCount > 0 ? t('ProjectLandingPanels.seeAllLink') : t('ProjectLandingPanels.goToRuns')}
+      seeAllAriaLabel={t('ProjectLandingPanels.goToRunsAriaLabel')}
       onSeeAll={onSeeAll}
       isEmpty={runs.length === 0}
-      emptyLabel="No runs yet."
+      emptyLabel={t('ProjectLandingPanels.runsEmptyLabel')}
       featured
     >
       {runs.map((r) => (
@@ -292,7 +305,7 @@ export function RunsPanel({
               <span className="shrink-0 text-xs text-muted-foreground">{timeAgo(r.createdAt)}</span>
             </span>
             {r.passRate === null ? (
-              <span className="text-xs text-muted-foreground">not run yet</span>
+              <span className="text-xs text-muted-foreground">{t('ProjectLandingPanels.runNotRunYet')}</span>
             ) : (
               <span className="flex items-center gap-2">
                 <span className="flex h-1.5 w-17 shrink-0 overflow-hidden rounded-full bg-muted">
@@ -304,7 +317,7 @@ export function RunsPanel({
                 </span>
                 <span className="text-xs font-bold tabular-nums">{r.passRate}%</span>
                 <span className="text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-                  {r.passCount}/{r.total} passed
+                  {t('ProjectLandingPanels.passedCount', { passCount: r.passCount, total: r.total })}
                 </span>
               </span>
             )}
@@ -338,12 +351,13 @@ export function ReleasesPanel({
   onSeeAll: () => void
   onSelectRelease: (releaseKey: string) => void
 }) {
+  const { t } = useTranslation()
   return (
     <PanelShell
       icon={<PackageIcon className="size-4" aria-hidden="true" />}
-      title="Releases"
-      seeAllLabel="see all ›"
-      seeAllAriaLabel="Go to Releases"
+      title={t('ProjectLandingPanels.releasesTitle')}
+      seeAllLabel={t('ProjectLandingPanels.seeAllLink')}
+      seeAllAriaLabel={t('ProjectLandingPanels.goToReleasesAriaLabel')}
       onSeeAll={onSeeAll}
       isEmpty={false}
       emptyLabel=""
@@ -362,7 +376,7 @@ export function ReleasesPanel({
             <span className="flex shrink-0 items-center gap-1.5 text-xs">
               <StatusPill rate={r.passRate} />
               <span className="text-muted-foreground">
-                {r.planCount} plan{r.planCount === 1 ? '' : 's'}
+                {t('ProjectLandingPanels.planCount', { count: r.planCount, plural: r.planCount === 1 ? '' : 's' })}
               </span>
             </span>
           </button>
@@ -397,6 +411,7 @@ export function ReportsPanel({
   onOpenReports: () => void
   onSelectFlakyCase: (caseKey: string) => void
 }) {
+  const { t } = useTranslation()
   const passRate = total > 0 ? Math.round(((counts.pass ?? 0) / total) * 100) : null
   const flakyCount = flakyCases.length
   const visibleFlakyCases = flakyCases.slice(0, FLAKY_ROWS_SHOWN)
@@ -408,20 +423,20 @@ export function ReportsPanel({
           <span className="text-primary">
             <BarChartIcon className="size-4" aria-hidden="true" />
           </span>
-          Reports
+          {t('ProjectLandingPanels.reportsTitle')}
         </span>
         <button
           type="button"
-          aria-label="Open Reports"
+          aria-label={t('ProjectLandingPanels.openReportsAriaLabel')}
           onClick={onOpenReports}
           className="shrink-0 text-xs font-semibold text-primary hover:underline"
         >
-          Open Reports ›
+          {t('ProjectLandingPanels.openReportsButton')}
         </button>
       </div>
       <div className="flex flex-wrap items-center gap-6 p-4">
         {passRate === null ? (
-          <p className="text-sm text-muted-foreground">No runs yet — its status breakdown will appear here once one exists.</p>
+          <p className="text-sm text-muted-foreground">{t('ProjectLandingPanels.reportsNoRunsYet')}</p>
         ) : (
           <div className="flex min-w-40 flex-1 items-center gap-3">
             <span className="text-xl font-black tracking-tight">{passRate}%</span>
@@ -435,10 +450,10 @@ export function ReportsPanel({
                   />
                 ))}
               </span>
-              <span className="text-xs text-muted-foreground">pass · {total} items</span>
+              <span className="text-xs text-muted-foreground">{t('ProjectLandingPanels.passItemsCount', { total })}</span>
             </div>
             {passRateHistory.length > 0 && (
-              <div aria-label="Pass rate trend" className="flex h-6 items-end gap-0.5">
+              <div aria-label={t('ProjectLandingPanels.passRateTrendAriaLabel')} className="flex h-6 items-end gap-0.5">
                 {passRateHistory.map((point, i) => (
                   <span
                     key={i}
@@ -453,14 +468,14 @@ export function ReportsPanel({
         {flakyCount > 0 && (
           <span className="flex items-center gap-1.5 text-xs">
             <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-semibold text-destructive">
-              {flakyCount} flaky
+              {t('ProjectLandingPanels.flakyCountBadge', { count: flakyCount })}
             </span>
-            <span className="text-muted-foreground">case{flakyCount === 1 ? '' : 's'} to watch</span>
+            <span className="text-muted-foreground">{t('ProjectLandingPanels.flakyCasesToWatch', { plural: flakyCount === 1 ? '' : 's' })}</span>
           </span>
         )}
       </div>
       {flakyCount > 0 && (
-        <ul aria-label="Flaky cases" className="border-t border-border">
+        <ul aria-label={t('ProjectLandingPanels.flakyCasesAriaLabel')} className="border-t border-border">
           {visibleFlakyCases.map((c) => (
             <li key={c.caseKey} className="border-b border-border last:border-b-0">
               <button
@@ -477,11 +492,11 @@ export function ReportsPanel({
             <li className="border-b-0">
               <button
                 type="button"
-                aria-label="See all flaky cases"
+                aria-label={t('ProjectLandingPanels.seeAllFlakyCasesAriaLabel')}
                 onClick={onOpenReports}
                 className="w-full px-4 py-2 text-left text-xs font-semibold text-primary hover:underline"
               >
-                see all {flakyCount} ›
+                {t('ProjectLandingPanels.seeAllFlakyCount', { count: flakyCount })}
               </button>
             </li>
           )}
@@ -495,6 +510,7 @@ export function ReportsPanel({
 // precedent as Reports itself: not squeezed into the 3-column grid. A
 // teaser only — no "see all"/full page yet (out of scope, see design.md).
 export function ActivityPanel({ entries }: { entries: AuditEntry[] }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
@@ -502,18 +518,18 @@ export function ActivityPanel({ entries }: { entries: AuditEntry[] }) {
           <span className="text-primary">
             <ActivityIcon className="size-4" aria-hidden="true" />
           </span>
-          Activity
+          {t('ProjectLandingPanels.activityTitle')}
         </span>
       </div>
-      <ul aria-label="Activity">
+      <ul aria-label={t('ProjectLandingPanels.activityTitle')}>
         {entries.length === 0 ? (
-          <li className="px-4 py-3 text-sm text-muted-foreground">No recent activity.</li>
+          <li className="px-4 py-3 text-sm text-muted-foreground">{t('ProjectLandingPanels.noRecentActivity')}</li>
         ) : (
           entries.map((e) => (
             <li key={e.id} className="flex items-center gap-2 border-b border-border px-4 py-2 text-sm last:border-b-0">
               <span
                 className="text-muted-foreground"
-                aria-label={e.actorKind === 'agent' ? 'Agent' : e.actorKind === 'system' ? 'System' : 'Human'}
+                aria-label={e.actorKind === 'agent' ? t('ProjectLandingPanels.agentLabel') : e.actorKind === 'system' ? t('ProjectLandingPanels.systemLabel') : t('ProjectLandingPanels.humanLabel')}
               >
                 {e.actorKind === 'agent' ? (
                   <BotIcon className="size-4" aria-hidden="true" />

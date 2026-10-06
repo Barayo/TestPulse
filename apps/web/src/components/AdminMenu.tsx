@@ -1,4 +1,5 @@
 import { Link, useLocation } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ShieldIcon } from 'lucide-react'
 
 // A top-level nav item, at the same level as the project switcher — not
@@ -11,6 +12,7 @@ import { ShieldIcon } from 'lucide-react'
 // any admin page, AdminShell's persistent tab strip owns moving between
 // People/Roles/Instance — this control's only remaining job is the door in.
 export function AdminMenu() {
+  const { t } = useTranslation()
   const { pathname } = useLocation()
   const isCurrent = pathname.startsWith('/settings/people') || pathname.startsWith('/settings/roles') ||
     pathname.startsWith('/settings/instance')
@@ -24,7 +26,7 @@ export function AdminMenu() {
       }`}
     >
       <ShieldIcon className="size-4" aria-hidden="true" />
-      Admin
+      {t('AdminMenu.adminLabel')}
     </Link>
   )
 }

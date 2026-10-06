@@ -86,9 +86,9 @@ a bare array.
 |---|---|---|
 | GET | `/healthz` | Liveness: process health only; `200` even when the database is down |
 | GET | `/readyz` | Readiness: `200` when the database is reachable and at the latest applied migration, `503 {"status":"unavailable","reason":"..."}` otherwise |
-| GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` (see below), `passwordResetEnabled` — whether self-service password recovery is available (SMTP configured), `ssoEnabled`/`ssoOnly` — whether OIDC/SSO login is configured and whether password login is disabled instance-wide (`add-sso-oidc`), `colorTheme`/`customPalette` (see below), and `defaultLandingView` — the instance-wide default landing view (`add-configurable-project-landing`), exposed here (not just via `/instance-settings`) since every visitor, including anonymous ones, needs it to resolve which view a project without its own override opens into |
-| GET | `/api/v1/instance-settings` | Read instance-wide settings (`publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`, `colorTheme`, `customPalette`, `oidcIssuer`, `oidcClientId`, `oidcClientSecretSet`, `oidcGroupClaim`, `oidcAdminClaimValues`, `oidcOnly`, `sessionTimeoutDays`, `defaultLandingView`) — Tenant Admin only. The OIDC client secret itself is never returned, only whether one is set |
-| PATCH | `/api/v1/instance-settings` | Update instance-wide settings — any subset of `publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`, `colorTheme`/`customPalette` (`add-data-retention`/`add-color-theme-customization`), `sessionTimeoutDays` (1–90, `add-session-timeout-setting` — only affects sessions created/extended afterward, not already-active ones), `defaultLandingView` (`dashboard`/`library`/`suites`/`runs`/`reports`, `add-configurable-project-landing`), or `oidcIssuer`/`oidcClientId`/`oidcClientSecret`/`oidcGroupClaim`/`oidcAdminClaimValues`/`oidcOnly`/`disableSso` (`add-sso-oidc`) — Tenant Admin only. Changing the issuer/client ID/client secret validates the new values via live OIDC discovery before persisting anything, `400` on failure. `oidcClientSecret` is write-only (omit to keep the current one); `disableSso: true` clears every OIDC field at once |
+| GET | `/api/v1/meta` | Service name and version, plus `publicProjectsEnabled` (see below), `passwordResetEnabled` — whether self-service password recovery is available (SMTP configured), `ssoEnabled`/`ssoOnly` — whether OIDC/SSO login is configured and whether password login is disabled instance-wide (`add-sso-oidc`), `colorTheme`/`customPalette` (see below), `defaultLandingView` — the instance-wide default landing view (`add-configurable-project-landing`), and `defaultLanguage`/`perUserLanguageEnabled` — the instance-wide default UI language and whether a user's own language preference may override it (`add-ui-i18n`), exposed here (not just via `/instance-settings`) since every visitor, including anonymous ones, needs it to resolve which view/language to render |
+| GET | `/api/v1/instance-settings` | Read instance-wide settings (`publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`, `colorTheme`, `customPalette`, `oidcIssuer`, `oidcClientId`, `oidcClientSecretSet`, `oidcGroupClaim`, `oidcAdminClaimValues`, `oidcOnly`, `sessionTimeoutDays`, `defaultLandingView`, `defaultLanguage`, `perUserLanguageEnabled`) — Tenant Admin only. The OIDC client secret itself is never returned, only whether one is set |
+| PATCH | `/api/v1/instance-settings` | Update instance-wide settings — any subset of `publicProjectsEnabled`, `runRetentionDays`, `autoArchiveInactiveDays`, `colorTheme`/`customPalette` (`add-data-retention`/`add-color-theme-customization`), `sessionTimeoutDays` (1–90, `add-session-timeout-setting` — only affects sessions created/extended afterward, not already-active ones), `defaultLandingView` (`dashboard`/`library`/`suites`/`runs`/`reports`, `add-configurable-project-landing`), `defaultLanguage`/`perUserLanguageEnabled` (`en`/`es`/`fr`/`de`/`pt`/`zh` and a boolean, `add-ui-i18n`), or `oidcIssuer`/`oidcClientId`/`oidcClientSecret`/`oidcGroupClaim`/`oidcAdminClaimValues`/`oidcOnly`/`disableSso` (`add-sso-oidc`) — Tenant Admin only. Changing the issuer/client ID/client secret validates the new values via live OIDC discovery before persisting anything, `400` on failure. `oidcClientSecret` is write-only (omit to keep the current one); `disableSso: true` clears every OIDC field at once |
 | GET | `/api/v1/sso/team-mappings` | List claim→Team mappings (`add-sso-oidc`) — Tenant Admin only |
 | POST | `/api/v1/sso/team-mappings` | Create a claim→Team mapping (`claimValue`, `teamId`) — on every OIDC login, a user whose ID token's group claim includes `claimValue` is added to that Team if not already a member (additive only) — Tenant Admin only |
 | DELETE | `/api/v1/sso/team-mappings/{mappingId}` | Delete a claim→Team mapping — Tenant Admin only |
@@ -290,7 +290,7 @@ field alongside the report text, not inside it.
 | GET | `/api/v1/auth/oidc/login` | Start OIDC/SSO login (`add-sso-oidc`) — redirects (`302`) to the configured identity provider's authorization endpoint. `404` when SSO isn't configured (`ssoEnabled` on `GET /api/v1/meta`) |
 | GET | `/api/v1/auth/oidc/callback` | OIDC/SSO callback (`code`, `state` query params) — completes login exactly like `POST /api/v1/auth/login`, sets the same session cookie, then redirects (`302`) to the app. JIT-provisions a new account on first login for an unrecognized email; `401` on an invalid/expired `state` or ID token; `404` when SSO isn't configured |
 | GET | `/api/v1/users/me` | The currently authenticated actor, as a user record |
-| PATCH | `/api/v1/users/me` | Update the caller's own `displayName`, `avatarKey`, and/or `timezone` — self-service only, no target-user parameter |
+| PATCH | `/api/v1/users/me` | Update the caller's own `displayName`, `avatarKey`, `timezone`, and/or `language` (`en`/`es`/`fr`/`de`/`pt`/`zh`/`null`, only takes effect while the instance's `perUserLanguageEnabled` is true — `add-ui-i18n`) — self-service only, no target-user parameter |
 | POST | `/api/v1/users/me/password` | Change the caller's own password (`currentPassword`, `newPassword`) — the current password is verified server-side. Revokes every session for the account, including the one making the request, and clears `mustChangePassword` (`add-change-own-password`) |
 | POST | `/api/v1/users/me/avatar` | Upload a custom photo avatar (`multipart/form-data`, field `avatar`; JPEG/PNG/WebP, max 500KB) — server-side center-cropped and resized to 128×128, sets `avatarKey` to the reserved value `"custom"` |
 | DELETE | `/api/v1/users/me/avatar` | Remove the caller's custom photo avatar, reverting to the generated default |
@@ -433,6 +433,18 @@ public-project visitor, not just the admin who set it — so `GET
 /api/v1/meta` carries `colorTheme` (and `customPalette`, when active)
 unauthenticated, the same reasoning `publicProjectsEnabled` is exposed
 there for (`add-color-theme-customization`).
+
+A Tenant Admin sets the instance's default UI language via `PATCH
+/api/v1/instance-settings`' `defaultLanguage` field — one of `en`
+(default), `es`, `fr`, `de`, `pt`, `zh` — and separately gates whether a
+user's own `language` preference may override it via the boolean
+`perUserLanguageEnabled` field, off by default (`add-ui-i18n`). Both are
+exposed unauthenticated via `GET /api/v1/meta`, the same reasoning
+`colorTheme`/`defaultLandingView` are exposed there for: every visitor,
+including anonymous ones, needs `defaultLanguage` to resolve which
+language to render, and an authenticated client needs
+`perUserLanguageEnabled` to know whether to respect a signed-in user's
+own `language` field (set via `PATCH /api/v1/users/me`) at all.
 
 ## Versioning policy
 

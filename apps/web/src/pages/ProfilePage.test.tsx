@@ -22,9 +22,10 @@ const meResponse = {
   createdAt: '',
 }
 
-function mockMe(user: unknown = meResponse) {
+function mockMe(user: unknown = meResponse, meta: Record<string, unknown> = {}) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') return Promise.resolve({ data: user, response: { ok: true } })
+    if (path === '/api/v1/meta') return Promise.resolve({ data: meta, response: { ok: true } })
     return Promise.resolve({ data: undefined, response: { ok: true } })
   })
 }
@@ -105,6 +106,80 @@ describe('ProfilePage', () => {
       )
     })
     expect(await screen.findByText(/saved/i)).toBeInTheDocument()
+  })
+
+  describe('Language (add-ui-i18n, gated by instance-wide perUserLanguageEnabled)', () => {
+    it('does not show a Language control when per-user customization is disabled', async () => {
+      mockMe(meResponse, { perUserLanguageEnabled: false })
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.queryByRole('group', { name: /^language$/i })).not.toBeInTheDocument()
+    })
+
+    it('shows a Language control with all six locales plus an instance-default option when enabled', async () => {
+      mockMe(meResponse, { perUserLanguageEnabled: true, defaultLanguage: 'en' })
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+
+      const group = screen.getByRole('group', { name: /^language$/i })
+      expect(group).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /use instance default/i })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'English' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Español' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Français' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Deutsch' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Português' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: '中文' })).toBeInTheDocument()
+    })
+
+    it('marks "Use instance default" active when the user has no personal language set', async () => {
+      mockMe({ ...meResponse, language: null }, { perUserLanguageEnabled: true })
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.getByRole('button', { name: /use instance default/i })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it("marks the user's personal language active when one is set", async () => {
+      mockMe({ ...meResponse, language: 'fr' }, { perUserLanguageEnabled: true })
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+      expect(screen.getByRole('button', { name: 'Français' })).toHaveAttribute('aria-pressed', 'true')
+      expect(screen.getByRole('button', { name: /use instance default/i })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('selecting a language and saving calls PATCH /api/v1/users/me with it', async () => {
+      mockMe(meResponse, { perUserLanguageEnabled: true })
+      mockPATCH.mockResolvedValue({ data: { ...meResponse, language: 'de' }, response: { ok: true } })
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+
+      await userEvent.click(screen.getByRole('button', { name: 'Deutsch' }))
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+      await waitFor(() => {
+        expect(mockPATCH).toHaveBeenCalledWith(
+          '/api/v1/users/me',
+          expect.objectContaining({ body: expect.objectContaining({ language: 'de' }) }),
+        )
+      })
+    })
+
+    it('selecting "Use instance default" and saving sends language: null', async () => {
+      mockMe({ ...meResponse, language: 'es' }, { perUserLanguageEnabled: true })
+      mockPATCH.mockResolvedValue({ data: { ...meResponse, language: null }, response: { ok: true } })
+      renderPage()
+      await screen.findByLabelText(/display name/i)
+
+      await userEvent.click(screen.getByRole('button', { name: /use instance default/i }))
+      await userEvent.click(screen.getByRole('button', { name: /save/i }))
+
+      await waitFor(() => {
+        expect(mockPATCH).toHaveBeenCalledWith(
+          '/api/v1/users/me',
+          expect.objectContaining({ body: expect.objectContaining({ language: null }) }),
+        )
+      })
+    })
   })
 
   it('always links to API tokens', async () => {

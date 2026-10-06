@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useAuth, type AuthUser } from '@/lib/useAuth'
 import { LoginForm } from '@/components/LoginForm'
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog'
@@ -10,6 +11,7 @@ import { api } from '@/lib/api'
 // (reload for the same user, home for a different one), so there's no
 // "close" state to manage here.
 export function SessionExpiredModal() {
+  const { t } = useTranslation()
   const { user, sessionExpired } = useAuth()
   const passwordRef = useRef<HTMLInputElement>(null)
   const [passwordResetEnabled, setPasswordResetEnabled] = useState(false)
@@ -42,8 +44,8 @@ export function SessionExpiredModal() {
           passwordRef.current?.focus()
         }}
       >
-        <DialogTitle>Your session has expired</DialogTitle>
-        <DialogDescription>Log back in to continue where you left off.</DialogDescription>
+        <DialogTitle>{t('SessionExpiredModal.title')}</DialogTitle>
+        <DialogDescription>{t('SessionExpiredModal.description')}</DialogDescription>
         <LoginForm
           onSuccess={handleSuccess}
           initialEmail={user?.email}

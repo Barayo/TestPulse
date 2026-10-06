@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { XIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -15,6 +16,7 @@ type WebhookDestination = components['schemas']['WebhookDestination']
 // gates the whole page on manageProject, so this card needs no
 // permission check of its own.
 export function WebhooksCard({ projectKey }: { projectKey: string }) {
+  const { t } = useTranslation()
   const [destinations, setDestinations] = useState<WebhookDestination[]>([])
   const [newURL, setNewURL] = useState('')
 
@@ -46,14 +48,14 @@ export function WebhooksCard({ projectKey }: { projectKey: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Webhooks</CardTitle>
+        <CardTitle>{t('WebhooksCard.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         <p className="text-sm text-muted-foreground">
-          Notified on a failed or blocked result, and when a run closes. Delivery is best-effort and not retried.
+          {t('WebhooksCard.description')}
         </p>
         {destinations.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No webhook destinations yet.</p>
+          <p className="text-sm text-muted-foreground">{t('WebhooksCard.noDestinationsYet')}</p>
         ) : (
           <ul className="space-y-1">
             {destinations.map((d) => (
@@ -61,7 +63,7 @@ export function WebhooksCard({ projectKey }: { projectKey: string }) {
                 <span className="min-w-0 flex-1 truncate font-mono text-xs">{d.url}</span>
                 <button
                   type="button"
-                  aria-label={`Remove ${d.url}`}
+                  aria-label={t('WebhooksCard.removeDestinationAriaLabel', { url: d.url })}
                   className="text-muted-foreground hover:text-destructive"
                   onClick={() => void removeDestination(d.id)}
                 >
@@ -73,17 +75,17 @@ export function WebhooksCard({ projectKey }: { projectKey: string }) {
         )}
         <form onSubmit={(e) => void addDestination(e)} className="flex items-end gap-2">
           <div className="flex-1 space-y-1">
-            <Label htmlFor="new-webhook-url">Webhook URL</Label>
+            <Label htmlFor="new-webhook-url">{t('WebhooksCard.webhookUrlLabel')}</Label>
             <Input
               id="new-webhook-url"
               type="url"
               value={newURL}
               onChange={(e) => setNewURL(e.target.value)}
-              placeholder="https://hooks.slack.com/services/…"
+              placeholder={t('WebhooksCard.webhookUrlPlaceholder')}
             />
           </div>
           <Button type="submit" size="sm">
-            Add
+            {t('WebhooksCard.addButton')}
           </Button>
         </form>
       </CardContent>

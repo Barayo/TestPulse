@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { Input } from '@/components/ui/input'
 import { useProjectSwitcher } from '@/lib/useProjectSwitcher'
@@ -25,6 +26,7 @@ type Props = {
 // project's own page, and only the caret opens the switcher — losing that
 // distinction was a real regression the product owner caught once already.
 export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: Props) {
+  const { t } = useTranslation()
   const { canSwitch, registerPopoverOpener } = useProjectSwitcher()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
@@ -64,7 +66,7 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
   if (!activeProject) {
     return (
       <span className="relative -top-1 truncate text-[20px] leading-none font-bold text-muted-foreground">
-        Select project
+        {t('ProjectSwitcher.selectProject')}
       </span>
     )
   }
@@ -96,8 +98,8 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
         type="button"
         className="relative -top-1 flex shrink-0 items-center justify-center rounded-md p-1 text-muted-foreground hover:bg-accent hover:text-primary aria-expanded:text-primary"
         onClick={() => setOpen((o) => !o)}
-        title="Switch project (⌘K)"
-        aria-label="Switch project"
+        title={t('ProjectSwitcher.switchProjectTitle')}
+        aria-label={t('ProjectSwitcher.switchProjectAriaLabel')}
         aria-haspopup="dialog"
         aria-expanded={open}
       >
@@ -114,12 +116,12 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
       {open && (
         <div
           role="dialog"
-          aria-label="Switch project"
+          aria-label={t('ProjectSwitcher.switchProjectAriaLabel')}
           className="absolute top-[calc(100%+12px)] left-0 z-50 w-80 rounded-md border bg-card p-3 shadow-lg"
         >
           <Input
             autoFocus
-            placeholder="Search projects…"
+            placeholder={t('ProjectSwitcher.searchProjectsPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
@@ -136,8 +138,11 @@ export function ProjectSwitcher({ projects, activeProjectId, onSelectProject }: 
                 >
                   <span className="block truncate text-sm font-medium">{p.name}</span>
                   <span className="block font-mono text-xs text-muted-foreground">
-                    {p.suiteCount} suites · {p.caseCount} cases ·{' '}
-                    {p.passRate === null ? 'no runs' : `${p.passRate}% pass`}
+                    {t('ProjectSwitcher.projectStats', {
+                      suites: p.suiteCount,
+                      cases: p.caseCount,
+                      status: p.passRate === null ? t('ProjectSwitcher.noRuns') : t('ProjectSwitcher.passRateStatus', { rate: p.passRate }),
+                    })}
                   </span>
                 </button>
               </li>

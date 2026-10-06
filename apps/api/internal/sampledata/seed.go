@@ -86,14 +86,27 @@ func Seed(ctx context.Context, svc *service.Service) error {
 	// A real preset avatar (not just Julia's generated initial) and a second
 	// actor identity — used below to show a case version edited by someone
 	// other than the Tenant Admin (link-case-version-actor-to-identity).
+	// Julia's language is also set here (add-ui-i18n design.md D8), showing
+	// the per-user override actually taking effect for one visitor without
+	// changing the instance's own default language for everyone else.
 	juliaAvatar := "ada-lovelace"
+	juliaLanguage := "es"
 	juliaActor := domain.Actor{
 		ID: julia.ID, Kind: domain.ActorKindUser, DisplayName: "Julia",
 		EffectiveUserID: julia.ID,
 	}
 	juliaCtx := domain.WithActor(ctx, juliaActor)
-	if _, err := svc.UpdateOwnProfile(juliaCtx, juliaActor, domain.UserProfileUpdate{AvatarKey: &juliaAvatar}); err != nil {
+	if _, err := svc.UpdateOwnProfile(juliaCtx, juliaActor, domain.UserProfileUpdate{AvatarKey: &juliaAvatar, Language: &juliaLanguage}); err != nil {
 		return fmt.Errorf("sampledata: setting demo user avatar: %w", err)
+	}
+	// Enables the per-user language toggle (add-ui-i18n design.md D8) so the
+	// capability is visible/working in Instance Settings — the instance's
+	// own default stays "en" (unset here, defaults apply) so the Sample
+	// Project doesn't surprise-render in a non-English language for most
+	// evaluators; only Julia (above) has opted into a personal language.
+	perUserLanguageEnabled := true
+	if _, err := svc.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{PerUserLanguageEnabled: &perUserLanguageEnabled}); err != nil {
+		return fmt.Errorf("sampledata: enabling per-user language: %w", err)
 	}
 	roles, err := svc.ListRoles(ctx)
 	if err != nil {

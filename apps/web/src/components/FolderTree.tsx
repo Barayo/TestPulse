@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronRightIcon, FolderPlusIcon } from 'lucide-react'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from './RowActionMenu'
 
@@ -80,12 +81,13 @@ function InlineNewFolderRow({
   // vanishing on a rejected create.
   error?: string
 }) {
+  const { t } = useTranslation()
   return (
     <div className="py-1" style={{ paddingLeft: indentPx(depth) }}>
       <div className="flex items-center gap-1.5">
         <span className="w-3 shrink-0" />
         <input
-          aria-label="New section name"
+          aria-label={t('FolderTree.newSectionNameAriaLabel')}
           autoFocus
           className="h-6 w-full rounded border px-1 text-sm"
           value={value}
@@ -131,6 +133,7 @@ function TreeNode({
   folder: TreeFolder
   depth: number
 } & Omit<Props, 'folders' | 'rootId'> & { folders: TreeFolder[] }) {
+  const { t } = useTranslation()
   const [dragOver, setDragOver] = useState(false)
   const menuRef = useRef<RowActionMenuHandle>(null)
   const children = folders.filter((f) => f.parentFolderId === folder.id)
@@ -138,7 +141,7 @@ function TreeNode({
   const isSelected = folder.id === selectedId
   const menuItems: RowActionMenuItem[] = [
     {
-      label: 'New section',
+      label: t('FolderTree.newSectionMenuLabel'),
       icon: <FolderPlusIcon className="size-4" aria-hidden="true" />,
       onSelect: () => onNewSubfolder(folder.id),
     },
@@ -168,7 +171,7 @@ function TreeNode({
         {children.length > 0 ? (
           <button
             type="button"
-            aria-label={isExpanded ? `Collapse ${folder.name}` : `Expand ${folder.name}`}
+            aria-label={isExpanded ? t('FolderTree.collapseAriaLabel', { name: folder.name }) : t('FolderTree.expandAriaLabel', { name: folder.name })}
             className="w-3 shrink-0 text-muted-foreground"
             onClick={() => onToggle(folder.id)}
           >
@@ -190,13 +193,13 @@ function TreeNode({
           </span>
           {folderStats?.[folder.id]?.hasCritical && (
             <span
-              aria-label={`${folder.name} contains a critical case`}
+              aria-label={t('FolderTree.criticalCaseAriaLabel', { name: folder.name })}
               className="size-1.5 shrink-0 rounded-full bg-destructive"
             />
           )}
           <span className="shrink-0 text-xs text-muted-foreground">{folderStats?.[folder.id]?.count ?? 0}</span>
         </button>
-        {canCreate && <RowActionMenu ref={menuRef} label={`New section in ${folder.name}`} items={menuItems} />}
+        {canCreate && <RowActionMenu ref={menuRef} label={t('FolderTree.newSectionInAriaLabel', { name: folder.name })} items={menuItems} />}
       </div>
       {isExpanded &&
         children.map((child) => (
@@ -254,10 +257,11 @@ export function FolderTree({
   canCreate = true,
   width = 256,
 }: Props) {
+  const { t } = useTranslation()
   const topLevel = folders.filter((f) => f.parentFolderId === rootId)
   return (
-    <nav aria-label="Section tree" className="relative shrink-0 rounded-lg bg-muted/60 py-2" style={{ width }}>
-      <p className="tp-label px-3 pb-1.5 text-muted-foreground">Sections</p>
+    <nav aria-label={t('FolderTree.sectionTreeAriaLabel')} className="relative shrink-0 rounded-lg bg-muted/60 py-2" style={{ width }}>
+      <p className="tp-label px-3 pb-1.5 text-muted-foreground">{t('FolderTree.sectionsHeading')}</p>
       {topLevel.map((folder) => (
         <TreeNode
           key={folder.id}

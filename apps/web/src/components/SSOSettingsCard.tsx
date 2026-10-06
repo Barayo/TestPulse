@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
@@ -26,6 +27,7 @@ export function SSOSettingsCard({
   settings: InstanceSettings
   onSettingsChange: (settings: InstanceSettings) => void
 }) {
+  const { t } = useTranslation()
   const [issuer, setIssuer] = useState(settings.oidcIssuer ?? '')
   const [clientId, setClientId] = useState(settings.oidcClientId ?? '')
   const [clientSecret, setClientSecret] = useState('')
@@ -54,7 +56,7 @@ export function SSOSettingsCard({
     })
     setSaving(false)
     if (err) {
-      setError((err as { error?: string }).error ?? 'Could not save SSO settings.')
+      setError((err as { error?: string }).error ?? t('SSOSettingsCard.saveError'))
       return
     }
     if (data) {
@@ -83,74 +85,72 @@ export function SSOSettingsCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Single sign-on</CardTitle>
+        <CardTitle>{t('SSOSettingsCard.title')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
         <p className="text-sm text-muted-foreground">
-          Let people sign in with an external identity provider (Okta, Entra ID, Google Workspace, and similar) via
-          standard OIDC discovery.
+          {t('SSOSettingsCard.description')}
         </p>
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1">
-            <Label htmlFor="sso-issuer">Issuer URL</Label>
-            <Input id="sso-issuer" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder="https://idp.example.com" />
+            <Label htmlFor="sso-issuer">{t('SSOSettingsCard.issuerUrlLabel')}</Label>
+            <Input id="sso-issuer" value={issuer} onChange={(e) => setIssuer(e.target.value)} placeholder={t('SSOSettingsCard.issuerUrlPlaceholder')} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="sso-client-id">Client ID</Label>
+            <Label htmlFor="sso-client-id">{t('SSOSettingsCard.clientIdLabel')}</Label>
             <Input id="sso-client-id" value={clientId} onChange={(e) => setClientId(e.target.value)} />
           </div>
           <div className="space-y-1">
-            <Label htmlFor="sso-client-secret">Client secret</Label>
+            <Label htmlFor="sso-client-secret">{t('SSOSettingsCard.clientSecretLabel')}</Label>
             <Input
               id="sso-client-secret"
               type="password"
               value={clientSecret}
               onChange={(e) => setClientSecret(e.target.value)}
-              placeholder={settings.oidcClientSecretSet ? 'Configured — leave blank to keep' : undefined}
+              placeholder={settings.oidcClientSecretSet ? t('SSOSettingsCard.clientSecretPlaceholder') : undefined}
             />
             {settings.oidcClientSecretSet && !clientSecret && (
-              <p className="text-xs text-muted-foreground">A client secret is configured.</p>
+              <p className="text-xs text-muted-foreground">{t('SSOSettingsCard.clientSecretConfiguredNote')}</p>
             )}
           </div>
           <div className="space-y-1">
-            <Label htmlFor="sso-group-claim">Group claim</Label>
-            <Input id="sso-group-claim" value={groupClaim} onChange={(e) => setGroupClaim(e.target.value)} placeholder="groups" />
+            <Label htmlFor="sso-group-claim">{t('SSOSettingsCard.groupClaimLabel')}</Label>
+            <Input id="sso-group-claim" value={groupClaim} onChange={(e) => setGroupClaim(e.target.value)} placeholder={t('SSOSettingsCard.groupClaimPlaceholder')} />
           </div>
           <div className="col-span-2 space-y-1">
-            <Label htmlFor="sso-admin-values">Tenant Admin claim values</Label>
+            <Label htmlFor="sso-admin-values">{t('SSOSettingsCard.adminClaimValuesLabel')}</Label>
             <Input
               id="sso-admin-values"
               value={adminClaimValues}
               onChange={(e) => setAdminClaimValues(e.target.value)}
-              placeholder="admins, platform-team"
+              placeholder={t('SSOSettingsCard.adminClaimValuesPlaceholder')}
             />
             <p className="text-xs text-muted-foreground">
-              Comma-separated. A matching value in the group claim grants Tenant Admin, re-evaluated on every login.
+              {t('SSOSettingsCard.adminClaimValuesNote')}
             </p>
           </div>
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
         <div className="flex items-center gap-2">
           <Button onClick={() => void save()} disabled={saving}>
-            {saving ? 'Saving…' : 'Save'}
+            {saving ? t('SSOSettingsCard.saving') : t('SSOSettingsCard.save')}
           </Button>
           {ssoConfigured && (
             <Button variant="outline" onClick={() => setDisableOpen(true)}>
-              Disable SSO
+              {t('SSOSettingsCard.disableSsoButton')}
             </Button>
           )}
         </div>
 
         <div className="flex items-center justify-between gap-4 border-t pt-4">
           <div>
-            <span className="text-sm font-medium">SSO-only</span>
+            <span className="text-sm font-medium">{t('SSOSettingsCard.ssoOnlyLabel')}</span>
             <p className="text-xs text-muted-foreground">
-              Disable password-based login instance-wide. Verify SSO login works before enabling this — there is no
-              break-glass.
+              {t('SSOSettingsCard.ssoOnlyDescription')}
             </p>
           </div>
           <Switch
-            aria-label="SSO-only"
+            aria-label={t('SSOSettingsCard.ssoOnlyLabel')}
             checked={settings.oidcOnly}
             disabled={!ssoConfigured}
             onCheckedChange={(next) => void toggleSSOOnly(next)}
@@ -162,17 +162,16 @@ export function SSOSettingsCard({
 
       <Dialog open={disableOpen} onOpenChange={setDisableOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Disable single sign-on?</DialogTitle>
+          <DialogTitle>{t('SSOSettingsCard.disableDialogTitle')}</DialogTitle>
           <DialogDescription>
-            Clears the issuer, client ID, client secret, and claim mappings. Password login remains (or resumes)
-            available.
+            {t('SSOSettingsCard.disableDialogDescription')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDisableOpen(false)}>
-              Cancel
+              {t('SSOSettingsCard.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void confirmDisable()}>
-              Confirm
+              {t('SSOSettingsCard.confirmButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -185,6 +184,7 @@ export function SSOSettingsCard({
 // (design.md D10) — on every OIDC login, a user whose group claim includes
 // the value is added to that Team, additive only.
 function OIDCTeamMappings() {
+  const { t } = useTranslation()
   const [teams, setTeams] = useState<Team[]>([])
   const [teamsTruncated, setTeamsTruncated] = useState(false)
   const [mappings, setMappings] = useState<OIDCTeamMapping[]>([])
@@ -202,7 +202,7 @@ function OIDCTeamMappings() {
   }, [])
 
   function teamName(id: string) {
-    return teams.find((t) => t.id === id)?.name ?? id
+    return teams.find((team) => team.id === id)?.name ?? id
   }
 
   async function addMapping() {
@@ -223,9 +223,9 @@ function OIDCTeamMappings() {
   return (
     <div className="space-y-3 border-t pt-4">
       <div>
-        <span className="text-sm font-medium">Claim→Team mapping</span>
+        <span className="text-sm font-medium">{t('SSOSettingsCard.claimTeamMappingLabel')}</span>
         <p className="text-xs text-muted-foreground">
-          A group claim value adds the user to the mapped Team on login — additive only, never removes membership.
+          {t('SSOSettingsCard.claimTeamMappingDescription')}
         </p>
       </div>
       {mappings.length > 0 && (
@@ -236,7 +236,7 @@ function OIDCTeamMappings() {
                 <span className="font-medium">{m.claimValue}</span>
                 <span className="text-muted-foreground"> → {teamName(m.teamId)}</span>
               </span>
-              <Button variant="ghost" size="icon" aria-label="Remove" onClick={() => void removeMapping(m.id)}>
+              <Button variant="ghost" size="icon" aria-label={t('SSOSettingsCard.removeMappingAriaLabel')} onClick={() => void removeMapping(m.id)}>
                 <Trash2Icon className="size-4" aria-hidden="true" />
               </Button>
             </li>
@@ -245,30 +245,30 @@ function OIDCTeamMappings() {
       )}
       <div className="flex items-end gap-2">
         <div className="space-y-1">
-          <Label htmlFor="sso-mapping-claim-value">Mapping claim value</Label>
+          <Label htmlFor="sso-mapping-claim-value">{t('SSOSettingsCard.mappingClaimValueLabel')}</Label>
           <Input id="sso-mapping-claim-value" value={claimValue} onChange={(e) => setClaimValue(e.target.value)} />
         </div>
         <div className="space-y-1">
-          <Label htmlFor="sso-mapping-team">Team</Label>
+          <Label htmlFor="sso-mapping-team">{t('SSOSettingsCard.teamLabel')}</Label>
           <select
             id="sso-mapping-team"
             value={teamId}
             onChange={(e) => setTeamId(e.target.value)}
             className="h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
           >
-            <option value="">—</option>
-            {teams.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
+            <option value="">{t('SSOSettingsCard.noTeamOption')}</option>
+            {teams.map((team) => (
+              <option key={team.id} value={team.id}>
+                {team.name}
               </option>
             ))}
           </select>
           {teamsTruncated && (
-            <p className="text-xs text-muted-foreground">Showing a limited set of teams.</p>
+            <p className="text-xs text-muted-foreground">{t('SSOSettingsCard.teamsTruncatedNote')}</p>
           )}
         </div>
         <Button variant="outline" onClick={() => void addMapping()} disabled={!claimValue || !teamId}>
-          Add mapping
+          {t('SSOSettingsCard.addMappingButton')}
         </Button>
       </div>
     </div>

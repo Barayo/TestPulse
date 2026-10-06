@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+
 // Shared pill vocabulary (rework-library-ux design.md: one set of primitives
 // for both SuiteCaseGrid/CasePicker's filterable case rows and the Library's
 // authoring rows, rather than a second, forked pill system). Priority,
@@ -40,10 +42,11 @@ export function ClassificationPills({
 }
 
 export function AutomationPill({ automated }: { automated: boolean }) {
+  const { t } = useTranslation()
   return automated ? (
-    <span className="rounded-full bg-accent px-2 py-0.5 text-primary">Auto</span>
+    <span className="rounded-full bg-accent px-2 py-0.5 text-primary">{t('Pills.autoLabel')}</span>
   ) : (
-    <span className="rounded-full border border-input px-2 py-0.5 text-muted-foreground">Manual</span>
+    <span className="rounded-full border border-input px-2 py-0.5 text-muted-foreground">{t('Pills.manualLabel')}</span>
   )
 }
 
@@ -51,14 +54,16 @@ export function AutomationPill({ automated }: { automated: boolean }) {
 // status vocabulary for a different meaning (design.md) — Library has no
 // execution context of its own to justify a new semantic tint.
 export function StalePill() {
-  return <span className="rounded-full bg-status-progress-bg px-2 py-0.5 text-status-progress-fg">Stale</span>
+  const { t } = useTranslation()
+  return <span className="rounded-full bg-status-progress-bg px-2 py-0.5 text-status-progress-fg">{t('Pills.staleLabel')}</span>
 }
 
 // Reuses the same bg-destructive/10 tint as critical priority — flakiness
 // is a real execution-health signal, not a neutral classification like
 // automated/manual (add-flaky-test-detection).
 export function FlakyPill() {
-  return <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-destructive">Flaky</span>
+  const { t } = useTranslation()
+  return <span className="rounded-full bg-destructive/10 px-2 py-0.5 text-destructive">{t('Pills.flakyLabel')}</span>
 }
 
 export function tagPills(tags: string[]) {

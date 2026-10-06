@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ChevronRightIcon, TrendingDownIcon, TrendingUpIcon, CheckCircle2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/useAuth'
@@ -14,14 +15,15 @@ type RunComparisonItem = components['schemas']['RunComparisonItem']
 type RunComparisonSummary = components['schemas']['RunComparisonSummary']
 
 function RunHeaderCard({ label, run }: { label: string; run: RunComparisonSummary }) {
+  const { t } = useTranslation()
   return (
     <Card className="flex-1">
       <CardHeader>
         <span className="tp-label text-muted-foreground">{label}</span>
         <CardTitle className="tp-heading">{run.runName}</CardTitle>
         <p className="text-sm text-muted-foreground">
-          Created {new Date(run.createdAt).toLocaleDateString()} ·{' '}
-          <span>{run.totalDurationMs != null ? formatDuration(run.totalDurationMs) : 'No timing data'}</span>
+          {t('RunComparePage.createdPrefix')} {new Date(run.createdAt).toLocaleDateString()} ·{' '}
+          <span>{run.totalDurationMs != null ? formatDuration(run.totalDurationMs) : t('RunComparePage.noTimingData')}</span>
         </p>
         <RunStatusBreakdown total={run.total} counts={run.counts} />
       </CardHeader>
@@ -89,13 +91,14 @@ function TransitionSection({
 }
 
 function AddedRemovedColumn({ label, items, removed }: { label: string; items: RunComparisonItem[]; removed?: boolean }) {
+  const { t } = useTranslation()
   return (
     <div>
       <p className="tp-label mb-2 text-muted-foreground">
         {label} · {items.length}
       </p>
       {items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">None.</p>
+        <p className="text-sm text-muted-foreground">{t('RunComparePage.noneMessage')}</p>
       ) : (
         <ul className="space-y-1 text-sm">
           {items.map((item) => (
@@ -110,6 +113,7 @@ function AddedRemovedColumn({ label, items, removed }: { label: string; items: R
 }
 
 export default function RunComparePage() {
+  const { t } = useTranslation()
   const { runKeyA, runKeyB } = useParams<{ runKeyA: string; runKeyB: string }>()
   const { user, loading: authLoading } = useAuth()
   const [comparison, setComparison] = useState<RunComparison>()
@@ -144,7 +148,7 @@ export default function RunComparePage() {
   }, [load])
 
   if (notFound) {
-    return <p className="text-sm text-muted-foreground">Comparison not found.</p>
+    return <p className="text-sm text-muted-foreground">{t('RunComparePage.comparisonNotFound')}</p>
   }
   if (!comparison) return null
 
@@ -157,44 +161,44 @@ export default function RunComparePage() {
   return (
     <div className="space-y-4">
       <div className="flex flex-col gap-4 md:flex-row md:items-stretch">
-        <RunHeaderCard label="OLDER RUN" run={olderRun} />
+        <RunHeaderCard label={t('RunComparePage.olderRunLabel')} run={olderRun} />
         <div className="flex items-center justify-center">
           <span className="flex size-8 shrink-0 rotate-90 items-center justify-center rounded-full bg-muted md:rotate-0" aria-hidden="true">
             →
           </span>
         </div>
-        <RunHeaderCard label="NEWER RUN" run={newerRun} />
+        <RunHeaderCard label={t('RunComparePage.newerRunLabel')} run={newerRun} />
       </div>
 
       {nearZeroOverlap && (
         <p className="text-sm text-muted-foreground">
-          Only {overlapping} of {totalDistinct} cases ran in both runs — Added and Removed below account for the rest.
+          {t('RunComparePage.overlapSummary', { overlapping, total: totalDistinct })}
         </p>
       )}
 
       {fullyUnchanged ? (
         <div className="rounded-2xl border border-dashed p-10 text-center">
           <CheckCircle2Icon className="mx-auto mb-2 size-6 text-primary" aria-hidden="true" />
-          <p className="mb-1 text-sm font-medium">No regressions or improvements</p>
+          <p className="mb-1 text-sm font-medium">{t('RunComparePage.noRegressionsMessage')}</p>
           <p className="text-sm text-muted-foreground">
-            Every case that ran in both {olderRun.runName} and {newerRun.runName} kept the same verdict.
+            {t('RunComparePage.allCasesSameVerdict', { older: olderRun.runName, newer: newerRun.runName })}
           </p>
         </div>
       ) : (
         <>
           <TransitionSection
-            label="Regressed"
+            label={t('RunComparePage.regressedLabel')}
             icon={<TrendingDownIcon className="size-4" aria-hidden="true" />}
             tone="destructive"
             items={regressed}
-            emptyMessage="No cases regressed between these runs."
+            emptyMessage={t('RunComparePage.noRegressedCasesMessage')}
           />
           <TransitionSection
-            label="Improved"
+            label={t('RunComparePage.improvedLabel')}
             icon={<TrendingUpIcon className="size-4" aria-hidden="true" />}
             tone="primary"
             items={improved}
-            emptyMessage="No cases improved between these runs."
+            emptyMessage={t('RunComparePage.noImprovedCasesMessage')}
           />
         </>
       )}
@@ -203,19 +207,19 @@ export default function RunComparePage() {
         <CardHeader>
           <button
             type="button"
-            aria-label={unchangedExpanded ? 'Collapse Unchanged' : 'Expand Unchanged'}
+            aria-label={unchangedExpanded ? t('RunComparePage.collapseUnchangedAriaLabel') : t('RunComparePage.expandUnchangedAriaLabel')}
             aria-expanded={unchangedExpanded}
             className="flex items-center gap-2 text-muted-foreground"
             onClick={() => setUnchangedExpanded((v) => !v)}
           >
             <ChevronRightIcon className={`size-3.5 transition-transform ${unchangedExpanded ? 'rotate-90' : ''}`} aria-hidden="true" />
-            <span className="tp-heading text-base">Unchanged · {unchanged.length}</span>
+            <span className="tp-heading text-base">{t('RunComparePage.unchangedCountLabel', { count: unchanged.length })}</span>
           </button>
         </CardHeader>
         {unchangedExpanded && (
           <CardContent>
             {unchanged.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No unchanged cases.</p>
+              <p className="text-sm text-muted-foreground">{t('RunComparePage.noUnchangedCasesMessage')}</p>
             ) : (
               <ul className="space-y-1">
                 {unchanged.map((item) => (
@@ -231,8 +235,8 @@ export default function RunComparePage() {
       </Card>
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-        <AddedRemovedColumn label="Removed" items={removed} removed />
-        <AddedRemovedColumn label="Added" items={added} />
+        <AddedRemovedColumn label={t('RunComparePage.removedLabel')} items={removed} removed />
+        <AddedRemovedColumn label={t('RunComparePage.addedLabel')} items={added} />
       </div>
     </div>
   )

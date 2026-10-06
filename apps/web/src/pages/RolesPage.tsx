@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { EyeIcon, FileTextIcon, FolderIcon, LayersIcon, CirclePlayIcon, SettingsIcon, Trash2Icon, Loader2Icon } from 'lucide-react'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
@@ -64,60 +65,60 @@ type PermissionKey =
 // Runs — the same hierarchy docs/test-management.md walks through), not
 // alphabetically. General/Read sits first since it's the one prerequisite
 // every other permission implicitly assumes.
-const PERMISSION_SECTIONS: {
-  heading: string
-  icon: ReactNode
-  items: { key: PermissionKey; shortLabel: string; fullLabel: string }[]
-}[] = [
+const PERMISSION_SECTIONS = [
   {
-    heading: 'General',
+    headingKey: 'RolesPage.sectionGeneral',
     icon: <EyeIcon className="size-4" aria-hidden="true" />,
-    items: [{ key: 'canRead', shortLabel: 'Read', fullLabel: 'Read' }],
+    items: [{ key: 'canRead', shortLabelKey: 'RolesPage.permReadShort', fullLabelKey: 'RolesPage.permReadFull' }],
   },
   {
-    heading: 'Project',
+    headingKey: 'RolesPage.sectionProject',
     icon: <SettingsIcon className="size-4" aria-hidden="true" />,
     items: [
-      { key: 'canManageProject', shortLabel: 'Manage', fullLabel: 'Manage Project' },
-      { key: 'canProjectDelete', shortLabel: 'Delete', fullLabel: 'Delete Project' },
+      { key: 'canManageProject', shortLabelKey: 'RolesPage.permManageProjectShort', fullLabelKey: 'RolesPage.permManageProjectFull' },
+      { key: 'canProjectDelete', shortLabelKey: 'RolesPage.permProjectDeleteShort', fullLabelKey: 'RolesPage.permProjectDeleteFull' },
     ],
   },
   {
-    heading: 'Sections',
+    headingKey: 'RolesPage.sectionSections',
     icon: <FolderIcon className="size-4" aria-hidden="true" />,
     items: [
-      { key: 'canSectionCreate', shortLabel: 'Create', fullLabel: 'Create Section' },
-      { key: 'canSectionEdit', shortLabel: 'Edit', fullLabel: 'Edit Section' },
-      { key: 'canSectionDelete', shortLabel: 'Delete', fullLabel: 'Delete Section' },
+      { key: 'canSectionCreate', shortLabelKey: 'RolesPage.permSectionCreateShort', fullLabelKey: 'RolesPage.permSectionCreateFull' },
+      { key: 'canSectionEdit', shortLabelKey: 'RolesPage.permSectionEditShort', fullLabelKey: 'RolesPage.permSectionEditFull' },
+      { key: 'canSectionDelete', shortLabelKey: 'RolesPage.permSectionDeleteShort', fullLabelKey: 'RolesPage.permSectionDeleteFull' },
     ],
   },
   {
-    heading: 'Cases',
+    headingKey: 'RolesPage.sectionCases',
     icon: <FileTextIcon className="size-4" aria-hidden="true" />,
     items: [
-      { key: 'canCaseCreate', shortLabel: 'Create', fullLabel: 'Create Case' },
-      { key: 'canCaseEdit', shortLabel: 'Edit', fullLabel: 'Edit Case' },
-      { key: 'canCaseDelete', shortLabel: 'Delete', fullLabel: 'Delete Case' },
+      { key: 'canCaseCreate', shortLabelKey: 'RolesPage.permCaseCreateShort', fullLabelKey: 'RolesPage.permCaseCreateFull' },
+      { key: 'canCaseEdit', shortLabelKey: 'RolesPage.permCaseEditShort', fullLabelKey: 'RolesPage.permCaseEditFull' },
+      { key: 'canCaseDelete', shortLabelKey: 'RolesPage.permCaseDeleteShort', fullLabelKey: 'RolesPage.permCaseDeleteFull' },
     ],
   },
   {
-    heading: 'Suites',
+    headingKey: 'RolesPage.sectionSuites',
     icon: <LayersIcon className="size-4" aria-hidden="true" />,
     items: [
-      { key: 'canSuiteCreate', shortLabel: 'Create', fullLabel: 'Create Suite' },
-      { key: 'canSuiteEditMembership', shortLabel: 'Edit Membership', fullLabel: 'Edit Suite Membership' },
+      { key: 'canSuiteCreate', shortLabelKey: 'RolesPage.permSuiteCreateShort', fullLabelKey: 'RolesPage.permSuiteCreateFull' },
+      { key: 'canSuiteEditMembership', shortLabelKey: 'RolesPage.permSuiteEditMembershipShort', fullLabelKey: 'RolesPage.permSuiteEditMembershipFull' },
     ],
   },
   {
-    heading: 'Runs',
+    headingKey: 'RolesPage.sectionRuns',
     icon: <CirclePlayIcon className="size-4" aria-hidden="true" />,
     items: [
-      { key: 'canRunCreate', shortLabel: 'Create', fullLabel: 'Create Run' },
-      { key: 'canRunRecordResult', shortLabel: 'Record Result', fullLabel: 'Record Result' },
-      { key: 'canRunDelete', shortLabel: 'Delete', fullLabel: 'Delete Run' },
+      { key: 'canRunCreate', shortLabelKey: 'RolesPage.permRunCreateShort', fullLabelKey: 'RolesPage.permRunCreateFull' },
+      { key: 'canRunRecordResult', shortLabelKey: 'RolesPage.permRunRecordResultShort', fullLabelKey: 'RolesPage.permRunRecordResultFull' },
+      { key: 'canRunDelete', shortLabelKey: 'RolesPage.permRunDeleteShort', fullLabelKey: 'RolesPage.permRunDeleteFull' },
     ],
   },
-]
+] as const satisfies {
+  headingKey: string
+  icon: ReactNode
+  items: { key: PermissionKey; shortLabelKey: string; fullLabelKey: string }[]
+}[]
 
 // Alternating teal transparency (not a second hue — an earlier pass paired
 // the brand teal with a gold tint, which read as too busy/too "yellow") so
@@ -153,13 +154,14 @@ function PermissionSections({
   values: Record<PermissionKey, boolean>
   onToggle: (key: PermissionKey) => void
 }) {
+  const { t } = useTranslation()
   return (
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
       {PERMISSION_SECTIONS.map((section, i) => (
-        <div key={section.heading} className={`rounded-lg ${SECTION_TINTS[i % SECTION_TINTS.length]} p-2.5`}>
+        <div key={section.headingKey} className={`rounded-lg ${SECTION_TINTS[i % SECTION_TINTS.length]} p-2.5`}>
           <div className="flex items-center gap-1.5 text-xs font-semibold tracking-wide text-primary uppercase">
             {section.icon}
-            {section.heading}
+            {t(section.headingKey)}
           </div>
           <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1.5">
             {section.items.map((item) => (
@@ -167,11 +169,11 @@ function PermissionSections({
                 <input
                   type="checkbox"
                   className="accent-primary"
-                  aria-label={`${ariaPrefix} — ${item.fullLabel}`}
+                  aria-label={`${ariaPrefix} — ${t(item.fullLabelKey)}`}
                   checked={values[item.key]}
                   onChange={() => onToggle(item.key)}
                 />
-                {item.shortLabel}
+                {t(item.shortLabelKey)}
               </label>
             ))}
           </div>
@@ -193,6 +195,7 @@ function PermissionSections({
 // resort would fracture that grouping across pages. Roles are rendered in
 // server order.
 export default function RolesPage() {
+  const { t } = useTranslation()
   const { user: me } = useAuth()
   const [roles, setRoles] = useState<Role[]>([])
   const [rolesCursor, setRolesCursor] = useState<string | null>(null)
@@ -232,7 +235,7 @@ export default function RolesPage() {
   }
 
   if (!me?.isTenantAdmin) {
-    return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
+    return <p className="text-sm text-muted-foreground">{t('RolesPage.notAuthorized')}</p>
   }
 
   async function handleCreate(e: FormEvent) {
@@ -289,24 +292,24 @@ export default function RolesPage() {
       {createFormOpen && (
         <Card>
           <CardHeader>
-            <CardTitle className="tp-heading">New role</CardTitle>
+            <CardTitle className="tp-heading">{t('RolesPage.newRoleCardTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="space-y-1">
-                <Label htmlFor="role-name">Role name</Label>
-                <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} placeholder="Reviewer" />
+                <Label htmlFor="role-name">{t('RolesPage.roleNameLabel')}</Label>
+                <Input id="role-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('RolesPage.roleNamePlaceholder')} />
               </div>
               <PermissionSections
-                ariaPrefix="New role"
+                ariaPrefix={t('RolesPage.newRoleCardTitle')}
                 values={flags}
                 onToggle={(key) => setFlags((f) => ({ ...f, [key]: !f[key] }))}
               />
               <div className="flex justify-end gap-2">
                 <Button type="button" variant="outline" onClick={() => setCreateFormOpen(false)}>
-                  Cancel
+                  {t('RolesPage.cancelButton')}
                 </Button>
-                <Button type="submit">Create role</Button>
+                <Button type="submit">{t('RolesPage.createRoleButton')}</Button>
               </div>
             </form>
           </CardContent>
@@ -314,18 +317,18 @@ export default function RolesPage() {
       )}
 
       <div className="flex items-center justify-between">
-        <h1 className="tp-heading text-xl">Roles</h1>
+        <h1 className="tp-heading text-xl">{t('RolesPage.heading')}</h1>
         <div className="flex gap-2">
           <Button size="sm" onClick={() => setCreateFormOpen((open) => !open)}>
-            + New role
+            {t('RolesPage.newRoleButton')}
           </Button>
           <Button variant="destructive" size="sm" onClick={() => setResetDialogOpen(true)}>
-            Reset to defaults
+            {t('RolesPage.resetToDefaultsButton')}
           </Button>
         </div>
       </div>
       {roles.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No roles yet.</p>
+        <p className="text-sm text-muted-foreground">{t('RolesPage.noRolesYet')}</p>
       ) : (
         <ul className="space-y-3">
           {roles.map((r) => (
@@ -348,7 +351,7 @@ export default function RolesPage() {
                     click. */}
                 <button
                   type="button"
-                  aria-label={`Delete ${r.name}`}
+                  aria-label={t('RolesPage.deleteRoleAriaLabel', { name: r.name })}
                   className="text-muted-foreground hover:text-destructive"
                   onClick={() => void openDeleteDialog(r)}
                 >
@@ -366,26 +369,31 @@ export default function RolesPage() {
 
       <Dialog open={deleteTarget !== null} onOpenChange={(open) => !open && setDeleteTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete "{deleteTarget?.name}"?</DialogTitle>
+          <DialogTitle>{t('RolesPage.deleteRoleDialogTitle', { name: deleteTarget?.name })}</DialogTitle>
           <DialogDescription>
-            Currently assigned to{' '}
+            {t('RolesPage.deleteRoleDialogPrefix')}
             {deletePreview === undefined ? (
               <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
             ) : (
               <>
-                {deletePreview.directUserCount} user{deletePreview.directUserCount === 1 ? '' : 's'} and{' '}
-                {deletePreview.teamCount} team{deletePreview.teamCount === 1 ? '' : 's'}, across{' '}
-                {deletePreview.projectCount} project{deletePreview.projectCount === 1 ? '' : 's'}
+                {t('RolesPage.deleteRoleDialogBody', {
+                  userCount: deletePreview.directUserCount,
+                  userUnit: deletePreview.directUserCount === 1 ? t('RolesPage.user') : t('RolesPage.users'),
+                  teamCount: deletePreview.teamCount,
+                  teamUnit: deletePreview.teamCount === 1 ? t('RolesPage.team') : t('RolesPage.teams'),
+                  projectCount: deletePreview.projectCount,
+                  projectUnit: deletePreview.projectCount === 1 ? t('RolesPage.project') : t('RolesPage.projects'),
+                })}
               </>
             )}
-            . Deleting it removes those assignments too, not just the role itself. This cannot be undone.
+            {t('RolesPage.deleteRoleDialogSuffix')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-              Cancel
+              {t('RolesPage.cancelButton')}
             </Button>
             <Button variant="destructive" disabled={deletePreview === undefined} onClick={() => void handleDelete()}>
-              Delete role
+              {t('RolesPage.deleteRoleButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -393,19 +401,16 @@ export default function RolesPage() {
 
       <Dialog open={resetDialogOpen} onOpenChange={setResetDialogOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Reset to defaults?</DialogTitle>
+          <DialogTitle>{t('RolesPage.resetDialogTitle')}</DialogTitle>
           <DialogDescription>
-            This restores <strong>Tester</strong>, <strong>Contributor</strong>, and{' '}
-            <strong>Project Admin</strong> to their original permission flags, discarding any changes you've
-            made to them. Every other role, and every project or team's role assignments, is left untouched.
-            This cannot be undone.
+            {t('RolesPage.resetDialogPrefix')}<strong>Tester</strong>{t('RolesPage.resetDialogSep1')}<strong>Contributor</strong>{t('RolesPage.resetDialogSep2')}<strong>Project Admin</strong>{t('RolesPage.resetDialogSuffix')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setResetDialogOpen(false)}>
-              Cancel
+              {t('RolesPage.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void handleResetToDefaults()}>
-              Reset to defaults
+              {t('RolesPage.resetToDefaultsButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

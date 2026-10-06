@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router'
 import { XIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,9 +11,9 @@ import { GeneratedPasswordChip } from '@/components/GeneratedPasswordChip'
 import { generateSecurePassword } from '@/lib/generatePassword'
 import { api } from '@/lib/api'
 
-const NETWORK_ERROR = "Couldn't reach the server — check your connection and try again."
-
 export default function ResetPasswordPage() {
+  const { t } = useTranslation()
+  const NETWORK_ERROR = t('ResetPasswordPage.networkError')
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const token = searchParams.get('token')
@@ -45,15 +46,15 @@ export default function ResetPasswordPage() {
     e.preventDefault()
     setError(undefined)
     if (!password || !confirmPassword) {
-      setError('Enter a new password and confirm it.')
+      setError(t('ResetPasswordPage.enterPasswordError'))
       return
     }
     if (password.length < 12) {
-      setError('password must be at least 12 characters')
+      setError(t('ResetPasswordPage.passwordTooShortError'))
       return
     }
     if (password !== confirmPassword) {
-      setError("Passwords don't match.")
+      setError(t('ResetPasswordPage.passwordsMismatchError'))
       return
     }
     setSubmitting(true)
@@ -80,7 +81,7 @@ export default function ResetPasswordPage() {
   const showDeadLink = !token || tokenDead
 
   return (
-    <AuthLayout backLink={{ to: '/login', label: 'Back to log in' }}>
+    <AuthLayout backLink={{ to: '/login', label: t('ResetPasswordPage.backToLoginLink') }}>
       <Card className="w-full max-w-sm">
         {showDeadLink ? (
           <CardContent className="flex flex-col items-center gap-3 pt-6 text-center">
@@ -88,32 +89,30 @@ export default function ResetPasswordPage() {
               <XIcon className="size-4" aria-hidden="true" />
             </span>
             <div className="space-y-1">
-              <p className="font-medium">This link no longer works</p>
-              <p className="text-sm text-muted-foreground">
-                Password reset links expire after 30 minutes and can only be used once.
-              </p>
+              <p className="font-medium">{t('ResetPasswordPage.deadLinkHeading')}</p>
+              <p className="text-sm text-muted-foreground">{t('ResetPasswordPage.deadLinkBody')}</p>
             </div>
             <Button asChild>
-              <Link to="/forgot-password">Request a new link</Link>
+              <Link to="/forgot-password">{t('ResetPasswordPage.requestNewLinkButton')}</Link>
             </Button>
           </CardContent>
         ) : (
           <>
             <CardHeader>
-              <CardTitle className="tp-heading">Set a new password</CardTitle>
-              <CardDescription>Choose a new password for your account.</CardDescription>
+              <CardTitle className="tp-heading">{t('ResetPasswordPage.title')}</CardTitle>
+              <CardDescription>{t('ResetPasswordPage.description')}</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <Label htmlFor="reset-password-new">New password</Label>
+                    <Label htmlFor="reset-password-new">{t('ResetPasswordPage.newPasswordLabel')}</Label>
                     <button
                       type="button"
                       className="text-xs font-bold text-primary"
                       onClick={handleGeneratePassword}
                     >
-                      Generate
+                      {t('ResetPasswordPage.generateButton')}
                     </button>
                   </div>
                   <Input
@@ -125,10 +124,10 @@ export default function ResetPasswordPage() {
                     value={password}
                     onChange={(e) => handlePasswordChange(e.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">At least 12 characters.</p>
+                  <p className="text-xs text-muted-foreground">{t('ResetPasswordPage.passwordHint')}</p>
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="reset-password-confirm">Confirm new password</Label>
+                  <Label htmlFor="reset-password-confirm">{t('ResetPasswordPage.confirmPasswordLabel')}</Label>
                   <Input
                     id="reset-password-confirm"
                     type="password"
@@ -142,7 +141,7 @@ export default function ResetPasswordPage() {
                   <GeneratedPasswordChip value={revealedPassword} />
                 )}
                 <Button type="submit" className="w-full" disabled={submitting}>
-                  {submitting ? 'Resetting…' : 'Reset password'}
+                  {submitting ? t('ResetPasswordPage.resettingButton') : t('ResetPasswordPage.resetPasswordButton')}
                 </Button>
                 {error && <p className="text-sm text-destructive">{error}</p>}
               </form>

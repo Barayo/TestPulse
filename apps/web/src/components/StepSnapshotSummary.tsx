@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { ChevronRightIcon } from 'lucide-react'
 import { dotClass } from '@/components/StatusBadge'
 import type { components } from '@testpulse/shared/api'
@@ -12,15 +13,16 @@ type StepResult = components['schemas']['StepResult']
 // result has no marked steps (recorded before this capability existed, or
 // without touching any step) — no "0/N steps marked" noise.
 export function StepSnapshotSummary({ stepResults, totalSteps }: { stepResults: StepResult[]; totalSteps: number }) {
+  const { t } = useTranslation()
   if (stepResults.length === 0) return null
 
   const byIndex = new Map(stepResults.map((s) => [s.stepIndex, s.verdict]))
   const failedCount = stepResults.filter((s) => s.verdict === 'failed').length
   const blockedCount = stepResults.filter((s) => s.verdict === 'blocked').length
 
-  const parts = [`${stepResults.length}/${totalSteps} steps marked`]
-  if (failedCount > 0) parts.push(`${failedCount} failed`)
-  if (blockedCount > 0) parts.push(`${blockedCount} blocked`)
+  const parts = [t('StepSnapshotSummary.stepsMarked', { marked: stepResults.length, total: totalSteps })]
+  if (failedCount > 0) parts.push(t('StepSnapshotSummary.failedCount', { count: failedCount }))
+  if (blockedCount > 0) parts.push(t('StepSnapshotSummary.blockedCount', { count: blockedCount }))
 
   return (
     <details className="group mt-0.5">
@@ -33,7 +35,7 @@ export function StepSnapshotSummary({ stepResults, totalSteps }: { stepResults: 
           const verdict = byIndex.get(i)
           return (
             <div key={i} className="flex items-center justify-between gap-2 text-xs">
-              <span className="text-muted-foreground">Step {i + 1}</span>
+              <span className="text-muted-foreground">{t('StepSnapshotSummary.stepLabel', { index: i + 1 })}</span>
               {verdict ? (
                 <span className="inline-flex items-center gap-1 font-semibold capitalize">
                   <span className={`h-1.5 w-1.5 rounded-full ${dotClass[verdict]}`} aria-hidden="true" />

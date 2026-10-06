@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PlusIcon, XIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 
@@ -19,12 +20,13 @@ export function TagChipsEditor({
   onAdd: (tag: string) => void
   onRemove: (tag: string) => void
 }) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const normalized = query.trim().toLowerCase()
   const suggestions = vocabulary.filter(
-    (t) => !tags.includes(t) && (normalized === '' || t.toLowerCase().includes(normalized)),
+    (tag) => !tags.includes(tag) && (normalized === '' || tag.toLowerCase().includes(normalized)),
   )
-  const exactMatch = vocabulary.some((t) => t.toLowerCase() === normalized)
+  const exactMatch = vocabulary.some((tag) => tag.toLowerCase() === normalized)
 
   function commit(tag: string) {
     if (!tag) return
@@ -36,14 +38,14 @@ export function TagChipsEditor({
     <div className="space-y-2">
       {tags.length > 0 && (
         <ul className="flex flex-wrap gap-1.5">
-          {tags.map((t) => (
-            <li key={t} className="flex items-center gap-1 rounded-full bg-muted py-0.5 pr-1 pl-2 text-xs">
-              <span>{t}</span>
+          {tags.map((tag) => (
+            <li key={tag} className="flex items-center gap-1 rounded-full bg-muted py-0.5 pr-1 pl-2 text-xs">
+              <span>{tag}</span>
               <button
                 type="button"
-                aria-label={`Remove ${t}`}
+                aria-label={t('TagChipsEditor.removeTag', { tag })}
                 className="text-muted-foreground hover:text-destructive"
-                onClick={() => onRemove(t)}
+                onClick={() => onRemove(tag)}
               >
                 <XIcon className="size-3" aria-hidden="true" />
               </button>
@@ -52,7 +54,7 @@ export function TagChipsEditor({
         </ul>
       )}
       <Input
-        placeholder="Add a tag…"
+        placeholder={t('TagChipsEditor.addTagPlaceholder')}
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         onKeyDown={(e) => {
@@ -64,14 +66,14 @@ export function TagChipsEditor({
       />
       {normalized !== '' && (
         <ul className="max-h-40 space-y-0.5 overflow-y-auto rounded-md border bg-card p-1">
-          {suggestions.map((t) => (
-            <li key={t}>
+          {suggestions.map((tag) => (
+            <li key={tag}>
               <button
                 type="button"
                 className="block w-full rounded-md px-2 py-1 text-left text-sm hover:bg-accent"
-                onClick={() => commit(t)}
+                onClick={() => commit(tag)}
               >
-                {t}
+                {tag}
               </button>
             </li>
           ))}
@@ -83,7 +85,7 @@ export function TagChipsEditor({
                 onClick={() => commit(normalized)}
               >
                 <PlusIcon className="size-3.5" aria-hidden="true" />
-                Add &quot;{query.trim()}&quot; as a new tag
+                {t('TagChipsEditor.addNewTag', { tag: query.trim() })}
               </button>
             </li>
           )}

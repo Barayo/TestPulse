@@ -1,5 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { LayersIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { HealthRing, StatusPill, healthLabel, statusBorderClass, statusDotClass } from '@/components/HealthBar'
@@ -22,8 +24,8 @@ type Suite = components['schemas']['Suite']
 // the same reason, per that file's own comment).
 const SECTION_CAP = 10
 
-function healthCaption(rate: number | null): string {
-  return rate === null ? 'No runs yet' : healthLabel(rate)
+function healthCaption(rate: number | null, t: TFunction): string {
+  return rate === null ? t('RunsListTriage.noRunsYetCaption') : healthLabel(rate)
 }
 
 function OpenRunCard({
@@ -35,6 +37,7 @@ function OpenRunCard({
   ringSize: number
   hero: boolean
 }) {
+  const { t } = useTranslation()
   const passRate = run.passRate ?? null
   return (
     <Link
@@ -45,7 +48,7 @@ function OpenRunCard({
       <div className="min-w-0 flex-1">
         {hero && <StatusPill rate={passRate} />}
         <p className={`truncate font-semibold ${hero ? 'mt-1 text-2xl' : 'text-sm'}`}>{run.name}</p>
-        {!hero && <p className="text-xs text-muted-foreground">{healthCaption(passRate)}</p>}
+        {!hero && <p className="text-xs text-muted-foreground">{healthCaption(passRate, t)}</p>}
         <p className="text-xs text-muted-foreground">{timeAgo(run.createdAt)}</p>
       </div>
     </Link>
@@ -53,6 +56,7 @@ function OpenRunCard({
 }
 
 export function OpenRunsTriage({ runs }: { runs: Run[] }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const sorted = sortOpenRunsByUrgency(runs)
   const visible = expanded ? sorted : sorted.slice(0, SECTION_CAP)
@@ -76,7 +80,9 @@ export function OpenRunsTriage({ runs }: { runs: Run[] }) {
       {remaining > 0 && (
         <div className="flex justify-center pt-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(true)}>
-            Show {remaining} more open run{remaining === 1 ? '' : 's'}
+            {remaining === 1
+              ? t('RunsListTriage.showMoreOpenRunsSingular', { count: remaining })
+              : t('RunsListTriage.showMoreOpenRunsPlural', { count: remaining })}
           </Button>
         </div>
       )}
@@ -85,13 +91,14 @@ export function OpenRunsTriage({ runs }: { runs: Run[] }) {
 }
 
 function ClosedRunRow({ run, projectKey }: { run: Run; projectKey?: string }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const menuRef = useRef<RowActionMenuHandle>(null)
   const showMenu = Boolean(projectKey)
   const menuItems: RowActionMenuItem[] = showMenu
     ? [
         {
-          label: 'Compare…',
+          label: t('RunsListTriage.compareLabel'),
           onSelect: () => navigate(`/projects/${projectKey}/runs/compare`, { state: { seedRunKey: run.key } }),
         },
       ]
@@ -119,7 +126,7 @@ function ClosedRunRow({ run, projectKey }: { run: Run; projectKey?: string }) {
         <span className="shrink-0 text-xs whitespace-nowrap text-muted-foreground">{timeAgo(run.createdAt)}</span>
       </Link>
       {showMenu && (
-        <RowActionMenu ref={menuRef} label={`Actions for ${run.name}`} items={menuItems} />
+        <RowActionMenu ref={menuRef} label={t('RunsListTriage.actionsForRunAriaLabel', { name: run.name })} items={menuItems} />
       )}
     </li>
   )
@@ -134,6 +141,7 @@ export function ClosedRunsLedger({
   suites: Suite[]
   projectKey?: string
 }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const visible = expanded ? runs : runs.slice(0, SECTION_CAP)
   const remaining = runs.length - visible.length
@@ -144,7 +152,7 @@ export function ClosedRunsLedger({
     <div className="rounded-xl bg-muted/40 p-3">
       <ul className="space-y-3">
         {clusters.map((cluster) => {
-          const label = cluster.suiteKey === null ? 'Ad hoc' : (suiteByKey.get(cluster.suiteKey)?.name ?? cluster.suiteKey)
+          const label = cluster.suiteKey === null ? t('RunsListTriage.adHocLabel') : (suiteByKey.get(cluster.suiteKey)?.name ?? cluster.suiteKey)
           const avg = clusterAveragePassRate(cluster)
           return (
             <li key={cluster.suiteKey ?? '__ad_hoc__'}>
@@ -160,8 +168,10 @@ export function ClosedRunsLedger({
                 )}
                 {cluster.suiteKey === null && <span>{label}</span>}
                 <span className="text-muted-foreground">
-                  · {cluster.runs.length} run{cluster.runs.length === 1 ? '' : 's'}
-                  {avg !== null && ` · avg ${avg}% pass rate`}
+                  {cluster.runs.length === 1
+                    ? t('RunsListTriage.runCountSingular', { count: cluster.runs.length })
+                    : t('RunsListTriage.runCountPlural', { count: cluster.runs.length })}
+                  {avg !== null && t('RunsListTriage.avgPassRateSuffix', { rate: avg })}
                 </span>
               </div>
               <ul className="space-y-0.5">
@@ -176,7 +186,9 @@ export function ClosedRunsLedger({
       {remaining > 0 && (
         <div className="flex justify-center pt-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setExpanded(true)}>
-            Show {remaining} more closed run{remaining === 1 ? '' : 's'}
+            {remaining === 1
+              ? t('RunsListTriage.showMoreClosedRunsSingular', { count: remaining })
+              : t('RunsListTriage.showMoreClosedRunsPlural', { count: remaining })}
           </Button>
         </div>
       )}

@@ -210,6 +210,36 @@ Every derived color is guaranteed to meet WCAG AA contrast regardless of
 the source hue. A person's assignment to one of the 6 identity slots (by
 name/email) never changes — only which colors that slot renders as.
 
+## Language
+
+TestPulse's UI ships in six languages — English, Spanish, French, German,
+Portuguese, and Chinese — extracted and translated throughout the whole
+app (`add-ui-i18n`). A Tenant Admin sets the instance-wide default language
+at `/settings/instance` under **Localization**, next to the Color theme
+section above: pick one of the six from a row of options, applying
+instance-wide the next time each page loads, the same immediate,
+no-separate-save-step behavior as a color theme preset.
+
+The same Localization card has a second, independent toggle: **Let people
+choose their own language**, off by default. While off, every visitor —
+admin or not, signed in or anonymous — sees the instance default
+regardless of anything set on their own account. Once an admin turns it
+on, a signed-in user gets a **Language** control on their own Profile
+page, next to their Timezone field, offering the same six languages plus
+an explicit **Use instance default** option; picking one overrides the
+instance default for that person only, on every device they sign into
+(it's a stored account preference, not a browser setting). Turning the
+toggle back off reverts everyone to the instance default immediately,
+without losing whatever each person had individually chosen — turning it
+back on later restores those personal choices rather than requiring
+everyone to re-pick.
+
+Both pickers show each language by its own native name — English,
+Español, Français, Deutsch, Português, 中文 — rather than translating the
+list into whichever language is currently active, so someone who's ended
+up in a language they don't read can still recognize and pick their own
+way back.
+
 ## Projects
 
 Everything lives inside a project. A Tenant Admin creates one from the home page (`/`): click **+ New project**, or **+ Create your first project** if none exist yet — both are hidden for everyone else, since project creation is Tenant-Admin-only. Projects can be renamed, described, and archived/unarchived (Project Admin or above) via an **Archive project** switch on the project's Settings page — archiving is a soft flag, never a delete, and fully reversible: flipping it back off restores the project exactly as it was, with no lingering "archived" residue. An archived project shows an **Archived** badge on its card and next to its name wherever it's referenced.

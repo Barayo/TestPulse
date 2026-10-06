@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
@@ -22,6 +23,7 @@ export function InsertStepGroupDialog({
   onInsert: (group: StepGroup) => void
   excludeGroupKey?: string
 }) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [groups, setGroups] = useState<StepGroup[]>([])
 
@@ -40,10 +42,10 @@ export function InsertStepGroupDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
-        <DialogTitle>Insert shared group…</DialogTitle>
-        <Input autoFocus placeholder="Search shared groups…" value={query} onChange={(e) => setQuery(e.target.value)} />
+        <DialogTitle>{t('InsertStepGroupDialog.title')}</DialogTitle>
+        <Input autoFocus placeholder={t('InsertStepGroupDialog.searchPlaceholder')} value={query} onChange={(e) => setQuery(e.target.value)} />
         {filtered.length === 0 ? (
-          <p className="p-2 text-sm text-muted-foreground">No matching shared groups.</p>
+          <p className="p-2 text-sm text-muted-foreground">{t('InsertStepGroupDialog.noMatches')}</p>
         ) : (
           <ul className="max-h-64 space-y-1 overflow-y-auto">
             {filtered.map((g) => {
@@ -60,7 +62,7 @@ export function InsertStepGroupDialog({
                   >
                     <span className="font-medium">{g.name}</span>
                     <span className="text-xs text-muted-foreground">
-                      {isAdjacent ? 'Already referenced directly above' : `${g.steps.length} step${g.steps.length === 1 ? '' : 's'}`}
+                      {isAdjacent ? t('InsertStepGroupDialog.alreadyReferenced') : t('InsertStepGroupDialog.stepsCount', { count: g.steps.length, suffix: g.steps.length === 1 ? '' : 's' })}
                     </span>
                   </button>
                 </li>

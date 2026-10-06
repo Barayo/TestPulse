@@ -21,6 +21,8 @@ function mockAsTenantAdmin(
   defaultLandingView = 'dashboard',
   mcpEnabled = true,
   runAutoArchiveInactiveDays = 0,
+  defaultLanguage = 'en',
+  perUserLanguageEnabled = false,
 ) {
   mockGET.mockImplementation((path: string) => {
     if (path === '/api/v1/users/me') {
@@ -37,6 +39,8 @@ function mockAsTenantAdmin(
           jiraSiteUrl,
           sessionTimeoutDays,
           defaultLandingView,
+          defaultLanguage,
+          perUserLanguageEnabled,
           updatedAt: '',
         },
         response: { ok: true },
@@ -46,7 +50,10 @@ function mockAsTenantAdmin(
     // separate call from /api/v1/instance-settings above, same as every
     // other AuthProvider-sourced field this page reads.
     if (path === '/api/v1/meta') {
-      return Promise.resolve({ data: { setupRequired: false, colorTheme, mcpEnabled }, response: { ok: true } })
+      return Promise.resolve({
+        data: { setupRequired: false, colorTheme, mcpEnabled, defaultLanguage, perUserLanguageEnabled },
+        response: { ok: true },
+      })
     }
     return Promise.resolve({ data: undefined, response: { ok: false } })
   })
@@ -502,6 +509,53 @@ describe('InstanceSettingsPage', () => {
         expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', { body: { defaultLandingView: 'reports' } })
       })
       expect(group.getByRole('button', { name: 'Reports' })).toHaveAttribute('aria-pressed', 'true')
+    })
+  })
+
+  describe('Localization (add-ui-i18n)', () => {
+    it('shows six language options with the current default selected', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', true, 0, 'fr')
+      renderPage()
+      const group = within(await screen.findByRole('group', { name: 'Default language' }))
+      for (const label of ['English', 'Español', 'Français', 'Deutsch', 'Português', '中文']) {
+        expect(group.getByRole('button', { name: label })).toBeInTheDocument()
+      }
+      expect(group.getByRole('button', { name: 'Français' })).toHaveAttribute('aria-pressed', 'true')
+      expect(group.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'false')
+    })
+
+    it('selecting a default language calls PATCH with defaultLanguage', async () => {
+      mockAsTenantAdmin(true)
+      mockPATCH.mockResolvedValue({
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'teal', sessionTimeoutDays: 30, defaultLandingView: 'dashboard', defaultLanguage: 'de', perUserLanguageEnabled: false, updatedAt: '' },
+        response: { ok: true },
+      })
+      renderPage()
+      const group = within(await screen.findByRole('group', { name: 'Default language' }))
+      await userEvent.click(group.getByRole('button', { name: 'Deutsch' }))
+
+      await waitFor(() => {
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', { body: { defaultLanguage: 'de' } })
+      })
+      expect(group.getByRole('button', { name: 'Deutsch' })).toHaveAttribute('aria-pressed', 'true')
+    })
+
+    it('shows the current per-user-customization state and toggling calls PATCH', async () => {
+      mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30, 'dashboard', true, 0, 'en', false)
+      mockPATCH.mockResolvedValue({
+        data: { publicProjectsEnabled: true, runRetentionDays: 0, autoArchiveInactiveDays: 0, colorTheme: 'teal', sessionTimeoutDays: 30, defaultLandingView: 'dashboard', defaultLanguage: 'en', perUserLanguageEnabled: true, updatedAt: '' },
+        response: { ok: true },
+      })
+      renderPage()
+      const toggle = await screen.findByRole('switch', { name: /let people choose their own language/i })
+      expect(toggle).not.toBeChecked()
+
+      await userEvent.click(toggle)
+
+      await waitFor(() => {
+        expect(mockPATCH).toHaveBeenCalledWith('/api/v1/instance-settings', { body: { perUserLanguageEnabled: true } })
+      })
+      expect(screen.getByRole('switch', { name: /let people choose their own language/i })).toBeChecked()
     })
   })
 

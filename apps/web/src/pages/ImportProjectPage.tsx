@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { CheckIcon, CheckCircle2Icon, Loader2Icon, TriangleAlertIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
@@ -107,6 +108,7 @@ function StatTile({ value, label, href }: { value: number; label: string; href?:
 }
 
 export default function ImportProjectPage() {
+  const { t } = useTranslation()
   const { source } = useParams<{ source: string }>()
   const { user, loading: authLoading } = useAuth()
   const projectSummaries = useProjectSummaries()
@@ -175,7 +177,9 @@ export default function ImportProjectPage() {
           setDryRunJob(data)
           setPhase('preview')
         } else if (data.status === 'failed') {
-          setConnectError(data.error ?? `Could not scan this ${SOURCE_LABEL[source as Source]} project.`)
+          setConnectError(
+            data.error ?? t('ImportProjectPage.scanFailedDefault', { sourceLabel: SOURCE_LABEL[source as Source] }),
+          )
           setPhase('connect')
         } else {
           setDryRunJob(data)
@@ -185,7 +189,7 @@ export default function ImportProjectPage() {
           setRealJob(data)
           setPhase('result')
         } else if (data.status === 'failed') {
-          setImportError(data.error ?? 'The import failed.')
+          setImportError(data.error ?? t('ImportProjectPage.importFailedDefault'))
           setRealJob(data)
         } else {
           setRealJob(data)
@@ -204,7 +208,7 @@ export default function ImportProjectPage() {
   if (!source) return null
   if (authLoading) return null
   if (!user?.isTenantAdmin) {
-    return <p className="text-sm text-muted-foreground">You don&apos;t have permission to create a project.</p>
+    return <p className="text-sm text-muted-foreground">{t('ImportProjectPage.noPermissionMessage')}</p>
   }
   if (
     source !== 'testrail' &&
@@ -215,7 +219,7 @@ export default function ImportProjectPage() {
     source !== 'tuskr' &&
     source !== 'csv'
   ) {
-    return <p className="text-sm text-muted-foreground">Unknown import source &ldquo;{source}&rdquo;.</p>
+    return <p className="text-sm text-muted-foreground">{t('ImportProjectPage.unknownSourceMessage', { source })}</p>
   }
 
   const targetChosen = targetMode === 'new' ? newProjectName.trim().length > 0 : existingProjectKey.length > 0
@@ -308,14 +312,16 @@ export default function ImportProjectPage() {
         body: { name: newProjectName.trim() },
       })
       if (!response.ok || !data) {
-        setConnectError((error as { error?: string } | undefined)?.error ?? 'Could not create the target project.')
+        setConnectError(
+          (error as { error?: string } | undefined)?.error ?? t('ImportProjectPage.createProjectFailedDefault'),
+        )
         return undefined
       }
       return { key: data.key, name: data.name }
     }
     const existing = emptyProjects.find((p) => p.id === existingProjectKey)
     if (!existing) {
-      setConnectError('Choose an existing empty project.')
+      setConnectError(t('ImportProjectPage.chooseExistingProjectError'))
       return undefined
     }
     return { key: existing.id, name: existing.name }
@@ -344,7 +350,7 @@ export default function ImportProjectPage() {
       if (!response.ok || !data) {
         setConnectError(
           (error as { error?: string } | undefined)?.error ??
-            `Could not start the ${SOURCE_LABEL[importSource]} scan.`,
+            t('ImportProjectPage.scanStartFailedDefault', { sourceLabel: SOURCE_LABEL[importSource] }),
         )
         return
       }
@@ -377,7 +383,7 @@ export default function ImportProjectPage() {
       })
       const root = folders?.items.find((f) => !f.parentFolderId)
       if (!root) {
-        setConnectError('Could not resolve the target project’s root folder.')
+        setConnectError(t('ImportProjectPage.csvRootFolderMissingError'))
         return
       }
 
@@ -391,7 +397,7 @@ export default function ImportProjectPage() {
       })
       const body = await res.json()
       if (!res.ok) {
-        setConnectError(body?.error ?? 'Could not import this CSV file.')
+        setConnectError(body?.error ?? t('ImportProjectPage.csvImportFailedDefault'))
         return
       }
       setCsvResult(body as CsvImportResult)
@@ -447,7 +453,7 @@ export default function ImportProjectPage() {
       body: { source: source as Source, mode: 'real', credentials: credentialsBody() },
     })
     if (!response.ok || !data) {
-      setImportError((error as { error?: string } | undefined)?.error ?? 'Could not start the import.')
+      setImportError((error as { error?: string } | undefined)?.error ?? t('ImportProjectPage.importStartFailedDefault'))
       return
     }
     setRealJob(data)
@@ -455,8 +461,8 @@ export default function ImportProjectPage() {
   }
 
   const breadcrumbSegments: Crumb[] = [
-    { label: 'Projects', href: '/' },
-    { label: `Import from ${SOURCE_LABEL[source]}` },
+    { label: t('ImportProjectPage.projectsBreadcrumb'), href: '/' },
+    { label: t('ImportProjectPage.importFromBreadcrumb', { sourceLabel: SOURCE_LABEL[source] }) },
   ]
 
   const report = dryRunJob?.report
@@ -473,124 +479,121 @@ export default function ImportProjectPage() {
   const progressTotal = realJob?.progressTotal ?? 0
   const progressPct = progressTotal > 0 ? Math.min(100, Math.round((progressCurrent / progressTotal) * 100)) : 0
 
+  const targetAction = targetMode === 'new' ? t('ImportProjectPage.creatingWord') : t('ImportProjectPage.intoWord')
   const connectSummary =
     targetProject &&
     (source === 'testrail'
-      ? `${siteUrl.replace(/^https?:\/\//, '')} · project ${testRailProjectId} · ${email} → ${
-          targetMode === 'new' ? 'creating' : 'into'
-        } ${targetProject.name}`
+      ? t('ImportProjectPage.connectSummaryTestrail', {
+          site: siteUrl.replace(/^https?:\/\//, ''),
+          projectId: testRailProjectId,
+          email,
+          targetAction,
+          targetName: targetProject.name,
+        })
       : source === 'qase'
-        ? `Qase project ${projectCode} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+        ? t('ImportProjectPage.connectSummaryQase', { projectCode, targetAction, targetName: targetProject.name })
         : source === 'zephyr-scale'
-          ? `Zephyr Scale project ${zephyrScaleProjectKey} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+          ? t('ImportProjectPage.connectSummaryZephyrScale', {
+              projectKey: zephyrScaleProjectKey,
+              targetAction,
+              targetName: targetProject.name,
+            })
           : source === 'kiwi-tcms'
-            ? `${kiwiSiteUrl.replace(/^https?:\/\//, '')} · product ${kiwiProduct} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+            ? t('ImportProjectPage.connectSummaryKiwiTcms', {
+                site: kiwiSiteUrl.replace(/^https?:\/\//, ''),
+                product: kiwiProduct,
+                targetAction,
+                targetName: targetProject.name,
+              })
             : source === 'xray'
               ? xrayMode === 'cloud'
-                ? `Xray Cloud project ${xrayProjectId} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
-                : `${xraySiteUrl.replace(/^https?:\/\//, '')} · project ${xrayProjectKey} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
+                ? t('ImportProjectPage.connectSummaryXrayCloud', {
+                    projectId: xrayProjectId,
+                    targetAction,
+                    targetName: targetProject.name,
+                  })
+                : t('ImportProjectPage.connectSummaryXrayServer', {
+                    site: xraySiteUrl.replace(/^https?:\/\//, ''),
+                    projectKey: xrayProjectKey,
+                    targetAction,
+                    targetName: targetProject.name,
+                  })
               : source === 'tuskr'
-                ? `Tuskr project ${tuskrProjectId} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`
-                : `${csvFile?.name} → ${targetMode === 'new' ? 'creating' : 'into'} ${targetProject.name}`)
+                ? t('ImportProjectPage.connectSummaryTuskr', {
+                    projectId: tuskrProjectId,
+                    targetAction,
+                    targetName: targetProject.name,
+                  })
+                : t('ImportProjectPage.connectSummaryCsv', {
+                    fileName: csvFile?.name,
+                    targetAction,
+                    targetName: targetProject.name,
+                  }))
 
   return (
     <div className="space-y-6">
       <Breadcrumbs segments={breadcrumbSegments} />
 
       <div>
-        <h1 className="tp-heading text-2xl">Import from {SOURCE_LABEL[source]}</h1>
+        <h1 className="tp-heading text-2xl">{t('ImportProjectPage.importFromHeading', { sourceLabel: SOURCE_LABEL[source] })}</h1>
         <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-          {source === 'testrail' ? (
-            <>
-              Recreates TestRail suites and sections as nested folders, and TestRail cases inside them —
-              doesn&apos;t touch TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this
-              version — see the note below.
-            </>
-          ) : source === 'qase' ? (
-            <>
-              Recreates Qase suites as nested folders, and Qase cases inside them — doesn&apos;t touch
-              TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this version — see the note
-              below.
-            </>
-          ) : source === 'zephyr-scale' ? (
-            <>
-              Recreates Zephyr Scale folders as nested TestPulse folders, and Zephyr Scale cases inside them —
-              doesn&apos;t touch TestPulse&apos;s own Suite feature. Run/result history isn&apos;t part of this
-              version — see the note below.
-            </>
-          ) : source === 'kiwi-tcms' ? (
-            <>
-              Recreates a Kiwi TCMS product&apos;s test plan tree as nested TestPulse folders, and its cases inside
-              them — doesn&apos;t touch TestPulse&apos;s own Suite feature. A case linked to more than one test plan
-              imports once, not once per plan. Run/result history isn&apos;t part of this version — see the note
-              below.
-            </>
-          ) : source === 'xray' ? (
-            <>
-              Recreates an Xray project&apos;s Test Repository folder tree as nested TestPulse folders, and its
-              Tests inside them, with structured steps for Manual-type tests — doesn&apos;t touch TestPulse&apos;s
-              own Suite feature. Supports both Xray Cloud and Server/Data Center. Test Sets, Test Plans, and
-              Preconditions aren&apos;t part of this version — see the note below.
-            </>
-          ) : source === 'tuskr' ? (
-            <>
-              Recreates a Tuskr project&apos;s Test Suites as top-level TestPulse folders and its Sections as
-              nested folders inside them, and Tuskr cases inside those — doesn&apos;t touch TestPulse&apos;s own
-              Suite feature. Run/result history isn&apos;t part of this version — see the note below.
-            </>
-          ) : (
-            <>
-              Creates one case per row in your CSV, in the folder you choose. Works with an export from any tool —
-              no account or credentials needed. Steps and run/result history aren&apos;t part of this version.
-            </>
-          )}
+          {source === 'testrail'
+            ? t('ImportProjectPage.descriptionTestrail')
+            : source === 'qase'
+              ? t('ImportProjectPage.descriptionQase')
+              : source === 'zephyr-scale'
+                ? t('ImportProjectPage.descriptionZephyrScale')
+                : source === 'kiwi-tcms'
+                  ? t('ImportProjectPage.descriptionKiwiTcms')
+                  : source === 'xray'
+                    ? t('ImportProjectPage.descriptionXray')
+                    : source === 'tuskr'
+                      ? t('ImportProjectPage.descriptionTuskr')
+                      : t('ImportProjectPage.descriptionCsv')}
         </p>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="tp-heading">Connect to {SOURCE_LABEL[source]}</CardTitle>
+          <CardTitle className="tp-heading">{t('ImportProjectPage.connectToHeading', { sourceLabel: SOURCE_LABEL[source] })}</CardTitle>
         </CardHeader>
         <CardContent>
           {phase === 'connect' ? (
             <form onSubmit={source === 'csv' ? handleCsvConnectSubmit : handleConnectSubmit} className="space-y-4">
               {source === 'testrail' ? (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    TestPulse reads your TestRail project over its REST API using an account email and API key —
-                    nothing is written back to TestRail.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('ImportProjectPage.testrailIntro')}</p>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <Label htmlFor="testrail-site-url">TestRail site URL</Label>
+                      <Label htmlFor="testrail-site-url">{t('ImportProjectPage.testrailSiteUrlLabel')}</Label>
                       <Input
                         id="testrail-site-url"
                         value={siteUrl}
                         onChange={(e) => setSiteUrl(e.target.value)}
-                        placeholder="https://yourcompany.testrail.io"
+                        placeholder={t('ImportProjectPage.testrailSiteUrlPlaceholder')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="testrail-project-id">TestRail project ID</Label>
+                      <Label htmlFor="testrail-project-id">{t('ImportProjectPage.testrailProjectIdLabel')}</Label>
                       <Input
                         id="testrail-project-id"
                         value={testRailProjectId}
                         onChange={(e) => setTestRailProjectId(e.target.value)}
-                        placeholder="e.g. 1"
+                        placeholder={t('ImportProjectPage.testrailProjectIdPlaceholder')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="testrail-email">TestRail account email</Label>
+                      <Label htmlFor="testrail-email">{t('ImportProjectPage.testrailEmailLabel')}</Label>
                       <Input
                         id="testrail-email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="qa-lead@acme.com"
+                        placeholder={t('ImportProjectPage.testrailEmailPlaceholder')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="testrail-api-key">TestRail API key</Label>
+                      <Label htmlFor="testrail-api-key">{t('ImportProjectPage.testrailApiKeyLabel')}</Label>
                       <Input
                         id="testrail-api-key"
                         type="password"
@@ -601,25 +604,19 @@ export default function ImportProjectPage() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Need a credential? In TestRail:{' '}
-                    <strong className="font-semibold">My Settings → API Keys → Add Key</strong>.
+                    {t('ImportProjectPage.testrailCredentialHintPrefix')}{' '}
+                    <strong className="font-semibold">{t('ImportProjectPage.testrailCredentialHintBold')}</strong>.
                   </p>
 
-                  <p className="text-xs text-muted-foreground">
-                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Idera,
-                    Inc. TestRail is a trademark of Idera, Inc.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('ImportProjectPage.testrailTrademarkNotice')}</p>
                 </>
               ) : source === 'qase' ? (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    TestPulse reads your Qase project over its REST API using an API token — nothing is written
-                    back to Qase.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('ImportProjectPage.qaseIntro')}</p>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <Label htmlFor="qase-api-token">Qase API token</Label>
+                      <Label htmlFor="qase-api-token">{t('ImportProjectPage.qaseApiTokenLabel')}</Label>
                       <Input
                         id="qase-api-token"
                         type="password"
@@ -628,33 +625,31 @@ export default function ImportProjectPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="qase-project-code">Qase project code</Label>
+                      <Label htmlFor="qase-project-code">{t('ImportProjectPage.qaseProjectCodeLabel')}</Label>
                       <Input
                         id="qase-project-code"
                         value={projectCode}
                         onChange={(e) => setProjectCode(e.target.value)}
-                        placeholder="e.g. PRJ"
+                        placeholder={t('ImportProjectPage.qaseProjectCodePlaceholder')}
                       />
                     </div>
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Need a credential? In Qase: <strong className="font-semibold">My Profile → API Token</strong>.
+                    {t('ImportProjectPage.qaseCredentialHintPrefix')}{' '}
+                    <strong className="font-semibold">{t('ImportProjectPage.qaseCredentialHintBold')}</strong>.
                   </p>
 
                   {qaseAdvancedOpen ? (
                     <div className="max-w-sm space-y-1">
-                      <Label htmlFor="qase-base-url">Base URL</Label>
+                      <Label htmlFor="qase-base-url">{t('ImportProjectPage.qaseBaseUrlLabel')}</Label>
                       <Input
                         id="qase-base-url"
                         value={qaseBaseUrl}
                         onChange={(e) => setQaseBaseUrl(e.target.value)}
-                        placeholder="https://api.qase.io/v1"
+                        placeholder={t('ImportProjectPage.qaseBaseUrlPlaceholder')}
                       />
-                      <p className="text-xs text-muted-foreground">
-                        Only needed for an Enterprise dedicated-VPC deployment — leave blank for Qase&apos;s public
-                        API.
-                      </p>
+                      <p className="text-xs text-muted-foreground">{t('ImportProjectPage.qaseBaseUrlHint')}</p>
                     </div>
                   ) : (
                     <Button
@@ -664,25 +659,19 @@ export default function ImportProjectPage() {
                       className="px-0"
                       onClick={() => setQaseAdvancedOpen(true)}
                     >
-                      Advanced
+                      {t('ImportProjectPage.qaseAdvancedButton')}
                     </Button>
                   )}
 
-                  <p className="text-xs text-muted-foreground">
-                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Qase
-                    Ltd. Qase is a trademark of Qase Ltd.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('ImportProjectPage.qaseTrademarkNotice')}</p>
                 </>
               ) : source === 'zephyr-scale' ? (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    TestPulse reads your Zephyr Scale Cloud project over its REST API using an API access token —
-                    nothing is written back to Zephyr Scale.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('ImportProjectPage.zephyrScaleIntro')}</p>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <Label htmlFor="zephyr-scale-api-token">Zephyr Scale API token</Label>
+                      <Label htmlFor="zephyr-scale-api-token">{t('ImportProjectPage.zephyrScaleApiTokenLabel')}</Label>
                       <Input
                         id="zephyr-scale-api-token"
                         type="password"
@@ -691,50 +680,44 @@ export default function ImportProjectPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="zephyr-scale-project-key">Zephyr Scale project key</Label>
+                      <Label htmlFor="zephyr-scale-project-key">{t('ImportProjectPage.zephyrScaleProjectKeyLabel')}</Label>
                       <Input
                         id="zephyr-scale-project-key"
                         value={zephyrScaleProjectKey}
                         onChange={(e) => setZephyrScaleProjectKey(e.target.value)}
-                        placeholder="e.g. PROJ"
+                        placeholder={t('ImportProjectPage.zephyrScaleProjectKeyPlaceholder')}
                       />
                     </div>
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Need a credential? In Jira:{' '}
-                    <strong className="font-semibold">Profile → Zephyr Scale API Access Tokens</strong>. Zephyr
-                    Scale Server/Data Center isn&apos;t supported — Cloud only.
+                    {t('ImportProjectPage.zephyrScaleCredentialHintPrefix')}{' '}
+                    <strong className="font-semibold">{t('ImportProjectPage.zephyrScaleCredentialHintBold')}</strong>
+                    {t('ImportProjectPage.zephyrScaleCredentialHintSuffix')}
                   </p>
 
-                  <p className="text-xs text-muted-foreground">
-                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by
-                    SmartBear Software. Zephyr Scale is a trademark of SmartBear Software.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('ImportProjectPage.zephyrScaleTrademarkNotice')}</p>
                 </>
               ) : source === 'kiwi-tcms' ? (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    TestPulse reads your self-hosted Kiwi TCMS instance over its XML-RPC API using a username and
-                    password — nothing is written back to Kiwi TCMS.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('ImportProjectPage.kiwiTcmsIntro')}</p>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1 sm:col-span-2">
-                      <Label htmlFor="kiwi-site-url">Kiwi TCMS site URL</Label>
+                      <Label htmlFor="kiwi-site-url">{t('ImportProjectPage.kiwiSiteUrlLabel')}</Label>
                       <Input
                         id="kiwi-site-url"
                         value={kiwiSiteUrl}
                         onChange={(e) => setKiwiSiteUrl(e.target.value)}
-                        placeholder="https://kiwi.example.com"
+                        placeholder={t('ImportProjectPage.kiwiSiteUrlPlaceholder')}
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="kiwi-username">Kiwi TCMS username</Label>
+                      <Label htmlFor="kiwi-username">{t('ImportProjectPage.kiwiUsernameLabel')}</Label>
                       <Input id="kiwi-username" value={kiwiUsername} onChange={(e) => setKiwiUsername(e.target.value)} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="kiwi-password">Kiwi TCMS password</Label>
+                      <Label htmlFor="kiwi-password">{t('ImportProjectPage.kiwiPasswordLabel')}</Label>
                       <Input
                         id="kiwi-password"
                         type="password"
@@ -743,32 +726,23 @@ export default function ImportProjectPage() {
                       />
                     </div>
                     <div className="space-y-1 sm:col-span-2">
-                      <Label htmlFor="kiwi-product">Kiwi TCMS product</Label>
+                      <Label htmlFor="kiwi-product">{t('ImportProjectPage.kiwiProductLabel')}</Label>
                       <Input
                         id="kiwi-product"
                         value={kiwiProduct}
                         onChange={(e) => setKiwiProduct(e.target.value)}
-                        placeholder="e.g. Acme"
+                        placeholder={t('ImportProjectPage.kiwiProductPlaceholder')}
                       />
                     </div>
                   </div>
 
-                  <p className="text-xs text-muted-foreground">
-                    Need a credential? Kiwi TCMS uses your own site account — there&apos;s no separate API key to
-                    generate.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('ImportProjectPage.kiwiCredentialHint')}</p>
 
-                  <p className="text-xs text-muted-foreground">
-                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Kiwi
-                    TCMS.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('ImportProjectPage.kiwiTrademarkNotice')}</p>
                 </>
               ) : source === 'xray' ? (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    TestPulse reads your Xray project over its API — Cloud via a client ID/secret exchanged for a
-                    token, Server/Data Center via a Jira Personal Access Token — nothing is written back to Xray.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('ImportProjectPage.xrayIntro')}</p>
 
                   <div className="flex gap-2">
                     <Button
@@ -777,7 +751,7 @@ export default function ImportProjectPage() {
                       aria-pressed={xrayMode === 'cloud'}
                       onClick={() => setXrayMode('cloud')}
                     >
-                      Cloud
+                      {t('ImportProjectPage.xrayModeCloudButton')}
                     </Button>
                     <Button
                       type="button"
@@ -785,14 +759,14 @@ export default function ImportProjectPage() {
                       aria-pressed={xrayMode === 'server'}
                       onClick={() => setXrayMode('server')}
                     >
-                      Server / Data Center
+                      {t('ImportProjectPage.xrayModeServerButton')}
                     </Button>
                   </div>
 
                   {xrayMode === 'cloud' ? (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1">
-                        <Label htmlFor="xray-client-id">Xray Client ID</Label>
+                        <Label htmlFor="xray-client-id">{t('ImportProjectPage.xrayClientIdLabel')}</Label>
                         <Input
                           id="xray-client-id"
                           value={xrayClientId}
@@ -800,7 +774,7 @@ export default function ImportProjectPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="xray-client-secret">Xray Client Secret</Label>
+                        <Label htmlFor="xray-client-secret">{t('ImportProjectPage.xrayClientSecretLabel')}</Label>
                         <Input
                           id="xray-client-secret"
                           type="password"
@@ -809,32 +783,29 @@ export default function ImportProjectPage() {
                         />
                       </div>
                       <div className="space-y-1 sm:col-span-2">
-                        <Label htmlFor="xray-project-id">Xray project ID</Label>
+                        <Label htmlFor="xray-project-id">{t('ImportProjectPage.xrayProjectIdLabel')}</Label>
                         <Input
                           id="xray-project-id"
                           value={xrayProjectId}
                           onChange={(e) => setXrayProjectId(e.target.value)}
-                          placeholder="e.g. 10000"
+                          placeholder={t('ImportProjectPage.xrayProjectIdPlaceholder')}
                         />
-                        <p className="text-xs text-muted-foreground">
-                          The numeric Jira project id, not the project key — find it in Jira&apos;s own project
-                          settings URL.
-                        </p>
+                        <p className="text-xs text-muted-foreground">{t('ImportProjectPage.xrayProjectIdHint')}</p>
                       </div>
                     </div>
                   ) : (
                     <div className="grid gap-3 sm:grid-cols-2">
                       <div className="space-y-1 sm:col-span-2">
-                        <Label htmlFor="xray-site-url">Xray site URL</Label>
+                        <Label htmlFor="xray-site-url">{t('ImportProjectPage.xraySiteUrlLabel')}</Label>
                         <Input
                           id="xray-site-url"
                           value={xraySiteUrl}
                           onChange={(e) => setXraySiteUrl(e.target.value)}
-                          placeholder="https://jira.example.com"
+                          placeholder={t('ImportProjectPage.xraySiteUrlPlaceholder')}
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="xray-pat">Xray Personal Access Token</Label>
+                        <Label htmlFor="xray-pat">{t('ImportProjectPage.xrayPatLabel')}</Label>
                         <Input
                           id="xray-pat"
                           type="password"
@@ -843,38 +814,32 @@ export default function ImportProjectPage() {
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label htmlFor="xray-project-key">Xray project key</Label>
+                        <Label htmlFor="xray-project-key">{t('ImportProjectPage.xrayProjectKeyLabel')}</Label>
                         <Input
                           id="xray-project-key"
                           value={xrayProjectKey}
                           onChange={(e) => setXrayProjectKey(e.target.value)}
-                          placeholder="e.g. XRAY"
+                          placeholder={t('ImportProjectPage.xrayProjectKeyPlaceholder')}
                         />
                       </div>
                     </div>
                   )}
 
                   <p className="text-xs text-muted-foreground">
-                    Need a Client ID/Secret? In Jira: <strong className="font-semibold">Xray Global Settings → API
-                    Keys</strong>. A Personal Access Token comes from your own Jira profile settings (requires Jira
-                    8.14+) — a username and password aren&apos;t accepted.
+                    {t('ImportProjectPage.xrayCredentialHintPrefix')}{' '}
+                    <strong className="font-semibold">{t('ImportProjectPage.xrayCredentialHintBold')}</strong>
+                    {t('ImportProjectPage.xrayCredentialHintSuffix')}
                   </p>
 
-                  <p className="text-xs text-muted-foreground">
-                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Xpand IT.
-                    Xray is a trademark of Xpand IT.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('ImportProjectPage.xrayTrademarkNotice')}</p>
                 </>
               ) : source === 'tuskr' ? (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    TestPulse reads your Tuskr project over its REST API using a tenant ID and a Personal Access
-                    Token — nothing is written back to Tuskr.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('ImportProjectPage.tuskrIntro')}</p>
 
                   <div className="grid gap-3 sm:grid-cols-2">
                     <div className="space-y-1 sm:col-span-2">
-                      <Label htmlFor="tuskr-tenant-id">Tuskr tenant ID</Label>
+                      <Label htmlFor="tuskr-tenant-id">{t('ImportProjectPage.tuskrTenantIdLabel')}</Label>
                       <Input
                         id="tuskr-tenant-id"
                         value={tuskrTenantId}
@@ -882,7 +847,7 @@ export default function ImportProjectPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tuskr-token">Tuskr Personal Access Token</Label>
+                      <Label htmlFor="tuskr-token">{t('ImportProjectPage.tuskrTokenLabel')}</Label>
                       <Input
                         id="tuskr-token"
                         type="password"
@@ -891,32 +856,29 @@ export default function ImportProjectPage() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="tuskr-project-id">Tuskr project ID</Label>
+                      <Label htmlFor="tuskr-project-id">{t('ImportProjectPage.tuskrProjectIdLabel')}</Label>
                       <Input
                         id="tuskr-project-id"
                         value={tuskrProjectId}
                         onChange={(e) => setTuskrProjectId(e.target.value)}
-                        placeholder="e.g. proj-42"
+                        placeholder={t('ImportProjectPage.tuskrProjectIdPlaceholder')}
                       />
                     </div>
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    Need a tenant ID or token? In Tuskr: <strong className="font-semibold">your profile menu → API</strong>.
+                    {t('ImportProjectPage.tuskrCredentialHintPrefix')}{' '}
+                    <strong className="font-semibold">{t('ImportProjectPage.tuskrCredentialHintBold')}</strong>.
                   </p>
 
-                  <p className="text-xs text-muted-foreground">
-                    Independent, unofficial integration — not affiliated with, endorsed by, or sponsored by Tuskr.
-                  </p>
+                  <p className="text-xs text-muted-foreground">{t('ImportProjectPage.tuskrTrademarkNotice')}</p>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-muted-foreground">
-                    TestPulse reads cases straight from your CSV file — nothing is uploaded anywhere else.
-                  </p>
+                  <p className="text-sm text-muted-foreground">{t('ImportProjectPage.csvIntro')}</p>
 
                   <div className="max-w-sm space-y-1">
-                    <Label htmlFor="csv-file">CSV file</Label>
+                    <Label htmlFor="csv-file">{t('ImportProjectPage.csvFileLabel')}</Label>
                     <Input
                       id="csv-file"
                       type="file"
@@ -931,18 +893,19 @@ export default function ImportProjectPage() {
                     onClick={downloadCSVTemplate}
                     className="text-xs font-semibold text-primary hover:underline"
                   >
-                    Download CSV template
+                    {t('ImportProjectPage.downloadTemplateButton')}
                   </button>
 
                   <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">
-                    Expected columns: <code className="font-mono">{CSV_FIXED_COLUMNS.join(', ')}</code>. Any other
-                    column becomes a new custom field on the target project.
+                    {t('ImportProjectPage.csvExpectedColumnsPrefix')}{' '}
+                    <code className="font-mono">{CSV_FIXED_COLUMNS.join(', ')}</code>
+                    {t('ImportProjectPage.csvExpectedColumnsSuffix')}
                   </p>
                 </>
               )}
 
               <div className="space-y-2">
-                <Label>Import into</Label>
+                <Label>{t('ImportProjectPage.importIntoLabel')}</Label>
                 <div className="flex gap-2">
                   <Button
                     type="button"
@@ -950,7 +913,7 @@ export default function ImportProjectPage() {
                     aria-pressed={targetMode === 'new'}
                     onClick={() => setTargetMode('new')}
                   >
-                    New project
+                    {t('ImportProjectPage.newProjectButton')}
                   </Button>
                   <Button
                     type="button"
@@ -958,39 +921,37 @@ export default function ImportProjectPage() {
                     aria-pressed={targetMode === 'existing'}
                     onClick={() => setTargetMode('existing')}
                   >
-                    Existing empty project
+                    {t('ImportProjectPage.existingEmptyProjectButton')}
                   </Button>
                 </div>
 
                 {targetMode === 'new' ? (
                   <div className="max-w-sm space-y-1">
-                    <Label htmlFor="new-project-name">New project name</Label>
+                    <Label htmlFor="new-project-name">{t('ImportProjectPage.newProjectNameLabel')}</Label>
                     <Input
                       id="new-project-name"
                       value={newProjectName}
                       onChange={(e) => setNewProjectName(e.target.value)}
-                      placeholder="QA Platform"
+                      placeholder={t('ImportProjectPage.newProjectNamePlaceholder')}
                     />
                   </div>
                 ) : (
                   <div className="max-w-sm space-y-1">
-                    <Label htmlFor="existing-project">Existing project</Label>
+                    <Label htmlFor="existing-project">{t('ImportProjectPage.existingProjectLabel')}</Label>
                     <select
                       id="existing-project"
                       className={SELECT_CLASSNAME}
                       value={existingProjectKey}
                       onChange={(e) => setExistingProjectKey(e.target.value)}
                     >
-                      <option value="">Select a project…</option>
+                      <option value="">{t('ImportProjectPage.selectProjectOption')}</option>
                       {emptyProjects.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
                         </option>
                       ))}
                     </select>
-                    <p className="text-xs text-muted-foreground">
-                      Only projects with no folders, suites, or cases yet are listed.
-                    </p>
+                    <p className="text-xs text-muted-foreground">{t('ImportProjectPage.existingProjectHint')}</p>
                   </div>
                 )}
               </div>
@@ -999,16 +960,16 @@ export default function ImportProjectPage() {
 
               <div className="flex items-center justify-end gap-2 border-t pt-4">
                 <Button type="button" variant="outline" asChild>
-                  <Link to="/">Cancel</Link>
+                  <Link to="/">{t('ImportProjectPage.cancelButton')}</Link>
                 </Button>
                 <Button type="submit" disabled={!canSubmitConnect || connecting}>
                   {source === 'csv'
                     ? connecting
-                      ? 'Importing…'
-                      : 'Import cases'
+                      ? t('ImportProjectPage.importingEllipsis')
+                      : t('ImportProjectPage.importCasesButton')
                     : connecting
-                      ? 'Starting scan…'
-                      : 'Preview import'}
+                      ? t('ImportProjectPage.startingScanEllipsis')
+                      : t('ImportProjectPage.previewImportButton')}
                 </Button>
               </div>
             </form>
@@ -1019,7 +980,7 @@ export default function ImportProjectPage() {
                 {connectSummary}
               </p>
               <Button type="button" variant="ghost" size="sm" onClick={() => setPhase('connect')}>
-                Edit connection
+                {t('ImportProjectPage.editConnectionButton')}
               </Button>
             </div>
           )}
@@ -1030,7 +991,9 @@ export default function ImportProjectPage() {
         <Card>
           <CardContent className="flex flex-col items-center gap-2 py-10 text-center">
             <Loader2Icon className="size-6 animate-spin text-muted-foreground" aria-hidden="true" />
-            <p className="text-sm text-muted-foreground">Scanning your {SOURCE_LABEL[source]} project…</p>
+            <p className="text-sm text-muted-foreground">
+              {t('ImportProjectPage.scanningMessage', { sourceLabel: SOURCE_LABEL[source] })}
+            </p>
           </CardContent>
         </Card>
       )}
@@ -1038,12 +1001,12 @@ export default function ImportProjectPage() {
       {phase === 'preview' && dryRunJob && (
         <Card>
           <CardHeader>
-            <CardTitle className="tp-heading">Preview</CardTitle>
+            <CardTitle className="tp-heading">{t('ImportProjectPage.previewHeading')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-3">
-              <StatTile value={folderCount} label="folders" />
-              <StatTile value={caseCount} label="cases" />
+              <StatTile value={folderCount} label={t('ImportProjectPage.foldersLabel')} />
+              <StatTile value={caseCount} label={t('ImportProjectPage.casesLabel')} />
             </div>
 
             {unmapped.length > 0 && (
@@ -1051,7 +1014,7 @@ export default function ImportProjectPage() {
                 <div className="flex items-start gap-2">
                   <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
                   <p className="text-sm font-medium">
-                    {unmapped.length} custom fields won&apos;t be imported
+                    {t('ImportProjectPage.customFieldsWontImport', { count: unmapped.length })}
                   </p>
                 </div>
                 <ul className="ml-6 list-disc space-y-0.5 text-sm">
@@ -1065,18 +1028,17 @@ export default function ImportProjectPage() {
             )}
 
             <p className="text-sm text-muted-foreground">
-              Run and result history also isn&apos;t imported in this version — structure and cases only, a
-              permanent v1 boundary. And to be explicit: none of this creates or changes any TestPulse{' '}
-              <strong className="font-semibold text-foreground">Suite</strong> (the run-scoping kind) —{' '}
-              {SOURCE_LABEL[source]} suites become folders, full stop.
+              {t('ImportProjectPage.previewHistoryNotePrefix')}{' '}
+              <strong className="font-semibold text-foreground">{t('ImportProjectPage.previewHistoryNoteBold')}</strong>{' '}
+              {t('ImportProjectPage.previewHistoryNoteSuffix', { sourceLabel: SOURCE_LABEL[source] })}
             </p>
 
             <div className="flex items-center justify-end gap-2 border-t pt-4">
               <Button type="button" variant="outline" onClick={handleStartOver}>
-                Start over
+                {t('ImportProjectPage.startOverButton')}
               </Button>
               <Button type="button" onClick={() => setConfirmOpen(true)}>
-                Import {caseCount} case{caseCount === 1 ? '' : 's'}
+                {t('ImportProjectPage.importCaseCountButton', { count: caseCount, plural: caseCount === 1 ? '' : 's' })}
               </Button>
             </div>
           </CardContent>
@@ -1086,7 +1048,7 @@ export default function ImportProjectPage() {
       {phase === 'importing' && realJob && (
         <Card>
           <CardHeader>
-            <CardTitle className="tp-heading">Importing…</CardTitle>
+            <CardTitle className="tp-heading">{t('ImportProjectPage.importingHeading')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             {importError ? (
@@ -1096,16 +1058,13 @@ export default function ImportProjectPage() {
                 <div className="flex flex-col items-center gap-2 py-6 text-center">
                   <Loader2Icon className="size-6 animate-spin text-muted-foreground" aria-hidden="true" />
                   <p className="text-sm font-medium tabular-nums">
-                    {progressCurrent} of {progressTotal} cases imported…
+                    {t('ImportProjectPage.progressMessage', { current: progressCurrent, total: progressTotal })}
                   </p>
                 </div>
                 <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                   <div className="h-full bg-primary" style={{ width: `${progressPct}%` }} />
                 </div>
-                <p className="text-xs text-muted-foreground">
-                  This can take a few minutes for a project this size. Keep this tab open — the report will be ready
-                  when it&apos;s done.
-                </p>
+                <p className="text-xs text-muted-foreground">{t('ImportProjectPage.importingHint')}</p>
               </>
             )}
           </CardContent>
@@ -1117,21 +1076,24 @@ export default function ImportProjectPage() {
           <CardHeader>
             <CardTitle className="tp-heading flex items-center gap-2">
               <CheckCircle2Icon className="size-5 text-primary" aria-hidden="true" />
-              Import complete
+              {t('ImportProjectPage.importCompleteHeading')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-3">
               <StatTile
                 value={csvResult.created}
-                label="cases"
+                label={t('ImportProjectPage.casesLabel')}
                 href={`/projects/${targetProject.key}/library`}
               />
             </div>
 
             {csvResult.newFields.length > 0 && (
               <p className="text-sm text-muted-foreground">
-                {csvResult.newFields.length} new custom field{csvResult.newFields.length === 1 ? '' : 's'} created:{' '}
+                {t('ImportProjectPage.newFieldsCreatedPrefix', {
+                  count: csvResult.newFields.length,
+                  plural: csvResult.newFields.length === 1 ? '' : 's',
+                })}{' '}
                 <strong className="font-semibold text-foreground">{csvResult.newFields.join(', ')}</strong>.
               </p>
             )}
@@ -1141,14 +1103,18 @@ export default function ImportProjectPage() {
                 <div className="flex items-start gap-2">
                   <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
                   <p className="text-sm font-medium">
-                    {csvResult.problems.length} row{csvResult.problems.length === 1 ? '' : 's'} couldn&apos;t be
-                    imported
+                    {t('ImportProjectPage.rowsCouldntImport', {
+                      count: csvResult.problems.length,
+                      plural: csvResult.problems.length === 1 ? '' : 's',
+                    })}
                   </p>
                 </div>
                 <ul className="ml-1 max-h-64 space-y-1 overflow-y-auto text-sm">
                   {csvResult.problems.map((p) => (
                     <li key={p.row} className="flex gap-2">
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">Row {p.row}</span>
+                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                        {t('ImportProjectPage.rowLabel', { row: p.row })}
+                      </span>
                       <span>{p.reason}</span>
                     </li>
                   ))}
@@ -1158,7 +1124,9 @@ export default function ImportProjectPage() {
 
             <div className="flex justify-end border-t pt-4">
               <Button asChild>
-                <Link to={`/projects/${targetProject.key}`}>Open {targetProject.name} →</Link>
+                <Link to={`/projects/${targetProject.key}`}>
+                  {t('ImportProjectPage.openProjectLink', { name: targetProject.name })}
+                </Link>
               </Button>
             </div>
           </CardContent>
@@ -1170,26 +1138,34 @@ export default function ImportProjectPage() {
           <CardHeader>
             <CardTitle className="tp-heading flex items-center gap-2">
               <CheckCircle2Icon className="size-5 text-primary" aria-hidden="true" />
-              Import complete
+              {t('ImportProjectPage.importCompleteHeading')}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-3">
-              <StatTile value={resultFolderCount} label="folders" href={`/projects/${targetProject.key}/library`} />
-              <StatTile value={resultCaseCount} label="cases" href={`/projects/${targetProject.key}/library`} />
+              <StatTile
+                value={resultFolderCount}
+                label={t('ImportProjectPage.foldersLabel')}
+                href={`/projects/${targetProject.key}/library`}
+              />
+              <StatTile
+                value={resultCaseCount}
+                label={t('ImportProjectPage.casesLabel')}
+                href={`/projects/${targetProject.key}/library`}
+              />
             </div>
 
             {resultUnmapped.length > 0 && (
               <p className="text-sm text-muted-foreground">
-                {resultUnmapped.length} custom fields were dropped and
-                run/result history wasn&apos;t imported — same list as the preview above. Your existing TestPulse
-                Suites are untouched.
+                {t('ImportProjectPage.resultUnmappedMessage', { count: resultUnmapped.length })}
               </p>
             )}
 
             <div className="flex justify-end border-t pt-4">
               <Button asChild>
-                <Link to={`/projects/${targetProject.key}`}>Open {targetProject.name} →</Link>
+                <Link to={`/projects/${targetProject.key}`}>
+                  {t('ImportProjectPage.openProjectLink', { name: targetProject.name })}
+                </Link>
               </Button>
             </div>
           </CardContent>
@@ -1199,18 +1175,27 @@ export default function ImportProjectPage() {
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogTitle>
-            Import {caseCount} case{caseCount === 1 ? '' : 's'} into &quot;{targetProject?.name}&quot;?
+            {t('ImportProjectPage.confirmImportDialogTitle', {
+              count: caseCount,
+              plural: caseCount === 1 ? '' : 's',
+              name: targetProject?.name,
+            })}
           </DialogTitle>
           <DialogDescription>
-            This creates {folderCount} folder{folderCount === 1 ? '' : 's'} and {caseCount} case
-            {caseCount === 1 ? '' : 's'} in {targetProject?.name}. This cannot be undone.
+            {t('ImportProjectPage.confirmImportDialogDescription', {
+              folderCount,
+              folderPlural: folderCount === 1 ? '' : 's',
+              count: caseCount,
+              plural: caseCount === 1 ? '' : 's',
+              name: targetProject?.name,
+            })}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmOpen(false)}>
-              Cancel
+              {t('ImportProjectPage.cancelButton')}
             </Button>
             <Button onClick={() => void handleConfirmImport()}>
-              Import {caseCount} case{caseCount === 1 ? '' : 's'}
+              {t('ImportProjectPage.importCaseCountButton', { count: caseCount, plural: caseCount === 1 ? '' : 's' })}
             </Button>
           </DialogFooter>
         </DialogContent>

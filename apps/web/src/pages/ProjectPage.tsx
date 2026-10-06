@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, Navigate, useNavigate, useParams } from 'react-router'
 import { ChevronDown, FileTextIcon, LayersIcon, CirclePlayIcon, UsersIcon, SettingsIcon } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -52,6 +53,7 @@ function GettingStartedStep({
 }
 
 export default function ProjectPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const { user, loading: authLoading, defaultLandingView } = useAuth()
@@ -169,13 +171,13 @@ export default function ProjectPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {t('ProjectPage.notFoundMessage')} <Link to="/" className="underline">{t('ProjectPage.goToProjects')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/projects/${projectKey}` }} className="underline">
-              Log in
+              {t('ProjectPage.logIn')}
             </Link>
           </>
         )}
@@ -214,20 +216,20 @@ export default function ProjectPage() {
           <div>
             <div className="flex items-center gap-1.5">
               <h1 className="tp-heading text-2xl">{project.name}</h1>
-              {project.archived && <Badge variant="outline">Archived</Badge>}
+              {project.archived && <Badge variant="outline">{t('ProjectPage.archivedBadge')}</Badge>}
               {canSwitch && (
                 <button
                   type="button"
                   className="text-muted-foreground hover:text-primary"
                   onClick={openSwitcher}
-                  title="Switch project (⌘K)"
-                  aria-label="Switch project"
+                  title={t('ProjectPage.switchProjectTitle')}
+                  aria-label={t('ProjectPage.switchProjectAriaLabel')}
                 >
                   <ChevronDown className="size-5" aria-hidden="true" />
                 </button>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">{project.key} · project overview</p>
+            <p className="text-sm text-muted-foreground">{t('ProjectPage.projectOverview', { key: project.key })}</p>
           </div>
         )}
         <div className="flex items-center gap-4">
@@ -237,7 +239,7 @@ export default function ProjectPage() {
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
               <UsersIcon className="size-4" aria-hidden="true" />
-              Members
+              {t('ProjectPage.membersLink')}
             </Link>
           )}
           {permissions?.manageProject && (
@@ -246,7 +248,7 @@ export default function ProjectPage() {
               className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
             >
               <SettingsIcon className="size-4" aria-hidden="true" />
-              Settings
+              {t('ProjectPage.settingsLink')}
             </Link>
           )}
         </div>
@@ -261,7 +263,7 @@ export default function ProjectPage() {
             <HealthRing rate={summary.passRate} />
             <div className="flex flex-col gap-1">
               <StatusPill rate={summary.passRate} dot />
-              <span className="text-xs text-muted-foreground">Pass rate across all suites</span>
+              <span className="text-xs text-muted-foreground">{t('ProjectPage.passRateAcrossSuites')}</span>
             </div>
           </div>
 
@@ -274,7 +276,7 @@ export default function ProjectPage() {
               </span>
               <div>
                 <div className="text-base leading-tight font-bold tabular-nums">{summary.suiteCount}</div>
-                <div className="text-[11px] text-muted-foreground">Suites</div>
+                <div className="text-[11px] text-muted-foreground">{t('ProjectPage.suitesLabel')}</div>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -283,7 +285,7 @@ export default function ProjectPage() {
               </span>
               <div>
                 <div className="text-base leading-tight font-bold tabular-nums">{summary.caseCount}</div>
-                <div className="text-[11px] text-muted-foreground">Cases</div>
+                <div className="text-[11px] text-muted-foreground">{t('ProjectPage.casesLabel')}</div>
               </div>
             </div>
           </div>
@@ -292,7 +294,7 @@ export default function ProjectPage() {
 
           {summary.lastRunAt && isValidDate(summary.lastRunAt) ? (
             <div>
-              <div className="text-[11px] tracking-wide text-muted-foreground uppercase">Last run</div>
+              <div className="text-[11px] tracking-wide text-muted-foreground uppercase">{t('ProjectPage.lastRunLabel')}</div>
               <div className="text-sm font-bold tabular-nums">{timeAgo(summary.lastRunAt)}</div>
               {landing.runs[0] && (
                 <div className="truncate text-xs text-muted-foreground">
@@ -302,7 +304,7 @@ export default function ProjectPage() {
               )}
             </div>
           ) : (
-            <div className="text-sm text-muted-foreground">No runs yet</div>
+            <div className="text-sm text-muted-foreground">{t('ProjectPage.noRunsYet')}</div>
           )}
         </div>
       )}
@@ -312,18 +314,25 @@ export default function ProjectPage() {
           <div>
             <h2 className="tp-heading text-lg">
               {latestImportJob.status === 'failed'
-                ? 'Import didn’t complete'
+                ? t('ProjectPage.importDidNotComplete')
                 : latestImportJob.status === 'succeeded'
-                  ? 'Import complete, but nothing landed here'
-                  : 'Import in progress'}
+                  ? t('ProjectPage.importCompleteButEmpty')
+                  : t('ProjectPage.importInProgressHeading')}
             </h2>
             <p className="text-sm text-muted-foreground">
               {latestImportJob.status === 'failed' ? (
-                <>An import from {SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source} failed: {latestImportJob.error}</>
+                t('ProjectPage.importFailedMessage', {
+                  source: SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source,
+                  error: latestImportJob.error,
+                })
               ) : latestImportJob.status === 'succeeded' ? (
-                <>The import from {SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source} finished but this project is still empty.</>
+                t('ProjectPage.importSucceededEmptyMessage', {
+                  source: SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source,
+                })
               ) : (
-                <>An import from {SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source} is still in progress — this page will update once it finishes.</>
+                t('ProjectPage.importInProgressMessage', {
+                  source: SOURCE_LABEL[latestImportJob.source as Source] ?? latestImportJob.source,
+                })
               )}
             </p>
           </div>
@@ -333,13 +342,13 @@ export default function ProjectPage() {
                 to={`/import/${latestImportJob.source}`}
                 className="rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted"
               >
-                Try the import again
+                {t('ProjectPage.tryImportAgain')}
               </Link>
               <Link
                 to={`/projects/${projectKey}/settings`}
                 className="rounded-md border border-input bg-background px-3 py-1.5 text-sm font-medium hover:bg-muted"
               >
-                Archive this project
+                {t('ProjectPage.archiveThisProject')}
               </Link>
             </div>
           )}
@@ -347,28 +356,28 @@ export default function ProjectPage() {
       ) : isAllEmpty ? (
         <div className="space-y-3">
           <div>
-            <h2 className="tp-heading text-lg">Get started</h2>
+            <h2 className="tp-heading text-lg">{t('ProjectPage.getStartedHeading')}</h2>
             <p className="text-sm text-muted-foreground">
-              This project doesn't have any test content yet — three steps to get it running.
+              {t('ProjectPage.getStartedDescription')}
             </p>
           </div>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <GettingStartedStep
               icon={<FileTextIcon className="size-5" />}
-              title="1. Add your first test case"
-              tip="Describe the steps to follow and what you expect to happen. You can always edit it later — every change keeps its own version."
+              title={t('ProjectPage.step1Title')}
+              tip={t('ProjectPage.step1Tip')}
               onClick={() => navigate(`/projects/${projectKey}/library`)}
             />
             <GettingStartedStep
               icon={<LayersIcon className="size-5" />}
-              title="2. Group your cases into a suite"
-              tip="Suites decide what runs together, independent of how cases are organized into sections."
+              title={t('ProjectPage.step2Title')}
+              tip={t('ProjectPage.step2Tip')}
               onClick={() => navigate(`/projects/${projectKey}/suites`)}
             />
             <GettingStartedStep
               icon={<CirclePlayIcon className="size-5" />}
-              title="3. Run the suite"
-              tip="Every run captures a pass or fail per case, so you can track quality over time."
+              title={t('ProjectPage.step3Title')}
+              tip={t('ProjectPage.step3Tip')}
               onClick={() => navigate(`/projects/${projectKey}/runs`)}
             />
           </div>

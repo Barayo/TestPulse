@@ -9,6 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ExternalLinkIcon, PaperclipIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
@@ -68,6 +69,7 @@ const MAX_ATTACHMENT_UPLOAD_BYTES = 5 * 1024 * 1024
 const ACCEPTED_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/webp']
 
 export default function RunItemDetailPage() {
+  const { t } = useTranslation()
   const { runKey, caseKey } = useParams<{ runKey: string; caseKey: string }>()
   const [searchParams] = useSearchParams()
   const rowParam = searchParams.get('row')
@@ -216,10 +218,10 @@ export default function RunItemDetailPage() {
 
   function rejectAttachment(file: File): string | null {
     if (!ACCEPTED_ATTACHMENT_TYPES.includes(file.type)) {
-      return "isn't a PNG, JPEG, or WebP image. Try a different file."
+      return t('RunItemDetailPage.rejectNotImageMessage')
     }
     if (file.size > MAX_ATTACHMENT_UPLOAD_BYTES) {
-      return `is ${(file.size / (1024 * 1024)).toFixed(1)}MB — the limit is 5MB. Try a smaller image.`
+      return t('RunItemDetailPage.rejectTooLargeMessage', { size: (file.size / (1024 * 1024)).toFixed(1) })
     }
     return null
   }
@@ -253,7 +255,7 @@ export default function RunItemDetailPage() {
         credentials: 'include',
       })
       if (!res.ok) {
-        setLastAttachError({ filename: file.name, reason: 'failed to upload. Try again.' })
+        setLastAttachError({ filename: file.name, reason: t('RunItemDetailPage.uploadFailedMessage') })
         setFailedUploads((prev) => [...prev, { id: `${file.name}-${Date.now()}`, filename: file.name }])
         return
       }
@@ -309,7 +311,7 @@ export default function RunItemDetailPage() {
         credentials: 'include',
       })
       if (!res.ok) {
-        setLastAttachError({ filename: file.name, reason: 'failed to upload. Try again.' })
+        setLastAttachError({ filename: file.name, reason: t('RunItemDetailPage.uploadFailedMessage') })
         return
       }
       const created = (await res.json()) as Attachment
@@ -377,7 +379,7 @@ export default function RunItemDetailPage() {
       body: { verdict },
     })
     if (!response.ok || !data) {
-      setStepMarkError((error as { error?: string })?.error ?? 'Could not mark this step.')
+      setStepMarkError((error as { error?: string })?.error ?? t('RunItemDetailPage.stepMarkError'))
       return
     }
     setStepMarkError(undefined)
@@ -450,13 +452,13 @@ export default function RunItemDetailPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Item not found. <Link to={`/runs/${runKey}`} className="underline">Go to run</Link>
+        {t('RunItemDetailPage.itemNotFound')} <Link to={`/runs/${runKey}`} className="underline">{t('RunItemDetailPage.goToRun')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/runs/${runKey}/items/${caseKey}` }} className="underline">
-              Log in
+              {t('RunItemDetailPage.logIn')}
             </Link>
           </>
         )}
@@ -470,19 +472,19 @@ export default function RunItemDetailPage() {
   const shortcuts: ShortcutEntry[] = [
     ...(!isClosed && canRecord
       ? [
-          { keys: 'P', label: 'Pass' },
-          { keys: 'F', label: 'Failed' },
-          { keys: 'B', label: 'Blocked' },
-          { keys: 'S', label: 'Skipped' },
-          ...(item.currentStatus === 'failed' ? [{ keys: 'R', label: 'Retest' }] : []),
-          ...(lastVerdict ? [{ keys: '⌘/Ctrl+Enter', label: 'Save comment' }] : []),
+          { keys: 'P', label: t('RunItemDetailPage.passLabel') },
+          { keys: 'F', label: t('RunItemDetailPage.failedLabel') },
+          { keys: 'B', label: t('RunItemDetailPage.blockedLabel') },
+          { keys: 'S', label: t('RunItemDetailPage.skippedLabel') },
+          ...(item.currentStatus === 'failed' ? [{ keys: 'R', label: t('RunItemDetailPage.retestLabel') }] : []),
+          ...(lastVerdict ? [{ keys: '⌘/Ctrl+Enter', label: t('RunItemDetailPage.saveCommentLabel') }] : []),
         ]
       : []),
-    { keys: 'J/K · ↑/↓', label: 'Next / previous item' },
+    { keys: 'J/K · ↑/↓', label: t('RunItemDetailPage.nextPreviousItemLabel') },
   ]
 
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
-    { label: 'Projects', href: '/' },
+    { label: t('RunItemDetailPage.projectsBreadcrumb'), href: '/' },
     { label: project?.name ?? '', href: project ? `/projects/${project.key}` : undefined },
     { label: run.name, href: `/runs/${runKey}` },
   ])
@@ -495,7 +497,7 @@ export default function RunItemDetailPage() {
         <div className="flex items-center gap-3">
           <Link
             to={`/runs/${runKey}`}
-            aria-label={`Back to ${run.name}`}
+            aria-label={t('RunItemDetailPage.backToRunAriaLabel', { name: run.name })}
             className="text-2xl leading-none text-primary hover:text-primary/70"
           >
             ←
@@ -528,7 +530,7 @@ export default function RunItemDetailPage() {
           </div>
           {item.content.expectedResult && (
             <div>
-              <h3 className="mb-1 text-sm font-medium">Expected result</h3>
+              <h3 className="mb-1 text-sm font-medium">{t('RunItemDetailPage.expectedResultHeading')}</h3>
               <p className="text-sm">{item.content.expectedResult}</p>
             </div>
           )}
@@ -536,7 +538,7 @@ export default function RunItemDetailPage() {
           <div className="space-y-2 border-t pt-4">
             {isClosed ? (
               <p className="text-sm text-muted-foreground">
-                This run is closed. Ask a project admin to reopen it to record new results.
+                {t('RunItemDetailPage.runClosedMessage')}
               </p>
             ) : canRecord ? (
               <>
@@ -552,10 +554,10 @@ export default function RunItemDetailPage() {
                 />
 
                 <div className="space-y-1">
-                  <Label htmlFor="comment">Comment</Label>
+                  <Label htmlFor="comment">{t('RunItemDetailPage.commentLabel')}</Label>
                   <Textarea
                     id="comment"
-                    placeholder="Add context for this result… (screenshots paste here too)"
+                    placeholder={t('RunItemDetailPage.commentPlaceholder')}
                     value={comment}
                     onChange={(e) => setComment(e.target.value)}
                     onKeyDown={handleCommentKeyDown}
@@ -565,7 +567,7 @@ export default function RunItemDetailPage() {
                   />
                   {showCommentAttachToast && (
                     <p className="text-xs text-primary" aria-live="polite">
-                      ✓ Added to Attachments
+                      {t('RunItemDetailPage.addedToAttachmentsToast')}
                     </p>
                   )}
                   {lastVerdict ? (
@@ -575,23 +577,23 @@ export default function RunItemDetailPage() {
                       disabled={!comment.trim() || isRecording}
                       onClick={() => void recordVerdict(lastVerdict)}
                     >
-                      Save comment
+                      {t('RunItemDetailPage.saveCommentLabel')}
                     </Button>
                   ) : (
                     <p className="text-xs text-muted-foreground">
-                      This comment is saved together with a verdict — record one below.
+                      {t('RunItemDetailPage.commentNeedsVerdictMessage')}
                     </p>
                   )}
                 </div>
                 <div className="space-y-1">
                   {showActorOverride ? (
                     <>
-                      <Label htmlFor="actor-override">Record on behalf of</Label>
+                      <Label htmlFor="actor-override">{t('RunItemDetailPage.recordOnBehalfOfLabel')}</Label>
                       <Input
                         id="actor-override"
                         value={actorOverride}
                         onChange={(e) => setActorOverride(e.target.value)}
-                        placeholder="Defaults to you"
+                        placeholder={t('RunItemDetailPage.recordOnBehalfOfPlaceholder')}
                       />
                     </>
                   ) : (
@@ -600,13 +602,13 @@ export default function RunItemDetailPage() {
                       className="text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
                       onClick={() => setShowActorOverride(true)}
                     >
-                      Record on behalf of someone else
+                      {t('RunItemDetailPage.recordOnBehalfOfSomeoneElseButton')}
                     </button>
                   )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button size="sm" disabled={isRecording} onClick={() => void recordVerdict('pass')}>
-                    Pass
+                    {t('RunItemDetailPage.passLabel')}
                   </Button>
                   <Button
                     size="sm"
@@ -614,7 +616,7 @@ export default function RunItemDetailPage() {
                     disabled={isRecording}
                     onClick={() => void recordVerdict('failed')}
                   >
-                    Failed
+                    {t('RunItemDetailPage.failedLabel')}
                   </Button>
                   <Button
                     size="sm"
@@ -622,7 +624,7 @@ export default function RunItemDetailPage() {
                     disabled={isRecording}
                     onClick={() => void recordVerdict('blocked')}
                   >
-                    Blocked
+                    {t('RunItemDetailPage.blockedLabel')}
                   </Button>
                   <Button
                     size="sm"
@@ -630,11 +632,11 @@ export default function RunItemDetailPage() {
                     disabled={isRecording}
                     onClick={() => void recordVerdict('skipped')}
                   >
-                    Skipped
+                    {t('RunItemDetailPage.skippedLabel')}
                   </Button>
                   {item.currentStatus === 'failed' && (
                     <Button size="sm" variant="secondary" disabled={isRecording} onClick={() => void markRetest()}>
-                      Retest
+                      {t('RunItemDetailPage.retestLabel')}
                     </Button>
                   )}
                 </div>
@@ -647,9 +649,9 @@ export default function RunItemDetailPage() {
           className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5"
           data-testid="run-item-sidebar"
         >
-          <CaseSidebarSection title="Properties">
+          <CaseSidebarSection title={t('RunItemDetailPage.propertiesTitle')}>
             <PropertyRow
-              label="Test case"
+              label={t('RunItemDetailPage.testCaseLabel')}
               value={
                 project && (
                   <Link
@@ -662,10 +664,10 @@ export default function RunItemDetailPage() {
                 )
               }
             />
-            {item.testName && <PropertyRow label="Test name" value={item.testName} />}
+            {item.testName && <PropertyRow label={t('RunItemDetailPage.testNameLabel')} value={item.testName} />}
             {item.testDataRow && Object.keys(item.testDataRow).length > 0 && (
               <PropertyRow
-                label="Test data"
+                label={t('RunItemDetailPage.testDataLabel')}
                 // Ordered by the case's own defined column order (still
                 // carried on the pinned version's content.parameters — see
                 // add-parameterized-cases design.md D9) rather than
@@ -685,23 +687,23 @@ export default function RunItemDetailPage() {
               />
             )}
             <PropertyRow
-              label="Priority"
+              label={t('RunItemDetailPage.priorityLabel')}
               value={<ClassificationPills priority={item.content.priority ?? 'medium'} />}
               wrap
             />
             <PropertyRow
-              label="Test type"
+              label={t('RunItemDetailPage.testTypeLabel')}
               value={item.content.testType && <ClassificationPills testType={item.content.testType} />}
               wrap
             />
             <PropertyRow
-              label="Automation"
+              label={t('RunItemDetailPage.automationLabel')}
               value={<AutomationPill automated={Boolean(item.content.automated)} />}
               wrap
             />
-            <PropertyRow label="Platform" value={item.content.platform} />
+            <PropertyRow label={t('RunItemDetailPage.platformLabel')} value={item.content.platform} />
             <PropertyRow
-              label="Tags"
+              label={t('RunItemDetailPage.tagsLabel')}
               value={
                 (item.content.tags ?? []).length > 0 &&
                 (item.content.tags ?? []).map((tag) => (
@@ -712,9 +714,9 @@ export default function RunItemDetailPage() {
               }
               wrap
             />
-            <PropertyRow label="Pinned version" value={`v${item.caseVersion}`} />
+            <PropertyRow label={t('RunItemDetailPage.pinnedVersionLabel')} value={`v${item.caseVersion}`} />
             <PropertyRow
-              label="Assignee"
+              label={t('RunItemDetailPage.assigneeLabel')}
               value={
                 <span className="flex items-center gap-2">
                   {item.assignee ? (
@@ -742,13 +744,13 @@ export default function RunItemDetailPage() {
                         className="size-5 shrink-0 rounded-full border border-dashed border-muted-foreground/40"
                         aria-hidden="true"
                       />
-                      Unassigned
+                      {t('RunItemDetailPage.unassignedLabel')}
                     </span>
                   )}
                   {canRecord && (
                     <button
                       type="button"
-                      aria-label="Assign to…"
+                      aria-label={t('RunItemDetailPage.assignToAriaLabel')}
                       className="text-muted-foreground hover:text-foreground"
                       onClick={() => setAssignDialogOpen(true)}
                     >
@@ -759,17 +761,17 @@ export default function RunItemDetailPage() {
               }
             />
             {item.newerVersion && (
-              <p className="text-sm text-muted-foreground">A newer version of this case exists</p>
+              <p className="text-sm text-muted-foreground">{t('RunItemDetailPage.newerVersionExistsMessage')}</p>
             )}
           </CaseSidebarSection>
 
-          <CaseSidebarSection title="Results">
+          <CaseSidebarSection title={t('RunItemDetailPage.resultsTitle')}>
             <CaseResultsPanel data={resultsData} />
           </CaseSidebarSection>
 
-          <CaseSidebarSection title="This run">
+          <CaseSidebarSection title={t('RunItemDetailPage.thisRunTitle')}>
             {results.length > 0 ? (
-              <ul className="space-y-2 text-sm" aria-label="Result history">
+              <ul className="space-y-2 text-sm" aria-label={t('RunItemDetailPage.resultHistoryAriaLabel')}>
                 {results.map((r) => (
                   <li key={r.id} className="space-y-1">
                     <div className="flex items-center gap-2">
@@ -794,8 +796,8 @@ export default function RunItemDetailPage() {
                       {!isClosed && canRecord && (
                         <button
                           type="button"
-                          aria-label="Attach screenshot"
-                          title="Attach screenshot"
+                          aria-label={t('RunItemDetailPage.attachScreenshotLabel')}
+                          title={t('RunItemDetailPage.attachScreenshotLabel')}
                           className="shrink-0 text-muted-foreground hover:text-foreground"
                           onClick={() => {
                             setPendingAttachResultId(r.id)
@@ -822,7 +824,7 @@ export default function RunItemDetailPage() {
                 ))}
               </ul>
             ) : (
-              <p className="text-sm text-muted-foreground">No results recorded yet.</p>
+              <p className="text-sm text-muted-foreground">{t('RunItemDetailPage.noResultsRecordedMessage')}</p>
             )}
             <input
               ref={historyFileInputRef}

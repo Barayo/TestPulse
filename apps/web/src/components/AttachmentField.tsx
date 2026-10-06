@@ -1,4 +1,5 @@
 import { useRef, type ChangeEvent, type ClipboardEvent, type DragEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PaperclipIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
 import { Label } from '@/components/ui/label'
 import type { components } from '@testpulse/shared/api'
@@ -33,6 +34,7 @@ export function AttachmentField({
   onRemove: (id: string) => void
   onOpenLightbox: (index: number) => void
 }) {
+  const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   function handlePaste(e: ClipboardEvent<HTMLDivElement>) {
@@ -63,10 +65,10 @@ export function AttachmentField({
 
   return (
     <div className="space-y-1">
-      <Label>Attachments</Label>
+      <Label>{t('AttachmentField.attachments')}</Label>
       <div
         role="group"
-        aria-label="Attachments"
+        aria-label={t('AttachmentField.attachments')}
         tabIndex={0}
         onClick={() => fileInputRef.current?.click()}
         onKeyDown={(e) => {
@@ -83,7 +85,7 @@ export function AttachmentField({
               <div key={att.id} className="group/thumb relative">
                 <button
                   type="button"
-                  aria-label={`Open attachment ${att.filename}`}
+                  aria-label={t('AttachmentField.openAttachment', { filename: att.filename })}
                   data-highlighted={highlightId === att.id ? 'true' : undefined}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -97,7 +99,7 @@ export function AttachmentField({
                 </button>
                 <button
                   type="button"
-                  aria-label={`Remove ${att.filename}`}
+                  aria-label={t('AttachmentField.removeAttachment', { filename: att.filename })}
                   onClick={(e) => {
                     e.stopPropagation()
                     onRemove(att.id)
@@ -111,8 +113,8 @@ export function AttachmentField({
             {failed.map((f) => (
               <div
                 key={f.id}
-                aria-label={`${f.filename} failed to attach`}
-                title={`${f.filename} failed to attach`}
+                aria-label={t('AttachmentField.failedToAttach', { filename: f.filename })}
+                title={t('AttachmentField.failedToAttach', { filename: f.filename })}
                 className="flex size-11 shrink-0 items-center justify-center rounded-md border border-destructive bg-destructive/10"
               >
                 <TriangleAlertIcon className="size-4 text-destructive" aria-hidden="true" />
@@ -125,7 +127,7 @@ export function AttachmentField({
           <PaperclipIcon className="size-3.5 shrink-0" aria-hidden="true" />
           {hasAny ? (
             <span>
-              {attachedCount} attached{failedCount > 0 ? `, ${failedCount} failed` : ''} —{' '}
+              {t('AttachmentField.attachedSummary', { count: attachedCount })}{failedCount > 0 ? t('AttachmentField.failedSummary', { count: failedCount }) : ''} —{' '}
               <button
                 type="button"
                 className="underline underline-offset-2 hover:text-foreground"
@@ -134,14 +136,14 @@ export function AttachmentField({
                   fileInputRef.current?.click()
                 }}
               >
-                attach another
+                {t('AttachmentField.attachAnother')}
               </button>
-              {uploading && ' — uploading…'}
+              {uploading && t('AttachmentField.uploadingSuffix')}
             </span>
           ) : (
             <span>
-              Click, drag a screenshot in, or paste it here
-              {uploading && ' — uploading…'}
+              {t('AttachmentField.dropHint')}
+              {uploading && t('AttachmentField.uploadingSuffix')}
             </span>
           )}
         </div>
@@ -160,7 +162,7 @@ export function AttachmentField({
         <div className="flex items-start gap-2 rounded-md border border-destructive/25 bg-destructive/5 p-2">
           <TriangleAlertIcon className="mt-0.5 size-3.5 shrink-0 text-destructive" aria-hidden="true" />
           <div>
-            <p className="text-xs font-semibold">Couldn't attach that file</p>
+            <p className="text-xs font-semibold">{t('AttachmentField.attachFailedTitle')}</p>
             <p className="text-xs text-muted-foreground">
               {lastError.filename} {lastError.reason}
             </p>

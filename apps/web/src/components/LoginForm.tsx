@@ -1,5 +1,6 @@
 import { useState, type FormEvent, type RefObject } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { useAuth, type AuthUser } from '@/lib/useAuth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ export function LoginForm({
   // the feature is available (add-forgot-password).
   showForgotPassword?: boolean
 }) {
+  const { t } = useTranslation()
   const { login } = useAuth()
   const [email, setEmail] = useState(initialEmail)
   const [password, setPassword] = useState('')
@@ -45,7 +47,7 @@ export function LoginForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-1">
-        <Label htmlFor="login-email">Email</Label>
+        <Label htmlFor="login-email">{t('LoginForm.emailLabel')}</Label>
         <Input
           id="login-email"
           type="email"
@@ -56,10 +58,10 @@ export function LoginForm({
       </div>
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label htmlFor="login-password">Password</Label>
+          <Label htmlFor="login-password">{t('LoginForm.passwordLabel')}</Label>
           {showForgotPassword && (
             <Link to="/forgot-password" className="text-sm text-muted-foreground hover:text-foreground">
-              Forgot password?
+              {t('LoginForm.forgotPasswordLink')}
             </Link>
           )}
         </div>
@@ -72,7 +74,7 @@ export function LoginForm({
         />
       </div>
       <Button type="submit" className="w-full">
-        Log in
+        {t('LoginForm.submitButton')}
       </Button>
       {error && <p className="text-sm text-destructive">{error}</p>}
     </form>

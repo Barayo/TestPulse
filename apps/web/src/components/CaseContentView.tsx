@@ -1,8 +1,10 @@
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileTextIcon, ScrollTextIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { CaseStepsList } from '@/components/CaseStepsList'
 import { GherkinView } from '@/components/GherkinEditor'
+import i18n from '@/i18n'
 import type { components } from '@testpulse/shared/api'
 
 type CaseContent = components['schemas']['CaseContent']
@@ -13,9 +15,9 @@ type CaseContent = components['schemas']['CaseContent']
 // of assuming steps (add-case-authoring-formats). CaseStepsList itself
 // stays steps-only; this wraps it rather than absorbing its logic.
 export function caseContentHeading(format: CaseContent['format']): string {
-  if (format === 'text') return 'Description'
-  if (format === 'gherkin') return 'Scenario'
-  return 'Steps'
+  if (format === 'text') return i18n.t('CaseContentView.description')
+  if (format === 'gherkin') return i18n.t('CaseContentView.scenario')
+  return i18n.t('CaseContentView.steps')
 }
 
 export function CaseContentView({
@@ -27,13 +29,14 @@ export function CaseContentView({
   emptyStateAction?: ReactNode
   projectKey?: string
 }) {
+  const { t } = useTranslation()
   if (content.format === 'text') {
     if (!content.description?.trim()) {
       return (
         <div className="rounded-2xl border border-dashed p-10 text-center">
           <FileTextIcon className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
-          <p className="mb-1 text-sm font-medium">No description yet</p>
-          <p className="mb-4 text-sm text-muted-foreground">Add a description to explain this test scenario.</p>
+          <p className="mb-1 text-sm font-medium">{t('CaseContentView.noDescriptionYet')}</p>
+          <p className="mb-4 text-sm text-muted-foreground">{t('CaseContentView.noDescriptionHint')}</p>
           {emptyStateAction}
         </div>
       )
@@ -50,8 +53,8 @@ export function CaseContentView({
       return (
         <div className="rounded-2xl border border-dashed p-10 text-center">
           <ScrollTextIcon className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
-          <p className="mb-1 text-sm font-medium">No scenario yet</p>
-          <p className="mb-4 text-sm text-muted-foreground">Write the Given/When/Then steps for this scenario.</p>
+          <p className="mb-1 text-sm font-medium">{t('CaseContentView.noScenarioYet')}</p>
+          <p className="mb-4 text-sm text-muted-foreground">{t('CaseContentView.noScenarioHint')}</p>
           {emptyStateAction}
         </div>
       )

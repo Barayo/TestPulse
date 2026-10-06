@@ -92,8 +92,9 @@ curl -b cookies.txt http://localhost:8080/api/v1/projects
 A Tenant Admin can create further users at `/settings/users` and teams at
 `/settings/teams` (both linked from the top-level Admin menu); any
 authenticated user can create scoped API tokens for agents at
-`/settings/tokens`, and set their own display name, avatar, and timezone at
-`/settings/profile` (`add-user-profile`) — both linked from the header's
+`/settings/tokens`, and set their own display name, avatar, timezone, and
+(when a Tenant Admin has enabled per-user language customization)
+language at `/settings/profile` (`add-user-profile`, `add-ui-i18n`) — both linked from the header's
 account menu, which shows the user's chosen (or generated-default) avatar
 in place of plain email text. A newly-created user has no project access until a
 Tenant Admin assigns them a role on a project (directly, or via a team) —

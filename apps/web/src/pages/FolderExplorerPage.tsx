@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type DragEvent, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
 import { FolderIcon, FileTextIcon, FolderInputIcon, Trash2Icon, UploadIcon, DownloadIcon } from 'lucide-react'
 import { useFloatingPosition } from '@/lib/useFloatingPosition'
@@ -78,9 +79,9 @@ function folderPathLabel(folders: Folder[], folderId: string): string {
 // The project's auto-created root folder is surfaced to users as "Library" —
 // a UI label only, not a rename of the underlying entity (still literally
 // named "Root" in the database).
-function displayFolderName(folder: Folder | undefined, rootId: string): string {
+function displayFolderName(folder: Folder | undefined, rootId: string, libraryLabel: string): string {
   if (!folder) return ''
-  return folder.id === rootId ? 'Library' : folder.name
+  return folder.id === rootId ? libraryLabel : folder.name
 }
 
 const STALE_DAYS = 90
@@ -138,6 +139,7 @@ function FolderRow({
   selectedCount: number
   bulkMenuItems: RowActionMenuItem[]
 }) {
+  const { t } = useTranslation()
   const menuRef = useRef<RowActionMenuHandle>(null)
   const isBulkContext = selected && selectedCount > 1
   const items: RowActionMenuItem[] = isBulkContext
@@ -146,7 +148,7 @@ function FolderRow({
         ...(canMove
           ? [
               {
-                label: 'Move to…',
+                label: t('FolderExplorerPage.moveToMenuLabel'),
                 icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
                 onSelect: onMoveTo,
               } satisfies RowActionMenuItem,
@@ -155,7 +157,7 @@ function FolderRow({
         ...(canDelete
           ? [
               {
-                label: 'Delete',
+                label: t('FolderExplorerPage.deleteMenuLabel'),
                 danger: true,
                 dividerBefore: true,
                 icon: <Trash2Icon className="size-4" aria-hidden="true" />,
@@ -213,7 +215,7 @@ function FolderRow({
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         {stats.hasCritical && (
           <span className="rounded-full bg-destructive/10 px-2 py-0.5 font-medium text-destructive">
-            {stats.criticalCount} critical
+            {t('FolderExplorerPage.criticalCount', { count: stats.criticalCount })}
           </span>
         )}
         {stats.count > 0 ? (
@@ -224,16 +226,16 @@ function FolderRow({
                 style={{ width: `${Math.round((stats.automatedCount / stats.count) * 100)}%` }}
               />
             </span>
-            {stats.automatedCount}/{stats.count} automated
+            {t('FolderExplorerPage.automatedCount', { automated: stats.automatedCount, count: stats.count })}
           </span>
         ) : (
-          <span>empty</span>
+          <span>{t('FolderExplorerPage.emptyFolder')}</span>
         )}
         <span>
-          {stats.count} {stats.count === 1 ? 'case' : 'cases'}
+          {t('FolderExplorerPage.folderCaseCount', { count: stats.count, plural: stats.count === 1 ? '' : 's' })}
         </span>
       </div>
-      {canOpenMenu && <RowActionMenu ref={menuRef} label={`Actions for ${folder.name}`} items={items} hoverReveal />}
+      {canOpenMenu && <RowActionMenu ref={menuRef} label={t('FolderExplorerPage.actionsForAriaLabel', { name: folder.name })} items={items} hoverReveal />}
     </li>
   )
 }
@@ -282,6 +284,7 @@ function CaseRow({
   selectedCount: number
   bulkMenuItems: RowActionMenuItem[]
 }) {
+  const { t } = useTranslation()
   const menuRef = useRef<RowActionMenuHandle>(null)
   const isBulkContext = selected && selectedCount > 1
   const items: RowActionMenuItem[] = isBulkContext
@@ -290,7 +293,7 @@ function CaseRow({
         ...(canMove
           ? [
               {
-                label: 'Move to…',
+                label: t('FolderExplorerPage.moveToMenuLabel'),
                 icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
                 onSelect: onMoveTo,
               } satisfies RowActionMenuItem,
@@ -299,7 +302,7 @@ function CaseRow({
         ...(canDelete
           ? [
               {
-                label: 'Delete',
+                label: t('FolderExplorerPage.deleteMenuLabel'),
                 danger: true,
                 dividerBefore: true,
                 icon: <Trash2Icon className="size-4" aria-hidden="true" />,
@@ -357,13 +360,14 @@ function CaseRow({
         {isStale(testCase.updatedAt) ? <StalePill /> : timeAgo(testCase.updatedAt)}
       </span>
       {items.length > 0 && (
-        <RowActionMenu ref={menuRef} label={`Actions for ${testCase.content.title}`} items={items} hoverReveal />
+        <RowActionMenu ref={menuRef} label={t('FolderExplorerPage.actionsForAriaLabel', { name: testCase.content.title })} items={items} hoverReveal />
       )}
     </li>
   )
 }
 
 export default function FolderExplorerPage() {
+  const { t } = useTranslation()
   // add-folder-slug-urls: the URL's trailing segment is a slug-path
   // (e.g. "authentication/two-factor"), resolved below against the
   // loaded folder tree — not a folder ID.
@@ -532,7 +536,7 @@ export default function FolderExplorerPage() {
       })
       const body = await res.json()
       if (!res.ok) {
-        setImportError(body?.error ?? 'Could not import this CSV file.')
+        setImportError(body?.error ?? t('FolderExplorerPage.errorImportCsv'))
         return
       }
       setImportDialogOpen(false)
@@ -702,23 +706,23 @@ export default function FolderExplorerPage() {
   }, [orderedVisibleEntriesSignal, focusedIndex])
 
   const librarySelectionShortcuts: ShortcutEntry[] = [
-    { keys: 'J/K · ↑/↓', label: 'Move focus' },
-    { keys: 'Space', label: 'Select focused row' },
-    { keys: 'Shift+Space', label: 'Extend selection' },
-    { keys: 'Enter', label: 'Open case / navigate into folder' },
+    { keys: 'J/K · ↑/↓', label: t('FolderExplorerPage.shortcutMoveFocus') },
+    { keys: 'Space', label: t('FolderExplorerPage.shortcutSelectFocusedRow') },
+    { keys: 'Shift+Space', label: t('FolderExplorerPage.shortcutExtendSelection') },
+    { keys: 'Enter', label: t('FolderExplorerPage.shortcutOpenCaseOrNavigate') },
   ]
 
   if (!projectKey) return null
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {t('FolderExplorerPage.projectNotFoundMessage')} <Link to="/" className="underline">{t('FolderExplorerPage.goToProjects')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/projects/${projectKey}/library` }} className="underline">
-              Log in
+              {t('FolderExplorerPage.logIn')}
             </Link>
           </>
         )}
@@ -732,7 +736,7 @@ export default function FolderExplorerPage() {
   if (folderNotFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Section not found. <Link to={`/projects/${projectKey}/library`} className="underline">Go to Library</Link>
+        {t('FolderExplorerPage.sectionNotFoundMessage')} <Link to={`/projects/${projectKey}/library`} className="underline">{t('FolderExplorerPage.goToLibrary')}</Link>
       </p>
     )
   }
@@ -774,7 +778,10 @@ export default function FolderExplorerPage() {
   // every case in its subtree.
   const canBulkCreateSuite = Boolean(permissions?.suiteCreate) && resolvedSuiteCaseKeys.length > 0
   const canBulkDelete = Boolean(permissions?.caseDelete || permissions?.sectionDelete)
-  const bulkCreateSuiteLabel = `Create suite from ${resolvedSuiteCaseKeys.length} case${resolvedSuiteCaseKeys.length === 1 ? '' : 's'}…`
+  const bulkCreateSuiteLabel = t('FolderExplorerPage.createSuiteFromSelectionLabel', {
+    count: resolvedSuiteCaseKeys.length,
+    plural: resolvedSuiteCaseKeys.length === 1 ? '' : 's',
+  })
 
   function openBulkMove() {
     setBulkMoveQuery('')
@@ -787,12 +794,12 @@ export default function FolderExplorerPage() {
   }
 
   const bulkActions: BulkAction[] = [
-    ...(canBulkMove ? ([{ kind: 'button', label: 'Move to…', onSelect: openBulkMove }] satisfies BulkAction[]) : []),
+    ...(canBulkMove ? ([{ kind: 'button', label: t('FolderExplorerPage.moveToMenuLabel'), onSelect: openBulkMove }] satisfies BulkAction[]) : []),
     ...(canBulkCreateSuite
       ? ([{ kind: 'button', label: bulkCreateSuiteLabel, onSelect: openCreateSuiteFromSelection }] satisfies BulkAction[])
       : []),
     ...(canBulkDelete
-      ? ([{ kind: 'button', label: 'Delete', onSelect: () => void requestBulkDelete(Array.from(selected)) }] satisfies BulkAction[])
+      ? ([{ kind: 'button', label: t('FolderExplorerPage.deleteMenuLabel'), onSelect: () => void requestBulkDelete(Array.from(selected)) }] satisfies BulkAction[])
       : []),
   ]
 
@@ -802,7 +809,7 @@ export default function FolderExplorerPage() {
   // the footer bar's bulkActions above, just rendered as menu items.
   const bulkMenuItems: RowActionMenuItem[] = [
     ...(canBulkMove
-      ? ([{ label: 'Move to…', icon: <FolderInputIcon className="size-4" aria-hidden="true" />, onSelect: openBulkMove }] satisfies RowActionMenuItem[])
+      ? ([{ label: t('FolderExplorerPage.moveToMenuLabel'), icon: <FolderInputIcon className="size-4" aria-hidden="true" />, onSelect: openBulkMove }] satisfies RowActionMenuItem[])
       : []),
     ...(canBulkCreateSuite
       ? ([{ label: bulkCreateSuiteLabel, onSelect: openCreateSuiteFromSelection }] satisfies RowActionMenuItem[])
@@ -810,7 +817,7 @@ export default function FolderExplorerPage() {
     ...(canBulkDelete
       ? ([
           {
-            label: 'Delete',
+            label: t('FolderExplorerPage.deleteMenuLabel'),
             danger: true,
             dividerBefore: true,
             icon: <Trash2Icon className="size-4" aria-hidden="true" />,
@@ -841,7 +848,7 @@ export default function FolderExplorerPage() {
       body: { name: name.trim(), parentFolderId: parentId },
     })
     if (!response.ok) {
-      return (error as { error?: string })?.error ?? 'Could not create this section.'
+      return (error as { error?: string })?.error ?? t('FolderExplorerPage.errorCreateSection')
     }
     await load()
     bumpLanding()
@@ -872,7 +879,7 @@ export default function FolderExplorerPage() {
       body: { parentFolderId: targetParentId },
     })
     if (!response.ok) {
-      return (error as { error?: string })?.error ?? 'Could not move this section.'
+      return (error as { error?: string })?.error ?? t('FolderExplorerPage.errorMoveSection')
     }
     await load()
     bumpLanding()
@@ -923,7 +930,7 @@ export default function FolderExplorerPage() {
     if (!deleteTarget) return undefined
     if (deleteTarget.kind === 'case') {
       const { error, response } = await api.DELETE('/api/v1/cases/{caseKey}', { params: { path: { caseKey: deleteTarget.key } } })
-      if (!response.ok) return (error as { error?: string })?.error ?? 'Could not delete this case.'
+      if (!response.ok) return (error as { error?: string })?.error ?? t('FolderExplorerPage.errorDeleteCase')
     } else if (deleteTarget.kind === 'bulk') {
       const [casesError, foldersError] = await Promise.all([
         bulkDeleteCases(deleteTarget.keys),
@@ -935,7 +942,7 @@ export default function FolderExplorerPage() {
       setLastToggledId(null)
     } else {
       const { error, response } = await api.DELETE('/api/v1/folders/{folderId}', { params: { path: { folderId: deleteTarget.id } } })
-      if (!response.ok) return (error as { error?: string })?.error ?? 'Could not delete this section.'
+      if (!response.ok) return (error as { error?: string })?.error ?? t('FolderExplorerPage.errorDeleteSection')
     }
     setDeleteTarget(null)
     await load()
@@ -990,12 +997,12 @@ export default function FolderExplorerPage() {
 
   const folderAncestors = ancestorChain(folders, selectedFolderId)
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
-    { label: 'Projects', href: '/' },
+    { label: t('FolderExplorerPage.projectsBreadcrumb'), href: '/' },
     { label: project?.name ?? '', href: `/projects/${projectKey}` },
     // No href when Library would be the sole remaining segment (browsing
     // the root itself) — that's "current location," not a distinct
     // ancestor; see the matching comment in CaseDetailPage.tsx.
-    { label: 'Library', href: folderAncestors.length > 0 ? libraryUrl(root) : undefined },
+    { label: t('FolderExplorerPage.libraryBreadcrumb'), href: folderAncestors.length > 0 ? libraryUrl(root) : undefined },
     ...folderAncestors.map((f) => ({
       label: f.name,
       href: libraryUrl(f),
@@ -1008,15 +1015,14 @@ export default function FolderExplorerPage() {
 
       {justMoved && (
         <ConfirmBanner
-          message={`Section "${justMoved.name}" moved — showing its current location.`}
+          message={t('FolderExplorerPage.sectionMovedMessage', { name: justMoved.name })}
           onDismiss={() => setJustMoved(null)}
         />
       )}
 
       {dataTruncated && (
         <p className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
-          This project has more sections, cases, or suites than can be shown at once — some counts and search
-          results below may be incomplete.
+          {t('FolderExplorerPage.dataTruncatedWarning')}
         </p>
       )}
 
@@ -1094,7 +1100,7 @@ export default function FolderExplorerPage() {
                   setBrowsingSections(true)
                 }}
               >
-                Browse sections
+                {t('FolderExplorerPage.browseSectionsButton')}
               </Button>
             )}
             {permissions?.sectionCreate && (
@@ -1107,12 +1113,12 @@ export default function FolderExplorerPage() {
                   setCreateFolderError(undefined)
                 }}
               >
-                + New section
+                {t('FolderExplorerPage.newSectionButton')}
               </Button>
             )}
             {permissions?.caseCreate && (
               <Button type="button" asChild>
-                <Link to={`/projects/${projectKey}/cases/new?folderId=${selectedFolderId}`}>+ New test case</Link>
+                <Link to={`/projects/${projectKey}/cases/new?folderId=${selectedFolderId}`}>{t('FolderExplorerPage.newTestCaseButton')}</Link>
               </Button>
             )}
             {/* Desktop only for now — a 375px toolbar has no room left
@@ -1125,8 +1131,8 @@ export default function FolderExplorerPage() {
                 type="button"
                 variant="outline"
                 size="icon"
-                title="Import"
-                aria-label="Import"
+                title={t('FolderExplorerPage.importTitle')}
+                aria-label={t('FolderExplorerPage.importTitle')}
                 onClick={() => {
                   setImportFile(null)
                   setImportError(undefined)
@@ -1142,8 +1148,8 @@ export default function FolderExplorerPage() {
                   type="button"
                   variant="outline"
                   size="icon"
-                  title="Export"
-                  aria-label="Export"
+                  title={t('FolderExplorerPage.exportTitle')}
+                  aria-label={t('FolderExplorerPage.exportTitle')}
                   aria-haspopup="menu"
                   aria-expanded={exportMenuOpen}
                   onClick={() => setExportMenuOpen((o) => !o)}
@@ -1156,7 +1162,7 @@ export default function FolderExplorerPage() {
                   <div
                     ref={exportMenuRef}
                     role="menu"
-                    aria-label="Export cases as CSV"
+                    aria-label={t('FolderExplorerPage.exportCasesAsCsvAriaLabel')}
                     style={{ top: exportMenuPosition.top, right: exportMenuPosition.right }}
                     className="fixed z-50 w-64 rounded-md border bg-card p-1.5 shadow-lg"
                   >
@@ -1166,7 +1172,7 @@ export default function FolderExplorerPage() {
                       className="w-full rounded-md p-2.5 text-left text-sm hover:bg-accent"
                       onClick={() => triggerExport(selectedFolderId)}
                     >
-                      Export {displayFolderName(selectedFolder, root?.id ?? '')}
+                      {t('FolderExplorerPage.exportFolder', { name: displayFolderName(selectedFolder, root?.id ?? '', t('FolderExplorerPage.libraryBreadcrumb')) })}
                     </button>
                     <button
                       type="button"
@@ -1174,7 +1180,7 @@ export default function FolderExplorerPage() {
                       className="w-full rounded-md p-2.5 text-left text-sm hover:bg-accent"
                       onClick={() => triggerExport()}
                     >
-                      Export entire project
+                      {t('FolderExplorerPage.exportEntireProject')}
                     </button>
                   </div>,
                   document.body,
@@ -1185,14 +1191,15 @@ export default function FolderExplorerPage() {
 
           <Dialog open={importDialogOpen} onOpenChange={setImportDialogOpen}>
             <DialogContent className="sm:max-w-md">
-              <DialogTitle>Import cases from CSV</DialogTitle>
+              <DialogTitle>{t('FolderExplorerPage.importCasesFromCsvTitle')}</DialogTitle>
               <DialogDescription>
-                Importing into {displayFolderName(selectedFolder, root?.id ?? '')}. Any column that isn&apos;t a
-                fixed field becomes a new custom field on this project.
+                {t('FolderExplorerPage.importingIntoDescription', {
+                  name: displayFolderName(selectedFolder, root?.id ?? '', t('FolderExplorerPage.libraryBreadcrumb')),
+                })}
               </DialogDescription>
               <form onSubmit={(e) => void handleImportSubmit(e)} className="space-y-4">
                 <div className="space-y-1">
-                  <Label htmlFor="library-import-file">CSV file</Label>
+                  <Label htmlFor="library-import-file">{t('FolderExplorerPage.csvFileLabel')}</Label>
                   <Input
                     id="library-import-file"
                     type="file"
@@ -1203,10 +1210,10 @@ export default function FolderExplorerPage() {
                 {importError && <p className="text-sm text-destructive">{importError}</p>}
                 <DialogFooter>
                   <Button type="button" variant="outline" onClick={() => setImportDialogOpen(false)}>
-                    Cancel
+                    {t('FolderExplorerPage.cancel')}
                   </Button>
                   <Button type="submit" disabled={!importFile || importSubmitting}>
-                    {importSubmitting ? 'Importing…' : 'Import cases'}
+                    {importSubmitting ? t('FolderExplorerPage.importingEllipsis') : t('FolderExplorerPage.importCasesButton')}
                   </Button>
                 </DialogFooter>
               </form>
@@ -1216,44 +1223,44 @@ export default function FolderExplorerPage() {
           <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-muted/30 p-2">
             <input
               type="text"
-              aria-label="Search test cases"
-              placeholder="Search test case titles…"
+              aria-label={t('FolderExplorerPage.searchTestCasesAriaLabel')}
+              placeholder={t('FolderExplorerPage.searchTestCaseTitlesPlaceholder')}
               className="h-8 min-w-[180px] flex-1 rounded-md border border-input bg-background px-2 text-sm"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
             <select
-              aria-label="Tag"
+              aria-label={t('FolderExplorerPage.tagAriaLabel')}
               className={filterSelectClass(Boolean(filters.tag))}
               value={filters.tag}
               onChange={(e) => setFilters((f) => ({ ...f, tag: e.target.value }))}
             >
-              <option value="">All tags</option>
-              {tagOptions.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              <option value="">{t('FolderExplorerPage.allTagsOption')}</option>
+              {tagOptions.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}
                 </option>
               ))}
             </select>
             <select
-              aria-label="Priority"
+              aria-label={t('FolderExplorerPage.priorityAriaLabel')}
               className={filterSelectClass(Boolean(filters.priority))}
               value={filters.priority}
               onChange={(e) => setFilters((f) => ({ ...f, priority: e.target.value }))}
             >
-              <option value="">All priorities</option>
-              <option value="critical">Critical</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
+              <option value="">{t('FolderExplorerPage.allPrioritiesOption')}</option>
+              <option value="critical">{t('FolderExplorerPage.priorityCritical')}</option>
+              <option value="high">{t('FolderExplorerPage.priorityHigh')}</option>
+              <option value="medium">{t('FolderExplorerPage.priorityMedium')}</option>
+              <option value="low">{t('FolderExplorerPage.priorityLow')}</option>
             </select>
             <select
-              aria-label="Platform"
+              aria-label={t('FolderExplorerPage.platformAriaLabel')}
               className={filterSelectClass(Boolean(filters.platform))}
               value={filters.platform}
               onChange={(e) => setFilters((f) => ({ ...f, platform: e.target.value }))}
             >
-              <option value="">All platforms</option>
+              <option value="">{t('FolderExplorerPage.allPlatformsOption')}</option>
               {platformOptions.map((p) => (
                 <option key={p} value={p}>
                   {p}
@@ -1261,37 +1268,37 @@ export default function FolderExplorerPage() {
               ))}
             </select>
             <select
-              aria-label="Test type"
+              aria-label={t('FolderExplorerPage.testTypeAriaLabel')}
               className={filterSelectClass(Boolean(filters.testType))}
               value={filters.testType}
               onChange={(e) => setFilters((f) => ({ ...f, testType: e.target.value }))}
             >
-              <option value="">All test types</option>
-              {testTypeOptions.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              <option value="">{t('FolderExplorerPage.allTestTypesOption')}</option>
+              {testTypeOptions.map((tt) => (
+                <option key={tt} value={tt}>
+                  {tt}
                 </option>
               ))}
             </select>
             <select
-              aria-label="Automated"
+              aria-label={t('FolderExplorerPage.automatedAriaLabel')}
               className={filterSelectClass(Boolean(filters.automated))}
               value={filters.automated}
               onChange={(e) => setFilters((f) => ({ ...f, automated: e.target.value }))}
             >
-              <option value="">All automation</option>
-              <option value="yes">Automated</option>
-              <option value="no">Manual</option>
+              <option value="">{t('FolderExplorerPage.allAutomationOption')}</option>
+              <option value="yes">{t('FolderExplorerPage.automatedOption')}</option>
+              <option value="no">{t('FolderExplorerPage.manualOption')}</option>
             </select>
             <select
-              aria-label="Flaky"
+              aria-label={t('FolderExplorerPage.flakyAriaLabel')}
               className={filterSelectClass(Boolean(filters.flaky))}
               value={filters.flaky}
               onChange={(e) => setFilters((f) => ({ ...f, flaky: e.target.value }))}
             >
-              <option value="">All flakiness</option>
-              <option value="yes">Flaky</option>
-              <option value="no">Not flaky</option>
+              <option value="">{t('FolderExplorerPage.allFlakinessOption')}</option>
+              <option value="yes">{t('FolderExplorerPage.flakyOption')}</option>
+              <option value="no">{t('FolderExplorerPage.notFlakyOption')}</option>
             </select>
             {anyFilterActive && (
               <button
@@ -1299,7 +1306,7 @@ export default function FolderExplorerPage() {
                 className="text-sm font-medium text-primary underline underline-offset-2"
                 onClick={clearFilters}
               >
-                Clear filters
+                {t('FolderExplorerPage.clearFiltersButton')}
               </button>
             )}
             <label className="ml-auto flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -1308,7 +1315,7 @@ export default function FolderExplorerPage() {
                 checked={searchEntireLibrary}
                 onChange={(e) => setSearchEntireLibrary(e.target.checked)}
               />
-              Search entire Library
+              {t('FolderExplorerPage.searchEntireLibraryLabel')}
             </label>
           </div>
 
@@ -1318,7 +1325,7 @@ export default function FolderExplorerPage() {
                 <div className="border-b bg-accent px-3 py-2">
                   <div className="flex items-center gap-2">
                     <input
-                      aria-label="New section name"
+                      aria-label={t('FolderExplorerPage.newSectionNameAriaLabel')}
                       autoFocus
                       className="h-7 flex-1 rounded border px-2 text-sm"
                       value={newFolderName}
@@ -1360,10 +1367,10 @@ export default function FolderExplorerPage() {
               {searchEntireLibrary ? (
                 entireLibraryMatches.length === 0 ? (
                   <p className="p-4 text-center text-sm text-muted-foreground">
-                    No cases match your search. Try a different term, or clear filters to see everything.
+                    {t('FolderExplorerPage.noCasesMatchSearch')}
                   </p>
                 ) : (
-                  <ul aria-label="Section contents">
+                  <ul aria-label={t('FolderExplorerPage.sectionContentsAriaLabel')}>
                     {entireLibraryMatches.map((c) => (
                       <CaseRow
                         key={c.id}
@@ -1395,15 +1402,14 @@ export default function FolderExplorerPage() {
                 )
               ) : subfoldersHere.length === 0 && casesHere.length === 0 && !contentCreatingFolder ? (
                 <p className="p-4 text-center text-sm text-muted-foreground">
-                  Nothing here yet in {displayFolderName(selectedFolder, root.id)}.
+                  {t('FolderExplorerPage.nothingHereYet', { name: displayFolderName(selectedFolder, root.id, t('FolderExplorerPage.libraryBreadcrumb')) })}
                 </p>
               ) : subfoldersHere.length === 0 && visibleHere.length === 0 && anyFilterActive ? (
                 <p className="p-4 text-center text-sm text-muted-foreground">
-                  No cases match your filters. Try a different combination, or use "Clear filters" above to see all
-                  cases in {displayFolderName(selectedFolder, root.id)}.
+                  {t('FolderExplorerPage.noCasesMatchFilters', { name: displayFolderName(selectedFolder, root.id, t('FolderExplorerPage.libraryBreadcrumb')) })}
                 </p>
               ) : (
-                <ul aria-label="Section contents">
+                <ul aria-label={t('FolderExplorerPage.sectionContentsAriaLabel')}>
                   {subfoldersHere.map((f) => (
                     <FolderRow
                       key={f.id}
@@ -1481,7 +1487,7 @@ export default function FolderExplorerPage() {
 
       <Dialog open={movingCaseKey !== null} onOpenChange={(open) => !open && setMovingCaseKey(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Move to…</DialogTitle>
+          <DialogTitle>{t('FolderExplorerPage.moveToDialogTitle')}</DialogTitle>
           <FolderPicker
             folders={folders}
             rootId={root.id}
@@ -1506,7 +1512,7 @@ export default function FolderExplorerPage() {
         }}
       >
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Move to…</DialogTitle>
+          <DialogTitle>{t('FolderExplorerPage.moveToDialogTitle')}</DialogTitle>
           <FolderPicker
             folders={movingFolderId ? folders.filter((f) => !subtreeIds(folders, movingFolderId).has(f.id)) : folders}
             rootId={root.id}
@@ -1535,7 +1541,12 @@ export default function FolderExplorerPage() {
 
       <Dialog open={bulkMoveKeys !== null} onOpenChange={(open) => !open && setBulkMoveKeys(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Move {bulkMoveKeys?.length} {bulkMoveKeys?.length === 1 ? 'item' : 'items'} to…</DialogTitle>
+          <DialogTitle>
+            {t('FolderExplorerPage.moveItemsDialogTitle', {
+              count: bulkMoveKeys?.length,
+              itemWord: bulkMoveKeys?.length === 1 ? t('FolderExplorerPage.item') : t('FolderExplorerPage.items'),
+            })}
+          </DialogTitle>
           <FolderPicker
             folders={
               bulkMoveKeys
@@ -1561,19 +1572,21 @@ export default function FolderExplorerPage() {
 
       <Dialog open={creatingSuiteFromSelection} onOpenChange={setCreatingSuiteFromSelection}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>New suite from selection</DialogTitle>
+          <DialogTitle>{t('FolderExplorerPage.newSuiteFromSelectionTitle')}</DialogTitle>
           <DialogDescription>
-            {resolvedSuiteCaseKeys.length} case{resolvedSuiteCaseKeys.length === 1 ? '' : 's'} from your selection
-            will become this suite&apos;s members.
+            {t('FolderExplorerPage.newSuiteFromSelectionDescription', {
+              count: resolvedSuiteCaseKeys.length,
+              plural: resolvedSuiteCaseKeys.length === 1 ? '' : 's',
+            })}
           </DialogDescription>
           <div className="space-y-1">
-            <Label htmlFor="new-suite-from-selection-name">Suite name</Label>
+            <Label htmlFor="new-suite-from-selection-name">{t('FolderExplorerPage.suiteNameLabel')}</Label>
             <Input
               id="new-suite-from-selection-name"
               autoFocus
               value={newSuiteFromSelectionName}
               onChange={(e) => setNewSuiteFromSelectionName(e.target.value)}
-              placeholder="Smoke"
+              placeholder={t('FolderExplorerPage.suiteNamePlaceholder')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && newSuiteFromSelectionName.trim()) void handleCreateSuiteFromSelection()
               }}
@@ -1581,10 +1594,10 @@ export default function FolderExplorerPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreatingSuiteFromSelection(false)}>
-              Cancel
+              {t('FolderExplorerPage.cancel')}
             </Button>
             <Button disabled={!newSuiteFromSelectionName.trim()} onClick={() => void handleCreateSuiteFromSelection()}>
-              Create suite
+              {t('FolderExplorerPage.createSuiteButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1592,7 +1605,7 @@ export default function FolderExplorerPage() {
 
       <Dialog open={browsingSections} onOpenChange={setBrowsingSections}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Browse sections</DialogTitle>
+          <DialogTitle>{t('FolderExplorerPage.browseSectionsDialogTitle')}</DialogTitle>
           <FolderPicker
             folders={folders}
             rootId={root.id}
@@ -1613,16 +1626,16 @@ export default function FolderExplorerPage() {
         <DialogContent className="sm:max-w-md">
           {deleteTarget?.kind === 'case' && (
             <>
-              <DialogTitle>Delete case?</DialogTitle>
+              <DialogTitle>{t('FolderExplorerPage.deleteCaseTitle')}</DialogTitle>
               <DialogDescription>
-                Delete case &ldquo;{deleteTarget.title}&rdquo;? This cannot be undone.
+                {t('FolderExplorerPage.deleteCaseDescription', { title: deleteTarget.title })}
               </DialogDescription>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-                  Cancel
+                  {t('FolderExplorerPage.cancel')}
                 </Button>
                 <Button variant="destructive" onClick={handleConfirmDelete}>
-                  Delete case
+                  {t('FolderExplorerPage.deleteCaseButton')}
                 </Button>
               </DialogFooter>
             </>
@@ -1630,44 +1643,59 @@ export default function FolderExplorerPage() {
           {deleteTarget?.kind === 'bulk' && (
             <>
               <DialogTitle>
-                Delete {deleteTarget.caseCount} case{deleteTarget.caseCount === 1 ? '' : 's'}
-                {deleteTarget.folderCount > 0
-                  ? ` and ${deleteTarget.folderCount} subsection${deleteTarget.folderCount === 1 ? '' : 's'}`
-                  : ''}
-                ?
+                {t('FolderExplorerPage.deleteBulkTitle', {
+                  caseCount: deleteTarget.caseCount,
+                  casePlural: deleteTarget.caseCount === 1 ? '' : 's',
+                  folderSuffix:
+                    deleteTarget.folderCount > 0
+                      ? t('FolderExplorerPage.deleteBulkFolderSuffix', {
+                          folderCount: deleteTarget.folderCount,
+                          folderPlural: deleteTarget.folderCount === 1 ? '' : 's',
+                        })
+                      : '',
+                })}
               </DialogTitle>
               <DialogDescription>
-                Delete {deleteTarget.caseCount} case{deleteTarget.caseCount === 1 ? '' : 's'}
-                {deleteTarget.folderCount > 0
-                  ? ` and ${deleteTarget.folderCount} subsection${deleteTarget.folderCount === 1 ? '' : 's'}`
-                  : ''}
-                ? This cannot be undone.
+                {t('FolderExplorerPage.deleteBulkDescription', {
+                  caseCount: deleteTarget.caseCount,
+                  casePlural: deleteTarget.caseCount === 1 ? '' : 's',
+                  folderSuffix:
+                    deleteTarget.folderCount > 0
+                      ? t('FolderExplorerPage.deleteBulkFolderSuffix', {
+                          folderCount: deleteTarget.folderCount,
+                          folderPlural: deleteTarget.folderCount === 1 ? '' : 's',
+                        })
+                      : '',
+                })}
               </DialogDescription>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-                  Cancel
+                  {t('FolderExplorerPage.cancel')}
                 </Button>
                 <Button variant="destructive" onClick={handleConfirmDelete}>
-                  Confirm delete
+                  {t('FolderExplorerPage.confirmDeleteButton')}
                 </Button>
               </DialogFooter>
             </>
           )}
           {deleteTarget?.kind === 'folder' && (
             <>
-              <DialogTitle>Delete section?</DialogTitle>
+              <DialogTitle>{t('FolderExplorerPage.deleteSectionTitle')}</DialogTitle>
               <DialogDescription>
-                Delete section &ldquo;{deleteTarget.name}&rdquo; and everything in it? This removes{' '}
-                {deleteTarget.caseCount} case{deleteTarget.caseCount === 1 ? '' : 's'} and{' '}
-                {deleteTarget.folderCount} subsection{deleteTarget.folderCount === 1 ? '' : 's'}. This cannot be
-                undone.
+                {t('FolderExplorerPage.deleteSectionDescription', {
+                  name: deleteTarget.name,
+                  caseCount: deleteTarget.caseCount,
+                  casePlural: deleteTarget.caseCount === 1 ? '' : 's',
+                  folderCount: deleteTarget.folderCount,
+                  folderPlural: deleteTarget.folderCount === 1 ? '' : 's',
+                })}
               </DialogDescription>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setDeleteTarget(null)}>
-                  Cancel
+                  {t('FolderExplorerPage.cancel')}
                 </Button>
                 <Button variant="destructive" onClick={handleConfirmDelete}>
-                  Delete section
+                  {t('FolderExplorerPage.deleteSectionButton')}
                 </Button>
               </DialogFooter>
             </>

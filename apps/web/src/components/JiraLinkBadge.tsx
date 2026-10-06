@@ -1,4 +1,6 @@
 import { useState, type KeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { CheckIcon, ClockIcon, ExternalLinkIcon, Link2Icon, PencilIcon, XIcon } from 'lucide-react'
 import { timeAgo } from '@/lib/timeAgo'
 
@@ -30,13 +32,21 @@ function issueUrl(jiraBaseUrl: string, jiraIssueKey: string): string | undefined
   return `${jiraBaseUrl.replace(/\/$/, '')}/browse/${jiraIssueKey}`
 }
 
-function tooltipFor(status: string | null | undefined, lastSyncedAt: string | null | undefined): string {
-  if (!lastSyncedAt) return 'Not yet synced with Jira'
-  const synced = `synced ${timeAgo(lastSyncedAt)}`
+function tooltipFor(
+  t: TFunction,
+  status: string | null | undefined,
+  lastSyncedAt: string | null | undefined,
+): string {
+  if (!lastSyncedAt) return t('JiraLinkBadge.notYetSyncedTooltip')
+  const synced = timeAgo(lastSyncedAt)
   if (isStale(lastSyncedAt)) {
-    return status ? `${status} · last ${synced} — may be out of date` : `Last ${synced} — may be out of date`
+    return status
+      ? t('JiraLinkBadge.staleWithStatusTooltip', { status, timeAgo: synced })
+      : t('JiraLinkBadge.staleTooltip', { timeAgo: synced })
   }
-  return status ? `${status} · Synced ${timeAgo(lastSyncedAt)}` : `Synced ${timeAgo(lastSyncedAt)}`
+  return status
+    ? t('JiraLinkBadge.freshWithStatusTooltip', { status, timeAgo: synced })
+    : t('JiraLinkBadge.freshTooltip', { timeAgo: synced })
 }
 
 export function JiraLinkBadge({
@@ -48,6 +58,7 @@ export function JiraLinkBadge({
   onSave,
   variant,
 }: JiraLinkBadgeProps) {
+  const { t } = useTranslation()
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState('')
 
@@ -81,14 +92,14 @@ export function JiraLinkBadge({
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={variant === 'row' ? 'PROJ-456' : 'PROJ-123'}
-          aria-label="Jira issue key"
+          placeholder={variant === 'row' ? t('JiraLinkBadge.placeholderRow') : t('JiraLinkBadge.placeholderProperty')}
+          aria-label={t('JiraLinkBadge.issueKeyAriaLabel')}
           className={`h-7 rounded-md border border-input bg-transparent px-2 font-mono text-xs uppercase outline-none focus:border-ring focus:ring-2 focus:ring-ring/50 ${inputWidth}`}
         />
-        <button type="button" aria-label="Save" onClick={save} className="text-primary hover:bg-primary/10 rounded p-1">
+        <button type="button" aria-label={t('JiraLinkBadge.saveAriaLabel')} onClick={save} className="text-primary hover:bg-primary/10 rounded p-1">
           <CheckIcon className="size-3.5" aria-hidden="true" />
         </button>
-        <button type="button" aria-label="Cancel" onClick={cancel} className="text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded p-1">
+        <button type="button" aria-label={t('JiraLinkBadge.cancelAriaLabel')} onClick={cancel} className="text-muted-foreground hover:bg-accent hover:text-accent-foreground rounded p-1">
           <XIcon className="size-3.5" aria-hidden="true" />
         </button>
       </span>
@@ -104,13 +115,13 @@ export function JiraLinkBadge({
         className="text-muted-foreground hover:text-primary inline-flex items-center gap-1 text-xs hover:underline"
       >
         <Link2Icon className="size-3.5" aria-hidden="true" />
-        Link Jira issue
+        {t('JiraLinkBadge.linkJiraIssueLabel')}
       </button>
     ) : (
       <button
         type="button"
         onClick={startEditing}
-        aria-label="Link Jira issue"
+        aria-label={t('JiraLinkBadge.linkJiraIssueAriaLabel')}
         className="text-muted-foreground hover:text-accent-foreground hover:bg-accent flex size-7 items-center justify-center rounded-md opacity-40 hover:opacity-100"
       >
         <Link2Icon className="size-3.5" aria-hidden="true" />
@@ -119,7 +130,7 @@ export function JiraLinkBadge({
   }
 
   const href = issueUrl(jiraBaseUrl, jiraIssueKey)
-  const title = tooltipFor(jiraIssueStatus, jiraLastSyncedAt)
+  const title = tooltipFor(t, jiraIssueStatus, jiraLastSyncedAt)
   const stale = isStale(jiraLastSyncedAt)
 
   if (variant === 'row') {
@@ -142,7 +153,7 @@ export function JiraLinkBadge({
         {canEdit && (
           <button
             type="button"
-            aria-label="Change Jira link"
+            aria-label={t('JiraLinkBadge.changeJiraLinkAriaLabel')}
             onClick={startEditing}
             className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex size-6 items-center justify-center rounded-md"
           >
@@ -178,7 +189,7 @@ export function JiraLinkBadge({
       {canEdit && (
         <button
           type="button"
-          aria-label="Change Jira link"
+          aria-label={t('JiraLinkBadge.changeJiraLinkAriaLabel')}
           onClick={startEditing}
           className="text-muted-foreground hover:bg-accent hover:text-accent-foreground flex size-5 items-center justify-center rounded-md"
         >

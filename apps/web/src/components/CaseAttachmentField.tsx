@@ -1,4 +1,5 @@
 import { useRef, type ChangeEvent, type ClipboardEvent, type DragEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileTextIcon, Loader2Icon, PaperclipIcon, TriangleAlertIcon, XIcon } from 'lucide-react'
 import { PropertyRow } from '@/components/PropertyRow'
 import type { FailedUpload } from '@/components/AttachmentField'
@@ -35,6 +36,7 @@ export function CaseAttachmentField({
   onRemove: (id: string) => void
   onOpenLightbox: (index: number) => void
 }) {
+  const { t } = useTranslation()
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // add-case-reference-attachments spec.md: a case with zero attachments
@@ -71,11 +73,11 @@ export function CaseAttachmentField({
   return (
     <div>
       <PropertyRow
-        label="Attachments"
+        label={t('CaseAttachmentField.attachments')}
         value={
           <span
             role="group"
-            aria-label="Attachments"
+            aria-label={t('CaseAttachmentField.attachments')}
             tabIndex={canEdit ? 0 : undefined}
             onPaste={canEdit ? handlePaste : undefined}
             onDragOver={canEdit ? handleDragOver : undefined}
@@ -89,7 +91,7 @@ export function CaseAttachmentField({
                 className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-primary hover:underline"
               >
                 <PaperclipIcon className="size-3.5" aria-hidden="true" />
-                Attach reference file
+                {t('CaseAttachmentField.attachReferenceFile')}
               </button>
             )}
 
@@ -98,7 +100,7 @@ export function CaseAttachmentField({
                 <div key={att.id} className="group/thumb relative">
                   <button
                     type="button"
-                    aria-label={`Open attachment ${att.filename}`}
+                    aria-label={t('CaseAttachmentField.openAttachment', { filename: att.filename })}
                     onClick={() => onOpenLightbox(imageIndexById.get(att.id)!)}
                     className="size-9 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
                   >
@@ -107,7 +109,7 @@ export function CaseAttachmentField({
                   {canEdit && (
                     <button
                       type="button"
-                      aria-label={`Remove ${att.filename}`}
+                      aria-label={t('CaseAttachmentField.removeAttachment', { filename: att.filename })}
                       onClick={(e) => {
                         e.stopPropagation()
                         onRemove(att.id)
@@ -124,7 +126,7 @@ export function CaseAttachmentField({
                     href={`/api/v1/case-attachments/${att.id}`}
                     target="_blank"
                     rel="noreferrer"
-                    aria-label={`Open ${att.filename}`}
+                    aria-label={t('CaseAttachmentField.openFile', { filename: att.filename })}
                     className="flex h-9 max-w-32 shrink-0 items-center gap-1.5 overflow-hidden rounded-md border border-border bg-muted px-2 text-xs"
                   >
                     <FileTextIcon className="size-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -133,7 +135,7 @@ export function CaseAttachmentField({
                   {canEdit && (
                     <button
                       type="button"
-                      aria-label={`Remove ${att.filename}`}
+                      aria-label={t('CaseAttachmentField.removeAttachment', { filename: att.filename })}
                       onClick={(e) => {
                         e.stopPropagation()
                         onRemove(att.id)
@@ -150,8 +152,8 @@ export function CaseAttachmentField({
             {failed.map((f) => (
               <div
                 key={f.id}
-                aria-label={`${f.filename} failed to attach`}
-                title={`${f.filename} failed to attach`}
+                aria-label={t('CaseAttachmentField.failedToAttach', { filename: f.filename })}
+                title={t('CaseAttachmentField.failedToAttach', { filename: f.filename })}
                 className="flex size-9 shrink-0 items-center justify-center rounded-md border border-destructive bg-destructive/10"
               >
                 <TriangleAlertIcon className="size-4 text-destructive" aria-hidden="true" />
@@ -161,7 +163,7 @@ export function CaseAttachmentField({
             {hasAny && canEdit && (
               <button
                 type="button"
-                aria-label={uploading ? 'Uploading…' : 'Attach another file'}
+                aria-label={uploading ? t('CaseAttachmentField.uploading') : t('CaseAttachmentField.attachAnotherFile')}
                 disabled={uploading}
                 onClick={() => fileInputRef.current?.click()}
                 className="flex size-9 shrink-0 items-center justify-center rounded-md border border-dashed border-input text-muted-foreground hover:border-primary hover:text-primary disabled:opacity-60"

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
@@ -34,6 +35,7 @@ function toGridCase(c: TestCase): SuiteCaseGridCase {
 }
 
 export default function RequirementDetailPage() {
+  const { t } = useTranslation()
   const { projectKey, requirementKey } = useParams<{ projectKey: string; requirementKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
@@ -160,9 +162,9 @@ export default function RequirementDetailPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Requirement not found. Go to{' '}
+        {t('RequirementDetailPage.notFoundPrefix')}{' '}
         <a href={`/projects/${projectKey}/requirements`} className="underline">
-          Requirements
+          {t('RequirementDetailPage.requirementsLinkText')}
         </a>
         .
       </p>
@@ -174,9 +176,9 @@ export default function RequirementDetailPage() {
 
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb(
     [
-      { label: 'Projects', href: '/' },
+      { label: t('RequirementDetailPage.projectsBreadcrumb'), href: '/' },
       { label: project.name, href: `/projects/${projectKey}` },
-      { label: 'Requirements', href: `/projects/${projectKey}/requirements` },
+      { label: t('RequirementDetailPage.requirementsBreadcrumb'), href: `/projects/${projectKey}/requirements` },
       { label: requirement.name },
     ],
     requirement.name,
@@ -190,7 +192,7 @@ export default function RequirementDetailPage() {
         <h1 className="tp-heading text-2xl">{requirement.name}</h1>
         {canManage && !isEditingCases && (
           <Button type="button" variant="outline" onClick={openEdit}>
-            Edit
+            {t('RequirementDetailPage.editButton')}
           </Button>
         )}
       </div>
@@ -198,17 +200,17 @@ export default function RequirementDetailPage() {
       <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="tp-heading text-lg">Linked cases</CardTitle>
+            <CardTitle className="tp-heading text-lg">{t('RequirementDetailPage.linkedCasesHeading')}</CardTitle>
             {canManage && !isEditingCases && (
               <Button type="button" variant="outline" onClick={() => setIsEditingCases(true)}>
-                Edit cases
+                {t('RequirementDetailPage.editCasesButton')}
               </Button>
             )}
           </CardHeader>
           <CardContent>
             {requirement.description && (
               <div className="mb-4 space-y-1">
-                <p className="tp-label">Description</p>
+                <p className="tp-label">{t('RequirementDetailPage.descriptionLabel')}</p>
                 <p className="text-sm text-muted-foreground">{requirement.description}</p>
               </div>
             )}
@@ -219,15 +221,15 @@ export default function RequirementDetailPage() {
                 selected={selected}
                 onToggle={toggle}
                 onToggleRange={toggleRange}
-                commitLabel="Save"
+                commitLabel={t('RequirementDetailPage.saveCommitLabel')}
                 commitDisabled={selected.size === baseline.size && Array.from(selected).every((id) => baseline.has(id))}
                 onCommit={() => void handleSaveCases()}
                 onExit={exitEditingCases}
               />
             ) : requirement.caseIds.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No cases linked yet.</p>
+              <p className="text-sm text-muted-foreground">{t('RequirementDetailPage.noCasesLinkedMessage')}</p>
             ) : (
-              <ul aria-label="Linked cases" className="divide-y">
+              <ul aria-label={t('RequirementDetailPage.linkedCasesAriaLabel')} className="divide-y">
                 {gridCases
                   .filter((c) => selected.has(c.id))
                   .map((c) => (
@@ -247,27 +249,37 @@ export default function RequirementDetailPage() {
         </Card>
 
         <div className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5">
-          <CaseSidebarSection title="Properties">
-            <PropertyRow label="Key" value={requirement.key} />
-            <PropertyRow label="External reference" value={requirement.externalRef || '—'} />
-            <PropertyRow label="Created" value={new Date(requirement.createdAt).toLocaleDateString()} />
+          <CaseSidebarSection title={t('RequirementDetailPage.propertiesSectionTitle')}>
+            <PropertyRow label={t('RequirementDetailPage.keyPropertyLabel')} value={requirement.key} />
+            <PropertyRow
+              label={t('RequirementDetailPage.externalRefLabel')}
+              value={requirement.externalRef || t('RequirementDetailPage.emptyValuePlaceholder')}
+            />
+            <PropertyRow label={t('RequirementDetailPage.createdPropertyLabel')} value={new Date(requirement.createdAt).toLocaleDateString()} />
           </CaseSidebarSection>
 
           {canManage && (
-            <CaseSidebarSection title="Actions">
+            <CaseSidebarSection title={t('RequirementDetailPage.actionsSectionTitle')}>
               <div className="flex flex-col gap-1.5">
                 <Button type="button" variant="outline" className="justify-start" onClick={openEdit}>
-                  Edit requirement
+                  {t('RequirementDetailPage.editRequirementButton')}
                 </Button>
                 <Button
                   type="button"
                   variant="destructive"
                   className="justify-start"
                   disabled={requirement.caseIds.length > 0}
-                  title={requirement.caseIds.length > 0 ? `Unlink its ${requirement.caseIds.length} linked case${requirement.caseIds.length === 1 ? '' : 's'} first` : undefined}
+                  title={
+                    requirement.caseIds.length > 0
+                      ? t('RequirementDetailPage.deleteBlockedTitle', {
+                          count: requirement.caseIds.length,
+                          plural: requirement.caseIds.length === 1 ? '' : 's',
+                        })
+                      : undefined
+                  }
                   onClick={() => setDeleting(true)}
                 >
-                  Delete requirement
+                  {t('RequirementDetailPage.deleteRequirementButton')}
                 </Button>
               </div>
             </CaseSidebarSection>
@@ -277,27 +289,27 @@ export default function RequirementDetailPage() {
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Edit requirement</DialogTitle>
+          <DialogTitle>{t('RequirementDetailPage.editRequirementDialogTitle')}</DialogTitle>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor="edit-requirement-name">Name</Label>
+              <Label htmlFor="edit-requirement-name">{t('RequirementDetailPage.nameLabel')}</Label>
               <Input id="edit-requirement-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="edit-requirement-description">Description</Label>
+              <Label htmlFor="edit-requirement-description">{t('RequirementDetailPage.descriptionLabel')}</Label>
               <Textarea id="edit-requirement-description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="edit-requirement-external-ref">External reference</Label>
+              <Label htmlFor="edit-requirement-external-ref">{t('RequirementDetailPage.externalRefLabel')}</Label>
               <Input id="edit-requirement-external-ref" value={editExternalRef} onChange={(e) => setEditExternalRef(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(false)}>
-              Cancel
+              {t('RequirementDetailPage.cancelButton')}
             </Button>
             <Button disabled={!editName.trim()} onClick={() => void handleSaveEdit()}>
-              Save
+              {t('RequirementDetailPage.saveButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -305,14 +317,14 @@ export default function RequirementDetailPage() {
 
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete requirement?</DialogTitle>
-          <DialogDescription>Delete &ldquo;{requirement.name}&rdquo;? This cannot be undone.</DialogDescription>
+          <DialogTitle>{t('RequirementDetailPage.deleteRequirementDialogTitle')}</DialogTitle>
+          <DialogDescription>{t('RequirementDetailPage.deleteRequirementConfirm', { name: requirement.name })}</DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(false)}>
-              Cancel
+              {t('RequirementDetailPage.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void handleDelete()}>
-              Confirm delete
+              {t('RequirementDetailPage.confirmDeleteButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

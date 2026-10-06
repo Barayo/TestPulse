@@ -4325,7 +4325,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView, mcpEnabled]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView, mcpEnabled, defaultLanguage, perUserLanguageEnabled]
       properties:
         name:
           type: string
@@ -4399,6 +4399,21 @@ components:
             (mcp-admin-discoverability-card) can show real enabled/disabled
             state instead of unconditionally claiming the server is
             available.
+        defaultLanguage:
+          $ref: '#/components/schemas/Language'
+          description: >
+            Instance-wide default UI language (add-ui-i18n). Read here (not
+            only via the Tenant-Admin-only InstanceSettings) since every
+            visitor, including anonymous ones, needs it to resolve which
+            language to render — the same reasoning that already put
+            colorTheme/defaultLandingView here.
+        perUserLanguageEnabled:
+          type: boolean
+          description: >
+            Whether a logged-in user's own Language preference is allowed
+            to override defaultLanguage for them (add-ui-i18n). Read here
+            so an authenticated client can resolve its effective language
+            on initial load, before any Tenant-Admin-only read.
     ColorTheme:
       type: string
       enum: [teal, indigo, ocean, forest, custom]
@@ -4414,6 +4429,11 @@ components:
         Which view a project opens into (add-configurable-project-landing).
         "dashboard" is the original fixed multi-panel view; the others
         redirect straight to that view's own existing route.
+    Language:
+      type: string
+      enum: [en, es, fr, de, pt, zh]
+      description: >
+        One of the six UI locales add-ui-i18n ships with.
     CustomPaletteMode:
       type: object
       required: [background, foreground, card, primary, primaryForeground, muted, mutedForeground, accent, border, input]
@@ -4440,7 +4460,7 @@ components:
         dark: { $ref: '#/components/schemas/CustomPaletteMode' }
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, runAutoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, runAutoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView, defaultLanguage, perUserLanguageEnabled]
       properties:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays:
@@ -4515,6 +4535,13 @@ components:
             afterward — already-active sessions keep their existing expiry.
         defaultLandingView:
           $ref: '#/components/schemas/LandingView'
+        defaultLanguage:
+          $ref: '#/components/schemas/Language'
+        perUserLanguageEnabled:
+          type: boolean
+          description: >
+            Whether a user's own Language preference is allowed to
+            override defaultLanguage (add-ui-i18n). Off by default.
     InstanceSettingsUpdate:
       type: object
       description: A partial update — every field is optional; omitted fields are left unchanged.
@@ -4555,6 +4582,9 @@ components:
           description: Sliding session expiry window in days (add-session-timeout-setting), 1-90.
         defaultLandingView:
           $ref: '#/components/schemas/LandingView'
+        defaultLanguage:
+          $ref: '#/components/schemas/Language'
+        perUserLanguageEnabled: { type: boolean }
     ClientErrorReport:
       type: object
       required: [kind, message]
@@ -4605,6 +4635,13 @@ components:
             "custom" meaning the user has uploaded their own photo —
             fetch it from GET /api/v1/users/{userId}/avatar.
         timezone: { type: string, nullable: true }
+        language:
+          allOf: [{ $ref: '#/components/schemas/Language' }]
+          nullable: true
+          description: >-
+            This user's personal UI language preference (add-ui-i18n),
+            null meaning "follow the instance default". Only takes effect
+            when InstanceSettings.perUserLanguageEnabled is true.
         deactivatedAt:
           type: string
           format: date-time
@@ -4643,6 +4680,9 @@ components:
             reserved value "custom" is rejected here — set only by
             POST /api/v1/users/me/avatar.
         timezone: { type: string, nullable: true }
+        language:
+          allOf: [{ $ref: '#/components/schemas/Language' }]
+          nullable: true
     UserInput:
       type: object
       required: [email, password]

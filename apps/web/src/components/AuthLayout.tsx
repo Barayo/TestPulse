@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { BrandMark } from '@/components/BrandMark'
 import { HealthBadge } from '@/components/HealthBadge'
 import { PRODUCT_HEADLINE, PRODUCT_PROOF_POINTS } from '@/lib/productProofPoints'
@@ -92,6 +93,7 @@ export function AuthLayout({
   children: ReactNode
   backLink?: { to: string; label: string }
 }) {
+  const { t } = useTranslation()
   return (
     <div className="flex min-h-screen flex-col lg:flex-row">
       <div className="dark relative overflow-hidden text-sidebar-foreground lg:hidden">
@@ -126,10 +128,7 @@ export function AuthLayout({
           <BrandMark />
         </Link>
         <h1 className="tp-heading relative text-2xl font-bold">{PRODUCT_HEADLINE}</h1>
-        <p className="relative text-sm text-muted-foreground">
-          MCP-first, AGPLv3, self-hostable on one Go binary. Humans get a clean UI; agents get a
-          first-class seat at the table.
-        </p>
+        <p className="relative text-sm text-muted-foreground">{t('AuthLayout.subheadline')}</p>
         <ul className="relative space-y-4 text-sm text-muted-foreground">
           {PRODUCT_PROOF_POINTS.map(({ lead, rest, icon }) => (
             <li key={lead} data-slot="proof-item" className="flex items-start gap-2.5">

@@ -1,21 +1,18 @@
+import { useTranslation } from 'react-i18next'
 import { Textarea } from '@/components/ui/textarea'
 
-const PLACEHOLDER = `Given a logged-in customer with an active subscription
-When they cancel their subscription from account settings
-Then the subscription status shows Cancelled
-And no further charges are made`
-
 export function GherkinEditor({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-1 flex-col space-y-1">
       <Textarea
-        aria-label="Scenario"
+        aria-label={t('GherkinEditor.scenarioAriaLabel')}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        placeholder={PLACEHOLDER}
+        placeholder={t('GherkinEditor.placeholder')}
         className="flex-1 rounded-lg border bg-card p-4 font-mono text-sm leading-relaxed"
       />
-      <p className="text-xs text-muted-foreground">Start each line with Given, When, Then, And, or But.</p>
+      <p className="text-xs text-muted-foreground">{t('GherkinEditor.syntaxHint')}</p>
     </div>
   )
 }

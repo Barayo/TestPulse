@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useLocation, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import { ArrowRightIcon, ExternalLinkIcon, LayersIcon, Loader2Icon, RotateCcwIcon, UserPlusIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { avatarStyle, initialsFor } from '@/lib/avatar'
@@ -11,7 +13,7 @@ import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/u
 import { Breadcrumbs } from '@/components/Breadcrumbs'
 import { trimProjectBreadcrumb } from '@/lib/trimProjectBreadcrumb'
 import { StatusBadge, dotClass } from '@/components/StatusBadge'
-import { RunStatusBreakdown, STATUS_COLOR, STATUS_LABEL, STATUS_ORDER } from '@/components/RunStatusBreakdown'
+import { RunStatusBreakdown, STATUS_COLOR, STATUS_ORDER, statusLabel } from '@/components/RunStatusBreakdown'
 import { RowActionMenu, type RowActionMenuHandle, type RowActionMenuItem } from '@/components/RowActionMenu'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { RunShortcutsHint, RunShortcutsOverlay, type ShortcutEntry } from '@/components/RunShortcuts'
@@ -51,9 +53,9 @@ const MAX_DRAIN_PAGES = 25
 // Shared by the bulk "Mark as" menu and a single row's own context menu
 // (add-run-row-status-actions) — same labels/dot icons either way, only
 // the onSelect callback (and what it's bound to) differs.
-function buildVerdictMenuItems(onVerdict: (verdict: Verdict) => void): RowActionMenuItem[] {
+function buildVerdictMenuItems(onVerdict: (verdict: Verdict) => void, t: TFunction): RowActionMenuItem[] {
   return (['pass', 'failed', 'blocked', 'skipped'] as const).map((verdict) => ({
-    label: STATUS_LABEL[verdict],
+    label: statusLabel(verdict, t),
     icon: <span className={`size-2 rounded-full ${dotClass[verdict]}`} aria-hidden="true" />,
     onSelect: () => onVerdict(verdict),
   }))
@@ -97,6 +99,7 @@ function RunItemRow({
   jiraSiteUrl: string
   onSaveJiraLink: (itemId: string, jiraIssueKey: string | null) => void | Promise<void>
 }) {
+  const { t } = useTranslation()
   const menuRef = useRef<RowActionMenuHandle>(null)
   const shiftHeldRef = useRef(false)
   // Right-clicking (or opening the ⋯ menu on) a row that's part of a
@@ -111,7 +114,7 @@ function RunItemRow({
         ...(canRecord
           ? [
               {
-                label: `Assign ${selectedCount} selected…`,
+                label: t('RunPage.assignSelectedMenuLabel', { count: selectedCount }),
                 icon: <UserPlusIcon className="size-4" aria-hidden="true" />,
                 onSelect: onAssignSelected,
               } satisfies RowActionMenuItem,
@@ -120,12 +123,12 @@ function RunItemRow({
         ...bulkVerdictItems.map((verdictItem, index) => (index === 0 ? { ...verdictItem, dividerBefore: true } : verdictItem)),
       ]
     : [
-        { label: 'Open execution', icon: <ArrowRightIcon className="size-4" aria-hidden="true" />, onSelect: onOpenExecution },
-        { label: 'Go to case in Library', icon: <ExternalLinkIcon className="size-4" aria-hidden="true" />, onSelect: onGoToCase },
+        { label: t('RunPage.openExecutionLabel'), icon: <ArrowRightIcon className="size-4" aria-hidden="true" />, onSelect: onOpenExecution },
+        { label: t('RunPage.goToCaseInLibraryLabel'), icon: <ExternalLinkIcon className="size-4" aria-hidden="true" />, onSelect: onGoToCase },
         ...(canRecord
           ? [
               {
-                label: 'Assign to…',
+                label: t('RunPage.assignToLabel'),
                 icon: <UserPlusIcon className="size-4" aria-hidden="true" />,
                 onSelect: onAssign,
               } satisfies RowActionMenuItem,
@@ -137,7 +140,7 @@ function RunItemRow({
         // instead of the whole selection (add-run-row-status-actions
         // design.md D1/D3).
         ...(bulkVerdictItems.length > 0
-          ? buildVerdictMenuItems(onItemVerdict).map((verdictItem, index) => (index === 0 ? { ...verdictItem, dividerBefore: true } : verdictItem))
+          ? buildVerdictMenuItems(onItemVerdict, t).map((verdictItem, index) => (index === 0 ? { ...verdictItem, dividerBefore: true } : verdictItem))
           : []),
         // Retest changes status directly rather than recording a verdict,
         // so it gets its own trailing divider and a distinct icon instead
@@ -146,7 +149,7 @@ function RunItemRow({
         ...(bulkVerdictItems.length > 0 && item.currentStatus === 'failed'
           ? [
               {
-                label: 'Retest',
+                label: t('RunPage.retestLabel'),
                 icon: <RotateCcwIcon className="size-4" aria-hidden="true" />,
                 onSelect: onRetest,
                 dividerBefore: true,
@@ -166,7 +169,7 @@ function RunItemRow({
       <div className="flex items-center gap-2">
         <input
           type="checkbox"
-          aria-label={`Select ${item.content.title}`}
+          aria-label={t('RunPage.selectItemAriaLabel', { title: item.content.title })}
           checked={selected}
           onClick={(e) => {
             shiftHeldRef.current = e.shiftKey
@@ -187,7 +190,7 @@ function RunItemRow({
             <span>
               {item.content.title}
               {item.newerVersion && (
-                <span className="ml-2 text-xs text-muted-foreground">(newer version available)</span>
+                <span className="ml-2 text-xs text-muted-foreground">{t('RunPage.newerVersionAvailable')}</span>
               )}
             </span>
             {(item.testName || item.content.platform || item.content.tags?.length) && (
@@ -222,7 +225,7 @@ function RunItemRow({
                   aria-hidden="true"
                 />
               )}
-              {item.assignee?.name ?? 'Unassigned'}
+              {item.assignee?.name ?? t('RunPage.unassignedRowFallback')}
             </span>
             <StatusBadge status={item.currentStatus} />
           </span>
@@ -236,13 +239,14 @@ function RunItemRow({
           canEdit={canRecord}
           onSave={(key) => onSaveJiraLink(item.id, key)}
         />
-        {projectKey && <RowActionMenu ref={menuRef} label={`Actions for ${item.content.title}`} items={menuItems} />}
+        {projectKey && <RowActionMenu ref={menuRef} label={t('RunPage.actionsForItemAriaLabel', { title: item.content.title })} items={menuItems} />}
       </div>
     </li>
   )
 }
 
 export default function RunPage() {
+  const { t } = useTranslation()
   const { runKey } = useParams<{ runKey: string }>()
   const navigate = useNavigate()
   const location = useLocation()
@@ -476,7 +480,7 @@ export default function RunPage() {
     const { error } = await api.POST('/api/v1/runs/{runKey}/close', { params: { path: { runKey } } })
     setIsClosing(false)
     if (error) {
-      setLifecycleError('Could not close this run.')
+      setLifecycleError(t('RunPage.closeRunError'))
       return
     }
     setRun((r) => (r ? { ...r, status: 'closed' } : r))
@@ -490,7 +494,7 @@ export default function RunPage() {
     const { error } = await api.POST('/api/v1/runs/{runKey}/reopen', { params: { path: { runKey } } })
     setIsReopening(false)
     if (error) {
-      setLifecycleError("You don't have permission to reopen this run — ask a project admin.")
+      setLifecycleError(t('RunPage.reopenPermissionError'))
       return
     }
     setRun((r) => (r ? { ...r, status: 'open' } : r))
@@ -505,7 +509,7 @@ export default function RunPage() {
     const { error } = await api.POST(path, { params: { path: { runKey } } })
     setIsArchiving(false)
     if (error) {
-      setLifecycleError('Could not archive/unarchive this run.')
+      setLifecycleError(t('RunPage.archiveToggleError'))
       return
     }
     setRun((r) => (r ? { ...r, archived: !r.archived } : r))
@@ -583,7 +587,11 @@ export default function RunPage() {
   // restrict-run-item-status-to-assignee's 403), so recordBulkVerdict would
   // otherwise silently no-op on it with no indication anything failed.
   function showRecordFailureWarning(failedCount: number) {
-    setRecordFailureWarning(`${failedCount} item${failedCount === 1 ? '' : 's'} not updated — not assigned to you.`)
+    setRecordFailureWarning(
+      failedCount === 1
+        ? t('RunPage.itemsNotUpdatedSingular', { count: failedCount })
+        : t('RunPage.itemsNotUpdatedPlural', { count: failedCount }),
+    )
   }
 
   // Mirrors RunItemDetailPage.tsx's markRetest — sets status directly
@@ -659,8 +667,8 @@ export default function RunPage() {
   }, [displayOrder, focusedIndex, runKey, navigate, toggleSelect])
 
   const runShortcuts: ShortcutEntry[] = [
-    { keys: 'J/K · ↑/↓', label: 'Move selection' },
-    { keys: 'Enter', label: 'Open selected item' },
+    { keys: 'J/K · ↑/↓', label: t('RunPage.moveSelectionShortcutLabel') },
+    { keys: 'Enter', label: t('RunPage.openSelectedItemShortcutLabel') },
   ]
 
   function handleAssignSelected() {
@@ -668,23 +676,23 @@ export default function RunPage() {
   }
 
   const verdictMenuItems: RowActionMenuItem[] =
-    run?.status === 'open' && canRecord ? buildVerdictMenuItems((verdict) => void handleBulkVerdict(verdict)) : []
+    run?.status === 'open' && canRecord ? buildVerdictMenuItems((verdict) => void handleBulkVerdict(verdict), t) : []
 
   const bulkActions: BulkAction[] = [
-    ...(canRecord ? ([{ kind: 'button', label: 'Assign selected…', onSelect: handleAssignSelected }] satisfies BulkAction[]) : []),
-    ...(verdictMenuItems.length > 0 ? ([{ kind: 'menu', label: 'Mark as', items: verdictMenuItems }] satisfies BulkAction[]) : []),
+    ...(canRecord ? ([{ kind: 'button', label: t('RunPage.assignSelectedButtonLabel'), onSelect: handleAssignSelected }] satisfies BulkAction[]) : []),
+    ...(verdictMenuItems.length > 0 ? ([{ kind: 'menu', label: t('RunPage.markAsMenuLabel'), items: verdictMenuItems }] satisfies BulkAction[]) : []),
   ]
 
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Run not found. <Link to="/" className="underline">Go to Projects</Link>
+        {t('RunPage.runNotFound')} <Link to="/" className="underline">{t('RunPage.goToProjects')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/runs/${runKey}` }} className="underline">
-              Log in
+              {t('RunPage.logIn')}
             </Link>
           </>
         )}
@@ -697,7 +705,7 @@ export default function RunPage() {
       <Breadcrumbs
         segments={trimProjectBreadcrumb(
           [
-            { label: 'Projects', href: '/' },
+            { label: t('RunPage.projectsBreadcrumb'), href: '/' },
             { label: project?.name ?? '', href: project ? `/projects/${project.key}` : undefined },
             { label: run?.name ?? '' },
           ],
@@ -705,7 +713,7 @@ export default function RunPage() {
         )}
       />
       {showCreatedBanner && run && (
-        <ConfirmBanner message={`Run "${run.name}" created.`} onDismiss={() => setShowCreatedBanner(false)} />
+        <ConfirmBanner message={t('RunPage.runCreatedMessage', { name: run.name })} onDismiss={() => setShowCreatedBanner(false)} />
       )}
       {recordFailureWarning && (
         <ConfirmBanner message={recordFailureWarning} onDismiss={() => setRecordFailureWarning(undefined)} />
@@ -713,7 +721,7 @@ export default function RunPage() {
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between gap-2">
-            <CardTitle className="tp-heading">{run?.name ?? 'Run'}</CardTitle>
+            <CardTitle className="tp-heading">{run?.name ?? t('RunPage.runFallbackTitle')}</CardTitle>
             {run && (
               <div className="flex items-center gap-2">
                 {run.status === 'closed' && (
@@ -724,30 +732,32 @@ export default function RunPage() {
                       navigate(`/projects/${run.projectKey}/runs/compare`, { state: { seedRunKey: run.key } })
                     }
                   >
-                    Compare…
+                    {t('RunPage.compareButton')}
                   </Button>
                 )}
                 <Badge variant={run.status === 'open' ? 'secondary' : 'outline'}>{run.status}</Badge>
-                {run.archived && <Badge variant="outline">Archived</Badge>}
+                {run.archived && <Badge variant="outline">{t('RunPage.archivedBadge')}</Badge>}
                 {run.status === 'open'
                   ? canRecord && (
                       <Button size="sm" variant="outline" disabled={isClosing} onClick={() => void closeRun()}>
-                        {isClosing ? 'Closing…' : 'Close run'}
+                        {isClosing ? t('RunPage.closingButton') : t('RunPage.closeRunButton')}
                       </Button>
                     )
                   : permissions?.manageProject && (
                       <Button size="sm" variant="outline" disabled={isReopening} onClick={() => void reopenRun()}>
-                        {isReopening ? 'Reopening…' : 'Reopen'}
+                        {isReopening ? t('RunPage.reopeningButton') : t('RunPage.reopenButton')}
                       </Button>
                     )}
                 {permissions?.manageProject && (
                   <Button size="sm" variant="outline" disabled={isArchiving} onClick={() => void toggleArchive()}>
-                    {run.archived ? (isArchiving ? 'Unarchiving…' : 'Unarchive') : isArchiving ? 'Archiving…' : 'Archive run'}
+                    {run.archived
+                      ? isArchiving ? t('RunPage.unarchivingButton') : t('RunPage.unarchiveButton')
+                      : isArchiving ? t('RunPage.archivingButton') : t('RunPage.archiveRunButton')}
                   </Button>
                 )}
                 {permissions?.runDelete && (
                   <Button size="sm" variant="destructive" onClick={() => setDeleteDialogOpen(true)}>
-                    Delete run
+                    {t('RunPage.deleteRunButton')}
                   </Button>
                 )}
               </div>
@@ -762,18 +772,18 @@ export default function RunPage() {
                   className="inline-flex items-center gap-1 font-medium text-primary hover:underline"
                 >
                   <LayersIcon className="size-3.5" aria-hidden="true" />
-                  From suite: {suite?.name ?? run.suiteKey}
+                  {t('RunPage.fromSuitePrefix')} {suite?.name ?? run.suiteKey}
                 </Link>
               ) : (
-                <span>Ad hoc run — not created from a suite</span>
+                <span>{t('RunPage.adHocRunLabel')}</span>
               )}
               <span aria-hidden="true">&middot;</span>
-              <span>Created {new Date(run.createdAt).toLocaleDateString()}</span>
+              <span>{t('RunPage.createdPrefix')} {new Date(run.createdAt).toLocaleDateString()}</span>
               {priorRunKey && (
                 <>
                   <span aria-hidden="true">&middot;</span>
                   <Link to={`/runs/compare/${priorRunKey}/${run.key}`} className="font-medium text-primary hover:underline">
-                    Compare to previous run
+                    {t('RunPage.compareToPreviousRunLink')}
                   </Link>
                 </>
               )}
@@ -782,14 +792,14 @@ export default function RunPage() {
           {summary && <RunStatusBreakdown total={summary.total} counts={summary.counts} />}
           {summary && summary.total > 0 && (
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div role="group" aria-label="Filter items by status" className="flex flex-wrap gap-1.5">
+              <div role="group" aria-label={t('RunPage.filterByStatusAriaLabel')} className="flex flex-wrap gap-1.5">
                 <button
                   type="button"
                   aria-pressed={activeFilter === null}
                   className={`rounded-full border px-2.5 py-1 text-xs font-medium ${activeFilter === null ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
                   onClick={() => setActiveFilter(null)}
                 >
-                  All <span className="ml-1 text-[0.7rem]">{summary.total}</span>
+                  {t('RunPage.allFilterLabel')} <span className="ml-1 text-[0.7rem]">{summary.total}</span>
                 </button>
                 {presentStatuses.map((status) => (
                   <button
@@ -803,7 +813,7 @@ export default function RunPage() {
                     }}
                   >
                     <span aria-hidden="true" className="size-2 rounded-sm" style={{ background: STATUS_COLOR[status] }} />
-                    {STATUS_LABEL[status]} <span className="text-[0.7rem]">{summary.counts?.[status] ?? 0}</span>
+                    {statusLabel(status, t)} <span className="text-[0.7rem]">{summary.counts?.[status] ?? 0}</span>
                   </button>
                 ))}
               </div>
@@ -811,7 +821,7 @@ export default function RunPage() {
                 type="button"
                 role="switch"
                 aria-checked={groupEnabled}
-                aria-label="Group by status"
+                aria-label={t('RunPage.groupByStatusLabel')}
                 className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-xs font-medium ${groupEnabled ? 'border-primary text-primary' : 'border-input text-muted-foreground'}`}
                 onClick={() => {
                   setGroupEnabled((v) => {
@@ -821,19 +831,19 @@ export default function RunPage() {
                   })
                 }}
               >
-                Group by status
+                {t('RunPage.groupByStatusLabel')}
               </button>
             </div>
           )}
           {summary && summary.total > 0 && (
-            <div role="group" aria-label="Filter items by assignee" className="flex flex-wrap gap-1.5">
+            <div role="group" aria-label={t('RunPage.filterByAssigneeAriaLabel')} className="flex flex-wrap gap-1.5">
               <button
                 type="button"
                 aria-pressed={assigneeFilter === null}
                 className={`rounded-full border px-2.5 py-1 text-xs font-medium ${assigneeFilter === null ? 'border-primary bg-accent text-primary' : 'border-input text-muted-foreground'}`}
                 onClick={() => setAssigneeFilter(null)}
               >
-                All
+                {t('RunPage.allAssigneeFilterLabel')}
               </button>
               {distinctAssignees.map((assignee) => (
                 <button
@@ -858,7 +868,7 @@ export default function RunPage() {
                   void ensureAllItemsLoaded()
                 }}
               >
-                Unassigned
+                {t('RunPage.unassignedFilterLabel')}
               </button>
             </div>
           )}
@@ -868,31 +878,31 @@ export default function RunPage() {
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <input
                 type="checkbox"
-                aria-label="Select all"
+                aria-label={t('RunPage.selectAllAriaLabel')}
                 checked={allVisibleSelected}
                 onChange={toggleSelectAll}
                 className="size-4 shrink-0 rounded border-input"
               />
               <p>
-                {`Showing ${visibleItems.length} of ${summary.total} items`}
-                {activeFilter && ` — filtered to ${STATUS_LABEL[activeFilter].toLowerCase()}`}
+                {t('RunPage.showingItemsCount', { count: visibleItems.length, total: summary.total })}
+                {activeFilter && ` ${t('RunPage.filteredToPrefix', { status: statusLabel(activeFilter, t).toLowerCase() })}`}
               </p>
             </div>
           )}
           {drainingItems && (
             <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Loader2Icon className="size-3 animate-spin" aria-hidden="true" />
-              Loading remaining items to filter accurately…
+              {t('RunPage.loadingRemainingItems')}
             </p>
           )}
           {itemsTruncated && !drainingItems && (
             <p className="text-xs text-muted-foreground">
-              This run has more items than can be filtered at once — some may be missing from the counts above.
+              {t('RunPage.itemsTruncatedWarning')}
             </p>
           )}
           <RunBulkActionBar count={selectedIds.size} actions={bulkActions} onClear={() => setSelectedIds(new Set())} />
           {visibleItems.length === 0 && summary && summary.total > 0 ? (
-            <p className="text-sm text-muted-foreground">No items match this filter.</p>
+            <p className="text-sm text-muted-foreground">{t('RunPage.noItemsMatchFilter')}</p>
           ) : groupEnabled ? (
             <div className="space-y-4">
               {STATUS_ORDER.map((status) => {
@@ -902,7 +912,7 @@ export default function RunPage() {
                   <div key={status} className="space-y-2">
                     <p className="tp-label flex items-center gap-2">
                       <span>
-                        {STATUS_LABEL[status]} &middot; {group.length}
+                        {statusLabel(status, t)} &middot; {group.length}
                       </span>
                       <span className="h-px flex-1 bg-border" aria-hidden="true" />
                     </p>
@@ -958,7 +968,7 @@ export default function RunPage() {
               ))}
             </ul>
           )}
-          <LoadMoreButton hasMore={!!itemsCursor} loading={loadingMoreItems} onClick={() => void loadMoreItems()} label="Load more items" />
+          <LoadMoreButton hasMore={!!itemsCursor} loading={loadingMoreItems} onClick={() => void loadMoreItems()} label={t('RunPage.loadMoreItemsLabel')} />
         </CardContent>
       </Card>
 
@@ -967,7 +977,7 @@ export default function RunPage() {
           open={assignTarget !== null}
           onOpenChange={(open) => !open && setAssignTarget(null)}
           projectKey={projectKey}
-          title={assignTarget && assignTarget.itemIds.length > 1 ? `Assign ${assignTarget.itemIds.length} items to…` : 'Assign to…'}
+          title={assignTarget && assignTarget.itemIds.length > 1 ? t('RunPage.assignItemsToLabel', { count: assignTarget.itemIds.length }) : t('RunPage.assignToLabel')}
           onAssign={(assignee) => {
             if (assignTarget) void handleAssign(assignTarget.itemIds, assignee)
           }}
@@ -979,17 +989,18 @@ export default function RunPage() {
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete &quot;{run?.name}&quot;?</DialogTitle>
+          <DialogTitle>{t('RunPage.deleteRunDialogTitle', { name: run?.name })}</DialogTitle>
           <p className="text-sm text-muted-foreground">
-            Permanently removes this run and its {summary?.total ?? 0} recorded result
-            {summary?.total === 1 ? '' : 's'}. This cannot be undone.
+            {summary?.total === 1
+              ? t('RunPage.deleteRunConfirmSingular', { count: summary?.total ?? 0 })
+              : t('RunPage.deleteRunConfirmPlural', { count: summary?.total ?? 0 })}
           </p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {t('RunPage.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void confirmDeleteRun()}>
-              Delete run
+              {t('RunPage.deleteRunButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

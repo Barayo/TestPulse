@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 
 export interface ResizeHandleProps {
   width: number
@@ -15,7 +16,9 @@ export interface ResizeHandleProps {
 // sub-pixel at typical DPR (docs/design-system.md), so a soft tint has no
 // area to lean on at 2px width the way FolderTree's bg-primary/10 drag-over
 // state does across a whole row.
-export function ResizeHandle({ width, min, max, onResize, onKeyDown, label = 'Resize section tree' }: ResizeHandleProps) {
+export function ResizeHandle({ width, min, max, onResize, onKeyDown, label }: ResizeHandleProps) {
+  const { t } = useTranslation()
+  const resolvedLabel = label ?? t('ResizeHandle.defaultLabel')
   const [isDragging, setIsDragging] = useState(false)
   const dragStart = useRef<{ x: number; width: number } | null>(null)
 
@@ -50,7 +53,7 @@ export function ResizeHandle({ width, min, max, onResize, onKeyDown, label = 'Re
     <div
       role="separator"
       aria-orientation="vertical"
-      aria-label={label}
+      aria-label={resolvedLabel}
       aria-valuenow={width}
       aria-valuemin={min}
       aria-valuemax={max}

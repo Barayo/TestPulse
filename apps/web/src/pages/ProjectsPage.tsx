@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { createPortal } from 'react-dom'
+import { useTranslation } from 'react-i18next'
+import type { ParseKeys } from 'i18next'
 import { Link, Navigate, useLocation, useNavigate } from 'react-router'
 import {
   StarIcon,
@@ -58,11 +60,24 @@ type NewProjectSource = {
   onSelect: () => void
 }
 
-const SORT_KEY_LABELS: Record<SortKey, string> = {
-  name: 'Name',
-  suites: 'Suites',
-  cases: 'Cases',
-  created: 'Created',
+// Values here are i18next translation keys (not display text) — SortKey is
+// used outside any component, so the actual t() lookup happens at render
+// time in ProjectsPage below.
+const SORT_KEY_LABELS: Record<SortKey, ParseKeys> = {
+  name: 'ProjectsPage.sortKeyName',
+  suites: 'ProjectsPage.sortKeySuites',
+  cases: 'ProjectsPage.sortKeyCases',
+  created: 'ProjectsPage.sortKeyCreated',
+}
+
+// Same translation-key-not-text idiom as SORT_KEY_LABELS above — StatusFilter
+// values double as data (statusOf()/filtering) and as their own display
+// label, so the label lookup lives separately from STATUS_FILTERS itself.
+const STATUS_FILTER_LABEL_KEYS: Record<StatusFilter, ParseKeys> = {
+  Healthy: 'ProjectsPage.statusFilterHealthy',
+  'In progress': 'ProjectsPage.statusFilterInProgress',
+  'At risk': 'ProjectsPage.statusFilterAtRisk',
+  'No runs yet': 'ProjectsPage.statusFilterNoRunsYet',
 }
 
 function statusOf(p: ProjectSummary): StatusFilter {
@@ -73,6 +88,7 @@ function statusOf(p: ProjectSummary): StatusFilter {
 // from the list itself (design.md D9) — add-project-rbac gates both behind
 // isTenantAdmin below, with no layout change from the always-shown version.
 export default function ProjectsPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const { user, loading: authLoading, publicProjectsEnabled, setupRequiredLoading } = useAuth()
@@ -141,57 +157,57 @@ export default function ProjectsPage() {
   const newProjectSources: NewProjectSource[] = [
     {
       key: 'scratch',
-      label: 'Start from scratch',
-      description: 'Create an empty project and build up folders, suites, and cases manually.',
+      label: t('ProjectsPage.sourceScratchLabel'),
+      description: t('ProjectsPage.sourceScratchDescription'),
       icon: PlusIcon,
       onSelect: () => setCreating(true),
     },
     {
       key: 'testrail',
-      label: 'Import from TestRail',
-      description: 'Bring in suites, sections, and cases from an existing TestRail project.',
+      label: t('ProjectsPage.sourceTestrailLabel'),
+      description: t('ProjectsPage.sourceTestrailDescription'),
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/testrail'),
     },
     {
       key: 'qase',
-      label: 'Import from Qase',
-      description: 'Bring in suites and cases from an existing Qase project.',
+      label: t('ProjectsPage.sourceQaseLabel'),
+      description: t('ProjectsPage.sourceQaseDescription'),
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/qase'),
     },
     {
       key: 'zephyr-scale',
-      label: 'Import from Zephyr Scale',
-      description: 'Bring in folders and cases from an existing Zephyr Scale Cloud project.',
+      label: t('ProjectsPage.sourceZephyrScaleLabel'),
+      description: t('ProjectsPage.sourceZephyrScaleDescription'),
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/zephyr-scale'),
     },
     {
       key: 'kiwi-tcms',
-      label: 'Import from Kiwi TCMS',
-      description: 'Bring in a test plan tree and cases from an existing Kiwi TCMS product.',
+      label: t('ProjectsPage.sourceKiwiTcmsLabel'),
+      description: t('ProjectsPage.sourceKiwiTcmsDescription'),
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/kiwi-tcms'),
     },
     {
       key: 'xray',
-      label: 'Import from Xray',
-      description: 'Bring in a Test Repository and tests from an existing Xray Cloud or Server/Data Center project.',
+      label: t('ProjectsPage.sourceXrayLabel'),
+      description: t('ProjectsPage.sourceXrayDescription'),
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/xray'),
     },
     {
       key: 'tuskr',
-      label: 'Import from Tuskr',
-      description: 'Bring in test suites, sections, and cases from an existing Tuskr project.',
+      label: t('ProjectsPage.sourceTuskrLabel'),
+      description: t('ProjectsPage.sourceTuskrDescription'),
       icon: DatabaseIcon,
       onSelect: () => navigate('/projects/import/tuskr'),
     },
     {
       key: 'csv',
-      label: 'Import from CSV',
-      description: 'Bring in cases from a spreadsheet export — works with any tool, no account needed.',
+      label: t('ProjectsPage.sourceCsvLabel'),
+      description: t('ProjectsPage.sourceCsvDescription'),
       icon: UploadIcon,
       onSelect: () => navigate('/projects/import/csv'),
     },
@@ -200,7 +216,7 @@ export default function ProjectsPage() {
   async function handleCreate(e: FormEvent) {
     e.preventDefault()
     if (!name.trim()) {
-      setError('name is required')
+      setError(t('ProjectsPage.errorNameRequired'))
       return
     }
     setError(undefined)
@@ -211,7 +227,7 @@ export default function ProjectsPage() {
       },
     })
     if (apiError) {
-      setError((apiError as { error?: string }).error ?? 'failed to create project')
+      setError((apiError as { error?: string }).error ?? t('ProjectsPage.errorCreateProjectFailed'))
       return
     }
     setName('')
@@ -270,17 +286,17 @@ export default function ProjectsPage() {
     }
     return (
       <div className="space-y-6">
-        <h1 className="tp-heading text-2xl">Projects</h1>
+        <h1 className="tp-heading text-2xl">{t('ProjectsPage.title')}</h1>
         {publicProjects && publicProjects.length === 0 && (
           <div className="rounded-2xl border border-dashed p-10 text-center">
             <GlobeIcon className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
-            <p className="mb-1 text-sm font-medium">No public projects yet</p>
+            <p className="mb-1 text-sm font-medium">{t('ProjectsPage.noPublicProjectsYet')}</p>
             <p className="mb-4 text-sm text-muted-foreground">
-              This instance doesn't have any projects open to visitors right now.
+              {t('ProjectsPage.noPublicProjectsDescription')}
             </p>
             <Button asChild>
               <Link to="/login" state={{ from: location.pathname }}>
-                Log in
+                {t('ProjectsPage.logIn')}
               </Link>
             </Button>
             {/* Collapsed single-state design (founder + Jose + Pepe,
@@ -334,7 +350,7 @@ export default function ProjectsPage() {
                   <CardHeader>
                     <div className="flex items-center gap-2">
                       <CardTitle>{p.name}</CardTitle>
-                      {p.isSample && <Badge variant="secondary">Sample</Badge>}
+                      {p.isSample && <Badge variant="secondary">{t('ProjectsPage.sampleBadge')}</Badge>}
                     </div>
                     {p.description && <CardDescription>{p.description}</CardDescription>}
                   </CardHeader>
@@ -384,10 +400,10 @@ export default function ProjectsPage() {
 
       <div className="flex items-end justify-between gap-4">
         <div>
-          <h1 className="tp-heading text-2xl">Projects</h1>
+          <h1 className="tp-heading text-2xl">{t('ProjectsPage.title')}</h1>
           {projects.length > 0 && (
             <p className="tp-label mt-1">
-              {projects.length} project{projects.length === 1 ? '' : 's'}
+              {t('ProjectsPage.projectCount', { count: projects.length, plural: projects.length === 1 ? '' : 's' })}
             </p>
           )}
         </div>
@@ -397,33 +413,33 @@ export default function ProjectsPage() {
       {creating && (
         <Card>
           <CardHeader>
-            <CardTitle className="tp-heading">New project</CardTitle>
+            <CardTitle className="tp-heading">{t('ProjectsPage.newProjectCardTitle')}</CardTitle>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="flex items-end gap-3">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="project-name">Name</Label>
+                  <Label htmlFor="project-name">{t('ProjectsPage.nameLabel')}</Label>
                   <Input
                     id="project-name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="QA Platform"
+                    placeholder={t('ProjectsPage.namePlaceholder')}
                   />
                 </div>
-                <Button type="submit">Create</Button>
+                <Button type="submit">{t('ProjectsPage.createButton')}</Button>
               </div>
               <div className="space-y-1">
-                <Label htmlFor="project-description">Description</Label>
+                <Label htmlFor="project-description">{t('ProjectsPage.descriptionLabel')}</Label>
                 <Textarea
                   id="project-description"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  placeholder="What this project covers (optional)"
+                  placeholder={t('ProjectsPage.descriptionPlaceholder')}
                 />
               </div>
               <div className="space-y-1">
-                <Label>Tags</Label>
+                <Label>{t('ProjectsPage.tagsLabel')}</Label>
                 <TagChipsEditor
                   tags={stagedTags}
                   vocabulary={tagVocabulary}
@@ -440,8 +456,8 @@ export default function ProjectsPage() {
       {projects.length > 0 && (
         <div className="flex flex-col gap-3">
           <Input
-            aria-label="Search projects"
-            placeholder="Search projects"
+            aria-label={t('ProjectsPage.searchProjectsAriaLabel')}
+            placeholder={t('ProjectsPage.searchProjectsPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="rounded-[10px]"
@@ -450,11 +466,11 @@ export default function ProjectsPage() {
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex min-w-0 items-center gap-2 overflow-x-auto">
               <Pill active={statusFilter === null} onClick={() => setStatusFilter(null)}>
-                All
+                {t('ProjectsPage.allFilter')}
               </Pill>
               {STATUS_FILTERS.map((s) => (
                 <Pill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-                  {s}
+                  {t(STATUS_FILTER_LABEL_KEYS[s])}
                 </Pill>
               ))}
               {anyProjectHasTags && (
@@ -470,7 +486,7 @@ export default function ProjectsPage() {
             <div className="flex flex-wrap items-center gap-2">
               <div className="flex items-center gap-1.5">
                 <Label htmlFor="project-sort-key" className="tp-label">
-                  Sort by
+                  {t('ProjectsPage.sortByLabel')}
                 </Label>
                 <select
                   id="project-sort-key"
@@ -483,13 +499,13 @@ export default function ProjectsPage() {
                 >
                   {(Object.keys(SORT_KEY_LABELS) as SortKey[]).map((key) => (
                     <option key={key} value={key}>
-                      {SORT_KEY_LABELS[key]}
+                      {t(SORT_KEY_LABELS[key])}
                     </option>
                   ))}
                 </select>
                 <button
                   type="button"
-                  aria-label="Toggle sort direction"
+                  aria-label={t('ProjectsPage.toggleSortDirectionAriaLabel')}
                   aria-pressed={sort.direction === 'desc'}
                   onClick={() => setSort({ key: sort.key, direction: sort.direction === 'asc' ? 'desc' : 'asc' })}
                   className="flex size-9 items-center justify-center rounded-[10px] border border-input bg-card text-foreground hover:border-primary/40"
@@ -499,11 +515,11 @@ export default function ProjectsPage() {
               </div>
 
               {!isMobile && (
-                <div role="group" aria-label="View mode" className="flex items-center gap-1.5">
+                <div role="group" aria-label={t('ProjectsPage.viewModeGroupAriaLabel')} className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    title="Expanded view"
-                    aria-label="Expanded view"
+                    title={t('ProjectsPage.expandedViewLabel')}
+                    aria-label={t('ProjectsPage.expandedViewLabel')}
                     aria-pressed={viewMode === 'expanded'}
                     onClick={() => setManualOverride('expanded')}
                     className={`flex size-9 items-center justify-center rounded-full border transition-colors ${
@@ -516,8 +532,8 @@ export default function ProjectsPage() {
                   </button>
                   <button
                     type="button"
-                    title="Compact view"
-                    aria-label="Compact view"
+                    title={t('ProjectsPage.compactViewLabel')}
+                    aria-label={t('ProjectsPage.compactViewLabel')}
                     aria-pressed={viewMode === 'compact'}
                     onClick={() => setManualOverride('compact')}
                     className={`flex size-9 items-center justify-center rounded-full border transition-colors ${
@@ -538,20 +554,20 @@ export default function ProjectsPage() {
       {projects.length === 0 ? (
         <div className="rounded-2xl border border-dashed p-10 text-center">
           <p className="mb-1 text-sm font-medium">
-            {isTenantAdmin ? 'No projects yet' : "You don't have access to any projects yet"}
+            {isTenantAdmin ? t('ProjectsPage.noProjectsYetAdmin') : t('ProjectsPage.noProjectsYetNonAdmin')}
           </p>
           <p className="mb-4 text-sm text-muted-foreground">
             {isTenantAdmin
-              ? 'Create the first one to start organizing sections, suites, and runs.'
-              : 'Ask a Tenant Admin to add you to a project.'}
+              ? t('ProjectsPage.emptyStateAdminDescription')
+              : t('ProjectsPage.emptyStateNonAdminDescription')}
           </p>
-          {isTenantAdmin && <Button onClick={() => setCreating(true)}>+ Create your first project</Button>}
+          {isTenantAdmin && <Button onClick={() => setCreating(true)}>{t('ProjectsPage.createFirstProjectButton')}</Button>}
         </div>
       ) : (
         <>
           {favorites.length > 0 && (
-            <section aria-label="Favorites" className="space-y-3">
-              <h2 className="tp-label">Favorites</h2>
+            <section aria-label={t('ProjectsPage.favoritesAriaLabel')} className="space-y-3">
+              <h2 className="tp-label">{t('ProjectsPage.favoritesHeading')}</h2>
               <ul className="flex flex-wrap gap-3">
                 {favorites.map((p) => (
                   <li key={p.id}>
@@ -566,7 +582,7 @@ export default function ProjectsPage() {
             </section>
           )}
           <div className="space-y-3">
-            {favorites.length > 0 && <h2 className="tp-label">All projects</h2>}
+            {favorites.length > 0 && <h2 className="tp-label">{t('ProjectsPage.allProjectsHeading')}</h2>}
             {viewMode === 'expanded' ? (
               <ExpandedGrid
                 projects={rest}
@@ -588,10 +604,10 @@ export default function ProjectsPage() {
             )}
           </div>
           {archivedVisible.length > 0 && (
-            <section aria-label="Archived projects" className="space-y-3">
+            <section aria-label={t('ProjectsPage.archivedProjectsAriaLabel')} className="space-y-3">
               <button
                 type="button"
-                aria-label={archivedExpanded ? 'Collapse Archived' : 'Expand Archived'}
+                aria-label={archivedExpanded ? t('ProjectsPage.collapseArchivedAriaLabel') : t('ProjectsPage.expandArchivedAriaLabel')}
                 aria-expanded={archivedExpanded}
                 className="flex items-center gap-2 text-muted-foreground"
                 onClick={() => setArchivedExpanded((v) => !v)}
@@ -600,7 +616,7 @@ export default function ProjectsPage() {
                   className={`size-3.5 transition-transform ${archivedExpanded ? 'rotate-90' : ''}`}
                   aria-hidden="true"
                 />
-                <span className="tp-label">Archived · {archivedVisible.length}</span>
+                <span className="tp-label">{t('ProjectsPage.archivedCount', { count: archivedVisible.length })}</span>
               </button>
               {archivedExpanded &&
                 (viewMode === 'expanded' ? (
@@ -648,6 +664,7 @@ function TagFilterControl({
   onSelectTag: (tag: string) => void
   onClear: () => void
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -685,12 +702,12 @@ function TagFilterControl({
             : 'whitespace-nowrap rounded-full border border-dashed border-input px-3 py-1.5 text-xs font-medium text-muted-foreground hover:border-primary/40'
         }
       >
-        {activeTag ?? 'Tag'}
+        {activeTag ?? t('ProjectsPage.tagFilterDefaultLabel')}
       </button>
       {activeTag && (
         <button
           type="button"
-          aria-label="Clear tag filter"
+          aria-label={t('ProjectsPage.clearTagFilterAriaLabel')}
           onClick={onClear}
           className="text-muted-foreground hover:text-destructive"
         >
@@ -703,7 +720,7 @@ function TagFilterControl({
           <div
             ref={dropdownRef}
             role="dialog"
-            aria-label="Filter by tag"
+            aria-label={t('ProjectsPage.filterByTagAriaLabel')}
             style={{ top: position.top, left: position.left }}
             className="fixed z-50 w-56 rounded-md border bg-card p-2 shadow-lg"
           >
@@ -738,6 +755,7 @@ function TagFilterControl({
 // shows a bold label plus a muted description line (two consequential,
 // different paths — not a plain single-line nav shortcut).
 function NewProjectMenu({ sources }: { sources: NewProjectSource[] }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -764,7 +782,7 @@ function NewProjectMenu({ sources }: { sources: NewProjectSource[] }) {
   return (
     <div ref={containerRef} className="relative">
       <Button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        + New project
+        {t('ProjectsPage.newProjectButton')}
       </Button>
       {open &&
         position &&
@@ -772,7 +790,7 @@ function NewProjectMenu({ sources }: { sources: NewProjectSource[] }) {
           <div
             ref={dropdownRef}
             role="menu"
-            aria-label="New project"
+            aria-label={t('ProjectsPage.newProjectMenuAriaLabel')}
             style={{ top: position.top, right: position.right }}
             className="fixed z-50 w-72 rounded-md border bg-card p-1.5 shadow-lg"
           >
@@ -819,6 +837,7 @@ function CardTagEditor({
   onAdd: (p: ProjectSummary, tag: string) => void
   onRemove: (p: ProjectSummary, tag: string) => void
 }) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -846,7 +865,7 @@ function CardTagEditor({
     <div ref={containerRef} className="relative">
       <button
         type="button"
-        aria-label={`Edit tags for ${p.name}`}
+        aria-label={t('ProjectsPage.editTagsAriaLabel', { name: p.name })}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={(e) => {
@@ -863,7 +882,7 @@ function CardTagEditor({
           <div
             ref={dropdownRef}
             role="dialog"
-            aria-label={`Edit tags for ${p.name}`}
+            aria-label={t('ProjectsPage.editTagsAriaLabel', { name: p.name })}
             style={{ top: position.top, right: position.right }}
             className="fixed z-50 w-64 rounded-md border bg-card p-3 shadow-lg"
             onClick={(e) => e.stopPropagation()}
@@ -893,7 +912,8 @@ function FavoriteCard({
   onNavigate: () => void
   onToggleFavorite: (p: ProjectSummary) => void
 }) {
-  const readout = p.passRate === null ? 'No runs yet' : `${p.passRate}%`
+  const { t } = useTranslation()
+  const readout = p.passRate === null ? t('ProjectsPage.favoriteNoRunsYet') : `${p.passRate}%`
   return (
     <div className="relative flex w-64 flex-col gap-1.5 rounded-xl border border-primary/30 bg-primary/5 p-4 transition-colors hover:border-primary/50">
       <button type="button" onClick={onNavigate} className="flex flex-col gap-1.5 pr-6 text-left">
@@ -901,12 +921,12 @@ function FavoriteCard({
           {p.name}
         </span>
         <span className="text-xs text-muted-foreground">
-          {readout} · {p.suiteCount} suites
+          {t('ProjectsPage.favoriteSuitesCount', { readout, count: p.suiteCount })}
         </span>
       </button>
       <button
         type="button"
-        aria-label={`Unstar ${p.name}`}
+        aria-label={t('ProjectsPage.unstarAriaLabel', { name: p.name })}
         aria-pressed={true}
         onClick={(e) => {
           e.stopPropagation()
@@ -975,6 +995,7 @@ function ExpandedGrid({
   // section already uses to skip its own badge.
   hideArchivedBadge?: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <ul className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
       {projects.map((p) => {
@@ -994,8 +1015,8 @@ function ExpandedGrid({
                       <h2 className="truncate text-base font-semibold leading-snug text-foreground" title={p.name}>
                         {p.name}
                       </h2>
-                      {p.isSample && <Badge variant="secondary">Sample</Badge>}
-                      {p.archived && !hideArchivedBadge && <Badge variant="outline">Archived</Badge>}
+                      {p.isSample && <Badge variant="secondary">{t('ProjectsPage.sampleBadge')}</Badge>}
+                      {p.archived && !hideArchivedBadge && <Badge variant="outline">{t('ProjectsPage.archivedBadge')}</Badge>}
                     </span>
                     {p.description && (
                       <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{p.description}</p>
@@ -1016,14 +1037,14 @@ function ExpandedGrid({
                 <ProgressBar rate={p.passRate} />
 
                 <span className="flex gap-2">
-                  <StatTile value={p.suiteCount} label="suites" />
-                  <StatTile value={p.caseCount} label="cases" />
+                  <StatTile value={p.suiteCount} label={t('ProjectsPage.suitesStatLabel')} />
+                  <StatTile value={p.caseCount} label={t('ProjectsPage.casesStatLabel')} />
                 </span>
 
                 {(created || lastRun) && (
                   <span className="flex flex-col gap-0.5 text-xs text-muted-foreground">
                     <span className="truncate">
-                      {lastRun ? `Last run ${lastRun}` : `Created ${created}`}
+                      {lastRun ? t('ProjectsPage.lastRunLabel', { lastRun }) : t('ProjectsPage.createdLabel', { created })}
                     </span>
                   </span>
                 )}
@@ -1033,7 +1054,7 @@ function ExpandedGrid({
                 <CardTagEditor project={p} vocabulary={tagVocabulary} onAdd={onAddTag} onRemove={onRemoveTag} />
                 <button
                   type="button"
-                  aria-label={p.isFavorite ? `Unstar ${p.name}` : `Star ${p.name}`}
+                  aria-label={p.isFavorite ? t('ProjectsPage.unstarAriaLabel', { name: p.name }) : t('ProjectsPage.starAriaLabel', { name: p.name })}
                   aria-pressed={p.isFavorite}
                   onClick={(e) => {
                     e.stopPropagation()
@@ -1079,6 +1100,7 @@ function CompactList({
   onRemoveTag: (p: ProjectSummary, tag: string) => void
   hideArchivedBadge?: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
       {projects.map((p) => (
@@ -1090,8 +1112,8 @@ function CompactList({
                   <h2 className="min-w-0 truncate text-base font-semibold leading-snug text-foreground" title={p.name}>
                     {p.name}
                   </h2>
-                  {p.isSample && <Badge variant="secondary">Sample</Badge>}
-                  {p.archived && !hideArchivedBadge && <Badge variant="outline">Archived</Badge>}
+                  {p.isSample && <Badge variant="secondary">{t('ProjectsPage.sampleBadge')}</Badge>}
+                  {p.archived && !hideArchivedBadge && <Badge variant="outline">{t('ProjectsPage.archivedBadge')}</Badge>}
                 </span>
                 <span className="flex shrink-0 gap-1.5" aria-hidden="true">
                   <span className="size-4" />
@@ -1107,7 +1129,7 @@ function CompactList({
               <ProgressBar rate={p.passRate} />
 
               <span className="text-xs text-muted-foreground">
-                {p.suiteCount} suites · {p.caseCount} cases
+                {t('ProjectsPage.compactSuitesCasesCount', { suites: p.suiteCount, cases: p.caseCount })}
               </span>
             </button>
 
@@ -1115,7 +1137,7 @@ function CompactList({
               <CardTagEditor project={p} vocabulary={tagVocabulary} onAdd={onAddTag} onRemove={onRemoveTag} />
               <button
                 type="button"
-                aria-label={p.isFavorite ? `Unstar ${p.name}` : `Star ${p.name}`}
+                aria-label={p.isFavorite ? t('ProjectsPage.unstarAriaLabel', { name: p.name }) : t('ProjectsPage.starAriaLabel', { name: p.name })}
                 aria-pressed={p.isFavorite}
                 onClick={(e) => {
                   e.stopPropagation()

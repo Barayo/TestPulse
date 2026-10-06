@@ -1,9 +1,11 @@
-import type { ReactNode } from 'react'
+import { useEffect, type ReactNode } from 'react'
 import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from 'react-router'
 import { Layout } from '@/components/Layout'
 import { DataRevisionProvider } from '@/lib/DataRevision'
 import { ThemeProvider } from '@/lib/ThemeProvider'
 import { AuthProvider, useAuth } from '@/lib/useAuth'
+import { resolveLanguage } from '@/lib/resolveLanguage'
+import i18next from '@/i18n/index.ts'
 import { SessionExpiredModal } from '@/components/SessionExpiredModal'
 import ProjectsPage from '@/pages/ProjectsPage'
 import ProjectPage from '@/pages/ProjectPage'
@@ -167,7 +169,15 @@ export { PROJECT_CONTENT_ROUTES, ACCOUNT_ONLY_ROUTES, AllowAnonymous }
 // remains usable/testable standalone (ThemeProvider.test.tsx) even though
 // AuthProvider is now its ancestor here.
 function ThemedApp() {
-  const { colorTheme, customPalette } = useAuth()
+  const { colorTheme, customPalette, defaultLanguage, perUserLanguageEnabled, user } = useAuth()
+  useEffect(() => {
+    const resolved = resolveLanguage({
+      perUserLanguageEnabled,
+      defaultLanguage,
+      userLanguage: user?.language,
+    })
+    if (i18next.language !== resolved) void i18next.changeLanguage(resolved)
+  }, [defaultLanguage, perUserLanguageEnabled, user?.language])
   return (
     <ThemeProvider colorTheme={colorTheme} customPalette={customPalette}>
       <DataRevisionProvider>

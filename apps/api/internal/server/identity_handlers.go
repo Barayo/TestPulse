@@ -286,6 +286,7 @@ type userProfileUpdate struct {
 	DisplayName *string `json:"displayName"`
 	AvatarKey   *string `json:"avatarKey"`
 	Timezone    *string `json:"timezone"`
+	Language    *string `json:"language"`
 }
 
 func (h *api) updateCurrentUserProfile(w http.ResponseWriter, r *http.Request) {
@@ -299,6 +300,7 @@ func (h *api) updateCurrentUserProfile(w http.ResponseWriter, r *http.Request) {
 		DisplayName: in.DisplayName,
 		AvatarKey:   in.AvatarKey,
 		Timezone:    in.Timezone,
+		Language:    in.Language,
 	})
 	h.respond(w, http.StatusOK, user, err)
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Breadcrumbs, type Crumb } from '@/components/Breadcrumbs'
@@ -41,6 +42,7 @@ function toGridCase(c: TestCase): SuiteCaseGridCase {
 }
 
 export default function SuiteDetailPage() {
+  const { t } = useTranslation()
   const { projectKey, suiteKey } = useParams<{ projectKey: string; suiteKey: string }>()
   const navigate = useNavigate()
   const bumpLanding = useBumpDataRevision()
@@ -187,13 +189,13 @@ export default function SuiteDetailPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Suite not found. <Link to={`/projects/${projectKey}/suites`} className="underline">Go to Suites</Link>
+        {t('SuiteDetailPage.suiteNotFound')} <Link to={`/projects/${projectKey}/suites`} className="underline">{t('SuiteDetailPage.goToSuites')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/projects/${projectKey}/suites/${suiteKey}` }} className="underline">
-              Log in
+              {t('SuiteDetailPage.logIn')}
             </Link>
           </>
         )}
@@ -219,9 +221,9 @@ export default function SuiteDetailPage() {
 
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb(
     [
-      { label: 'Projects', href: '/' },
+      { label: t('SuiteDetailPage.projectsBreadcrumb'), href: '/' },
       { label: project.name, href: `/projects/${projectKey}` },
-      { label: 'Suites', href: `/projects/${projectKey}/suites` },
+      { label: t('SuiteDetailPage.suitesBreadcrumb'), href: `/projects/${projectKey}/suites` },
       { label: suite.name },
     ],
     suite.name,
@@ -233,9 +235,9 @@ export default function SuiteDetailPage() {
 
       {createdRun && (
         <ConfirmBanner
-          message={`Run "${createdRun.name}" created.`}
+          message={t('SuiteDetailPage.runCreatedMessage', { name: createdRun.name })}
           linkTo={`/runs/${createdRun.key}`}
-          linkLabel="View it →"
+          linkLabel={t('SuiteDetailPage.viewItLink')}
           onDismiss={() => setCreatedRun(undefined)}
         />
       )}
@@ -244,7 +246,7 @@ export default function SuiteDetailPage() {
         <h1 className="tp-heading text-2xl">{suite.name}</h1>
         {!isEditing && (
           <Button type="button" variant="outline" onClick={() => setIsEditing(true)}>
-            {canEditMembership ? 'Edit cases' : 'View cases'}
+            {canEditMembership ? t('SuiteDetailPage.editCasesButton') : t('SuiteDetailPage.viewCasesButton')}
           </Button>
         )}
       </div>
@@ -257,7 +259,7 @@ export default function SuiteDetailPage() {
             selected={selected}
             onToggle={toggle}
             onToggleRange={toggleRange}
-            commitLabel="Save changes"
+            commitLabel={t('SuiteDetailPage.saveChangesButton')}
             commitDisabled={!isDirty}
             onCommit={() => void handleSaveEdit()}
             onExit={exitEditing}
@@ -267,25 +269,29 @@ export default function SuiteDetailPage() {
           <div className="space-y-5">
             <Card>
               <CardHeader>
-                <CardTitle className="tp-heading text-lg">Stability</CardTitle>
+                <CardTitle className="tp-heading text-lg">{t('SuiteDetailPage.stabilityTitle')}</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center gap-4 border-b pb-4" data-testid="suite-latest-closed-run">
                   <HealthRing rate={latestClosedRun ? (latestClosedRun.passRate ?? 0) : null} size={72} />
                   <div className="space-y-1">
-                    <p className="tp-label">Latest closed run</p>
+                    <p className="tp-label">{t('SuiteDetailPage.latestClosedRunLabel')}</p>
                     {latestClosedRun && (
                       <p className="text-xs text-muted-foreground">{timeAgo(latestClosedRun.createdAt)}</p>
                     )}
                     {trailingOpenCount > 0 && (
                       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                        In progress
-                        <Badge variant="secondary">{trailingOpenCount} run{trailingOpenCount === 1 ? '' : 's'}</Badge>
+                        {t('SuiteDetailPage.inProgressLabel')}
+                        <Badge variant="secondary">
+                          {trailingOpenCount === 1
+                            ? t('SuiteDetailPage.runCountSingular', { count: trailingOpenCount })
+                            : t('SuiteDetailPage.runCountPlural', { count: trailingOpenCount })}
+                        </Badge>
                       </p>
                     )}
                   </div>
                 </div>
-                <div role="group" aria-label="Stability view" className="flex w-fit gap-0.5 rounded-full bg-muted p-1">
+                <div role="group" aria-label={t('SuiteDetailPage.stabilityViewAriaLabel')} className="flex w-fit gap-0.5 rounded-full bg-muted p-1">
                   {(['closed', 'all'] as const).map((view) => (
                     <button
                       key={view}
@@ -296,7 +302,7 @@ export default function SuiteDetailPage() {
                         stabilityView === view ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
                       }`}
                     >
-                      {view === 'closed' ? 'Closed runs' : 'Open + closed'}
+                      {view === 'closed' ? t('SuiteDetailPage.closedRunsToggle') : t('SuiteDetailPage.openClosedToggle')}
                     </button>
                   ))}
                 </div>
@@ -305,21 +311,20 @@ export default function SuiteDetailPage() {
                     <>
                       <SuiteRunBreakdownTrend
                         points={trendPoints}
-                        emptyMessage="No closed runs yet — close a run created from this suite to see its trend here."
+                        emptyMessage={t('SuiteDetailPage.noClosedRunsMessage')}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Only closed runs — an in-progress run has no final verdict yet.
+                        {t('SuiteDetailPage.closedRunsOnlyNote')}
                       </p>
                     </>
                   ) : (
                     <>
                       <SuiteRunBreakdownTrend
                         points={openTrendPoints}
-                        emptyMessage="No runs yet — run this suite to see its trend here."
+                        emptyMessage={t('SuiteDetailPage.noRunsMessage')}
                       />
                       <p className="text-xs text-muted-foreground">
-                        Every run, open or closed. The open run's breakdown counts only what's
-                        been recorded so far against its full case list — it will keep moving.
+                        {t('SuiteDetailPage.openClosedNote')}
                       </p>
                     </>
                   )}
@@ -329,10 +334,10 @@ export default function SuiteDetailPage() {
 
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
-                <CardTitle className="tp-heading text-lg">Run history</CardTitle>
+                <CardTitle className="tp-heading text-lg">{t('SuiteDetailPage.runHistoryTitle')}</CardTitle>
                 {suiteRuns.filter((r) => r.status === 'closed').length >= 2 && (
                   <Button type="button" variant="outline" size="sm" asChild>
-                    <Link to={`/projects/${projectKey}/runs/compare`}>Compare runs</Link>
+                    <Link to={`/projects/${projectKey}/runs/compare`}>{t('SuiteDetailPage.compareRunsButton')}</Link>
                   </Button>
                 )}
               </CardHeader>
@@ -340,7 +345,7 @@ export default function SuiteDetailPage() {
                 <div className="rounded-xl bg-muted/40 p-3" data-testid="suite-run-history">
                   {suiteRuns.length === 0 ? (
                     <p className="px-1 text-sm text-muted-foreground">
-                      No runs yet — run this suite to see its history here.
+                      {t('SuiteDetailPage.noRunHistoryMessage')}
                     </p>
                   ) : (
                     <>
@@ -354,8 +359,9 @@ export default function SuiteDetailPage() {
                       {!runHistoryExpanded && suiteRuns.length > SECTION_CAP && (
                         <div className="flex justify-center pt-2">
                           <Button type="button" variant="outline" size="sm" onClick={() => setRunHistoryExpanded(true)}>
-                            Show {suiteRuns.length - SECTION_CAP} more run
-                            {suiteRuns.length - SECTION_CAP === 1 ? '' : 's'}
+                            {suiteRuns.length - SECTION_CAP === 1
+                              ? t('SuiteDetailPage.showMoreRunsSingular', { count: suiteRuns.length - SECTION_CAP })
+                              : t('SuiteDetailPage.showMoreRunsPlural', { count: suiteRuns.length - SECTION_CAP })}
                           </Button>
                         </div>
                       )}
@@ -371,16 +377,16 @@ export default function SuiteDetailPage() {
           className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5"
           data-testid="suite-sidebar"
         >
-          <CaseSidebarSection title="Properties">
-            <PropertyRow label="Cases" value={suite.caseIds.length} />
+          <CaseSidebarSection title={t('SuiteDetailPage.propertiesTitle')}>
+            <PropertyRow label={t('SuiteDetailPage.casesLabel')} value={suite.caseIds.length} />
             <PropertyRow
-              label="Pass rate"
-              value={suite.passRate === null ? 'Never run' : <HealthBar rate={suite.passRate} />}
+              label={t('SuiteDetailPage.passRateLabel')}
+              value={suite.passRate === null ? t('SuiteDetailPage.neverRun') : <HealthBar rate={suite.passRate} />}
             />
-            <PropertyRow label="Created" value={suite.createdAt ? new Date(suite.createdAt).toLocaleDateString() : undefined} />
+            <PropertyRow label={t('SuiteDetailPage.createdLabel')} value={suite.createdAt ? new Date(suite.createdAt).toLocaleDateString() : undefined} />
           </CaseSidebarSection>
 
-          <CaseSidebarSection title="Actions">
+          <CaseSidebarSection title={t('SuiteDetailPage.actionsTitle')}>
             <SuiteActionsMenu
               suite={suite}
               projectKey={projectKey}

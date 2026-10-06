@@ -3370,6 +3370,10 @@ export interface components {
             defaultLandingView: components["schemas"]["LandingView"];
             /** @description Whether the MCP server is mounted at /mcp (TESTPULSE_MCP_ENABLED, default true). Read here so the admin UI's MCP integration card (mcp-admin-discoverability-card) can show real enabled/disabled state instead of unconditionally claiming the server is available. */
             mcpEnabled: boolean;
+            /** @description Instance-wide default UI language (add-ui-i18n). Read here (not only via the Tenant-Admin-only InstanceSettings) since every visitor, including anonymous ones, needs it to resolve which language to render — the same reasoning that already put colorTheme/defaultLandingView here. */
+            defaultLanguage: components["schemas"]["Language"];
+            /** @description Whether a logged-in user's own Language preference is allowed to override defaultLanguage for them (add-ui-i18n). Read here so an authenticated client can resolve its effective language on initial load, before any Tenant-Admin-only read. */
+            perUserLanguageEnabled: boolean;
         };
         /**
          * @description The instance-wide color palette (add-color-theme-customization). "teal" is the unchanged default; indigo/ocean/forest are built-in presets; "custom" means the Tenant-Admin-authored CustomPalette is active.
@@ -3381,6 +3385,11 @@ export interface components {
          * @enum {string}
          */
         LandingView: "dashboard" | "library" | "suites" | "runs" | "reports";
+        /**
+         * @description One of the six UI locales add-ui-i18n ships with.
+         * @enum {string}
+         */
+        Language: "en" | "es" | "fr" | "de" | "pt" | "zh";
         /** @description The 10 admin-editable tokens for one light/dark mode of a custom palette — every other CSS custom property is derived from these by copying, matching how every built-in preset is already structured. */
         CustomPaletteMode: {
             /** @example #F8F7FA */
@@ -3437,6 +3446,9 @@ export interface components {
             /** @description Instance-wide, Tenant-Admin-configurable sliding session expiry window in days (add-session-timeout-setting). Default 30. Changing it only affects sessions created or extended afterward — already-active sessions keep their existing expiry. */
             sessionTimeoutDays: number;
             defaultLandingView: components["schemas"]["LandingView"];
+            defaultLanguage: components["schemas"]["Language"];
+            /** @description Whether a user's own Language preference is allowed to override defaultLanguage (add-ui-i18n). Off by default. */
+            perUserLanguageEnabled: boolean;
         };
         /** @description A partial update — every field is optional; omitted fields are left unchanged. */
         InstanceSettingsUpdate: {
@@ -3460,6 +3472,8 @@ export interface components {
             /** @description Sliding session expiry window in days (add-session-timeout-setting), 1-90. */
             sessionTimeoutDays?: number;
             defaultLandingView?: components["schemas"]["LandingView"];
+            defaultLanguage?: components["schemas"]["Language"];
+            perUserLanguageEnabled?: boolean;
         };
         /** @description A frontend crash or failed API call, reported for server-side logging only (add-frontend-error-reporting) — never persisted. */
         ClientErrorReport: {
@@ -3487,6 +3501,8 @@ export interface components {
             /** @description A preset key, null (generated default), or the reserved value "custom" meaning the user has uploaded their own photo — fetch it from GET /api/v1/users/{userId}/avatar. */
             avatarKey?: string | null;
             timezone?: string | null;
+            /** @description This user's personal UI language preference (add-ui-i18n), null meaning "follow the instance default". Only takes effect when InstanceSettings.perUserLanguageEnabled is true. */
+            language?: components["schemas"]["Language"] | null;
             /** Format: date-time */
             deactivatedAt?: string | null;
             /** Format: date-time */
@@ -3505,6 +3521,7 @@ export interface components {
             /** @description A known preset key, or null for the generated default. The reserved value "custom" is rejected here — set only by POST /api/v1/users/me/avatar. */
             avatarKey?: string | null;
             timezone?: string | null;
+            language?: components["schemas"]["Language"] | null;
         };
         UserInput: {
             email: string;

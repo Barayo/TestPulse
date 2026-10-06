@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
 import { FolderInputIcon, Trash2Icon, XIcon } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -54,6 +55,7 @@ function firstNameOf(displayName: string): string {
 }
 
 export default function CaseDetailPage() {
+  const { t } = useTranslation()
   const { projectKey, caseKey } = useParams<{ projectKey: string; caseKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
@@ -215,13 +217,13 @@ export default function CaseDetailPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Case not found. <Link to={`/projects/${projectKey}/library`} className="underline">Go to Library</Link>
+        {t('CaseDetailPage.caseNotFound')} <Link to={`/projects/${projectKey}/library`} className="underline">{t('CaseDetailPage.goToLibrary')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/projects/${projectKey}/cases/${caseKey}` }} className="underline">
-              Log in
+              {t('CaseDetailPage.logIn')}
             </Link>
           </>
         )}
@@ -232,7 +234,7 @@ export default function CaseDetailPage() {
 
   const root = folders.find((f) => !f.parentFolderId)
   const folder = folders.find((f) => f.id === testCase.folderId)
-  const folderName = folder && root && folder.id !== root.id ? folder.name : 'Library'
+  const folderName = folder && root && folder.id !== root.id ? folder.name : t('CaseDetailPage.library')
   const suiteNames = suites.filter((s) => s.caseIds.includes(testCase.id)).map((s) => s.name)
   const linkedRequirements = requirements.filter((r) => r.caseIds.includes(testCase.id))
   const unlinkedRequirements = requirements.filter((r) => !r.caseIds.includes(testCase.id))
@@ -264,7 +266,7 @@ export default function CaseDetailPage() {
       },
     })
     if (!response.ok) {
-      setSaveError((error as { error?: string })?.error ?? 'Could not save these changes.')
+      setSaveError((error as { error?: string })?.error ?? t('CaseDetailPage.saveFailed'))
       return
     }
     await load()
@@ -293,10 +295,10 @@ export default function CaseDetailPage() {
     const looksLikeTextByName = /\.(txt|log)$/i.test(file.name)
     const typeAccepted = ACCEPTED_CASE_ATTACHMENT_TYPES.includes(file.type) || (looksLikeTextByName && (file.type === '' || file.type === 'text/plain'))
     if (!typeAccepted) {
-      return "isn't a PNG, JPEG, WebP image, PDF, or plain-text (.txt/.log) file. Try a different file."
+      return t('CaseDetailPage.attachmentRejectedType')
     }
     if (file.size > MAX_CASE_ATTACHMENT_UPLOAD_BYTES) {
-      return `is ${(file.size / (1024 * 1024)).toFixed(1)}MB — the limit is 5MB. Try a smaller file.`
+      return t('CaseDetailPage.attachmentRejectedSize', { size: (file.size / (1024 * 1024)).toFixed(1) })
     }
     return null
   }
@@ -323,7 +325,7 @@ export default function CaseDetailPage() {
         credentials: 'include',
       })
       if (!res.ok) {
-        setLastCaseAttachError({ filename: file.name, reason: 'failed to upload. Try again.' })
+        setLastCaseAttachError({ filename: file.name, reason: t('CaseDetailPage.attachmentUploadFailed') })
         setFailedCaseUploads((prev) => [...prev, { id: `${file.name}-${Date.now()}`, filename: file.name }])
         return
       }
@@ -378,7 +380,7 @@ export default function CaseDetailPage() {
     ...(canEdit
       ? [
           {
-            label: 'Move to…',
+            label: t('CaseDetailPage.moveTo'),
             icon: <FolderInputIcon className="size-4" aria-hidden="true" />,
             onSelect: () => setMoving(true),
           } satisfies RowActionMenuItem,
@@ -387,7 +389,7 @@ export default function CaseDetailPage() {
     ...(canDelete
       ? [
           {
-            label: 'Delete',
+            label: t('CaseDetailPage.delete'),
             danger: true,
             dividerBefore: true,
             icon: <Trash2Icon className="size-4" aria-hidden="true" />,
@@ -402,7 +404,7 @@ export default function CaseDetailPage() {
   // can wrap instead of truncating a long one mid-word.
   const hasFolderAncestor = Boolean(folder && root && folder.id !== root.id)
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
-    { label: 'Projects', href: '/' },
+    { label: t('CaseDetailPage.projects'), href: '/' },
     { label: project.name, href: `/projects/${projectKey}` },
     // No href when Library would be the sole remaining segment (case lives
     // directly in root) — that's "current location," not a distinct
@@ -410,7 +412,7 @@ export default function CaseDetailPage() {
     // convention (Breadcrumbs.tsx's single-segment case renders nothing
     // when the lone segment has no href, same as an unsectioned Suites/Runs
     // page having nothing left to show).
-    { label: 'Library', href: hasFolderAncestor ? `/projects/${projectKey}/library` : undefined },
+    { label: t('CaseDetailPage.library'), href: hasFolderAncestor ? `/projects/${projectKey}/library` : undefined },
     ...(hasFolderAncestor && folder ? [{ label: folder.name, href: libraryUrl(folder) }] : []),
   ])
 
@@ -424,7 +426,7 @@ export default function CaseDetailPage() {
             {!isEditing && (
               <Link
                 to={libraryUrl(folder ?? root)}
-                aria-label={`Back to ${folderName}`}
+                aria-label={t('CaseDetailPage.backToFolder', { folderName })}
                 className="text-2xl leading-none text-primary hover:text-primary/70"
               >
                 ←
@@ -432,7 +434,7 @@ export default function CaseDetailPage() {
             )}
             {isEditing ? (
               <input
-                aria-label="Title"
+                aria-label={t('CaseDetailPage.titleFieldLabel')}
                 className="tp-heading w-full min-w-0 border-b border-transparent bg-transparent text-2xl outline-none focus-visible:border-ring"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
@@ -451,11 +453,11 @@ export default function CaseDetailPage() {
                   setIsEditing(true)
                 }}
               >
-                Edit
+                {t('CaseDetailPage.edit')}
               </Button>
             )}
             {actionMenuItems.length > 0 && (
-              <RowActionMenu label={`Actions for ${testCase.content.title}`} items={actionMenuItems} />
+              <RowActionMenu label={t('CaseDetailPage.actionsForCase', { title: testCase.content.title })} items={actionMenuItems} />
             )}
           </div>
         )}
@@ -488,14 +490,14 @@ export default function CaseDetailPage() {
                     setIsEditing(false)
                   }}
                 >
-                  Cancel
+                  {t('CaseDetailPage.cancel')}
                 </Button>
                 <Button
                   onClick={() => {
                     void saveEdit()
                   }}
                 >
-                  Save changes
+                  {t('CaseDetailPage.saveChanges')}
                 </Button>
               </div>
             </div>
@@ -514,7 +516,7 @@ export default function CaseDetailPage() {
                         setIsEditing(true)
                       }}
                     >
-                      + Add steps
+                      {t('CaseDetailPage.addSteps')}
                     </Button>
                   ) : undefined
                 }
@@ -531,14 +533,14 @@ export default function CaseDetailPage() {
           className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5"
           data-testid="case-sidebar"
         >
-          <CaseSidebarSection title="Properties">
-            <PropertyRow label="Format" value={CASE_FORMAT_LABELS[(isEditing ? format : testCase.content.format) ?? 'steps']} />
+          <CaseSidebarSection title={t('CaseDetailPage.properties')}>
+            <PropertyRow label={t('CaseDetailPage.format')} value={CASE_FORMAT_LABELS[(isEditing ? format : testCase.content.format) ?? 'steps']} />
             <PropertyRow
-              label="Priority"
+              label={t('CaseDetailPage.priority')}
               value={
                 isEditing ? (
                   <select
-                    aria-label="Priority"
+                    aria-label={t('CaseDetailPage.priority')}
                     value={priority}
                     onChange={(e) => setPriority(e.target.value as Priority)}
                     className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
@@ -556,14 +558,14 @@ export default function CaseDetailPage() {
               wrap
             />
             <PropertyRow
-              label="Test type"
+              label={t('CaseDetailPage.testType')}
               value={
                 isEditing ? (
                   <Input
-                    aria-label="Test type"
+                    aria-label={t('CaseDetailPage.testType')}
                     value={testType}
                     onChange={(e) => setTestType(e.target.value)}
-                    placeholder="e.g. unit, e2e"
+                    placeholder={t('CaseDetailPage.testTypePlaceholder')}
                   />
                 ) : (
                   testCase.content.testType && <ClassificationPills testType={testCase.content.testType} />
@@ -572,10 +574,10 @@ export default function CaseDetailPage() {
               wrap
             />
             <PropertyRow
-              label="Automation"
+              label={t('CaseDetailPage.automation')}
               value={
                 isEditing ? (
-                  <Switch aria-label="Automated" checked={automated} onCheckedChange={setAutomated} />
+                  <Switch aria-label={t('CaseDetailPage.automatedAriaLabel')} checked={automated} onCheckedChange={setAutomated} />
                 ) : (
                   <AutomationPill automated={Boolean(testCase.content.automated)} />
                 )
@@ -583,14 +585,14 @@ export default function CaseDetailPage() {
               wrap
             />
             <PropertyRow
-              label="Platform"
+              label={t('CaseDetailPage.platform')}
               value={
                 isEditing ? (
                   <Input
-                    aria-label="Platform"
+                    aria-label={t('CaseDetailPage.platform')}
                     value={platform}
                     onChange={(e) => setPlatform(e.target.value)}
-                    placeholder="e.g. web, iOS"
+                    placeholder={t('CaseDetailPage.platformPlaceholder')}
                   />
                 ) : (
                   testCase.content.platform && <ClassificationPills platform={testCase.content.platform} />
@@ -599,7 +601,7 @@ export default function CaseDetailPage() {
               wrap
             />
             <PropertyRow
-              label="Tags"
+              label={t('CaseDetailPage.tags')}
               value={
                 isEditing ? (
                   <TagChipsEditor
@@ -619,9 +621,9 @@ export default function CaseDetailPage() {
               }
               wrap
             />
-            <PropertyRow label="Version" value={`v${testCase.currentVersion}`} />
+            <PropertyRow label={t('CaseDetailPage.version')} value={t('CaseDetailPage.versionValue', { version: testCase.currentVersion })} />
             <PropertyRow
-              label="In suites"
+              label={t('CaseDetailPage.inSuites')}
               value={
                 suiteNames.length > 0 &&
                 suiteNames.map((name) => (
@@ -633,7 +635,7 @@ export default function CaseDetailPage() {
               wrap
             />
             <PropertyRow
-              label="Requirements"
+              label={t('CaseDetailPage.requirements')}
               value={
                 <>
                   {linkedRequirements.map((r) => (
@@ -647,7 +649,7 @@ export default function CaseDetailPage() {
                       {canManageRequirements && (
                         <button
                           type="button"
-                          aria-label={`Unlink ${r.name}`}
+                          aria-label={t('CaseDetailPage.unlinkRequirement', { name: r.name })}
                           className="text-muted-foreground hover:text-destructive"
                           onClick={() => void unlinkRequirement(r.key)}
                         >
@@ -658,14 +660,14 @@ export default function CaseDetailPage() {
                   ))}
                   {canManageRequirements && unlinkedRequirements.length > 0 && (
                     <select
-                      aria-label="Link a requirement"
+                      aria-label={t('CaseDetailPage.linkARequirement')}
                       className="rounded-md border border-input bg-background px-1.5 py-0.5 text-xs"
                       value=""
                       onChange={(e) => {
                         if (e.target.value) void linkRequirement(e.target.value)
                       }}
                     >
-                      <option value="">+ Link requirement…</option>
+                      <option value="">{t('CaseDetailPage.linkRequirementPlaceholder')}</option>
                       {unlinkedRequirements.map((r) => (
                         <option key={r.id} value={r.key}>
                           {r.name}
@@ -678,7 +680,7 @@ export default function CaseDetailPage() {
               wrap
             />
             <PropertyRow
-              label="Jira"
+              label={t('CaseDetailPage.jira')}
               value={
                 <JiraLinkBadge
                   variant="property"
@@ -764,7 +766,7 @@ export default function CaseDetailPage() {
                           className="text-xs text-primary hover:underline"
                           onClick={() => setShowAllCustomFields(true)}
                         >
-                          Show {hidden.length} more
+                          {t('CaseDetailPage.showMore', { count: hidden.length })}
                         </button>
                       ))}
                   </>
@@ -772,15 +774,15 @@ export default function CaseDetailPage() {
               })()}
           </CaseSidebarSection>
 
-          <CaseSidebarSection title="Results">
+          <CaseSidebarSection title={t('CaseDetailPage.results')}>
             <CaseResultsPanel data={resultsData} />
           </CaseSidebarSection>
 
-          <CaseSidebarSection title="Version history">
-              <ul aria-label="Version history" className="divide-y rounded-md border text-sm">
+          <CaseSidebarSection title={t('CaseDetailPage.versionHistory')}>
+              <ul aria-label={t('CaseDetailPage.versionHistory')} className="divide-y rounded-md border text-sm">
                 {versions.map((v) => {
                   const previous = versions.find((x) => x.version === v.version - 1)
-                  const signal = previous ? diffSignal(diffContent(previous.content, v.content, customFieldDefs)) : 'Initial version'
+                  const signal = previous ? diffSignal(diffContent(previous.content, v.content, customFieldDefs)) : t('CaseDetailPage.initialVersion')
                   const expanded = expandedVersion === v.version
                   const author = v.actorKind === 'user' && v.actorRefId ? userIdentities[v.actorRefId] : undefined
                   return (
@@ -792,8 +794,8 @@ export default function CaseDetailPage() {
                       >
                         <span className="flex flex-col gap-0.5">
                           <span className="flex items-center gap-2">
-                            <span>v{v.version}</span>
-                            {v.version === testCase.currentVersion && <Badge variant="default">current</Badge>}
+                            <span>{t('CaseDetailPage.versionValue', { version: v.version })}</span>
+                            {v.version === testCase.currentVersion && <Badge variant="default">{t('CaseDetailPage.current')}</Badge>}
                           </span>
                           <span className="flex items-center gap-1 text-xs text-muted-foreground">
                             {author && (
@@ -821,12 +823,12 @@ export default function CaseDetailPage() {
                             <ContentDiffView diff={diffContent(previous.content, v.content, customFieldDefs)} />
                           ) : (
                             <p className="text-sm text-muted-foreground">
-                              This is the first version — there is no previous version to compare against.
+                              {t('CaseDetailPage.noPreviousVersion')}
                             </p>
                           )}
                           <div className="flex gap-2">
                             <Button type="button" variant="outline" size="sm" onClick={() => setViewingVersion(v.version)}>
-                              View executions
+                              {t('CaseDetailPage.viewExecutions')}
                             </Button>
                             {canEdit && v.version !== testCase.currentVersion && (
                               <Button
@@ -835,7 +837,7 @@ export default function CaseDetailPage() {
                                 size="sm"
                                 onClick={() => setRestoringVersion(v.version)}
                               >
-                                Restore this version
+                                {t('CaseDetailPage.restoreThisVersion')}
                               </Button>
                             )}
                           </div>
@@ -873,7 +875,7 @@ export default function CaseDetailPage() {
 
       <Dialog open={moving} onOpenChange={setMoving}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Move to…</DialogTitle>
+          <DialogTitle>{t('CaseDetailPage.moveTo')}</DialogTitle>
           <FolderPicker
             folders={folders}
             rootId={root?.id ?? ''}
@@ -886,16 +888,16 @@ export default function CaseDetailPage() {
 
       <Dialog open={confirmingDelete} onOpenChange={setConfirmingDelete}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete case?</DialogTitle>
+          <DialogTitle>{t('CaseDetailPage.deleteCaseQuestion')}</DialogTitle>
           <DialogDescription>
-            Delete case &ldquo;{testCase.content.title}&rdquo;? This cannot be undone.
+            {t('CaseDetailPage.deleteCaseConfirm', { title: testCase.content.title })}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setConfirmingDelete(false)}>
-              Cancel
+              {t('CaseDetailPage.cancel')}
             </Button>
             <Button variant="destructive" onClick={() => void confirmDeleteCase()}>
-              Delete case
+              {t('CaseDetailPage.deleteCaseButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -903,16 +905,15 @@ export default function CaseDetailPage() {
 
       <Dialog open={restoringVersion !== null} onOpenChange={(open) => !open && setRestoringVersion(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Restore version {restoringVersion}?</DialogTitle>
+          <DialogTitle>{t('CaseDetailPage.restoreVersionQuestion', { version: restoringVersion })}</DialogTitle>
           <DialogDescription>
-            This creates a new version with version {restoringVersion}&rsquo;s content, which becomes current.
-            Existing versions remain in history, untouched.
+            {t('CaseDetailPage.restoreVersionDescription', { version: restoringVersion })}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRestoringVersion(null)}>
-              Cancel
+              {t('CaseDetailPage.cancel')}
             </Button>
-            <Button onClick={() => void confirmRestoreVersion()}>Restore</Button>
+            <Button onClick={() => void confirmRestoreVersion()}>{t('CaseDetailPage.restore')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

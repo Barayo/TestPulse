@@ -9,6 +9,7 @@ export type AuthUser = {
   displayName?: string | null
   avatarKey?: string | null
   timezone?: string | null
+  language?: string | null
   mustChangePassword?: boolean
 }
 
@@ -98,6 +99,15 @@ type AuthContextValue = {
   // available. Defaults to true, matching the server's own default-enabled
   // config.go behavior, the ordinary case.
   mcpEnabled: boolean
+  // Instance-wide default UI language (add-ui-i18n), resolved from the
+  // same GET /api/v1/meta fetch. Defaults to "en", the server's own
+  // seeded default — same "render the ordinary default for a moment"
+  // reasoning as colorTheme/defaultLandingView above.
+  defaultLanguage: string
+  // Whether a user's own `language` preference is allowed to override
+  // defaultLanguage (add-ui-i18n), resolved from the same fetch. Defaults
+  // to false, matching the server's own conservative default.
+  perUserLanguageEnabled: boolean
   login: (email: string, password: string) => Promise<LoginResult>
   // Creates the instance's first admin account and logs it in, in one
   // request (add-first-run-setup) — updates both `user` and `setupRequired`
@@ -132,6 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [defaultLandingView, setDefaultLandingView] = useState('dashboard')
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState(true)
   const [mcpEnabled, setMcpEnabled] = useState(true)
+  const [defaultLanguage, setDefaultLanguage] = useState('en')
+  const [perUserLanguageEnabled, setPerUserLanguageEnabled] = useState(false)
   const [sessionExpired, setSessionExpired] = useState(false)
   const userRef = useRef<AuthUser | null>(null)
   userRef.current = user
@@ -162,6 +174,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               defaultLandingView?: string
               publicProjectsEnabled?: boolean
               mcpEnabled?: boolean
+              defaultLanguage?: string
+              perUserLanguageEnabled?: boolean
             }
           | undefined
         setSetupRequired(response.ok && meta ? Boolean(meta.setupRequired) : false)
@@ -171,6 +185,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setDefaultLandingView(response.ok && meta?.defaultLandingView ? meta.defaultLandingView : 'dashboard')
         setPublicProjectsEnabled(response.ok && meta ? meta.publicProjectsEnabled !== false : true)
         setMcpEnabled(response.ok && meta ? meta.mcpEnabled !== false : true)
+        setDefaultLanguage(response.ok && meta?.defaultLanguage ? meta.defaultLanguage : 'en')
+        setPerUserLanguageEnabled(response.ok && meta ? meta.perUserLanguageEnabled === true : false)
       } catch {
         if (!cancelled) {
           setSetupRequired(false)
@@ -180,6 +196,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setDefaultLandingView('dashboard')
           setPublicProjectsEnabled(true)
           setMcpEnabled(true)
+          setDefaultLanguage('en')
+          setPerUserLanguageEnabled(false)
         }
       } finally {
         if (!cancelled) setSetupRequiredLoading(false)
@@ -229,14 +247,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const refreshColorTheme = useCallback(async () => {
     try {
       const { data, response } = await api.GET('/api/v1/meta')
-      const meta = data as { colorTheme?: string; customPalette?: CustomPalette; jiraSiteUrl?: string } | undefined
+      const meta = data as
+        | {
+            colorTheme?: string
+            customPalette?: CustomPalette
+            jiraSiteUrl?: string
+            defaultLanguage?: string
+            perUserLanguageEnabled?: boolean
+          }
+        | undefined
       setColorTheme(response.ok && meta?.colorTheme ? meta.colorTheme : 'teal')
       setCustomPalette(response.ok && meta?.customPalette ? meta.customPalette : null)
       setJiraSiteUrl(response.ok && meta?.jiraSiteUrl ? meta.jiraSiteUrl : '')
+      setDefaultLanguage(response.ok && meta?.defaultLanguage ? meta.defaultLanguage : 'en')
+      setPerUserLanguageEnabled(response.ok && meta ? meta.perUserLanguageEnabled === true : false)
     } catch {
       setColorTheme('teal')
       setCustomPalette(null)
       setJiraSiteUrl('')
+      setDefaultLanguage('en')
+      setPerUserLanguageEnabled(false)
     }
   }, [])
 
@@ -267,6 +297,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         defaultLandingView,
         publicProjectsEnabled,
         mcpEnabled,
+        defaultLanguage,
+        perUserLanguageEnabled,
         refreshColorTheme,
         login,
         setup,

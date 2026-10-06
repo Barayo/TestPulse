@@ -1,4 +1,5 @@
 import { FolderIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Input } from '@/components/ui/input'
 
 export type PickerFolder = { id: string; name: string; parentFolderId?: string }
@@ -16,13 +17,13 @@ function ancestorChain(folders: PickerFolder[], folderId: string): PickerFolder[
 // Full path for disambiguation (a title-attribute tooltip, not the row's
 // visible label) — same-named sections at different depths would otherwise
 // be indistinguishable once rows show just their own name.
-function folderPath(folders: PickerFolder[], folderId: string, rootId: string): string {
-  if (folderId === rootId) return 'Library'
-  return ['Library', ...ancestorChain(folders, folderId).map((f) => f.name)].join(' / ')
+function folderPath(folders: PickerFolder[], folderId: string, rootId: string, libraryLabel: string): string {
+  if (folderId === rootId) return libraryLabel
+  return [libraryLabel, ...ancestorChain(folders, folderId).map((f) => f.name)].join(' / ')
 }
 
-function displayName(folder: PickerFolder, rootId: string): string {
-  return folder.id === rootId ? 'Library' : folder.name
+function displayName(folder: PickerFolder, rootId: string, libraryLabel: string): string {
+  return folder.id === rootId ? libraryLabel : folder.name
 }
 
 type Props = {
@@ -42,16 +43,18 @@ type Props = {
 // rather than a flat list of full-path strings, with an optional per-row case
 // count; search matches a folder's own name, not its full path.
 export function FolderPicker({ folders, rootId, query, onQueryChange, onSelect, folderStats }: Props) {
+  const { t } = useTranslation()
+  const libraryLabel = t('FolderPicker.library')
   const normalizedQuery = query.trim().toLowerCase()
   const rows = folders
     .map((f) => ({ folder: f, depth: f.id === rootId ? 0 : ancestorChain(folders, f.id).length }))
-    .filter((r) => displayName(r.folder, rootId).toLowerCase().includes(normalizedQuery))
+    .filter((r) => displayName(r.folder, rootId, libraryLabel).toLowerCase().includes(normalizedQuery))
 
   return (
     <div className="space-y-2">
       <Input
         autoFocus
-        placeholder="Search sections…"
+        placeholder={t('FolderPicker.searchSectionsPlaceholder')}
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
       />
@@ -67,12 +70,12 @@ export function FolderPicker({ folders, rootId, query, onQueryChange, onSelect, 
                 onClick={() => onSelect(folder.id)}
               >
                 <FolderIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-                <span className="min-w-0 flex-1 truncate" title={folderPath(folders, folder.id, rootId)}>
-                  {displayName(folder, rootId)}
+                <span className="min-w-0 flex-1 truncate" title={folderPath(folders, folder.id, rootId, libraryLabel)}>
+                  {displayName(folder, rootId, libraryLabel)}
                 </span>
                 {count !== undefined && (
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {count} {count === 1 ? 'case' : 'cases'}
+                    {t('FolderPicker.caseCount', { count, plural: count === 1 ? '' : 's' })}
                   </span>
                 )}
               </button>

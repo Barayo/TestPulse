@@ -91,17 +91,19 @@ func TestUserUpdateProfile(t *testing.T) {
 	ctx := context.Background()
 	u := mustUser(t, s, "profile@example.com", false)
 
-	if u.DisplayName != nil || u.AvatarKey != nil || u.Timezone != nil {
+	if u.DisplayName != nil || u.AvatarKey != nil || u.Timezone != nil || u.Language != nil {
 		t.Fatalf("new user profile fields = %+v, want all nil", u)
 	}
 
 	displayName := "Ada"
 	avatarKey := "ada-lovelace"
 	timezone := "Europe/Madrid"
+	language := "es"
 	updated, err := s.Users.UpdateProfile(ctx, u.ID, domain.UserProfileUpdate{
 		DisplayName: &displayName,
 		AvatarKey:   &avatarKey,
 		Timezone:    &timezone,
+		Language:    &language,
 	})
 	if err != nil {
 		t.Fatalf("UpdateProfile: %v", err)
@@ -115,6 +117,9 @@ func TestUserUpdateProfile(t *testing.T) {
 	if updated.Timezone == nil || *updated.Timezone != timezone {
 		t.Errorf("Timezone = %v, want %q", updated.Timezone, timezone)
 	}
+	if updated.Language == nil || *updated.Language != language {
+		t.Errorf("Language = %v, want %q", updated.Language, language)
+	}
 
 	got, err := s.Users.Get(ctx, u.ID)
 	if err != nil {
@@ -122,6 +127,9 @@ func TestUserUpdateProfile(t *testing.T) {
 	}
 	if got.DisplayName == nil || *got.DisplayName != displayName {
 		t.Errorf("Get().DisplayName = %v, want %q (round-trip)", got.DisplayName, displayName)
+	}
+	if got.Language == nil || *got.Language != language {
+		t.Errorf("Get().Language = %v, want %q (round-trip)", got.Language, language)
 	}
 }
 

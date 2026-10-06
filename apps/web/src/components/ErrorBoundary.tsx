@@ -1,5 +1,6 @@
 import { Component, type ReactNode } from 'react'
 import { RefreshCwIcon, TriangleAlertIcon } from 'lucide-react'
+import i18next from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { BrandMark } from '@/components/BrandMark'
@@ -44,17 +45,15 @@ export class ErrorBoundary extends Component<Props, State> {
               <TriangleAlertIcon className="size-4" aria-hidden="true" />
             </span>
             <div role="alert" className="space-y-1">
-              <p className="font-medium">Something went wrong</p>
-              <p className="text-sm text-muted-foreground">
-                TestPulse hit an unexpected error and couldn't continue. Reloading the page usually fixes it.
-              </p>
+              <p className="font-medium">{i18next.t('ErrorBoundary.genericErrorHeading')}</p>
+              <p className="text-sm text-muted-foreground">{i18next.t('ErrorBoundary.genericErrorMessage')}</p>
             </div>
             <Button type="button" className="w-full" onClick={() => window.location.reload()}>
               <RefreshCwIcon aria-hidden="true" />
-              Reload page
+              {i18next.t('ErrorBoundary.reloadButton')}
             </Button>
             <a href="/" className="text-sm text-muted-foreground hover:text-foreground">
-              Back to projects
+              {i18next.t('ErrorBoundary.backToProjectsLink')}
             </a>
           </CardContent>
         </Card>

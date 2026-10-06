@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PlusIcon, XIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -50,6 +51,7 @@ export function CaseParametersEditor({
   steps: Step[]
   onChange: (parameters: CaseParameters | undefined) => void
 }) {
+  const { t } = useTranslation()
   const [blockedMessage, setBlockedMessage] = useState<string | null>(null)
   const columns = parameters?.columns ?? [NAME_COLUMN]
   const rows = parameters?.rows ?? []
@@ -57,10 +59,10 @@ export function CaseParametersEditor({
   if (rows.length === 0) {
     return (
       <div>
-        <p className="tp-label mb-2">Test Data</p>
+        <p className="tp-label mb-2">{t('CaseParametersEditor.testData')}</p>
         <div className="flex items-center justify-between gap-4">
           <p className="max-w-lg text-sm text-muted-foreground">
-            Run this case with several sets of input values instead of duplicating it — add a data table below.
+            {t('CaseParametersEditor.testDataHint')}
           </p>
           <Button
             type="button"
@@ -68,7 +70,7 @@ export function CaseParametersEditor({
             size="sm"
             onClick={() => onChange({ columns: [NAME_COLUMN], rows: [{ [NAME_COLUMN]: '' }] })}
           >
-            + Add test data
+            {t('CaseParametersEditor.addTestData')}
           </Button>
         </div>
       </div>
@@ -85,7 +87,7 @@ export function CaseParametersEditor({
 
   function renameColumn(col: string, next: string) {
     if (next !== col && (next === NAME_COLUMN || columns.includes(next))) {
-      setBlockedMessage(`"${next}" is already a column name.`)
+      setBlockedMessage(t('CaseParametersEditor.duplicateColumnName', { name: next }))
       return
     }
     update({
@@ -96,7 +98,7 @@ export function CaseParametersEditor({
 
   function removeColumn(col: string) {
     if (usedPlaceholders.has(col)) {
-      setBlockedMessage(`"${col}" is used in a step and can't be removed.`)
+      setBlockedMessage(t('CaseParametersEditor.columnInUse', { name: col }))
       return
     }
     update({
@@ -134,7 +136,7 @@ export function CaseParametersEditor({
 
   return (
     <div>
-      <p className="tp-label mb-2">Test Data</p>
+      <p className="tp-label mb-2">{t('CaseParametersEditor.testData')}</p>
       <Card>
         <CardContent className="overflow-x-auto p-0">
           <table className="w-full border-collapse text-sm">
@@ -142,8 +144,8 @@ export function CaseParametersEditor({
               <tr className="bg-muted/70">
                 <th className="border-b px-3 py-2 text-left font-semibold whitespace-nowrap">
                   <input
-                    aria-label="Name column"
-                    title="Required, always first"
+                    aria-label={t('CaseParametersEditor.nameColumnAriaLabel')}
+                    title={t('CaseParametersEditor.nameColumnTitle')}
                     value={NAME_COLUMN}
                     readOnly
                     className="tp-label w-auto min-w-[4ch] border-none bg-transparent text-foreground outline-none"
@@ -153,15 +155,15 @@ export function CaseParametersEditor({
                   <th key={i} className="group border-b px-3 py-2 text-left font-semibold whitespace-nowrap">
                     <div className="flex items-center gap-1.5">
                       <input
-                        aria-label={`Column ${i + 1}`}
+                        aria-label={t('CaseParametersEditor.columnAriaLabel', { index: i + 1 })}
                         value={col}
-                        placeholder="Column name"
+                        placeholder={t('CaseParametersEditor.columnNamePlaceholder')}
                         onChange={(e) => renameColumn(col, e.target.value)}
                         className="tp-label w-auto min-w-[4ch] rounded border-none bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                       />
                       <button
                         type="button"
-                        aria-label={`Remove column ${col}`}
+                        aria-label={t('CaseParametersEditor.removeColumn', { col })}
                         className="text-muted-foreground opacity-0 hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100 group-focus-within:opacity-100"
                         onClick={() => removeColumn(col)}
                       >
@@ -173,7 +175,7 @@ export function CaseParametersEditor({
                 <th className="w-9 border-b px-1.5 py-1.5">
                   <button
                     type="button"
-                    aria-label="Add column"
+                    aria-label={t('CaseParametersEditor.addColumn')}
                     className="inline-flex size-6 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground"
                     onClick={addColumn}
                   >
@@ -187,9 +189,9 @@ export function CaseParametersEditor({
                 <tr key={i} className="last:[&_td]:border-b-0">
                   <td className="border-b px-1 py-0.5">
                     <input
-                      aria-label={`Row ${i + 1} name`}
+                      aria-label={t('CaseParametersEditor.rowNameAriaLabel', { index: i + 1 })}
                       value={row[NAME_COLUMN] ?? ''}
-                      placeholder="Row name"
+                      placeholder={t('CaseParametersEditor.rowNamePlaceholder')}
                       onChange={(e) => updateCell(i, NAME_COLUMN, e.target.value)}
                       className="w-full min-w-[7ch] rounded-md border-none bg-transparent p-2 text-sm font-semibold outline-none focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/45"
                     />
@@ -197,9 +199,9 @@ export function CaseParametersEditor({
                   {otherColumns.map((col, ci) => (
                     <td key={ci} className="border-b px-1 py-0.5">
                       <input
-                        aria-label={`Row ${i + 1} ${col}`}
+                        aria-label={t('CaseParametersEditor.rowCellAriaLabel', { index: i + 1, col })}
                         value={row[col] ?? ''}
-                        placeholder="Value"
+                        placeholder={t('CaseParametersEditor.valuePlaceholder')}
                         onChange={(e) => updateCell(i, col, e.target.value)}
                         className="w-full min-w-[7ch] rounded-md border-none bg-transparent p-2 text-sm outline-none focus-visible:bg-card focus-visible:ring-2 focus-visible:ring-ring/45"
                       />
@@ -208,7 +210,7 @@ export function CaseParametersEditor({
                   <td className="border-b px-1 py-0.5 text-center">
                     <button
                       type="button"
-                      aria-label={`Remove row ${i + 1}`}
+                      aria-label={t('CaseParametersEditor.removeRow', { index: i + 1 })}
                       className="text-muted-foreground hover:text-destructive"
                       onClick={() => removeRow(i)}
                     >
@@ -221,7 +223,7 @@ export function CaseParametersEditor({
           </table>
           <div className="flex items-center gap-4 px-(--card-spacing) py-3">
             <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={addRow}>
-              + Add row
+              {t('CaseParametersEditor.addRow')}
             </button>
           </div>
         </CardContent>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { CasePicker, type CasePickerCase, type CasePickerFolder } from './CasePicker'
 
@@ -47,6 +48,7 @@ export function SuiteCaseGrid({
   // (unify-authenticated-and-public-views tasks.md 2.2).
   readOnly?: boolean
 }) {
+  const { t } = useTranslation()
   return (
     <div className="space-y-3">
       <CasePicker
@@ -61,17 +63,17 @@ export function SuiteCaseGrid({
       {readOnly ? (
         <div className="flex justify-end rounded-md border bg-accent px-4 py-2.5">
           <Button type="button" variant="outline" onClick={onExit}>
-            Done
+            {t('SuiteCaseGrid.doneButton')}
           </Button>
         </div>
       ) : (
         <div className="flex items-center justify-between rounded-md border bg-accent px-4 py-2.5">
           <span className="text-sm font-medium">
-            {selected.size === 0 ? 'No cases selected' : `${selected.size} selected`}
+            {selected.size === 0 ? t('SuiteCaseGrid.noCasesSelected') : t('SuiteCaseGrid.selectedCount', { count: selected.size })}
           </span>
           <div className="flex gap-2">
             <Button type="button" variant="outline" onClick={onExit}>
-              Cancel
+              {t('SuiteCaseGrid.cancelButton')}
             </Button>
             <Button type="button" disabled={commitDisabled} onClick={onCommit}>
               {commitLabel}

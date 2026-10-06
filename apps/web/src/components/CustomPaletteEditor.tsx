@@ -1,4 +1,6 @@
 import { useState, type CSSProperties } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { ParseKeys } from 'i18next'
 import { CheckIcon } from 'lucide-react'
 import type { CustomPalette, CustomPaletteMode } from '@/lib/useAuth'
 import { Input } from '@/components/ui/input'
@@ -10,31 +12,31 @@ import { contrastRatio, meetsAA } from '@/lib/contrast'
 
 type Mode = 'light' | 'dark'
 
-const FIELDS: { key: keyof CustomPaletteMode; label: string }[] = [
-  { key: 'background', label: 'Background' },
-  { key: 'foreground', label: 'Foreground' },
-  { key: 'card', label: 'Card' },
-  { key: 'primary', label: 'Primary' },
-  { key: 'primaryForeground', label: 'Primary text' },
-  { key: 'muted', label: 'Muted' },
-  { key: 'mutedForeground', label: 'Muted text' },
-  { key: 'accent', label: 'Accent' },
-  { key: 'border', label: 'Border' },
-  { key: 'input', label: 'Input' },
+const FIELDS: { key: keyof CustomPaletteMode; labelKey: ParseKeys }[] = [
+  { key: 'background', labelKey: 'CustomPaletteEditor.fieldBackground' },
+  { key: 'foreground', labelKey: 'CustomPaletteEditor.fieldForeground' },
+  { key: 'card', labelKey: 'CustomPaletteEditor.fieldCard' },
+  { key: 'primary', labelKey: 'CustomPaletteEditor.fieldPrimary' },
+  { key: 'primaryForeground', labelKey: 'CustomPaletteEditor.fieldPrimaryText' },
+  { key: 'muted', labelKey: 'CustomPaletteEditor.fieldMuted' },
+  { key: 'mutedForeground', labelKey: 'CustomPaletteEditor.fieldMutedText' },
+  { key: 'accent', labelKey: 'CustomPaletteEditor.fieldAccent' },
+  { key: 'border', labelKey: 'CustomPaletteEditor.fieldBorder' },
+  { key: 'input', labelKey: 'CustomPaletteEditor.fieldInput' },
 ]
 
 const HEX_PATTERN = /^#[0-9A-Fa-f]{6}$/
 
 // The seven real contrast pairs used elsewhere in this app (design.md) —
 // live, non-blocking readouts, not a Save-blocking guardrail.
-const CONTRAST_PAIRS: { label: string; fg: keyof CustomPaletteMode; bg: keyof CustomPaletteMode }[] = [
-  { label: 'Foreground / Background', fg: 'foreground', bg: 'background' },
-  { label: 'Foreground / Card', fg: 'foreground', bg: 'card' },
-  { label: 'Primary text / Primary', fg: 'primaryForeground', bg: 'primary' },
-  { label: 'Muted text / Muted', fg: 'mutedForeground', bg: 'muted' },
-  { label: 'Foreground / Accent', fg: 'foreground', bg: 'accent' },
-  { label: 'Muted text / Card', fg: 'mutedForeground', bg: 'card' },
-  { label: 'Primary / Accent', fg: 'primary', bg: 'accent' },
+const CONTRAST_PAIRS: { labelKey: ParseKeys; fg: keyof CustomPaletteMode; bg: keyof CustomPaletteMode }[] = [
+  { labelKey: 'CustomPaletteEditor.contrastForegroundBackground', fg: 'foreground', bg: 'background' },
+  { labelKey: 'CustomPaletteEditor.contrastForegroundCard', fg: 'foreground', bg: 'card' },
+  { labelKey: 'CustomPaletteEditor.contrastPrimaryTextPrimary', fg: 'primaryForeground', bg: 'primary' },
+  { labelKey: 'CustomPaletteEditor.contrastMutedTextMuted', fg: 'mutedForeground', bg: 'muted' },
+  { labelKey: 'CustomPaletteEditor.contrastForegroundAccent', fg: 'foreground', bg: 'accent' },
+  { labelKey: 'CustomPaletteEditor.contrastMutedTextCard', fg: 'mutedForeground', bg: 'card' },
+  { labelKey: 'CustomPaletteEditor.contrastPrimaryAccent', fg: 'primary', bg: 'accent' },
 ]
 
 interface CustomPaletteEditorProps {
@@ -49,6 +51,7 @@ interface CustomPaletteEditorProps {
 // page — ten free-text hex fields shouldn't flash instance-wide, to every
 // visitor, on every keystroke).
 export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEditorProps) {
+  const { t } = useTranslation()
   const [light, setLight] = useState<CustomPaletteMode>(initial.light)
   const [dark, setDark] = useState<CustomPaletteMode>(initial.dark)
   const [activeMode, setActiveMode] = useState<Mode>('light')
@@ -67,7 +70,10 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
     for (const mode of [light, dark]) {
       for (const { key } of FIELDS) {
         if (!HEX_PATTERN.test(mode[key])) {
-          newErrors[key] = `${FIELDS.find((f) => f.key === key)?.label} must be a valid #RRGGBB hex color`
+          const fieldLabelKey = FIELDS.find((f) => f.key === key)?.labelKey
+          newErrors[key] = t('CustomPaletteEditor.invalidHexError', {
+            field: fieldLabelKey ? t(fieldLabelKey) : '',
+          })
         }
       }
     }
@@ -95,7 +101,7 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
 
   return (
     <div className="space-y-4 rounded-lg border p-3">
-      <div role="group" aria-label="Mode" className="flex gap-0.5 rounded-full bg-muted p-1 w-fit">
+      <div role="group" aria-label={t('CustomPaletteEditor.modeAriaLabel')} className="flex gap-0.5 rounded-full bg-muted p-1 w-fit">
         {(['light', 'dark'] as const).map((mode) => (
           <button
             key={mode}
@@ -106,7 +112,7 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
               activeMode === mode ? 'bg-card text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            {mode === 'light' ? 'Light' : 'Dark'}
+            {mode === 'light' ? t('CustomPaletteEditor.lightLabel') : t('CustomPaletteEditor.darkLabel')}
           </button>
         ))}
       </div>
@@ -114,9 +120,9 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_260px]">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            {FIELDS.map(({ key, label }) => (
+            {FIELDS.map(({ key, labelKey }) => (
               <div key={key} className="space-y-1">
-                <Label htmlFor={`palette-${key}`}>{label}</Label>
+                <Label htmlFor={`palette-${key}`}>{t(labelKey)}</Label>
                 <div className="flex items-center gap-1.5">
                   <input
                     type="color"
@@ -138,16 +144,16 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
             ))}
           </div>
 
-          <div role="region" aria-label="Contrast" className="space-y-1 rounded-md bg-muted p-2.5">
-            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Contrast</p>
-            {CONTRAST_PAIRS.map(({ label, fg, bg }) => {
+          <div role="region" aria-label={t('CustomPaletteEditor.contrastAriaLabel')} className="space-y-1 rounded-md bg-muted p-2.5">
+            <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">{t('CustomPaletteEditor.contrastAriaLabel')}</p>
+            {CONTRAST_PAIRS.map(({ labelKey, fg, bg }) => {
               const ratio = contrastRatio(draft[fg], draft[bg])
               const ok = meetsAA(ratio)
               return (
-                <div key={label} className="flex items-center justify-between text-xs">
-                  <span className="text-muted-foreground">{label}</span>
+                <div key={labelKey} className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{t(labelKey)}</span>
                   <span className={ok ? 'text-foreground' : 'font-medium text-destructive'}>
-                    {ratio.toFixed(2)}:1 · {ok ? 'AA' : 'fails AA'}
+                    {ratio.toFixed(2)}:1 · {ok ? t('CustomPaletteEditor.aaPass') : t('CustomPaletteEditor.aaFail')}
                   </span>
                 </div>
               )
@@ -155,7 +161,7 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
           </div>
         </div>
 
-        <div role="region" aria-label="Preview" className="md:sticky md:top-6 md:self-start">
+        <div role="region" aria-label={t('CustomPaletteEditor.previewAriaLabel')} className="md:sticky md:top-6 md:self-start">
           <div style={previewStyle} className="space-y-3 rounded-lg border p-3" data-testid="palette-preview">
             {/* A non-interactive sample, not the real Save action below —
                 labeled to read as an example, not confused with the actual
@@ -166,24 +172,24 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
               aria-hidden="true"
               style={{ '--primary': draft.primary, '--primary-foreground': draft.primaryForeground } as CSSProperties}
             >
-              Example button
+              {t('CustomPaletteEditor.exampleButtonLabel')}
             </Button>
             <Card>
               <CardHeader>
-                <CardTitle>Login flow test</CardTitle>
+                <CardTitle>{t('CustomPaletteEditor.loginFlowTestTitle')}</CardTitle>
               </CardHeader>
               <CardContent>
-                <PropertyRow label="Test type" value="E2E" />
-                <PropertyRow label="Platform" value="Web" />
+                <PropertyRow label={t('CustomPaletteEditor.sampleTestTypeLabel')} value={t('CustomPaletteEditor.sampleTestTypeValue')} />
+                <PropertyRow label={t('CustomPaletteEditor.samplePlatformLabel')} value={t('CustomPaletteEditor.samplePlatformValue')} />
               </CardContent>
             </Card>
             <p className="rounded-md bg-muted p-2 text-xs text-muted-foreground">
-              No result history yet — record a run to see success rate here.
+              {t('CustomPaletteEditor.sampleNoResultHistoryText')}
             </p>
-            <div className="rounded-md bg-accent px-2.5 py-1.5 text-sm font-semibold text-primary">Roles</div>
+            <div className="rounded-md bg-accent px-2.5 py-1.5 text-sm font-semibold text-primary">{t('CustomPaletteEditor.sampleRolesLabel')}</div>
             <div className="flex items-center justify-between rounded-md border bg-accent px-2.5 py-1.5 text-sm">
-              <span>3 cases</span>
-              <span className="text-muted-foreground">updated 2h ago</span>
+              <span>{t('CustomPaletteEditor.sampleCasesCount')}</span>
+              <span className="text-muted-foreground">{t('CustomPaletteEditor.sampleUpdatedAgoText')}</span>
             </div>
           </div>
         </div>
@@ -191,11 +197,11 @@ export function CustomPaletteEditor({ initial, onSave, saving }: CustomPaletteEd
 
       <Button onClick={handleSave} disabled={saving}>
         {saving ? (
-          'Saving…'
+          t('CustomPaletteEditor.saving')
         ) : (
           <>
             <CheckIcon className="size-4" aria-hidden="true" />
-            Save custom palette
+            {t('CustomPaletteEditor.saveCustomPaletteButton')}
           </>
         )}
       </Button>

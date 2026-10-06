@@ -5,10 +5,10 @@ import { CheckIcon } from 'lucide-react'
 // the grid must show every option's own colors regardless of which one is
 // currently active on the page itself.
 export const PRESETS = [
-  { key: 'teal', label: 'Teal', light: '#F7FAFA', lightPrimary: '#14B8A6', dark: '#0B2A28', darkPrimary: '#2DD4BF' },
-  { key: 'indigo', label: 'Indigo', light: '#F8F7FA', lightPrimary: '#4514B8', dark: '#140B2A', darkPrimary: '#5F2DD4' },
-  { key: 'ocean', label: 'Ocean', light: '#F7F8FA', lightPrimary: '#1453B8', dark: '#0B172A', darkPrimary: '#2D6DD4' },
-  { key: 'forest', label: 'Forest', light: '#F7FAF8', lightPrimary: '#14B850', dark: '#0B2A16', darkPrimary: '#2DD46A' },
+  { key: 'teal', labelKey: 'PaletteSwatchSelector.presetTeal', light: '#F7FAFA', lightPrimary: '#14B8A6', dark: '#0B2A28', darkPrimary: '#2DD4BF' },
+  { key: 'indigo', labelKey: 'PaletteSwatchSelector.presetIndigo', light: '#F8F7FA', lightPrimary: '#4514B8', dark: '#140B2A', darkPrimary: '#5F2DD4' },
+  { key: 'ocean', labelKey: 'PaletteSwatchSelector.presetOcean', light: '#F7F8FA', lightPrimary: '#1453B8', dark: '#0B172A', darkPrimary: '#2D6DD4' },
+  { key: 'forest', labelKey: 'PaletteSwatchSelector.presetForest', light: '#F7FAF8', lightPrimary: '#14B850', dark: '#0B2A16', darkPrimary: '#2DD46A' },
 ] as const
 
 interface PaletteSwatchProps {

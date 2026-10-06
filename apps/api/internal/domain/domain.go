@@ -521,6 +521,22 @@ type Project struct {
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
+// SupportedLanguages are the six UI locales add-ui-i18n ships with —
+// shared by InstanceSettings.DefaultLanguage's validation and User.Language's
+// validation, so the two never drift from each other or from the actual
+// locale files under apps/web/src/locales/.
+var SupportedLanguages = []string{"en", "es", "fr", "de", "pt", "zh"}
+
+// IsSupportedLanguage reports whether lang is one of SupportedLanguages.
+func IsSupportedLanguage(lang string) bool {
+	for _, l := range SupportedLanguages {
+		if l == lang {
+			return true
+		}
+	}
+	return false
+}
+
 // InstanceSettings is the single, instance-wide configuration row
 // (enable-public-project-access) — a Tenant-Admin-only kill switch layered
 // above every project's own PublicAccess flag.
@@ -572,8 +588,18 @@ type InstanceSettings struct {
 	// (add-configurable-project-landing) — one of "dashboard" (default),
 	// "library", "suites", "runs", "reports". A project's own LandingView
 	// override, when set, wins over this.
-	DefaultLandingView string    `json:"defaultLandingView"`
-	UpdatedAt          time.Time `json:"updatedAt"`
+	DefaultLandingView string `json:"defaultLandingView"`
+	// DefaultLanguage is a Tenant-Admin-configurable, instance-wide default
+	// UI language (add-ui-i18n design.md D3) — one of "en" (default), "es",
+	// "fr", "de", "pt", "zh". A user's own Language preference, when
+	// PerUserLanguageEnabled is true and the preference is set, wins over
+	// this for that user only.
+	DefaultLanguage string `json:"defaultLanguage"`
+	// PerUserLanguageEnabled (add-ui-i18n design.md D5) gates whether a
+	// user's personal Language preference is allowed to override
+	// DefaultLanguage at all. Off by default.
+	PerUserLanguageEnabled bool      `json:"perUserLanguageEnabled"`
+	UpdatedAt              time.Time `json:"updatedAt"`
 }
 
 // InstanceSettingsUpdate is a partial update to InstanceSettings — nil
@@ -604,6 +630,9 @@ type InstanceSettingsUpdate struct {
 	// RunAutoArchiveInactiveDays (auto-archive-runs design.md D1) — same
 	// 0-means-off convention as RunRetentionDays/AutoArchiveInactiveDays.
 	RunAutoArchiveInactiveDays *int
+	// DefaultLanguage/PerUserLanguageEnabled (add-ui-i18n design.md D3/D5).
+	DefaultLanguage        *string
+	PerUserLanguageEnabled *bool
 }
 
 // OIDCTeamMapping maps a single OIDC group-claim value to a Team
@@ -1413,12 +1442,18 @@ func (p Permissions) Intersect(other Permissions) Permissions {
 // (add-project-rbac design.md D1) — a non-Tenant-Admin's access is entirely
 // determined by their per-project membership, not a flat instance role.
 type User struct {
-	ID                 string     `json:"id"`
-	Email              string     `json:"email"`
-	IsTenantAdmin      bool       `json:"isTenantAdmin"`
-	DisplayName        *string    `json:"displayName"`
-	AvatarKey          *string    `json:"avatarKey"`
-	Timezone           *string    `json:"timezone"`
+	ID            string  `json:"id"`
+	Email         string  `json:"email"`
+	IsTenantAdmin bool    `json:"isTenantAdmin"`
+	DisplayName   *string `json:"displayName"`
+	AvatarKey     *string `json:"avatarKey"`
+	Timezone      *string `json:"timezone"`
+	// Language is this user's personal UI language preference
+	// (add-ui-i18n design.md D4) — nullable like Timezone. Only takes
+	// effect when InstanceSettings.PerUserLanguageEnabled is true;
+	// otherwise every visitor sees InstanceSettings.DefaultLanguage
+	// regardless of this value.
+	Language           *string    `json:"language"`
 	DeactivatedAt      *time.Time `json:"deactivatedAt"`
 	CreatedAt          time.Time  `json:"createdAt"`
 	MustChangePassword bool       `json:"mustChangePassword"`
@@ -1498,6 +1533,7 @@ type UserProfileUpdate struct {
 	DisplayName *string
 	AvatarKey   *string
 	Timezone    *string
+	Language    *string
 }
 
 // Team is a named group of users with no scope of its own — it only gains
@@ -1673,13 +1709,13 @@ type Actor struct {
 // history remains readable even after the actor itself is deleted (design
 // D5).
 type AuditEntry struct {
-	ID         string         `json:"id"`
-	ActorKind  ActorKind      `json:"actorKind"`
-	ActorID    string         `json:"actorId"`
-	ActorName  string         `json:"actorName"`
-	Action     string         `json:"action"`
-	EntityType string         `json:"entityType"`
-	EntityID   string         `json:"entityId"`
+	ID         string    `json:"id"`
+	ActorKind  ActorKind `json:"actorKind"`
+	ActorID    string    `json:"actorId"`
+	ActorName  string    `json:"actorName"`
+	Action     string    `json:"action"`
+	EntityType string    `json:"entityType"`
+	EntityID   string    `json:"entityId"`
 	// ProjectID is the entity's owning project (project-activity-feed),
 	// resolved automatically at write time. Empty for entity types with
 	// no owning project (user, team, role, instance_settings, api_token).

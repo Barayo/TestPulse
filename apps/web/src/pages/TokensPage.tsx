@@ -1,4 +1,5 @@
 import { useEffect, useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { CopyIcon, CheckIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
@@ -21,6 +22,7 @@ type ProjectOption = { id: string; name: string }
 type RoleOption = { id: string; name: string }
 
 export default function TokensPage() {
+  const { t } = useTranslation()
   const [tokens, setTokens] = useState<Token[]>([])
   const [projects, setProjects] = useState<ProjectOption[]>([])
   const [roles, setRoles] = useState<RoleOption[]>([])
@@ -37,14 +39,14 @@ export default function TokensPage() {
   const [revokeTarget, setRevokeTarget] = useState<Token | null>(null)
 
   async function load() {
-    const [{ data: t }, { data: p }, r] = await Promise.all([
+    const [{ data: tokensData }, { data: p }, r] = await Promise.all([
       api.GET('/api/v1/tokens'),
       api.GET('/api/v1/projects'),
       fetchAllPages((cursor) =>
         api.GET('/api/v1/roles', { params: { query: { cursor, limit: 200 } } }).then(({ data }) => data ?? { items: [], nextCursor: null }),
       ),
     ])
-    if (t) setTokens(t as Token[])
+    if (tokensData) setTokens(tokensData as Token[])
     if (p) setProjects(p as ProjectOption[])
     setRoles(r.items as RoleOption[])
   }
@@ -69,7 +71,7 @@ export default function TokensPage() {
       body: scoped ? { name, projectId: scopeProjectId, roleId: scopeRoleId } : { name },
     })
     if (apiError) {
-      setError((apiError as { error?: string }).error ?? 'failed to create token')
+      setError((apiError as { error?: string }).error ?? t('TokensPage.createTokenError'))
       return
     }
     resetCreateForm()
@@ -94,34 +96,34 @@ export default function TokensPage() {
 
   return (
     <div className="space-y-4">
-      <Breadcrumbs segments={[{ label: 'API tokens' }]} />
+      <Breadcrumbs segments={[{ label: t('TokensPage.heading') }]} />
       <div className="flex items-center justify-between">
-        <h1 className="tp-heading text-xl">API tokens</h1>
-        <Button onClick={() => setCreating(true)}>+ New token</Button>
+        <h1 className="tp-heading text-xl">{t('TokensPage.heading')}</h1>
+        <Button onClick={() => setCreating(true)}>{t('TokensPage.newTokenButton')}</Button>
       </div>
 
       {justCreated && (
         <Card className="border-secondary">
           <CardContent className="space-y-2 pt-6">
-            <p className="text-sm font-medium">Copy this token now — it won&apos;t be shown again.</p>
+            <p className="text-sm font-medium">{t('TokensPage.copyTokenNowNote')}</p>
             <div className="flex items-center gap-2">
               <code className="block flex-1 rounded bg-muted p-2 text-sm break-all">{justCreated}</code>
               <Button variant="outline" size="sm" onClick={() => void handleCopy()}>
                 {copied ? (
                   <>
                     <CheckIcon className="size-4" aria-hidden="true" />
-                    Copied
+                    {t('TokensPage.copiedLabel')}
                   </>
                 ) : (
                   <>
                     <CopyIcon className="size-4" aria-hidden="true" />
-                    Copy
+                    {t('TokensPage.copyLabel')}
                   </>
                 )}
               </Button>
             </div>
             <Button variant="ghost" size="sm" onClick={() => setJustCreated(undefined)}>
-              Done
+              {t('TokensPage.doneButton')}
             </Button>
           </CardContent>
         </Card>
@@ -130,21 +132,21 @@ export default function TokensPage() {
       {creating && (
         <Card>
           <CardHeader>
-            <CardTitle className="tp-heading">New token</CardTitle>
+            <CardTitle className="tp-heading">{t('TokensPage.newTokenCardTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <form onSubmit={handleCreate} className="space-y-3">
               <div className="flex items-end gap-3">
                 <div className="flex-1 space-y-1">
-                  <Label htmlFor="new-token-name">Name</Label>
+                  <Label htmlFor="new-token-name">{t('TokensPage.nameLabel')}</Label>
                   <Input
                     id="new-token-name"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="ci-agent"
+                    placeholder={t('TokensPage.namePlaceholder')}
                   />
                 </div>
-                <Button type="submit">Create</Button>
+                <Button type="submit">{t('TokensPage.createButton')}</Button>
               </div>
 
               {!scoping ? (
@@ -153,15 +155,15 @@ export default function TokensPage() {
                   className="text-sm text-muted-foreground underline underline-offset-2 hover:text-foreground"
                   onClick={() => setScoping(true)}
                 >
-                  Scope to a project (optional)
+                  {t('TokensPage.scopeToProjectButton')}
                 </button>
               ) : (
                 <div className="flex items-end gap-3 rounded-md border bg-muted/40 p-3">
                   <div className="flex-1 space-y-1">
-                    <Label htmlFor="new-token-project">Project</Label>
+                    <Label htmlFor="new-token-project">{t('TokensPage.projectLabel')}</Label>
                     <select
                       id="new-token-project"
-                      aria-label="Project"
+                      aria-label={t('TokensPage.projectLabel')}
                       className="h-8 w-full rounded-md border bg-background px-2 text-sm"
                       value={scopeProjectId}
                       onChange={(e) => {
@@ -169,7 +171,7 @@ export default function TokensPage() {
                         setScopeRoleId('')
                       }}
                     >
-                      <option value="">Select a project…</option>
+                      <option value="">{t('TokensPage.selectProjectOption')}</option>
                       {projects.map((p) => (
                         <option key={p.id} value={p.id}>
                           {p.name}
@@ -179,15 +181,15 @@ export default function TokensPage() {
                   </div>
                   {scopeProjectId && (
                     <div className="flex-1 space-y-1">
-                      <Label htmlFor="new-token-role">Role</Label>
+                      <Label htmlFor="new-token-role">{t('TokensPage.roleLabel')}</Label>
                       <select
                         id="new-token-role"
-                        aria-label="Role"
+                        aria-label={t('TokensPage.roleLabel')}
                         className="h-8 w-full rounded-md border bg-background px-2 text-sm"
                         value={scopeRoleId}
                         onChange={(e) => setScopeRoleId(e.target.value)}
                       >
-                        <option value="">Select a role…</option>
+                        <option value="">{t('TokensPage.selectRoleOption')}</option>
                         {roles.map((r) => (
                           <option key={r.id} value={r.id}>
                             {r.name}
@@ -206,7 +208,7 @@ export default function TokensPage() {
                       setScopeRoleId('')
                     }}
                   >
-                    Remove scope
+                    {t('TokensPage.removeScopeButton')}
                   </Button>
                 </div>
               )}
@@ -217,31 +219,31 @@ export default function TokensPage() {
       )}
 
       <ul className="rounded-lg border">
-        {tokens.map((t) => (
-          <li key={t.id} className="flex items-center justify-between border-b px-4 py-3 last:border-b-0">
+        {tokens.map((token) => (
+          <li key={token.id} className="flex items-center justify-between border-b px-4 py-3 last:border-b-0">
             <div>
-              <span className="font-medium">{t.name}</span>
-              <span className="ml-2 font-mono text-sm text-muted-foreground">{t.prefix}…</span>
+              <span className="font-medium">{token.name}</span>
+              <span className="ml-2 font-mono text-sm text-muted-foreground">{token.prefix}…</span>
               <div className="text-xs text-muted-foreground">
-                {t.projectId && t.roleId ? (
+                {token.projectId && token.roleId ? (
                   <>
-                    {projects.find((p) => p.id === t.projectId)?.name ?? 'Unknown project'}
+                    {projects.find((p) => p.id === token.projectId)?.name ?? t('TokensPage.unknownProject')}
                     {' · '}
-                    {roles.find((r) => r.id === t.roleId)?.name ?? 'Unknown role'}
+                    {roles.find((r) => r.id === token.roleId)?.name ?? t('TokensPage.unknownRole')}
                   </>
                 ) : (
-                  'Full access'
+                  t('TokensPage.fullAccess')
                 )}
               </div>
             </div>
-            {t.revokedAt ? (
+            {token.revokedAt ? (
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <span className="size-1.5 rounded-full bg-border" />
-                Revoked
+                {t('TokensPage.revokedLabel')}
               </div>
             ) : (
-              <Button variant="ghost" size="sm" onClick={() => setRevokeTarget(t)}>
-                Revoke
+              <Button variant="ghost" size="sm" onClick={() => setRevokeTarget(token)}>
+                {t('TokensPage.revokeButton')}
               </Button>
             )}
           </li>
@@ -250,16 +252,16 @@ export default function TokensPage() {
 
       <Dialog open={revokeTarget !== null} onOpenChange={(open) => !open && setRevokeTarget(null)}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Revoke "{revokeTarget?.name}"?</DialogTitle>
+          <DialogTitle>{t('TokensPage.revokeDialogTitle', { name: revokeTarget?.name })}</DialogTitle>
           <DialogDescription>
-            Any CI/agent using it immediately loses access. This cannot be undone.
+            {t('TokensPage.revokeDialogDescription')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRevokeTarget(null)}>
-              Cancel
+              {t('TokensPage.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void handleRevoke()}>
-              Revoke
+              {t('TokensPage.revokeButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

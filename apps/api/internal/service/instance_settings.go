@@ -77,6 +77,9 @@ func (s *Service) UpdateInstanceSettings(ctx context.Context, upd domain.Instanc
 	if upd.DefaultLandingView != nil && !validLandingViews[*upd.DefaultLandingView] {
 		return domain.InstanceSettings{}, invalid("defaultLandingView must be one of dashboard, library, suites, runs, reports")
 	}
+	if upd.DefaultLanguage != nil && !domain.IsSupportedLanguage(*upd.DefaultLanguage) {
+		return domain.InstanceSettings{}, invalid("defaultLanguage must be one of en, es, fr, de, pt, zh")
+	}
 	if upd.CustomPalette != nil {
 		if err := validateCustomPalette(upd.CustomPalette); err != nil {
 			return domain.InstanceSettings{}, err

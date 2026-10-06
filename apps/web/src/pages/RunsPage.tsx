@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ChevronRightIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
@@ -19,6 +20,7 @@ type Project = components['schemas']['Project']
 type Suite = components['schemas']['Suite']
 
 export default function RunsPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
@@ -104,13 +106,13 @@ export default function RunsPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {t('RunsPage.projectNotFound')} <Link to="/" className="underline">{t('RunsPage.goToProjects')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/projects/${projectKey}/runs` }} className="underline">
-              Log in
+              {t('RunsPage.logIn')}
             </Link>
           </>
         )}
@@ -127,17 +129,17 @@ export default function RunsPage() {
       <Breadcrumbs
         segments={trimProjectBreadcrumb(
           [
-            { label: 'Projects', href: '/' },
+            { label: t('RunsPage.projectsBreadcrumb'), href: '/' },
             { label: project?.name ?? '', href: `/projects/${projectKey}` },
-            { label: 'Runs' },
+            { label: t('RunsPage.runsBreadcrumb') },
           ],
-          'Runs',
+          t('RunsPage.runsBreadcrumb'),
         )}
       />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="tp-heading">Runs</CardTitle>
+          <CardTitle className="tp-heading">{t('RunsPage.heading')}</CardTitle>
           <div className="flex items-center gap-2">
             {closed.length >= 2 && (
               <Button
@@ -145,12 +147,12 @@ export default function RunsPage() {
                 variant="outline"
                 onClick={() => navigate(`/projects/${projectKey}/runs/compare`)}
               >
-                Compare runs
+                {t('RunsPage.compareRunsButton')}
               </Button>
             )}
             {permissions?.runCreate && (
               <Button type="button" asChild>
-                <Link to={`/projects/${projectKey}/runs/new`}>+ New run</Link>
+                <Link to={`/projects/${projectKey}/runs/new`}>{t('RunsPage.newRunButton')}</Link>
               </Button>
             )}
           </div>
@@ -158,13 +160,13 @@ export default function RunsPage() {
         <CardContent>
           {runs.length === 0 ? (
             <div className="rounded-2xl border border-dashed p-10 text-center">
-              <p className="mb-1 text-sm font-medium">No runs yet</p>
+              <p className="mb-1 text-sm font-medium">{t('RunsPage.noRunsYet')}</p>
               <p className="mb-4 text-sm text-muted-foreground">
-                Runs track execution of your cases. Start one from a suite, or build one from scratch.
+                {t('RunsPage.noRunsDescription')}
               </p>
               {permissions?.runCreate && (
                 <Button asChild>
-                  <Link to={`/projects/${projectKey}/runs/new`}>+ New run</Link>
+                  <Link to={`/projects/${projectKey}/runs/new`}>{t('RunsPage.newRunButton')}</Link>
                 </Button>
               )}
             </div>
@@ -172,17 +174,17 @@ export default function RunsPage() {
             <div className="space-y-5">
               <div>
                 <div className="mb-2 flex items-center gap-2 px-1">
-                  <Badge variant="secondary">Open</Badge>
+                  <Badge variant="secondary">{t('RunsPage.openBadge')}</Badge>
                   <span className="text-xs text-muted-foreground">{open.length}</span>
                 </div>
                 {open.length === 0 ? (
                   <p className="px-1 text-sm text-muted-foreground">
-                    No open runs — everything&apos;s closed out. Start one with the &quot;+ New run&quot; button above.
+                    {t('RunsPage.noOpenRunsMessage')}
                   </p>
                 ) : (
                   <>
                     <p className="mb-2 px-1 text-xs text-muted-foreground italic">
-                      Ordered by what needs attention first — lowest pass rate leads, not most recent.
+                      {t('RunsPage.openRunsOrderNote')}
                     </p>
                     <OpenRunsTriage runs={open} />
                   </>
@@ -190,22 +192,22 @@ export default function RunsPage() {
               </div>
               <div>
                 <div className="mb-2 flex items-center gap-2 px-1">
-                  <Badge variant="outline">Closed</Badge>
+                  <Badge variant="outline">{t('RunsPage.closedBadge')}</Badge>
                   <span className="text-xs text-muted-foreground">{closed.length}</span>
                 </div>
                 {closed.length === 0 ? (
                   <p className="px-1 text-sm text-muted-foreground">
-                    No closed runs yet — runs land here once they&apos;re closed.
+                    {t('RunsPage.noClosedRunsMessage')}
                   </p>
                 ) : (
                   <ClosedRunsLedger runs={closed} suites={suites} projectKey={projectKey} />
                 )}
               </div>
               {archived.length > 0 && (
-                <section aria-label="Archived runs" className="space-y-3">
+                <section aria-label={t('RunsPage.archivedRunsAriaLabel')} className="space-y-3">
                   <button
                     type="button"
-                    aria-label={archivedExpanded ? 'Collapse Archived' : 'Expand Archived'}
+                    aria-label={archivedExpanded ? t('RunsPage.collapseArchivedAriaLabel') : t('RunsPage.expandArchivedAriaLabel')}
                     aria-expanded={archivedExpanded}
                     className="flex items-center gap-2 text-muted-foreground"
                     onClick={() => setArchivedExpanded((v) => !v)}
@@ -214,7 +216,7 @@ export default function RunsPage() {
                       className={`size-3.5 transition-transform ${archivedExpanded ? 'rotate-90' : ''}`}
                       aria-hidden="true"
                     />
-                    <span className="tp-label">Archived · {archived.length}</span>
+                    <span className="tp-label">{t('RunsPage.archivedLabel', { count: archived.length })}</span>
                   </button>
                   {archivedExpanded && <ClosedRunsLedger runs={archived} suites={suites} projectKey={projectKey} />}
                 </section>
@@ -223,7 +225,7 @@ export default function RunsPage() {
                   either bucket above, so the label stays generic rather
                   than scoped to "open"/"closed". */}
               <div className="border-t pt-4">
-                <LoadMoreButton hasMore={!!runsCursor} loading={loadingMoreRuns} onClick={() => void loadMoreRuns()} label="Load more runs" />
+                <LoadMoreButton hasMore={!!runsCursor} loading={loadingMoreRuns} onClick={() => void loadMoreRuns()} label={t('RunsPage.loadMoreRunsLabel')} />
               </div>
             </div>
           )}

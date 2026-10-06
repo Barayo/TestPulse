@@ -62,9 +62,9 @@ func (r *UserRepo) CreateFirstAdmin(ctx context.Context, email, passwordHash str
 	var u domain.User
 	err = tx.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, is_tenant_admin) VALUES ($1, $2, true)
-		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password`,
 		email, passwordHash,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	if err != nil {
 		return domain.User{}, err
 	}
@@ -75,9 +75,9 @@ func (r *UserRepo) Create(ctx context.Context, email, passwordHash string, isTen
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, is_tenant_admin) VALUES ($1, $2, $3)
-		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password`,
 		email, passwordHash, isTenantAdmin,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	return u, err
 }
 
@@ -88,9 +88,9 @@ func (r *UserRepo) CreateSSO(ctx context.Context, email, oidcSubject string) (do
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
 		`INSERT INTO users (email, password_hash, oidc_subject) VALUES ($1, NULL, $2)
-		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password`,
 		email, oidcSubject,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	return u, err
 }
 
@@ -100,9 +100,9 @@ func (r *UserRepo) CreateSSO(ctx context.Context, email, oidcSubject string) (do
 func (r *UserRepo) GetByOIDCSubject(ctx context.Context, subject string) (domain.User, bool, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password
 		 FROM users WHERE oidc_subject = $1`, subject,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, false, nil
 	}
@@ -141,9 +141,9 @@ func (r *UserRepo) LinkOIDCSubject(ctx context.Context, id, subject string) erro
 func (r *UserRepo) Get(ctx context.Context, id string) (domain.User, error) {
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password
 		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, ErrNotFound
 	}
@@ -162,9 +162,9 @@ func (r *UserRepo) GetByEmailWithHash(ctx context.Context, email string) (domain
 	var u domain.User
 	var hash *string
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password, password_hash
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password, password_hash
 		 FROM users WHERE email = $1`, email,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword, &hash)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, "", ErrNotFound
 	}
@@ -186,9 +186,9 @@ func (r *UserRepo) GetByIDWithHash(ctx context.Context, id string) (domain.User,
 	var u domain.User
 	var hash *string
 	err := r.pool.QueryRow(ctx,
-		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password, password_hash
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password, password_hash
 		 FROM users WHERE id = $1`, id,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword, &hash)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword, &hash)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, "", ErrNotFound
 	}
@@ -203,7 +203,7 @@ func (r *UserRepo) GetByIDWithHash(ctx context.Context, id string) (domain.User,
 
 func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password
 		 FROM users ORDER BY created_at`)
 	if err != nil {
 		return nil, err
@@ -213,7 +213,7 @@ func (r *UserRepo) List(ctx context.Context) ([]domain.User, error) {
 	users := []domain.User{}
 	for rows.Next() {
 		var u domain.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword); err != nil {
 			return nil, err
 		}
 		users = append(users, u)
@@ -236,7 +236,7 @@ func (r *UserRepo) ListPage(ctx context.Context, cursor string, limit int) ([]do
 		cursorCreatedAt, cursorID = createdAt, id
 	}
 	rows, err := r.pool.Query(ctx,
-		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password
+		`SELECT id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password
 		 FROM users
 		 WHERE $1::timestamptz IS NULL OR (created_at, id) > ($1, $2)
 		 ORDER BY created_at ASC, id ASC
@@ -249,7 +249,7 @@ func (r *UserRepo) ListPage(ctx context.Context, cursor string, limit int) ([]do
 	users := []domain.User{}
 	for rows.Next() {
 		var u domain.User
-		if err := rows.Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword); err != nil {
+		if err := rows.Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword); err != nil {
 			return nil, "", err
 		}
 		users = append(users, u)
@@ -275,11 +275,12 @@ func (r *UserRepo) UpdateProfile(ctx context.Context, id string, update domain.U
 		`UPDATE users SET
 		   display_name = COALESCE($2, display_name),
 		   avatar_key = COALESCE($3, avatar_key),
-		   timezone = COALESCE($4, timezone)
+		   timezone = COALESCE($4, timezone),
+		   language = COALESCE($5, language)
 		 WHERE id = $1
-		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
-		id, update.DisplayName, update.AvatarKey, update.Timezone,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password`,
+		id, update.DisplayName, update.AvatarKey, update.Timezone, update.Language,
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, ErrNotFound
 	}
@@ -298,9 +299,9 @@ func (r *UserRepo) ClearAvatarKey(ctx context.Context, id string) (domain.User, 
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
 		`UPDATE users SET avatar_key = NULL WHERE id = $1
-		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password`,
 		id,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, ErrNotFound
 	}
@@ -316,9 +317,9 @@ func (r *UserRepo) UpdateEmail(ctx context.Context, id, email string) (domain.Us
 	var u domain.User
 	err := r.pool.QueryRow(ctx,
 		`UPDATE users SET email = $2 WHERE id = $1
-		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, deactivated_at, created_at, must_change_password`,
+		 RETURNING id, email, is_tenant_admin, display_name, avatar_key, timezone, language, deactivated_at, created_at, must_change_password`,
 		id, email,
-	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
+	).Scan(&u.ID, &u.Email, &u.IsTenantAdmin, &u.DisplayName, &u.AvatarKey, &u.Timezone, &u.Language, &u.DeactivatedAt, &u.CreatedAt, &u.MustChangePassword)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return domain.User{}, ErrNotFound
 	}

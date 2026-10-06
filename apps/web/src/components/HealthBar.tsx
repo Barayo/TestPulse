@@ -1,3 +1,6 @@
+import { useTranslation } from 'react-i18next'
+import type { ParseKeys } from 'i18next'
+
 // Pass-rate color bands, shared by every place a run's health is shown at
 // a glance (project landing panels, project list). Bands mirror
 // StatusBadge's pass/warn/fail semantics: teal = healthy, amber = watch,
@@ -62,14 +65,22 @@ const pillClasses: Record<'Healthy' | 'In progress' | 'At risk' | 'No runs yet',
 // word-only with no dot; the project landing summary strip's mockup adds
 // one (enrich-project-landing-panels). Same component, two call sites, each
 // matching its own source of truth rather than forcing one look on both.
+const STATUS_PILL_LABEL_KEYS: Record<'Healthy' | 'In progress' | 'At risk' | 'No runs yet', ParseKeys> = {
+  Healthy: 'HealthBar.healthyLabel',
+  'In progress': 'HealthBar.inProgressLabel',
+  'At risk': 'HealthBar.atRiskLabel',
+  'No runs yet': 'HealthBar.noRunsYetLabel',
+}
+
 export function StatusPill({ rate, dot }: { rate: number | null; dot?: boolean }) {
+  const { t } = useTranslation()
   const label = rate === null ? 'No runs yet' : healthLabel(rate)
   return (
     <span
       className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${pillClasses[label]}`}
     >
       {dot && <span data-dot className="size-1.5 shrink-0 rounded-full bg-current" aria-hidden="true" />}
-      {label}
+      {t(STATUS_PILL_LABEL_KEYS[label])}
     </span>
   )
 }

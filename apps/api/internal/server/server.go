@@ -153,17 +153,19 @@ func handleMeta(svc *service.Service, oidcManager *OIDCManager, mcpEnabled bool)
 		}
 		ssoEnabled := oidcManager.Get() != nil
 		body := map[string]any{
-			"name":                  "TestPulse",
-			"version":               "0.0.1",
-			"publicProjectsEnabled": settings.PublicProjectsEnabled,
-			"passwordResetEnabled":  passwordResetEnabled,
-			"setupRequired":         !hasAnyUser,
-			"colorTheme":            settings.ColorTheme,
-			"ssoEnabled":            ssoEnabled,
-			"ssoOnly":               ssoEnabled && settings.OIDCOnly,
-			"jiraSiteUrl":           settings.JiraSiteURL,
-			"defaultLandingView":    settings.DefaultLandingView,
-			"mcpEnabled":            mcpEnabled,
+			"name":                   "TestPulse",
+			"version":                "0.0.1",
+			"publicProjectsEnabled":  settings.PublicProjectsEnabled,
+			"passwordResetEnabled":   passwordResetEnabled,
+			"setupRequired":          !hasAnyUser,
+			"colorTheme":             settings.ColorTheme,
+			"ssoEnabled":             ssoEnabled,
+			"ssoOnly":                ssoEnabled && settings.OIDCOnly,
+			"jiraSiteUrl":            settings.JiraSiteURL,
+			"defaultLandingView":     settings.DefaultLandingView,
+			"mcpEnabled":             mcpEnabled,
+			"defaultLanguage":        settings.DefaultLanguage,
+			"perUserLanguageEnabled": settings.PerUserLanguageEnabled,
 		}
 		if settings.ColorTheme == "custom" && settings.CustomPalette != nil {
 			body["customPalette"] = settings.CustomPalette

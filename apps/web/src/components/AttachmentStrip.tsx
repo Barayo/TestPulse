@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import type { components } from '@testpulse/shared/api'
 
 type Attachment = components['schemas']['Attachment']
@@ -15,6 +16,7 @@ export function AttachmentStrip({
   attachments: Attachment[]
   onSelect: (index: number) => void
 }) {
+  const { t } = useTranslation()
   if (attachments.length === 0) return null
 
   const visible = attachments.slice(0, MAX_VISIBLE)
@@ -26,7 +28,7 @@ export function AttachmentStrip({
         <button
           key={att.id}
           type="button"
-          aria-label={`Open attachment ${att.filename}`}
+          aria-label={t('AttachmentStrip.openAttachment', { filename: att.filename })}
           onClick={() => onSelect(i)}
           className="size-11 shrink-0 overflow-hidden rounded-md border border-border bg-muted"
         >

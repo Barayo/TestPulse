@@ -1,4 +1,5 @@
 import { Loader2Icon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 
 // add-cursor-pagination: one shared "Load more" control for every
@@ -14,18 +15,20 @@ export interface LoadMoreButtonProps {
   label?: string
 }
 
-export function LoadMoreButton({ hasMore, loading, onClick, label = 'Load more' }: LoadMoreButtonProps) {
+export function LoadMoreButton({ hasMore, loading, onClick, label }: LoadMoreButtonProps) {
+  const { t } = useTranslation()
   if (!hasMore) return null
+  const resolvedLabel = label ?? t('LoadMoreButton.defaultLabel')
   return (
     <div className="flex justify-center pt-2">
       <Button type="button" variant="outline" size="sm" disabled={loading} onClick={onClick}>
         {loading ? (
           <>
             <Loader2Icon className="animate-spin" aria-hidden="true" />
-            Loading…
+            {t('LoadMoreButton.loadingLabel')}
           </>
         ) : (
-          label
+          resolvedLabel
         )}
       </Button>
     </div>

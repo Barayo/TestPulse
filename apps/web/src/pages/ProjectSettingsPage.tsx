@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import type { ParseKeys } from 'i18next'
 import { useNavigate, useParams } from 'react-router'
 import { ClockIcon, Loader2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
@@ -19,12 +21,15 @@ import type { components } from '@testpulse/shared/api'
 
 type LandingView = components['schemas']['LandingView']
 
-const LANDING_VIEW_LABELS: Record<LandingView, string> = {
-  dashboard: 'Dashboard',
-  library: 'Library',
-  suites: 'Suites',
-  runs: 'Runs',
-  reports: 'Reports',
+// Values here are i18next translation keys (not display text) — LandingView
+// is used outside any component, so the actual t() lookup happens at render
+// time in ProjectSettingsPage below.
+const LANDING_VIEW_LABELS: Record<LandingView, ParseKeys> = {
+  dashboard: 'ProjectSettingsPage.landingViewDashboard',
+  library: 'ProjectSettingsPage.landingViewLibrary',
+  suites: 'ProjectSettingsPage.landingViewSuites',
+  runs: 'ProjectSettingsPage.landingViewRuns',
+  reports: 'ProjectSettingsPage.landingViewReports',
 }
 const LANDING_VIEWS = Object.keys(LANDING_VIEW_LABELS) as LandingView[]
 
@@ -34,6 +39,7 @@ const LANDING_VIEWS = Object.keys(LANDING_VIEW_LABELS) as LandingView[]
 // already requires server-side), following the same client-side
 // self-gating idiom as RolesPage.tsx/InstanceSettingsPage.tsx.
 export default function ProjectSettingsPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const { user: me } = useAuth()
@@ -83,7 +89,7 @@ export default function ProjectSettingsPage() {
   }, [projectKey, permissions?.manageProject, me?.isTenantAdmin])
 
   if (permissions !== undefined && !permissions.manageProject) {
-    return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
+    return <p className="text-sm text-muted-foreground">{t('ProjectSettingsPage.notAuthorized')}</p>
   }
 
   async function toggle() {
@@ -165,7 +171,7 @@ export default function ProjectSettingsPage() {
 
   return (
     <div className="space-y-6">
-      <Breadcrumbs segments={[{ label: 'Settings' }]} />
+      <Breadcrumbs segments={[{ label: t('ProjectSettingsPage.settingsBreadcrumb') }]} />
 
       {projectKey && <StepGroupsCard projectKey={projectKey} />}
       {projectKey && <CustomFieldsCard projectKey={projectKey} />}
@@ -175,19 +181,18 @@ export default function ProjectSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Public access</CardTitle>
+          <CardTitle>{t('ProjectSettingsPage.publicAccessTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Anyone with this link can view the project&apos;s cases, runs, and results without an account. Nothing
-            can be created, edited, or run by an anonymous visitor.
+            {t('ProjectSettingsPage.publicAccessDescription')}
           </p>
           <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-medium">Public access</span>
+            <span className="text-sm font-medium">{t('ProjectSettingsPage.publicAccessLabel')}</span>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{publicAccess ? 'On' : 'Off'}</span>
+              <span className="text-xs text-muted-foreground">{publicAccess ? t('ProjectSettingsPage.on') : t('ProjectSettingsPage.off')}</span>
               <Switch
-                aria-label="Public access"
+                aria-label={t('ProjectSettingsPage.publicAccessLabel')}
                 checked={publicAccess ?? false}
                 disabled={publicAccess === undefined || publicProjectsEnabled === false}
                 onCheckedChange={() => void toggle()}
@@ -196,8 +201,7 @@ export default function ProjectSettingsPage() {
           </div>
           {publicProjectsEnabled === false && (
             <p className="text-xs text-muted-foreground">
-              Public project access is turned off for this instance. Ask a Tenant Admin to enable it under
-              Administration → Instance.
+              {t('ProjectSettingsPage.publicAccessDisabledInstanceWide')}
             </p>
           )}
           {publicAccess && (
@@ -213,7 +217,7 @@ export default function ProjectSettingsPage() {
                   setTimeout(() => setCopied(false), 1500)
                 }}
               >
-                {copied ? 'Copied' : 'Copy'}
+                {copied ? t('ProjectSettingsPage.copied') : t('ProjectSettingsPage.copy')}
               </Button>
             </div>
           )}
@@ -222,19 +226,18 @@ export default function ProjectSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Restrict recording to assignee</CardTitle>
+          <CardTitle>{t('ProjectSettingsPage.restrictRecordingTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            When on, only a run item&apos;s assignee (or a project admin) can record a result or change its status.
-            Unassigned items are unaffected.
+            {t('ProjectSettingsPage.restrictRecordingDescription')}
           </p>
           <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-medium">Restrict recording to assignee</span>
+            <span className="text-sm font-medium">{t('ProjectSettingsPage.restrictRecordingLabel')}</span>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{assigneeRestrictedRecording ? 'On' : 'Off'}</span>
+              <span className="text-xs text-muted-foreground">{assigneeRestrictedRecording ? t('ProjectSettingsPage.on') : t('ProjectSettingsPage.off')}</span>
               <Switch
-                aria-label="Restrict recording to assignee"
+                aria-label={t('ProjectSettingsPage.restrictRecordingLabel')}
                 checked={assigneeRestrictedRecording ?? false}
                 disabled={assigneeRestrictedRecording === undefined}
                 onCheckedChange={() => void toggleAssigneeRestrictedRecording()}
@@ -246,20 +249,21 @@ export default function ProjectSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Landing view</CardTitle>
+          <CardTitle>{t('ProjectSettingsPage.landingViewTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Which view this project opens into. Overrides the instance-wide default set by a Tenant Admin, under
-            Administration → Instance.
+            {t('ProjectSettingsPage.landingViewDescription')}
           </p>
-          <div role="group" aria-label="Landing view" className="flex flex-wrap gap-2">
+          <div role="group" aria-label={t('ProjectSettingsPage.landingViewTitle')} className="flex flex-wrap gap-2">
             <Pill active={landingView == null} onClick={() => void clearLandingViewOverride()}>
-              Use instance default{defaultLandingView ? ` (currently: ${LANDING_VIEW_LABELS[defaultLandingView]})` : ''}
+              {defaultLandingView
+                ? t('ProjectSettingsPage.useInstanceDefaultWithCurrent', { current: t(LANDING_VIEW_LABELS[defaultLandingView]) })
+                : t('ProjectSettingsPage.useInstanceDefault')}
             </Pill>
             {LANDING_VIEWS.map((view) => (
               <Pill key={view} active={landingView === view} onClick={() => void selectLandingView(view)}>
-                {LANDING_VIEW_LABELS[view]}
+                {t(LANDING_VIEW_LABELS[view])}
               </Pill>
             ))}
           </div>
@@ -268,19 +272,18 @@ export default function ProjectSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Archive project</CardTitle>
+          <CardTitle>{t('ProjectSettingsPage.archiveProjectTitle')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Archiving hides the project from the default project list. It stays reversible — nothing is deleted,
-            and unarchiving restores it to active at any time.
+            {t('ProjectSettingsPage.archiveProjectDescription')}
           </p>
           <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-medium">Archive project</span>
+            <span className="text-sm font-medium">{t('ProjectSettingsPage.archiveProjectTitle')}</span>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-muted-foreground">{archived ? 'Archived' : 'Active'}</span>
+              <span className="text-xs text-muted-foreground">{archived ? t('ProjectSettingsPage.archivedStatus') : t('ProjectSettingsPage.activeStatus')}</span>
               <Switch
-                aria-label="Archive project"
+                aria-label={t('ProjectSettingsPage.archiveProjectTitle')}
                 checked={archived ?? false}
                 disabled={archived === undefined}
                 onCheckedChange={() => void toggleArchived()}
@@ -291,20 +294,20 @@ export default function ProjectSettingsPage() {
             <div className="space-y-2 border-t pt-3">
               <p className="text-xs text-muted-foreground">
                 {autoArchiveInactiveDays === 0
-                  ? 'A Tenant Admin can turn on an instance-wide policy, under Administration → Instance, that automatically archives a project once it goes quiet for a set number of days. That policy is currently off, so no project is archived automatically right now.'
-                  : `A Tenant Admin has turned on an instance-wide policy, under Administration → Instance, that automatically archives any project after ${autoArchiveInactiveDays} days with no new runs, case edits, or suites.`}
+                  ? t('ProjectSettingsPage.autoArchivePolicyOff')
+                  : t('ProjectSettingsPage.autoArchivePolicyOn', { days: autoArchiveInactiveDays })}
               </p>
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <span className="text-sm font-medium">Exempt this project</span>
+                  <span className="text-sm font-medium">{t('ProjectSettingsPage.exemptThisProject')}</span>
                   <p className="text-xs text-muted-foreground">
                     {autoArchiveExempt
-                      ? 'On — this project will never be archived automatically, no matter how long it goes without activity. It can still be archived manually at any time.'
-                      : 'Off — this project follows the instance-wide policy above like any other project.'}
+                      ? t('ProjectSettingsPage.autoArchiveExemptOn')
+                      : t('ProjectSettingsPage.autoArchiveExemptOff')}
                   </p>
                 </div>
                 <Switch
-                  aria-label="Auto-archive exemption"
+                  aria-label={t('ProjectSettingsPage.autoArchiveExemptionAriaLabel')}
                   checked={autoArchiveExempt ?? false}
                   disabled={autoArchiveExempt === undefined}
                   onCheckedChange={() => void toggleAutoArchiveExempt()}
@@ -318,15 +321,14 @@ export default function ProjectSettingsPage() {
       {archived && permissions?.projectDelete && (
         <Card className="border-destructive/30">
           <CardHeader>
-            <CardTitle>Delete project</CardTitle>
+            <CardTitle>{t('ProjectSettingsPage.deleteProjectTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Permanently removes this project and everything inside it — cases, suites, runs, and results. This
-              cannot be undone.
+              {t('ProjectSettingsPage.deleteProjectDescription')}
             </p>
             <Button type="button" variant="destructive" onClick={() => void openDeleteDialog()}>
-              Delete project
+              {t('ProjectSettingsPage.deleteProjectTitle')}
             </Button>
           </CardContent>
         </Card>
@@ -334,34 +336,35 @@ export default function ProjectSettingsPage() {
 
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete &quot;{projectName}&quot;?</DialogTitle>
+          <DialogTitle>{t('ProjectSettingsPage.deleteProjectDialogTitle', { name: projectName })}</DialogTitle>
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              This permanently removes{' '}
+              {t('ProjectSettingsPage.deleteProjectPermanentlyRemovesPrefix')}{' '}
               {deleteCounts === undefined ? (
                 <Loader2Icon className="inline size-3 animate-spin align-[-2px]" aria-hidden="true" />
               ) : (
-                <>
-                  {deleteCounts.suiteCount} suite{deleteCounts.suiteCount === 1 ? '' : 's'} and{' '}
-                  {deleteCounts.caseCount} case{deleteCounts.caseCount === 1 ? '' : 's'}
-                </>
+                t('ProjectSettingsPage.deleteProjectSuiteCaseCounts', {
+                  suiteCount: deleteCounts.suiteCount,
+                  suitePlural: deleteCounts.suiteCount === 1 ? '' : 's',
+                  caseCount: deleteCounts.caseCount,
+                  casePlural: deleteCounts.caseCount === 1 ? '' : 's',
+                })
               )}
-              , along with every run and result recorded against them. This cannot be undone.
+              {t('ProjectSettingsPage.deleteProjectPermanentlyRemovesSuffix')}
             </p>
             <div className="flex items-start gap-2 rounded-lg bg-muted/40 p-2.5">
               <ClockIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               <p className="text-sm text-muted-foreground">
-                Deletion runs in the background and may take a few minutes for large projects. The project
-                disappears from every list immediately.
+                {t('ProjectSettingsPage.deleteProjectBackgroundNote')}
               </p>
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-              Cancel
+              {t('ProjectSettingsPage.cancel')}
             </Button>
             <Button variant="destructive" disabled={deleteCounts === undefined} onClick={() => void confirmDelete()}>
-              Delete project
+              {t('ProjectSettingsPage.deleteProjectTitle')}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next'
 import { ListChecksIcon, FileTextIcon, ScrollTextIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -49,6 +50,7 @@ export function CaseFormatEditor({
   onParametersChange: (parameters: CaseParameters | undefined) => void
   projectKey?: string
 }) {
+  const { t } = useTranslation()
   const hasContentFor = (f: CaseFormat) => {
     if (f === 'steps') return steps.some((s) => s.action?.trim() || s.groupRef) || (parameters?.rows.length ?? 0) > 0
     if (f === 'text') return description.trim() !== ''
@@ -73,7 +75,7 @@ export function CaseFormatEditor({
 
   return (
     <>
-      <div role="group" aria-label="Format" className="inline-flex gap-0.5 rounded-2xl bg-muted p-1">
+      <div role="group" aria-label={t('CaseFormatEditor.formatGroupLabel')} className="inline-flex gap-0.5 rounded-2xl bg-muted p-1">
         {(Object.keys(CASE_FORMAT_LABELS) as CaseFormat[]).map((f) => {
           const Icon = FORMAT_ICONS[f]
           const isActive = f === format
@@ -104,10 +106,10 @@ export function CaseFormatEditor({
         <Card>
           <CardContent>
             <Textarea
-              aria-label="Description"
+              aria-label={t('CaseFormatEditor.descriptionAriaLabel')}
               value={description}
               onChange={(e) => onDescriptionChange(e.target.value)}
-              placeholder="Describe the scenario, prerequisites, and expected outcome in your own words…"
+              placeholder={t('CaseFormatEditor.descriptionPlaceholder')}
               className="min-h-40 border-none bg-transparent p-0 text-base leading-relaxed shadow-none focus-visible:ring-0"
             />
           </CardContent>
@@ -117,21 +119,22 @@ export function CaseFormatEditor({
 
       <Dialog open={pendingFormat !== null} onOpenChange={(next) => !next && cancelSwitch()}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Switch to {pendingFormat ? CASE_FORMAT_LABELS[pendingFormat] : ''}?</DialogTitle>
+          <DialogTitle>{t('CaseFormatEditor.switchToFormat', { formatLabel: pendingFormat ? CASE_FORMAT_LABELS[pendingFormat] : '' })}</DialogTitle>
           <DialogDescription>
-            Switching clears{' '}
-            {format === 'steps'
-              ? "the steps you've written"
-              : format === 'text'
-                ? "the description you've written"
-                : "the Given/When/Then scenario you've written"}
-            . This only changes what&rsquo;s in the editor — nothing is saved yet.
+            {t('CaseFormatEditor.switchDescription', {
+              changedThing:
+                format === 'steps'
+                  ? t('CaseFormatEditor.switchClearsSteps')
+                  : format === 'text'
+                    ? t('CaseFormatEditor.switchClearsText')
+                    : t('CaseFormatEditor.switchClearsGherkin'),
+            })}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={cancelSwitch}>
-              Cancel
+              {t('CaseFormatEditor.cancel')}
             </Button>
-            <Button onClick={confirmFormatSwitch}>Switch format</Button>
+            <Button onClick={confirmFormatSwitch}>{t('CaseFormatEditor.switchFormat')}</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

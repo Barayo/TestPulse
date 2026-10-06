@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { Input } from '@/components/ui/input'
@@ -30,6 +31,7 @@ type Project = components['schemas']['Project']
 type RollupRow = { runCount: number; passRate: number | null }
 
 export default function TestPlanDetailPage() {
+  const { t } = useTranslation()
   const { projectKey, releaseKey, planKey } = useParams<{ projectKey: string; releaseKey: string; planKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
@@ -112,9 +114,9 @@ export default function TestPlanDetailPage() {
 
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb(
     [
-      { label: 'Projects', href: '/' },
+      { label: t('TestPlanDetailPage.projectsBreadcrumb'), href: '/' },
       { label: project.name, href: `/projects/${projectKey}` },
-      { label: 'Releases', href: `/projects/${projectKey}/releases` },
+      { label: t('TestPlanDetailPage.releasesBreadcrumb'), href: `/projects/${projectKey}/releases` },
       { label: release?.name ?? '', href: `/projects/${projectKey}/releases/${releaseKey}` },
       { label: plan.name },
     ],
@@ -129,7 +131,7 @@ export default function TestPlanDetailPage() {
         <h1 className="tp-heading text-2xl">{plan.name}</h1>
         {canManage && (
           <Button type="button" variant="outline" onClick={openEdit}>
-            Edit
+            {t('TestPlanDetailPage.editButton')}
           </Button>
         )}
       </div>
@@ -137,26 +139,26 @@ export default function TestPlanDetailPage() {
       <div className="grid grid-cols-1 gap-7 md:grid-cols-[1fr_320px]">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="tp-heading text-lg">Runs</CardTitle>
+            <CardTitle className="tp-heading text-lg">{t('TestPlanDetailPage.runsHeading')}</CardTitle>
             <Button type="button" onClick={goToNewRun}>
-              + New run
+              {t('TestPlanDetailPage.newRunButton')}
             </Button>
           </CardHeader>
           <CardContent>
             {runs.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No runs yet.</p>
+              <p className="text-sm text-muted-foreground">{t('TestPlanDetailPage.noRunsMessage')}</p>
             ) : (
               <div className="space-y-5">
                 <div>
                   <div className="mb-2 flex items-center gap-2 px-1">
-                    <Badge variant="secondary">Open</Badge>
+                    <Badge variant="secondary">{t('TestPlanDetailPage.openBadge')}</Badge>
                     <span className="text-xs text-muted-foreground">{open.length}</span>
                   </div>
                   {open.length > 0 && <OpenRunsTriage runs={open} />}
                 </div>
                 <div>
                   <div className="mb-2 flex items-center gap-2 px-1">
-                    <Badge variant="outline">Closed</Badge>
+                    <Badge variant="outline">{t('TestPlanDetailPage.closedBadge')}</Badge>
                     <span className="text-xs text-muted-foreground">{closed.length}</span>
                   </div>
                   {closed.length > 0 && <ClosedRunsLedger runs={closed} suites={suites} projectKey={projectKey} />}
@@ -167,10 +169,10 @@ export default function TestPlanDetailPage() {
         </Card>
 
         <div className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5">
-          <CaseSidebarSection title="Properties">
-            <PropertyRow label="Key" value={plan.key} />
+          <CaseSidebarSection title={t('TestPlanDetailPage.propertiesSectionTitle')}>
+            <PropertyRow label={t('TestPlanDetailPage.keyPropertyLabel')} value={plan.key} />
             <PropertyRow
-              label="Release"
+              label={t('TestPlanDetailPage.releasePropertyLabel')}
               value={
                 release ? (
                   <Link to={`/projects/${projectKey}/releases/${releaseKey}`} className="text-primary hover:underline">
@@ -180,31 +182,35 @@ export default function TestPlanDetailPage() {
               }
             />
             <PropertyRow
-              label="Pass rate"
-              value={rollup && rollup.passRate !== null ? <HealthBar rate={rollup.passRate} /> : 'No runs yet'}
+              label={t('TestPlanDetailPage.passRatePropertyLabel')}
+              value={rollup && rollup.passRate !== null ? <HealthBar rate={rollup.passRate} /> : t('TestPlanDetailPage.noRunsYetValue')}
             />
-            <PropertyRow label="Runs" value={rollup?.runCount ?? 0} />
-            <PropertyRow label="Created" value={new Date(plan.createdAt).toLocaleDateString()} />
+            <PropertyRow label={t('TestPlanDetailPage.runsPropertyLabel')} value={rollup?.runCount ?? 0} />
+            <PropertyRow label={t('TestPlanDetailPage.createdPropertyLabel')} value={new Date(plan.createdAt).toLocaleDateString()} />
           </CaseSidebarSection>
 
           {canManage && (
-            <CaseSidebarSection title="Actions">
+            <CaseSidebarSection title={t('TestPlanDetailPage.actionsSectionTitle')}>
               <div className="flex flex-col gap-1.5">
                 <Button type="button" className="justify-start" onClick={goToNewRun}>
-                  + New run
+                  {t('TestPlanDetailPage.newRunButton')}
                 </Button>
                 <Button type="button" variant="outline" className="justify-start" onClick={openEdit}>
-                  Edit test plan
+                  {t('TestPlanDetailPage.editTestPlanButton')}
                 </Button>
                 <Button
                   type="button"
                   variant="destructive"
                   className="justify-start"
                   disabled={runs.length > 0}
-                  title={runs.length > 0 ? `Has ${runs.length} run${runs.length === 1 ? '' : 's'} — remove them first` : undefined}
+                  title={
+                    runs.length > 0
+                      ? t('TestPlanDetailPage.deleteBlockedTitle', { count: runs.length, plural: runs.length === 1 ? '' : 's' })
+                      : undefined
+                  }
                   onClick={() => setDeleting(true)}
                 >
-                  Delete test plan
+                  {t('TestPlanDetailPage.deleteTestPlanButton')}
                 </Button>
               </div>
             </CaseSidebarSection>
@@ -214,23 +220,23 @@ export default function TestPlanDetailPage() {
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Edit test plan</DialogTitle>
+          <DialogTitle>{t('TestPlanDetailPage.editTestPlanDialogTitle')}</DialogTitle>
           <div className="space-y-3">
             <div className="space-y-1">
-              <Label htmlFor="edit-plan-name">Name</Label>
+              <Label htmlFor="edit-plan-name">{t('TestPlanDetailPage.nameLabel')}</Label>
               <Input id="edit-plan-name" value={editName} onChange={(e) => setEditName(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="edit-plan-description">Description</Label>
+              <Label htmlFor="edit-plan-description">{t('TestPlanDetailPage.descriptionLabel')}</Label>
               <Textarea id="edit-plan-description" value={editDescription} onChange={(e) => setEditDescription(e.target.value)} />
             </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditing(false)}>
-              Cancel
+              {t('TestPlanDetailPage.cancelButton')}
             </Button>
             <Button disabled={!editName.trim()} onClick={() => void handleSaveEdit()}>
-              Save
+              {t('TestPlanDetailPage.saveButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -238,14 +244,14 @@ export default function TestPlanDetailPage() {
 
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete test plan?</DialogTitle>
-          <p className="text-sm text-muted-foreground">Delete &ldquo;{plan.name}&rdquo;? This cannot be undone.</p>
+          <DialogTitle>{t('TestPlanDetailPage.deleteTestPlanDialogTitle')}</DialogTitle>
+          <p className="text-sm text-muted-foreground">{t('TestPlanDetailPage.deleteTestPlanConfirm', { name: plan.name })}</p>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(false)}>
-              Cancel
+              {t('TestPlanDetailPage.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void handleDelete()}>
-              Confirm delete
+              {t('TestPlanDetailPage.confirmDeleteButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

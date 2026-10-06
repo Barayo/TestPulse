@@ -1,11 +1,13 @@
+import { useTranslation } from 'react-i18next'
 import type { ContentDiff } from '@/lib/versionDiff'
 
 // Shared by VersionDetailDialog (the full diff view) and CaseDetailPage's
 // inline version-row expand (rework-case-detail-ux) — one diff renderer,
 // not two copies drifting apart.
 export function ContentDiffView({ diff }: { diff: ContentDiff }) {
+  const { t } = useTranslation()
   if (diff.fields.length === 0 && diff.steps.length === 0) {
-    return <p className="text-sm text-muted-foreground">No changes relative to the previous version.</p>
+    return <p className="text-sm text-muted-foreground">{t('ContentDiffView.noChanges')}</p>
   }
   return (
     <div className="space-y-2">
@@ -19,7 +21,7 @@ export function ContentDiffView({ diff }: { diff: ContentDiff }) {
       ))}
       {diff.steps.map((s) => (
         <div key={s.index} className="text-sm">
-          <span className="tp-label mr-1.5 text-muted-foreground">Step {s.index + 1}:</span>
+          <span className="tp-label mr-1.5 text-muted-foreground">{t('ContentDiffView.stepLabel', { index: s.index + 1 })}</span>
           {s.kind === 'added' && <span>{s.after!.action}</span>}
           {s.kind === 'removed' && <span className="text-muted-foreground line-through">{s.before!.action}</span>}
           {s.kind === 'changed' && (

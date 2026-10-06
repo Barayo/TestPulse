@@ -1,4 +1,5 @@
 import { useNavigate, useLocation, Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { ProjectSwitcher } from '@/components/ProjectSwitcher'
 import { AdminMenu } from '@/components/AdminMenu'
 import { UserMenu } from '@/components/UserMenu'
@@ -18,6 +19,7 @@ import { BrandMark } from '@/components/BrandMark'
 // project-content routes that render anonymously for a public project
 // (outside RequireAuth, per D3).
 export function Layout({ children }: { children: React.ReactNode }) {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const activeProjectId = useActiveProjectId()
@@ -101,7 +103,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   </span>
                   {isAdminSettingsPage ? (
                     <span className="relative -top-1 truncate text-[20px] leading-none font-bold text-muted-foreground">
-                      Administration
+                      {t('Layout.administrationLabel')}
                     </span>
                   ) : (
                     <ProjectSwitcher
@@ -121,7 +123,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             )}
             {!user && !loading && (
               <Link to="/login" state={{ from: location.pathname }} className="text-sm text-muted-foreground hover:text-foreground">
-                Log in
+                {t('Layout.logInLink')}
               </Link>
             )}
           </div>
@@ -131,10 +133,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               there's no session. */}
           {!user && !loading && (
             <div className="flex items-center gap-2 border-t bg-muted/40 px-4 py-2 text-sm text-muted-foreground sm:px-6">
-              <span>
-                You&apos;re viewing this without an account. Some actions (editing, running tests, commenting) require
-                signing in.
-              </span>
+              <span>{t('Layout.anonymousViewerBanner')}</span>
             </div>
           )}
         </header>

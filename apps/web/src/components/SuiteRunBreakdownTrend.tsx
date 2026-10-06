@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { STATUS_COLOR, STATUS_ORDER, STATUS_LABEL, RETEST_TEXTURE } from './RunStatusBreakdown'
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
+import { STATUS_COLOR, STATUS_ORDER, RETEST_TEXTURE, statusLabel } from './RunStatusBreakdown'
 import type { components } from '@testpulse/shared/api'
 
 type Status = components['schemas']['Status']
@@ -51,12 +53,18 @@ function passRateOf(p: RunBreakdownPoint): number {
 // non-pass status, plus an explicit in-progress marker for an open run —
 // this is the chart's only accessible description of its full breakdown,
 // not color alone.
-function detailOf(p: RunBreakdownPoint): string {
+function detailOf(p: RunBreakdownPoint, t: TFunction): string {
   const rate = passRateOf(p)
-  const base = `${p.runName} · ${formatAxisDate(p.createdAt)} · ${rate}% (${p.counts.pass ?? 0}/${p.total} pass)`
-  const extras = STATUS_ORDER.filter((s) => s !== 'pass' && (p.counts[s] ?? 0) > 0).map((s) => `${p.counts[s]} ${STATUS_LABEL[s].toLowerCase()}`)
+  const base = t('SuiteRunBreakdownTrend.barDetailBase', {
+    name: p.runName,
+    date: formatAxisDate(p.createdAt),
+    rate,
+    pass: p.counts.pass ?? 0,
+    total: p.total,
+  })
+  const extras = STATUS_ORDER.filter((s) => s !== 'pass' && (p.counts[s] ?? 0) > 0).map((s) => `${p.counts[s]} ${statusLabel(s, t).toLowerCase()}`)
   let detail = extras.length > 0 ? `${base} — ${extras.join(', ')}` : base
-  if (p.isOpen) detail += ' — still open, in progress'
+  if (p.isOpen) detail += t('SuiteRunBreakdownTrend.stillOpenSuffix')
   return detail
 }
 
@@ -67,6 +75,7 @@ export function SuiteRunBreakdownTrend({
   points: RunBreakdownPoint[]
   emptyMessage: string
 }) {
+  const { t } = useTranslation()
   const [activeKey, setActiveKey] = useState<string | null>(null)
 
   if (points.length === 0) {
@@ -126,7 +135,7 @@ export function SuiteRunBreakdownTrend({
                     data-testid={`suite-breakdown-bar-${p.runKey}`}
                     data-endpoint={isEndpoint ? 'true' : undefined}
                     data-open={p.isOpen ? 'true' : undefined}
-                    aria-label={detailOf(p)}
+                    aria-label={detailOf(p, t)}
                     onMouseEnter={() => setActiveKey(p.runKey)}
                     onMouseLeave={() => setActiveKey((k) => (k === p.runKey ? null : k))}
                     onFocus={() => setActiveKey(p.runKey)}
@@ -186,17 +195,17 @@ export function SuiteRunBreakdownTrend({
                     style={{ background: STATUS_COLOR[status], backgroundImage: status === 'retest' ? RETEST_TEXTURE : undefined }}
                   />
                   <span>
-                    {STATUS_LABEL[status]}: <span className="font-medium text-card-foreground">{activePoint.counts[status]}</span> (
+                    {statusLabel(status, t)}: <span className="font-medium text-card-foreground">{activePoint.counts[status]}</span> (
                     {Math.round(((activePoint.counts[status] ?? 0) / activePoint.total) * 100)}%)
                   </span>
                 </div>
               ))}
-              {activePoint.isOpen && <div className="mt-1 border-t pt-1 text-muted-foreground">Still open — in progress</div>}
+              {activePoint.isOpen && <div className="mt-1 border-t pt-1 text-muted-foreground">{t('SuiteRunBreakdownTrend.stillOpenTooltip')}</div>}
             </div>
           )}
         </div>
       </div>
-      <ul aria-label="Status breakdown" className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+      <ul aria-label={t('SuiteRunBreakdownTrend.statusBreakdownAriaLabel')} className="flex flex-wrap gap-3 text-xs text-muted-foreground">
         {STATUS_ORDER.map((status) => (
           <li key={status} className="flex items-center gap-1.5">
             <span
@@ -204,7 +213,7 @@ export function SuiteRunBreakdownTrend({
               className="size-2 rounded-sm"
               style={{ background: STATUS_COLOR[status], backgroundImage: status === 'retest' ? RETEST_TEXTURE : undefined }}
             />
-            <span>{STATUS_LABEL[status]}</span>
+            <span>{statusLabel(status, t)}</span>
           </li>
         ))}
       </ul>

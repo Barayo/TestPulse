@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
@@ -26,6 +27,7 @@ type CaseParameters = components['schemas']['CaseParameters']
 // drawer, which had grown too small for the format picker + a
 // potentially large content editor plus the full classification block.
 export default function CreateCasePage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const [searchParams] = useSearchParams()
   const folderId = searchParams.get('folderId')
@@ -71,17 +73,17 @@ export default function CreateCasePage() {
 
   const root = folders.find((f) => !f.parentFolderId)
   const targetFolder = folders.find((f) => f.id === folderId) ?? root
-  const folderName = targetFolder && root && targetFolder.id !== root.id ? targetFolder.name : 'Library'
+  const folderName = targetFolder && root && targetFolder.id !== root.id ? targetFolder.name : t('CreateCasePage.library')
   const canCreate = Boolean(permissions?.caseCreate)
 
   const breadcrumbSegments: Crumb[] = trimProjectBreadcrumb([
-    { label: 'Projects', href: '/' },
+    { label: t('CreateCasePage.projects'), href: '/' },
     { label: project.name, href: `/projects/${projectKey}` },
-    { label: 'Library', href: `/projects/${projectKey}/library` },
+    { label: t('CreateCasePage.library'), href: `/projects/${projectKey}/library` },
     ...(targetFolder && root && targetFolder.id !== root.id
       ? [{ label: targetFolder.name, href: `/projects/${projectKey}/library/${targetFolder.id}` }]
       : []),
-    { label: 'New test case' },
+    { label: t('CreateCasePage.newTestCase') },
   ])
 
   async function submitCreate() {
@@ -106,7 +108,7 @@ export default function CreateCasePage() {
       },
     })
     if (!response.ok) {
-      setCreateError((error as { error?: string })?.error ?? 'Could not create this test case.')
+      setCreateError((error as { error?: string })?.error ?? t('CreateCasePage.createFailed'))
       return
     }
     if (data) navigate(`/projects/${projectKey}/cases/${data.key}`)
@@ -119,14 +121,14 @@ export default function CreateCasePage() {
       <div className="flex items-center gap-3 border-b pb-4">
         <Link
           to={`/projects/${projectKey}/library/${(targetFolder ?? root)?.id ?? ''}`}
-          aria-label={`Back to ${folderName}`}
+          aria-label={t('CreateCasePage.backToFolder', { folderName })}
           className="text-2xl leading-none text-primary hover:text-primary/70"
         >
           ←
         </Link>
         <input
-          aria-label="Title"
-          placeholder="e.g. Login with valid credentials"
+          aria-label={t('CreateCasePage.titleFieldLabel')}
+          placeholder={t('CreateCasePage.titlePlaceholder')}
           className="tp-heading w-full min-w-0 border-b border-transparent bg-transparent text-2xl outline-none focus-visible:border-ring"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
@@ -152,10 +154,10 @@ export default function CreateCasePage() {
           <div className="flex items-center justify-end gap-2 border-t pt-4">
             {createError && <p className="mr-auto text-sm text-destructive">{createError}</p>}
             <Button variant="outline" asChild>
-              <Link to={`/projects/${projectKey}/library/${(targetFolder ?? root)?.id ?? ''}`}>Cancel</Link>
+              <Link to={`/projects/${projectKey}/library/${(targetFolder ?? root)?.id ?? ''}`}>{t('CreateCasePage.cancel')}</Link>
             </Button>
             <Button disabled={!title.trim() || !canCreate} onClick={() => void submitCreate()}>
-              Create test case
+              {t('CreateCasePage.createTestCase')}
             </Button>
           </div>
         </div>
@@ -164,13 +166,13 @@ export default function CreateCasePage() {
           className="space-y-4 md:sticky md:top-6 md:self-start md:rounded-2xl md:bg-muted/60 md:p-5"
           data-testid="case-sidebar"
         >
-          <CaseSidebarSection title="Properties">
-            <PropertyRow label="Format" value={CASE_FORMAT_LABELS[format]} />
+          <CaseSidebarSection title={t('CreateCasePage.properties')}>
+            <PropertyRow label={t('CreateCasePage.format')} value={CASE_FORMAT_LABELS[format]} />
             <PropertyRow
-              label="Priority"
+              label={t('CreateCasePage.priority')}
               value={
                 <select
-                  aria-label="Priority"
+                  aria-label={t('CreateCasePage.priority')}
                   value={priority}
                   onChange={(e) => setPriority(e.target.value as Priority)}
                   className="h-8 w-full rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
@@ -185,22 +187,22 @@ export default function CreateCasePage() {
               wrap
             />
             <PropertyRow
-              label="Test type"
-              value={<Input aria-label="Test type" value={testType} onChange={(e) => setTestType(e.target.value)} placeholder="e.g. unit, e2e" />}
+              label={t('CreateCasePage.testType')}
+              value={<Input aria-label={t('CreateCasePage.testType')} value={testType} onChange={(e) => setTestType(e.target.value)} placeholder={t('CreateCasePage.testTypePlaceholder')} />}
               wrap
             />
             <PropertyRow
-              label="Automation"
-              value={<Switch aria-label="Automated" checked={automated} onCheckedChange={setAutomated} />}
+              label={t('CreateCasePage.automation')}
+              value={<Switch aria-label={t('CreateCasePage.automatedAriaLabel')} checked={automated} onCheckedChange={setAutomated} />}
               wrap
             />
             <PropertyRow
-              label="Platform"
-              value={<Input aria-label="Platform" value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder="e.g. web, iOS" />}
+              label={t('CreateCasePage.platform')}
+              value={<Input aria-label={t('CreateCasePage.platform')} value={platform} onChange={(e) => setPlatform(e.target.value)} placeholder={t('CreateCasePage.platformPlaceholder')} />}
               wrap
             />
             <PropertyRow
-              label="Tags"
+              label={t('CreateCasePage.tags')}
               value={
                 <TagChipsEditor
                   tags={tags}

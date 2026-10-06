@@ -110,3 +110,33 @@ func TestUpdateOwnProfileRejectsCustomAsClientSuppliedAvatarKey(t *testing.T) {
 		t.Errorf("err = %v, want ValidationError", err)
 	}
 }
+
+// UpdateOwnProfile rejects an unsupported Language value (add-ui-i18n
+// design.md D4), the same validation shape as AvatarKey above.
+func TestUpdateOwnProfileRejectsUnsupportedLanguage(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "bad-lang@example.com", "correcthorse", false)
+	actor := actorFor(u)
+	lang := "klingon"
+
+	_, err := s.UpdateOwnProfile(context.Background(), actor, domain.UserProfileUpdate{Language: &lang})
+	var verr *service.ValidationError
+	if !errors.As(err, &verr) {
+		t.Errorf("err = %v, want ValidationError", err)
+	}
+}
+
+func TestUpdateOwnProfileAppliesSupportedLanguage(t *testing.T) {
+	s := testService(t)
+	u := mustCreateUser(t, s, "good-lang@example.com", "correcthorse", false)
+	actor := actorFor(u)
+	lang := "de"
+
+	got, err := s.UpdateOwnProfile(context.Background(), actor, domain.UserProfileUpdate{Language: &lang})
+	if err != nil {
+		t.Fatalf("UpdateOwnProfile: %v", err)
+	}
+	if got.Language == nil || *got.Language != "de" {
+		t.Errorf("Language = %v, want \"de\"", got.Language)
+	}
+}

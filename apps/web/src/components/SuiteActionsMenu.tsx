@@ -1,5 +1,6 @@
 import { forwardRef, useImperativeHandle, useRef, useState } from 'react'
 import type { NavigateFunction } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { PencilIcon, PlayIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -50,6 +51,7 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
   { suite, projectKey, variant, navigate, onChanged, onRunCreated, permissions },
   ref,
 ) {
+  const { t } = useTranslation()
   const bumpLanding = useBumpDataRevision()
   const menuRef = useRef<RowActionMenuHandle>(null)
   const [renaming, setRenaming] = useState(false)
@@ -117,12 +119,12 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
 
   const menuItems: RowActionMenuItem[] = [
     ...(canRun
-      ? [{ label: 'Run suite', icon: <PlayIcon className="size-4" aria-hidden="true" />, onSelect: openRunSuite } satisfies RowActionMenuItem]
+      ? [{ label: t('SuiteActionsMenu.runSuiteLabel'), icon: <PlayIcon className="size-4" aria-hidden="true" />, onSelect: openRunSuite } satisfies RowActionMenuItem]
       : []),
     ...(canRename
       ? [
           {
-            label: 'Rename',
+            label: t('SuiteActionsMenu.renameLabel'),
             icon: <PencilIcon className="size-4" aria-hidden="true" />,
             onSelect: () => {
               setRenameValue(suite.name)
@@ -134,7 +136,7 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
     ...(canDelete
       ? [
           {
-            label: 'Delete',
+            label: t('SuiteActionsMenu.deleteLabel'),
             icon: <Trash2Icon className="size-4" aria-hidden="true" />,
             danger: true,
             onSelect: () => setDeleting(true),
@@ -150,7 +152,7 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
           {canRun && (
             <Button type="button" onClick={openRunSuite}>
               <PlayIcon className="size-4" aria-hidden="true" />
-              Run suite
+              {t('SuiteActionsMenu.runSuiteLabel')}
             </Button>
           )}
           {canRename && (
@@ -163,28 +165,30 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
               }}
             >
               <PencilIcon className="size-4" aria-hidden="true" />
-              Rename
+              {t('SuiteActionsMenu.renameLabel')}
             </Button>
           )}
           {canDelete && (
             <Button type="button" variant="destructive" onClick={() => setDeleting(true)}>
               <Trash2Icon className="size-4" aria-hidden="true" />
-              Delete
+              {t('SuiteActionsMenu.deleteLabel')}
             </Button>
           )}
         </div>
       ) : (
-        menuItems.length > 0 && <RowActionMenu ref={menuRef} label={`Actions for ${suite.name}`} items={menuItems} />
+        menuItems.length > 0 && <RowActionMenu ref={menuRef} label={t('SuiteActionsMenu.actionsForAriaLabel', { name: suite.name })} items={menuItems} />
       )}
 
       <Dialog open={runningQuick} onOpenChange={setRunningQuick}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Run {suite.name}</DialogTitle>
+          <DialogTitle>{t('SuiteActionsMenu.runDialogTitle', { name: suite.name })}</DialogTitle>
           <DialogDescription>
-            {suite.caseIds.length} {suite.caseIds.length === 1 ? 'case' : 'cases'} from {suite.name}
+            {suite.caseIds.length === 1
+              ? t('SuiteActionsMenu.caseCountFromSingular', { count: suite.caseIds.length, name: suite.name })
+              : t('SuiteActionsMenu.caseCountFromPlural', { count: suite.caseIds.length, name: suite.name })}
           </DialogDescription>
           <div className="space-y-1">
-            <Label htmlFor={`quick-run-name-${suite.key}`}>Name</Label>
+            <Label htmlFor={`quick-run-name-${suite.key}`}>{t('SuiteActionsMenu.nameLabel')}</Label>
             <Input
               id={`quick-run-name-${suite.key}`}
               autoFocus
@@ -195,14 +199,14 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
           </div>
           <DialogFooter className="sm:justify-between">
             <Button type="button" variant="ghost" onClick={handleCustomizeSelection}>
-              Customize selection
+              {t('SuiteActionsMenu.customizeSelectionButton')}
             </Button>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setRunningQuick(false)}>
-                Cancel
+                {t('SuiteActionsMenu.cancelButton')}
               </Button>
               <Button disabled={!quickRunName.trim()} onClick={() => void handleQuickRun()}>
-                Create run
+                {t('SuiteActionsMenu.createRunButton')}
               </Button>
             </div>
           </DialogFooter>
@@ -211,9 +215,9 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
 
       <Dialog open={renaming} onOpenChange={setRenaming}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Rename suite</DialogTitle>
+          <DialogTitle>{t('SuiteActionsMenu.renameSuiteDialogTitle')}</DialogTitle>
           <div className="space-y-1">
-            <Label htmlFor={`rename-suite-name-${suite.key}`}>Suite name</Label>
+            <Label htmlFor={`rename-suite-name-${suite.key}`}>{t('SuiteActionsMenu.suiteNameLabel')}</Label>
             <Input
               id={`rename-suite-name-${suite.key}`}
               autoFocus
@@ -226,10 +230,10 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setRenaming(false)}>
-              Cancel
+              {t('SuiteActionsMenu.cancelButton')}
             </Button>
             <Button disabled={!renameValue.trim()} onClick={() => void handleRename()}>
-              Save
+              {t('SuiteActionsMenu.saveButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -237,16 +241,16 @@ export const SuiteActionsMenu = forwardRef<SuiteActionsMenuHandle, Props>(functi
 
       <Dialog open={deleting} onOpenChange={setDeleting}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete suite?</DialogTitle>
+          <DialogTitle>{t('SuiteActionsMenu.deleteSuiteDialogTitle')}</DialogTitle>
           <DialogDescription>
-            Delete &ldquo;{suite.name}&rdquo;? This cannot be undone. Its cases stay in your Library.
+            {t('SuiteActionsMenu.deleteSuiteConfirmMessage', { name: suite.name })}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleting(false)}>
-              Cancel
+              {t('SuiteActionsMenu.cancelButton')}
             </Button>
             <Button variant="destructive" onClick={() => void handleDelete()}>
-              Confirm delete
+              {t('SuiteActionsMenu.confirmDeleteButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

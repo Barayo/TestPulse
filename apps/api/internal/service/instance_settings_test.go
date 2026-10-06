@@ -162,6 +162,36 @@ func validCustomPalette() *domain.CustomPalette {
 	return &domain.CustomPalette{Light: side, Dark: side}
 }
 
+func TestUpdateInstanceSettingsRejectsUnknownDefaultLanguage(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-lang-bad@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	lang := "klingon"
+	if _, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{DefaultLanguage: &lang}); err == nil {
+		t.Fatal(`UpdateInstanceSettings(DefaultLanguage: "klingon"): want error, got nil`)
+	}
+}
+
+func TestUpdateInstanceSettingsAppliesDefaultLanguageAndPerUserLanguageEnabled(t *testing.T) {
+	s := testService(t)
+	admin := mustCreateUser(t, s, "admin-lang-ok@example.com", "correcthorse", true)
+	ctx := domain.WithActor(context.Background(), actorFor(admin))
+
+	lang := "fr"
+	enabled := true
+	got, err := s.UpdateInstanceSettings(ctx, domain.InstanceSettingsUpdate{DefaultLanguage: &lang, PerUserLanguageEnabled: &enabled})
+	if err != nil {
+		t.Fatalf("UpdateInstanceSettings: %v", err)
+	}
+	if got.DefaultLanguage != "fr" {
+		t.Errorf("DefaultLanguage = %q, want \"fr\"", got.DefaultLanguage)
+	}
+	if !got.PerUserLanguageEnabled {
+		t.Errorf("PerUserLanguageEnabled = %v, want true", got.PerUserLanguageEnabled)
+	}
+}
+
 func TestUpdateInstanceSettingsRejectsMalformedCustomPaletteHex(t *testing.T) {
 	s := testService(t)
 	admin := mustCreateUser(t, s, "admin-palette-bad@example.com", "correcthorse", true)

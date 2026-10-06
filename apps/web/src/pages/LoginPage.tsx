@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { LoginForm } from '@/components/LoginForm'
 import { ConfirmBanner } from '@/components/ConfirmBanner'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,6 +9,7 @@ import { AuthLayout } from '@/components/AuthLayout'
 import { api } from '@/lib/api'
 
 export default function LoginPage() {
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const location = useLocation()
   const [passwordResetEnabled, setPasswordResetEnabled] = useState(false)
@@ -36,7 +38,7 @@ export default function LoginPage() {
   const routerState = location.state as { passwordReset?: boolean; message?: string } | null
   const [bannerMessage, setBannerMessage] = useState<string | undefined>(
     routerState?.passwordReset
-      ? 'Password updated — log in with your new password'
+      ? t('LoginPage.passwordUpdatedBanner')
       : routerState?.message,
   )
   useEffect(() => {
@@ -46,7 +48,7 @@ export default function LoginPage() {
   }, [])
 
   return (
-    <AuthLayout backLink={{ to: '/', label: 'Back to home' }}>
+    <AuthLayout backLink={{ to: '/', label: t('LoginPage.backToHomeLink') }}>
       {bannerMessage && (
         <div className="w-full max-w-sm">
           <ConfirmBanner message={bannerMessage} onDismiss={() => setBannerMessage(undefined)} />
@@ -54,7 +56,7 @@ export default function LoginPage() {
       )}
       <Card className="w-full max-w-sm">
         <CardHeader>
-          <CardTitle className="tp-heading">Log in to TestPulse</CardTitle>
+          <CardTitle className="tp-heading">{t('LoginPage.title')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {!ssoOnly && (
@@ -74,7 +76,7 @@ export default function LoginPage() {
           )}
           {ssoEnabled && (
             <Button asChild variant={ssoOnly ? 'default' : 'outline'} className="w-full">
-              <a href="/api/v1/auth/oidc/login">Sign in with SSO</a>
+              <a href="/api/v1/auth/oidc/login">{t('LoginPage.ssoButton')}</a>
             </Button>
           )}
         </CardContent>

@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { UsersIcon, ShieldCheckIcon, SettingsIcon, KeyRoundIcon } from 'lucide-react'
 
 // Persistent tab strip shared by the four Administration pages
@@ -12,19 +13,20 @@ import { UsersIcon, ShieldCheckIcon, SettingsIcon, KeyRoundIcon } from 'lucide-r
 // resource — every user's tokens, Tenant-Admin-only — so it belongs in
 // the shell even though the personal page doesn't.
 const TABS = [
-  { to: '/settings/people', label: 'People', icon: UsersIcon },
-  { to: '/settings/roles', label: 'Roles', icon: ShieldCheckIcon },
-  { to: '/settings/agent-tokens', label: 'Agent Tokens', icon: KeyRoundIcon },
-  { to: '/settings/instance', label: 'Instance', icon: SettingsIcon },
+  { to: '/settings/people', labelKey: 'AdminShell.peopleTab', icon: UsersIcon },
+  { to: '/settings/roles', labelKey: 'AdminShell.rolesTab', icon: ShieldCheckIcon },
+  { to: '/settings/agent-tokens', labelKey: 'AdminShell.agentTokensTab', icon: KeyRoundIcon },
+  { to: '/settings/instance', labelKey: 'AdminShell.instanceTab', icon: SettingsIcon },
 ] as const
 
 export function AdminShell({ children }: { children: ReactNode }) {
+  const { t } = useTranslation()
   const { pathname } = useLocation()
 
   return (
     <div className="space-y-6">
-      <nav aria-label="Administration" className="inline-flex gap-0.5 rounded-2xl bg-muted p-1">
-        {TABS.map(({ to, label, icon: Icon }) => {
+      <nav aria-label={t('AdminShell.ariaLabel')} className="inline-flex gap-0.5 rounded-2xl bg-muted p-1">
+        {TABS.map(({ to, labelKey, icon: Icon }) => {
           const isActive = pathname === to
           return (
             <Link
@@ -37,7 +39,7 @@ export function AdminShell({ children }: { children: ReactNode }) {
               }`}
             >
               <Icon className={`size-4 ${isActive ? 'text-primary' : ''}`} aria-hidden="true" />
-              {label}
+              {t(labelKey)}
             </Link>
           )
         })}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams, type NavigateFunction } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { LayersIcon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,7 @@ function SuiteCard({
   permissions: Permissions | undefined
 }) {
   const menuRef = useRef<SuiteActionsMenuHandle>(null)
+  const { t } = useTranslation()
 
   return (
     <li
@@ -72,7 +74,7 @@ function SuiteCard({
             <span className="truncate font-medium">{suite.name}</span>
           </span>
           {suite.passRate === null ? (
-            <span className="text-xs text-muted-foreground">Never run</span>
+            <span className="text-xs text-muted-foreground">{t('SuitesPage.neverRun')}</span>
           ) : (
             <>
               <StatusPill rate={suite.passRate} />
@@ -80,7 +82,7 @@ function SuiteCard({
             </>
           )}
           <span className="text-xs text-muted-foreground">
-            {suite.caseIds.length} {suite.caseIds.length === 1 ? 'case' : 'cases'}
+            {suite.caseIds.length} {suite.caseIds.length === 1 ? t('SuitesPage.caseSingular') : t('SuitesPage.casePlural')}
             {suite.lastRunAt && ` · ${timeAgo(suite.lastRunAt)}`}
           </span>
         </button>
@@ -102,6 +104,7 @@ function SuiteCard({
 }
 
 export default function SuitesPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const permissions = useProjectPermissions(projectKey)
@@ -185,13 +188,13 @@ export default function SuitesPage() {
   if (notFound) {
     return (
       <p className="text-sm text-muted-foreground">
-        Project not found. <Link to="/" className="underline">Go to Projects</Link>
+        {t('SuitesPage.projectNotFound')} <Link to="/" className="underline">{t('SuitesPage.goToProjects')}</Link>
         {!user && !authLoading && (
           <>
             {' '}
             ·{' '}
             <Link to="/login" state={{ from: `/projects/${projectKey}/suites` }} className="underline">
-              Log in
+              {t('SuitesPage.logIn')}
             </Link>
           </>
         )}
@@ -204,25 +207,25 @@ export default function SuitesPage() {
       <Breadcrumbs
         segments={trimProjectBreadcrumb(
           [
-            { label: 'Projects', href: '/' },
+            { label: t('SuitesPage.projectsBreadcrumb'), href: '/' },
             { label: project?.name ?? '', href: `/projects/${projectKey}` },
-            { label: 'Suites' },
+            { label: t('SuitesPage.suitesBreadcrumb') },
           ],
-          'Suites',
+          t('SuitesPage.suitesBreadcrumb'),
         )}
       />
 
       {createdRun && (
         <ConfirmBanner
-          message={`Run "${createdRun.name}" created.`}
+          message={t('SuitesPage.runCreatedMessage', { name: createdRun.name })}
           linkTo={`/runs/${createdRun.key}`}
-          linkLabel="View it →"
+          linkLabel={t('SuitesPage.viewItLink')}
           onDismiss={() => setCreatedRun(undefined)}
         />
       )}
 
       <div className="flex items-center justify-between">
-        <h1 className="tp-heading text-2xl">Suites</h1>
+        <h1 className="tp-heading text-2xl">{t('SuitesPage.heading')}</h1>
         {permissions?.suiteCreate && (
           <Button
             type="button"
@@ -231,16 +234,16 @@ export default function SuitesPage() {
               setCreating(true)
             }}
           >
-            + New suite
+            {t('SuitesPage.newSuiteButton')}
           </Button>
         )}
       </div>
 
       {suites.length === 0 ? (
-        <p className="text-sm text-muted-foreground">No suites yet.</p>
+        <p className="text-sm text-muted-foreground">{t('SuitesPage.noSuitesYet')}</p>
       ) : (
         <ul
-          aria-label="Suites"
+          aria-label={t('SuitesPage.suitesListAriaLabel')}
           className="grid gap-4"
           style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(15rem, 1fr))' }}
         >
@@ -261,15 +264,15 @@ export default function SuitesPage() {
 
       <Dialog open={creating} onOpenChange={setCreating}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>New suite</DialogTitle>
+          <DialogTitle>{t('SuitesPage.newSuiteDialogTitle')}</DialogTitle>
           <div className="space-y-1">
-            <Label htmlFor="suite-name">Suite name</Label>
+            <Label htmlFor="suite-name">{t('SuitesPage.suiteNameLabel')}</Label>
             <Input
               id="suite-name"
               autoFocus
               value={suiteName}
               onChange={(e) => setSuiteName(e.target.value)}
-              placeholder="Smoke"
+              placeholder={t('SuitesPage.suiteNamePlaceholder')}
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && suiteName.trim()) void handleCreateSuite()
               }}
@@ -277,10 +280,10 @@ export default function SuitesPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreating(false)}>
-              Cancel
+              {t('SuitesPage.cancelButton')}
             </Button>
             <Button disabled={!suiteName.trim()} onClick={() => void handleCreateSuite()}>
-              Create
+              {t('SuitesPage.createButton')}
             </Button>
           </DialogFooter>
         </DialogContent>

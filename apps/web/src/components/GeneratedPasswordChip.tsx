@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { CopyIcon, CheckIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 
 // Shared "here's a secret, shown once — copy it" chip (add-change-own-password
@@ -8,6 +9,7 @@ import { Button } from '@/components/ui/button'
 // temporary-password fallback. Matches TokensPage's identical idiom for a
 // newly-created API token.
 export function GeneratedPasswordChip({ value }: { value: string }) {
+  const { t } = useTranslation()
   const [copied, setCopied] = useState(false)
   async function handleCopy() {
     await navigator.clipboard.writeText(value)
@@ -20,12 +22,12 @@ export function GeneratedPasswordChip({ value }: { value: string }) {
         {copied ? (
           <>
             <CheckIcon className="size-3.5" aria-hidden="true" />
-            Copied
+            {t('GeneratedPasswordChip.copiedLabel')}
           </>
         ) : (
           <>
             <CopyIcon className="size-3.5" aria-hidden="true" />
-            Copy
+            {t('GeneratedPasswordChip.copyLabel')}
           </>
         )}
       </Button>

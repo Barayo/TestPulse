@@ -349,3 +349,67 @@ func TestInstanceSettingsUpdateRoundTripsSessionTimeoutDays(t *testing.T) {
 		t.Errorf("SessionTimeoutDays = %d, want %d", got.SessionTimeoutDays, days)
 	}
 }
+
+func TestInstanceSettingsGetReturnsDefaultLanguageDefaultingToEn(t *testing.T) {
+	// add-ui-i18n design.md D3: 'en' is the seeded default.
+	s := testStore(t)
+	ctx := context.Background()
+
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DefaultLanguage != "en" {
+		t.Errorf("DefaultLanguage = %q, want \"en\" (seeded default)", got.DefaultLanguage)
+	}
+}
+
+func TestInstanceSettingsGetReturnsPerUserLanguageEnabledDefaultingToFalse(t *testing.T) {
+	// add-ui-i18n design.md D5: off by default, matching the project's
+	// existing conservative-default pattern for admin-gated settings.
+	s := testStore(t)
+	ctx := context.Background()
+
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.PerUserLanguageEnabled {
+		t.Errorf("PerUserLanguageEnabled = %v, want false (seeded default)", got.PerUserLanguageEnabled)
+	}
+}
+
+func TestInstanceSettingsUpdateAppliesDefaultLanguageAndPerUserLanguageEnabledIndependently(t *testing.T) {
+	s := testStore(t)
+	ctx := context.Background()
+
+	lang := "es"
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{DefaultLanguage: &lang}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	got, err := s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if got.DefaultLanguage != "es" {
+		t.Errorf("DefaultLanguage = %q, want \"es\"", got.DefaultLanguage)
+	}
+	if got.PerUserLanguageEnabled {
+		t.Errorf("PerUserLanguageEnabled = %v, want unchanged false (not touched by this update)", got.PerUserLanguageEnabled)
+	}
+
+	enabled := true
+	if _, err := s.InstanceSettings.Update(ctx, domain.InstanceSettingsUpdate{PerUserLanguageEnabled: &enabled}); err != nil {
+		t.Fatalf("Update: %v", err)
+	}
+	got, err = s.InstanceSettings.Get(ctx)
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if !got.PerUserLanguageEnabled {
+		t.Errorf("PerUserLanguageEnabled = %v, want true", got.PerUserLanguageEnabled)
+	}
+	if got.DefaultLanguage != "es" {
+		t.Errorf("DefaultLanguage = %q, want still \"es\" (not touched by this update)", got.DefaultLanguage)
+	}
+}

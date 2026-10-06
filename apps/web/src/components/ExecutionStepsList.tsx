@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next'
+import type { TFunction } from 'i18next'
 import type { components } from '@testpulse/shared/api'
 
 type Step = components['schemas']['Step']
@@ -8,12 +10,14 @@ type Verdict = components['schemas']['Verdict']
 // shortcuts hint already teaches (for the overall verdict), rather than
 // inventing new icons/vocabulary — approved design (Pepe mock,
 // add-step-level-results).
-const VERDICT_LETTERS: { verdict: Verdict; letter: string; label: string }[] = [
-  { verdict: 'pass', letter: 'P', label: 'Pass' },
-  { verdict: 'failed', letter: 'F', label: 'Fail' },
-  { verdict: 'blocked', letter: 'B', label: 'Blocked' },
-  { verdict: 'skipped', letter: 'S', label: 'Skipped' },
-]
+function verdictLetters(t: TFunction): { verdict: Verdict; letter: string; label: string }[] {
+  return [
+    { verdict: 'pass', letter: 'P', label: t('ExecutionStepsList.passLabel') },
+    { verdict: 'failed', letter: 'F', label: t('ExecutionStepsList.failLabel') },
+    { verdict: 'blocked', letter: 'B', label: t('ExecutionStepsList.blockedLabel') },
+    { verdict: 'skipped', letter: 'S', label: t('ExecutionStepsList.skippedLabel') },
+  ]
+}
 
 // Color tokens reused verbatim from elsewhere in the app: pass matches
 // CaseStepsList's own step-number badge tint; fail and blocked match the
@@ -43,10 +47,11 @@ export function ExecutionStepsList({
   stepStates: StepResult[]
   onMark: (stepIndex: number, verdict: Verdict) => void
 }) {
+  const { t } = useTranslation()
   if (steps.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed p-10 text-center">
-        <p className="text-sm font-medium">No steps yet</p>
+        <p className="text-sm font-medium">{t('ExecutionStepsList.noStepsYetMessage')}</p>
       </div>
     )
   }
@@ -71,7 +76,7 @@ export function ExecutionStepsList({
                 {s.expected && (
                   <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
                     <p className="text-base leading-relaxed text-foreground">
-                      <span className="tp-label mr-1.5 text-primary">Expected:</span>
+                      <span className="tp-label mr-1.5 text-primary">{t('ExecutionStepsList.expectedLabel')}</span>
                       {s.expected}
                     </p>
                   </div>
@@ -79,14 +84,14 @@ export function ExecutionStepsList({
               </div>
               <div
                 role="group"
-                aria-label={`Mark step ${i + 1} result`}
+                aria-label={t('ExecutionStepsList.markStepResultAriaLabel', { number: i + 1 })}
                 className="flex shrink-0 items-center gap-0.5 self-start rounded-full bg-muted/70 p-0.5"
               >
-                {VERDICT_LETTERS.map(({ verdict, letter, label }) => (
+                {verdictLetters(t).map(({ verdict, letter, label }) => (
                   <button
                     key={verdict}
                     type="button"
-                    aria-label={`Mark step ${i + 1} as ${label}`}
+                    aria-label={t('ExecutionStepsList.markStepAsAriaLabel', { number: i + 1, label })}
                     aria-pressed={active === verdict}
                     onClick={() => onMark(i, verdict)}
                     className={`flex size-6 items-center justify-center rounded-full font-mono text-[11px] font-extrabold transition-colors ${

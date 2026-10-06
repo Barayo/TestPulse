@@ -1,5 +1,6 @@
 import { useState, type FormEvent } from 'react'
 import { TriangleAlertIcon } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,12 +17,14 @@ import { generateSecurePassword } from '@/lib/generatePassword'
 export function ChangePasswordForm({
   onSuccess,
   onCancel,
-  submitLabel = 'Change password',
+  submitLabel,
 }: {
   onSuccess: () => void
   onCancel?: () => void
   submitLabel?: string
 }) {
+  const { t } = useTranslation()
+  const resolvedSubmitLabel = submitLabel ?? t('ChangePasswordForm.defaultSubmitLabel')
   const [currentPassword, setCurrentPassword] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [revealedPassword, setRevealedPassword] = useState<string>()
@@ -43,7 +46,7 @@ export function ChangePasswordForm({
         body: { currentPassword, newPassword },
       })
       if (!response.ok) {
-        setError((apiError as { error?: string })?.error ?? 'Could not change your password.')
+        setError((apiError as { error?: string })?.error ?? t('ChangePasswordForm.genericErrorMessage'))
         return
       }
       onSuccess()
@@ -55,7 +58,7 @@ export function ChangePasswordForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
       <div className="space-y-1">
-        <Label htmlFor="current-password">Current password</Label>
+        <Label htmlFor="current-password">{t('ChangePasswordForm.currentPasswordLabel')}</Label>
         <Input
           id="current-password"
           type="password"
@@ -68,9 +71,9 @@ export function ChangePasswordForm({
       </div>
       <div className="space-y-1">
         <div className="flex items-center justify-between">
-          <Label htmlFor="new-password">New password</Label>
+          <Label htmlFor="new-password">{t('ChangePasswordForm.newPasswordLabel')}</Label>
           <button type="button" className="text-xs font-bold text-primary" onClick={handleGeneratePassword}>
-            Generate
+            {t('ChangePasswordForm.generateButton')}
           </button>
         </div>
         <Input
@@ -81,18 +84,15 @@ export function ChangePasswordForm({
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
         />
-        <p className="text-xs text-muted-foreground">At least 12 characters.</p>
+        <p className="text-xs text-muted-foreground">{t('ChangePasswordForm.passwordHint')}</p>
       </div>
       {revealedPassword && newPassword === revealedPassword && <GeneratedPasswordChip value={revealedPassword} />}
       <div className="space-y-2 rounded-lg border border-secondary/30 bg-secondary/10 p-2.5">
         <div className="flex items-start gap-2">
           <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
           <div>
-            <p className="text-sm font-medium">This signs you out everywhere</p>
-            <p className="text-sm text-muted-foreground">
-              Every active session for your account ends the moment you save, including this one — you'll need to
-              log in again.
-            </p>
+            <p className="text-sm font-medium">{t('ChangePasswordForm.signOutWarningHeading')}</p>
+            <p className="text-sm text-muted-foreground">{t('ChangePasswordForm.signOutWarningBody')}</p>
           </div>
         </div>
       </div>
@@ -100,15 +100,15 @@ export function ChangePasswordForm({
       {onCancel ? (
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
-            Cancel
+            {t('ChangePasswordForm.cancelButton')}
           </Button>
           <Button type="submit" disabled={submitting}>
-            {submitting ? 'Changing…' : submitLabel}
+            {submitting ? t('ChangePasswordForm.changingButton') : resolvedSubmitLabel}
           </Button>
         </DialogFooter>
       ) : (
         <Button type="submit" className="w-full" disabled={submitting}>
-          {submitting ? 'Changing…' : submitLabel}
+          {submitting ? t('ChangePasswordForm.changingButton') : resolvedSubmitLabel}
         </Button>
       )}
     </form>

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ListChecksIcon, Trash2Icon, Link2Icon, TriangleAlertIcon } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import { Textarea } from '@/components/ui/textarea'
@@ -80,6 +81,7 @@ function renderWithPlaceholders(text: string | undefined, columns: string[] | un
 }
 
 function GroupBlockBody({ steps, startIndex }: { steps: Step[]; startIndex: number }) {
+  const { t } = useTranslation()
   return (
     <ol className="space-y-3 border-t px-3 py-3">
       {steps.map((s, k) => {
@@ -97,7 +99,7 @@ function GroupBlockBody({ steps, startIndex }: { steps: Step[]; startIndex: numb
               {s.expected && (
                 <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
                   <p className="text-base leading-relaxed text-foreground">
-                    <span className="tp-label mr-1.5 text-primary">Expected:</span>
+                    <span className="tp-label mr-1.5 text-primary">{t('CaseStepsList.expectedLabel')}</span>
                     {s.expected}
                   </p>
                 </div>
@@ -127,6 +129,7 @@ function GroupBlock({
   onReplace: (steps: Step[]) => void
   onDetach: () => void
 }) {
+  const { t } = useTranslation()
   const range = block.startIndex === block.endIndex ? `${block.startIndex + 1}` : `${block.startIndex + 1}–${block.endIndex + 1}`
   const name = info?.status === 'ok' ? info.group.name : block.groupKey
   const deleted = info?.status === 'deleted'
@@ -148,28 +151,28 @@ function GroupBlock({
           </span>
           <Link2Icon className="size-3.5 shrink-0 text-primary" aria-hidden="true" />
           <span className="font-medium">{name}</span>
-          {info?.status === 'ok' && <span className="text-xs text-muted-foreground">{info.group.steps.length} steps</span>}
+          {info?.status === 'ok' && <span className="text-xs text-muted-foreground">{t('CaseStepsList.stepsCount', { count: info.group.steps.length })}</span>}
           {deleted && (
             <span className="inline-flex items-center gap-1 rounded-full border border-destructive/35 bg-destructive/10 px-2 py-0.5 text-xs font-semibold text-destructive">
               <TriangleAlertIcon className="size-3" aria-hidden="true" />
-              Source group deleted
+              {t('CaseStepsList.sourceGroupDeleted')}
             </span>
           )}
           {!deleted && stale && (
             <span className="inline-flex items-center gap-1 rounded-full border border-secondary/35 bg-secondary/10 px-2 py-0.5 text-xs font-semibold text-secondary-foreground">
               <TriangleAlertIcon className="size-3" aria-hidden="true" />
-              Update available
+              {t('CaseStepsList.updateAvailable')}
             </span>
           )}
           <span className="flex-1" />
           <div className="flex items-center gap-3 text-xs font-semibold">
             {!deleted && stale && projectKey && (
               <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
-                Refresh
+                {t('CaseStepsList.refresh')}
               </Button>
             )}
             <button type="button" className="text-muted-foreground hover:text-foreground" onClick={onDetach}>
-              Detach
+              {t('CaseStepsList.detach')}
             </button>
           </div>
         </div>
@@ -177,8 +180,7 @@ function GroupBlock({
           <div className="flex items-start gap-2 border-t border-secondary/30 bg-secondary/10 p-2.5">
             <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-secondary-foreground" aria-hidden="true" />
             <p className="text-sm text-muted-foreground">
-              This group's steps changed since you added them. Refresh to pull in the current version — nothing is
-              saved until you save this case.
+              {t('CaseStepsList.staleGroupHint')}
             </p>
           </div>
         )}
@@ -186,8 +188,7 @@ function GroupBlock({
           <div className="flex items-start gap-2 border-t border-destructive/30 bg-destructive/10 p-2.5">
             <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
             <p className="text-sm text-muted-foreground">
-              This group was deleted. There's nothing to refresh from — Detach to keep these steps as your own
-              editable copy.
+              {t('CaseStepsList.deletedGroupHint')}
             </p>
           </div>
         )}
@@ -238,6 +239,7 @@ export function CaseStepsList({
   // views, whose step text already arrived pre-substituted from the API.
   parameterColumns?: string[]
 }) {
+  const { t } = useTranslation()
   const editable = Boolean(onChange)
   const list = useMemo(() => steps ?? [], [steps])
   const blocks = useMemo(() => toBlocks(list), [list])
@@ -270,8 +272,8 @@ export function CaseStepsList({
     return (
       <div className="rounded-2xl border border-dashed p-10 text-center">
         <ListChecksIcon className="mx-auto mb-2 size-6 text-muted-foreground" aria-hidden="true" />
-        <p className="mb-1 text-sm font-medium">No steps yet</p>
-        <p className="mb-4 text-sm text-muted-foreground">Add steps to describe how to run this test.</p>
+        <p className="mb-1 text-sm font-medium">{t('CaseStepsList.noStepsYet')}</p>
+        <p className="mb-4 text-sm text-muted-foreground">{t('CaseStepsList.noStepsHint')}</p>
         {emptyStateAction}
       </div>
     )
@@ -350,10 +352,10 @@ export function CaseStepsList({
                 <div className="flex-1 space-y-2 pt-0.5">
                   {editable ? (
                     <Textarea
-                      aria-label={`Action for step ${i + 1}`}
+                      aria-label={t('CaseStepsList.actionForStep', { index: i + 1 })}
                       value={s.action}
                       onChange={(e) => update(i, 'action', e.target.value)}
-                      placeholder="Action…"
+                      placeholder={t('CaseStepsList.actionPlaceholder')}
                       className="text-base font-medium leading-relaxed"
                     />
                   ) : (
@@ -363,12 +365,12 @@ export function CaseStepsList({
                   )}
                   {editable ? (
                     <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
-                      <span className="tp-label mb-1 block text-primary">Expected:</span>
+                      <span className="tp-label mb-1 block text-primary">{t('CaseStepsList.expectedLabel')}</span>
                       <Textarea
-                        aria-label={`Expected result for step ${i + 1}`}
+                        aria-label={t('CaseStepsList.expectedForStep', { index: i + 1 })}
                         value={s.expected ?? ''}
                         onChange={(e) => update(i, 'expected', e.target.value)}
-                        placeholder="Expected result…"
+                        placeholder={t('CaseStepsList.expectedPlaceholder')}
                         className="bg-transparent text-base leading-relaxed"
                       />
                     </div>
@@ -376,7 +378,7 @@ export function CaseStepsList({
                     s.expected && (
                       <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
                         <p className="text-base leading-relaxed text-foreground">
-                          <span className="tp-label mr-1.5 text-primary">Expected:</span>
+                          <span className="tp-label mr-1.5 text-primary">{t('CaseStepsList.expectedLabel')}</span>
                           {renderWithPlaceholders(s.expected, parameterColumns)}
                         </p>
                       </div>
@@ -386,7 +388,7 @@ export function CaseStepsList({
                 {editable && (
                   <button
                     type="button"
-                    aria-label={`Remove step ${i + 1}`}
+                    aria-label={t('CaseStepsList.removeStep', { index: i + 1 })}
                     className="shrink-0 self-start pt-1.5 text-muted-foreground hover:text-destructive"
                     onClick={() => remove(i)}
                   >
@@ -408,7 +410,7 @@ export function CaseStepsList({
                   <div className="mb-2.5 flex items-center gap-1.5 text-xs text-muted-foreground">
                     <Link2Icon className="size-3.5 text-primary" aria-hidden="true" />
                     <span>
-                      From shared group:{' '}
+                      {t('CaseStepsList.fromSharedGroup')}{' '}
                       <a
                         className="font-semibold text-primary hover:underline"
                         href={projectKey ? `/projects/${projectKey}/settings` : '#'}
@@ -433,7 +435,7 @@ export function CaseStepsList({
                             {s.expected && (
                               <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5">
                                 <p className="text-base leading-relaxed text-foreground">
-                                  <span className="tp-label mr-1.5 text-primary">Expected:</span>
+                                  <span className="tp-label mr-1.5 text-primary">{t('CaseStepsList.expectedLabel')}</span>
                                   {s.expected}
                                 </p>
                               </div>
@@ -467,21 +469,21 @@ export function CaseStepsList({
           {selected.size > 0 ? (
             <div className="flex flex-1 items-center justify-between gap-3 rounded-lg border border-primary/25 bg-primary/5 px-3 py-2">
               <span className="text-sm font-semibold">
-                {selected.size} step{selected.size === 1 ? '' : 's'} selected
+                {t('CaseStepsList.stepsSelected', { count: selected.size, suffix: selected.size === 1 ? '' : 's' })}
               </span>
               <div className="flex gap-2">
                 <Button type="button" size="sm" onClick={() => setExtractOpen(true)}>
-                  Extract as shared group
+                  {t('CaseStepsList.extractAsSharedGroup')}
                 </Button>
                 <Button type="button" size="sm" variant="ghost" onClick={() => setSelected(new Set())}>
-                  Cancel
+                  {t('CaseStepsList.cancel')}
                 </Button>
               </div>
             </div>
           ) : (
             <>
               <button type="button" className="text-sm font-medium text-primary hover:underline" onClick={add}>
-                + Add step
+                {t('CaseStepsList.addStep')}
               </button>
               {projectKey && (
                 <button
@@ -489,7 +491,7 @@ export function CaseStepsList({
                   className="text-sm font-medium text-primary hover:underline"
                   onClick={() => setInsertOpen(true)}
                 >
-                  + Insert shared group
+                  {t('CaseStepsList.insertSharedGroup')}
                 </button>
               )}
             </>

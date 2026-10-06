@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { Avatar } from '@/components/Avatar'
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
 // separate top-level AdminMenu, not here: it isn't a personal-account
 // concern, so it doesn't belong under the user's own email.
 export function UserMenu({ user, onLogout }: Props) {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
 
@@ -56,7 +58,7 @@ export function UserMenu({ user, onLogout }: Props) {
       {open && (
         <div
           role="menu"
-          aria-label="Account"
+          aria-label={t('UserMenu.accountAriaLabel')}
           className="absolute right-0 z-50 mt-1 w-48 rounded-md border bg-card py-1 text-sm shadow-lg"
         >
           <Link
@@ -65,7 +67,7 @@ export function UserMenu({ user, onLogout }: Props) {
             className="block px-3 py-1.5 hover:bg-accent"
             onClick={() => setOpen(false)}
           >
-            Profile
+            {t('UserMenu.profileLink')}
           </Link>
           <Link
             role="menuitem"
@@ -73,7 +75,7 @@ export function UserMenu({ user, onLogout }: Props) {
             className="block px-3 py-1.5 hover:bg-accent"
             onClick={() => setOpen(false)}
           >
-            API tokens
+            {t('UserMenu.apiTokensLink')}
           </Link>
           <div className="my-1 border-t" />
           <button
@@ -85,7 +87,7 @@ export function UserMenu({ user, onLogout }: Props) {
               onLogout()
             }}
           >
-            Log out
+            {t('UserMenu.logOutButton')}
           </button>
         </div>
       )}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { api } from '@/lib/api'
@@ -22,6 +23,7 @@ type Props = {
 // assigning to a team has different real-world meaning (shared ownership)
 // than assigning to one person, so they stay visually distinct.
 export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }: Props) {
+  const { t } = useTranslation()
   const [query, setQuery] = useState('')
   const [users, setUsers] = useState<Option[]>([])
   const [teams, setTeams] = useState<Option[]>([])
@@ -49,7 +51,7 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
     ]).then(([{ data: membership }, allUsers, allTeams]) => {
       if (cancelled) return
       const memberUserIds = new Set((membership?.users ?? []).map((m) => m.userId))
-      const memberTeamIds = new Set((membership?.teams ?? []).map((t) => t.teamId))
+      const memberTeamIds = new Set((membership?.teams ?? []).map((team) => team.teamId))
       setUsers(
         allUsers.items
           .filter((u) => memberUserIds.has(u.id))
@@ -57,8 +59,8 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
       )
       setTeams(
         allTeams.items
-          .filter((t) => memberTeamIds.has(t.id))
-          .map((t) => ({ id: t.id, label: t.name })),
+          .filter((team) => memberTeamIds.has(team.id))
+          .map((team) => ({ id: team.id, label: team.name })),
       )
       setTruncated(allUsers.truncated || allTeams.truncated)
     })
@@ -72,7 +74,7 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
     [users, query],
   )
   const filteredTeams = useMemo(
-    () => teams.filter((t) => t.label.toLowerCase().includes(query.toLowerCase())),
+    () => teams.filter((team) => team.label.toLowerCase().includes(query.toLowerCase())),
     [teams, query],
   )
 
@@ -84,25 +86,25 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
-        <DialogTitle>{title ?? 'Assign to…'}</DialogTitle>
+        <DialogTitle>{title ?? t('AssignDialog.defaultTitle')}</DialogTitle>
         <Input
           autoFocus
-          placeholder="Search people or teams…"
+          placeholder={t('AssignDialog.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         {truncated && !query && (
           <p className="px-2 text-xs text-muted-foreground">
-            Showing a limited set of members — search by name to find someone not listed.
+            {t('AssignDialog.truncatedNote')}
           </p>
         )}
         {filteredUsers.length === 0 && filteredTeams.length === 0 ? (
-          <p className="p-2 text-sm text-muted-foreground">No matching project members.</p>
+          <p className="p-2 text-sm text-muted-foreground">{t('AssignDialog.noMatchingMembers')}</p>
         ) : (
           <div className="max-h-80 space-y-3 overflow-y-auto">
             {filteredUsers.length > 0 && (
               <div>
-                <p className="tp-label px-2 text-muted-foreground">People</p>
+                <p className="tp-label px-2 text-muted-foreground">{t('AssignDialog.peopleLabel')}</p>
                 <ul className="space-y-1">
                   {filteredUsers.map((u) => (
                     <li key={u.id}>
@@ -120,16 +122,16 @@ export function AssignDialog({ open, onOpenChange, projectKey, onAssign, title }
             )}
             {filteredTeams.length > 0 && (
               <div>
-                <p className="tp-label px-2 text-muted-foreground">Teams</p>
+                <p className="tp-label px-2 text-muted-foreground">{t('AssignDialog.teamsLabel')}</p>
                 <ul className="space-y-1">
-                  {filteredTeams.map((t) => (
-                    <li key={t.id}>
+                  {filteredTeams.map((team) => (
+                    <li key={team.id}>
                       <button
                         type="button"
                         className="w-full rounded-md px-2 py-2 text-left text-sm hover:bg-accent"
-                        onClick={() => pick('team', t.id, t.label)}
+                        onClick={() => pick('team', team.id, team.label)}
                       >
-                        {t.label}
+                        {team.label}
                       </button>
                     </li>
                   ))}

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router'
+import { useTranslation } from 'react-i18next'
 import { api } from '@/lib/api'
 import { fetchAllPages } from '@/lib/fetchAllPages'
 import { useAuth } from '@/lib/useAuth'
@@ -13,6 +14,7 @@ type Run = components['schemas']['Run']
 type PickerLocationState = { seedRunKey?: string } | null
 
 export default function RunComparePickerPage() {
+  const { t } = useTranslation()
   const { projectKey } = useParams<{ projectKey: string }>()
   const navigate = useNavigate()
   const location = useLocation()
@@ -57,7 +59,7 @@ export default function RunComparePickerPage() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="tp-heading">Compare runs</CardTitle>
+        <CardTitle className="tp-heading">{t('RunComparePickerPage.compareRunsTitle')}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {/* A native <label> wrapping the listbox would work fine for a real
@@ -70,27 +72,27 @@ export default function RunComparePickerPage() {
             RunListbox's own aria-label instead — no label/for association
             needed since the trigger already names itself accessibly. */}
         <div className="flex flex-col gap-1 text-sm">
-          First run
+          {t('RunComparePickerPage.firstRunLabel')}
           <RunListbox
-            label="First run"
+            label={t('RunComparePickerPage.firstRunLabel')}
             runs={runs.filter((r) => r.key !== runKeyB)}
             value={runKeyA}
             onChange={setRunKeyA}
-            placeholder="Select a closed run…"
+            placeholder={t('RunComparePickerPage.selectClosedRunPlaceholder')}
           />
         </div>
         <div className="flex flex-col gap-1 text-sm">
-          Second run
+          {t('RunComparePickerPage.secondRunLabel')}
           <RunListbox
-            label="Second run"
+            label={t('RunComparePickerPage.secondRunLabel')}
             runs={runs.filter((r) => r.key !== runKeyA)}
             value={runKeyB}
             onChange={setRunKeyB}
-            placeholder="Select a closed run…"
+            placeholder={t('RunComparePickerPage.selectClosedRunPlaceholder')}
           />
         </div>
         <Button type="button" disabled={!runKeyA || !runKeyB} onClick={submit}>
-          Compare
+          {t('RunComparePickerPage.compareButton')}
         </Button>
       </CardContent>
     </Card>

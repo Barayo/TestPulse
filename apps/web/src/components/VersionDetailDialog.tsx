@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Badge } from '@/components/ui/badge'
@@ -36,6 +37,7 @@ type Props = {
 }
 
 export function VersionDetailDialog({ open, onOpenChange, caseKey, version, versions, access, customFieldDefs = [] }: Props) {
+  const { t } = useTranslation()
   const [executions, setExecutions] = useState<CaseExecution[]>([])
 
   useEffect(() => {
@@ -64,14 +66,14 @@ export function VersionDetailDialog({ open, onOpenChange, caseKey, version, vers
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
-        <DialogTitle>Version {version}</DialogTitle>
+        <DialogTitle>{t('VersionDetailDialog.versionTitle', { version })}</DialogTitle>
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <p className="tp-label text-muted-foreground">What changed</p>
+            <p className="tp-label text-muted-foreground">{t('VersionDetailDialog.whatChanged')}</p>
             {!current ? null : !previous ? (
               <p className="text-sm text-muted-foreground">
-                This is the first version — there is no previous version to compare against.
+                {t('VersionDetailDialog.noPreviousVersion')}
               </p>
             ) : (
               diff && <ContentDiffView diff={diff} />
@@ -80,11 +82,11 @@ export function VersionDetailDialog({ open, onOpenChange, caseKey, version, vers
 
           <div className="space-y-2">
             <div className="flex items-center gap-2">
-              <p className="tp-label text-muted-foreground">Executions</p>
-              {isFlaky && <Badge variant="destructive">Flaky</Badge>}
+              <p className="tp-label text-muted-foreground">{t('VersionDetailDialog.executions')}</p>
+              {isFlaky && <Badge variant="destructive">{t('VersionDetailDialog.flaky')}</Badge>}
             </div>
             {versionExecutions.length === 0 ? (
-              <p className="text-sm text-muted-foreground">This version has not been run yet.</p>
+              <p className="text-sm text-muted-foreground">{t('VersionDetailDialog.notRunYet')}</p>
             ) : (
               <ul className="space-y-1 text-sm">
                 {versionExecutions.map((e) => (

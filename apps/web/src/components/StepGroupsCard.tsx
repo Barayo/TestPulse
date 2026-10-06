@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type FormEvent, type KeyboardEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { ChevronRightIcon, PencilIcon, Trash2Icon } from 'lucide-react'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
@@ -13,6 +14,7 @@ type StepGroup = components['schemas']['StepGroup']
 type Step = components['schemas']['Step']
 
 function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => void }) {
+  const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
   const [renaming, setRenaming] = useState(false)
   const [renameValue, setRenameValue] = useState(group.name)
@@ -27,7 +29,7 @@ function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => voi
       body: { name: nextName, steps: nextSteps },
     })
     if (!response.ok) {
-      setError((apiError as { error?: string })?.error ?? 'Could not save this group.')
+      setError((apiError as { error?: string })?.error ?? t('StepGroupsCard.saveFailed'))
       return false
     }
     setError(undefined)
@@ -66,7 +68,7 @@ function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => voi
       <div className="flex items-center gap-2 px-3 py-2">
         <button
           type="button"
-          aria-label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
+          aria-label={expanded ? t('StepGroupsCard.collapseGroup', { name: group.name }) : t('StepGroupsCard.expandGroup', { name: group.name })}
           className="text-muted-foreground hover:text-foreground"
           onClick={() => setExpanded((e) => !e)}
         >
@@ -93,11 +95,11 @@ function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => voi
           </button>
         )}
         <span className="shrink-0 rounded bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
-          {steps.length} step{steps.length === 1 ? '' : 's'}
+          {t('StepGroupsCard.stepsCount', { count: steps.length, suffix: steps.length === 1 ? '' : 's' })}
         </span>
         <button
           type="button"
-          aria-label={`Rename ${group.name}`}
+          aria-label={t('StepGroupsCard.renameGroup', { name: group.name })}
           className="text-muted-foreground hover:text-foreground"
           onClick={() => setRenaming(true)}
         >
@@ -105,7 +107,7 @@ function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => voi
         </button>
         <button
           type="button"
-          aria-label={`Delete ${group.name}`}
+          aria-label={t('StepGroupsCard.deleteGroup', { name: group.name })}
           className="text-muted-foreground hover:text-destructive"
           onClick={() => setDeleteOpen(true)}
         >
@@ -119,10 +121,10 @@ function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => voi
           {error && <p className="text-sm text-destructive">{error}</p>}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" size="sm" onClick={cancelStepsEdit}>
-              Cancel
+              {t('StepGroupsCard.cancel')}
             </Button>
             <Button type="button" size="sm" disabled={saving} onClick={() => void saveStepsEdit()}>
-              Save changes
+              {t('StepGroupsCard.saveChanges')}
             </Button>
           </div>
         </div>
@@ -130,18 +132,16 @@ function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => voi
 
       <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <DialogContent className="sm:max-w-md">
-          <DialogTitle>Delete "{group.name}"?</DialogTitle>
+          <DialogTitle>{t('StepGroupsCard.deleteGroupQuestion', { name: group.name })}</DialogTitle>
           <DialogDescription>
-            Test cases that already reference this group keep their own saved copy of these steps — deleting it
-            doesn't change anything they've already saved. Any case whose current, unsaved edit still references
-            this group will need to be detached before that edit can be saved. This cannot be undone.
+            {t('StepGroupsCard.deleteGroupDescription')}
           </DialogDescription>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDeleteOpen(false)}>
-              Cancel
+              {t('StepGroupsCard.cancel')}
             </Button>
             <Button variant="destructive" onClick={() => void confirmDelete()}>
-              Delete group
+              {t('StepGroupsCard.deleteGroupButton')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -156,6 +156,7 @@ function GroupRow({ group, onChanged }: { group: StepGroup; onChanged: () => voi
 // already gates the whole page on manageProject, so this card needs no
 // permission check of its own.
 export function StepGroupsCard({ projectKey }: { projectKey: string }) {
+  const { t } = useTranslation()
   const [groups, setGroups] = useState<StepGroup[]>([])
   const [loaded, setLoaded] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -190,7 +191,7 @@ export function StepGroupsCard({ projectKey }: { projectKey: string }) {
       body: { name: newName.trim(), steps: newSteps.filter((s) => s.action?.trim()) },
     })
     if (!response.ok) {
-      setCreateError((apiError as { error?: string })?.error ?? 'Could not create the group.')
+      setCreateError((apiError as { error?: string })?.error ?? t('StepGroupsCard.createFailed'))
       return
     }
     cancelCreate()
@@ -200,38 +201,38 @@ export function StepGroupsCard({ projectKey }: { projectKey: string }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Shared step groups</CardTitle>
+        <CardTitle>{t('StepGroupsCard.title')}</CardTitle>
         <Button size="sm" variant="outline" onClick={() => (creating ? cancelCreate() : setCreating(true))}>
-          + New group
+          {t('StepGroupsCard.newGroup')}
         </Button>
       </CardHeader>
       <CardContent className="space-y-3">
         {creating && (
           <form onSubmit={(e) => void createGroup(e)} className="space-y-3 rounded-md border p-3">
             <div className="space-y-1">
-              <Label htmlFor="new-group-name">Group name</Label>
+              <Label htmlFor="new-group-name">{t('StepGroupsCard.groupNameLabel')}</Label>
               <Input
                 id="new-group-name"
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="e.g. Log in as admin"
+                placeholder={t('StepGroupsCard.groupNamePlaceholder')}
               />
             </div>
             <CaseStepsList steps={newSteps} onChange={setNewSteps} bare />
             {createError && <p className="text-sm text-destructive">{createError}</p>}
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" size="sm" onClick={cancelCreate}>
-                Cancel
+                {t('StepGroupsCard.cancel')}
               </Button>
               <Button type="submit" size="sm" disabled={!newName.trim() || !hasStep}>
-                Create group
+                {t('StepGroupsCard.createGroup')}
               </Button>
             </div>
           </form>
         )}
 
         {loaded && groups.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No shared step groups yet.</p>
+          <p className="text-sm text-muted-foreground">{t('StepGroupsCard.noGroupsYet')}</p>
         ) : (
           <ul className="space-y-2">
             {groups.map((g) => (

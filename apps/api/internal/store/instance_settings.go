@@ -25,11 +25,11 @@ func (r *InstanceSettingsRepo) Get(ctx context.Context) (domain.InstanceSettings
 	err := r.pool.QueryRow(ctx,
 		`SELECT public_projects_enabled, run_retention_days, auto_archive_inactive_days, run_auto_archive_inactive_days, color_theme, custom_palette, updated_at,
 		        oidc_issuer, oidc_client_id, oidc_client_secret_encrypted, oidc_group_claim, oidc_admin_claim_values, oidc_only,
-		        jira_site_url, session_timeout_days, default_landing_view
+		        jira_site_url, session_timeout_days, default_landing_view, default_language, per_user_language_enabled
 		 FROM instance_settings WHERE id`,
 	).Scan(&s.PublicProjectsEnabled, &s.RunRetentionDays, &s.AutoArchiveInactiveDays, &s.RunAutoArchiveInactiveDays, &s.ColorTheme, &customPalette, &s.UpdatedAt,
 		&oidcIssuer, &oidcClientID, &oidcClientSecret, &oidcGroupClaim, &oidcAdminClaimValues, &s.OIDCOnly, &jiraSiteURL, &s.SessionTimeoutDays,
-		&s.DefaultLandingView)
+		&s.DefaultLandingView, &s.DefaultLanguage, &s.PerUserLanguageEnabled)
 	if err != nil {
 		return s, err
 	}
@@ -122,11 +122,13 @@ func (r *InstanceSettingsRepo) Update(ctx context.Context, upd domain.InstanceSe
 		   jira_site_url = COALESCE($12, jira_site_url),
 		   session_timeout_days = COALESCE($13, session_timeout_days),
 		   default_landing_view = COALESCE($14, default_landing_view),
+		   default_language = COALESCE($15, default_language),
+		   per_user_language_enabled = COALESCE($16, per_user_language_enabled),
 		   updated_at = now()
 		 WHERE id`,
 		upd.PublicProjectsEnabled, upd.RunRetentionDays, upd.AutoArchiveInactiveDays, upd.RunAutoArchiveInactiveDays, upd.ColorTheme, nullIfEmpty(customPaletteJSON),
 		upd.OIDCIssuer, upd.OIDCClientID, upd.OIDCGroupClaim, nullIfEmptyStrings(adminClaimValues, upd.OIDCAdminClaimValues), upd.OIDCOnly,
-		upd.JiraSiteURL, upd.SessionTimeoutDays, upd.DefaultLandingView,
+		upd.JiraSiteURL, upd.SessionTimeoutDays, upd.DefaultLandingView, upd.DefaultLanguage, upd.PerUserLanguageEnabled,
 	); err != nil {
 		return domain.InstanceSettings{}, err
 	}

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router'
-import { DatabaseIcon, GlobeIcon, LayoutDashboardIcon, LinkIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
+import { DatabaseIcon, GlobeIcon, LanguagesIcon, LayoutDashboardIcon, LinkIcon, LockIcon, PaletteIcon, TriangleAlertIcon } from 'lucide-react'
 import { Pill } from '@/components/ui/Pill'
 import { useAuth } from '@/lib/useAuth'
 import { api } from '@/lib/api'
@@ -21,20 +22,33 @@ type ColorTheme = components['schemas']['ColorTheme']
 type InstanceSettings = components['schemas']['InstanceSettings']
 type LandingView = components['schemas']['LandingView']
 
-const LANDING_VIEW_LABELS: Record<LandingView, string> = {
-  dashboard: 'Dashboard',
-  library: 'Library',
-  suites: 'Suites',
-  runs: 'Runs',
-  reports: 'Reports',
-}
-const LANDING_VIEWS = Object.keys(LANDING_VIEW_LABELS) as LandingView[]
+const LANDING_VIEW_KEYS = {
+  dashboard: 'InstanceSettingsPage.landingViewDashboard',
+  library: 'InstanceSettingsPage.landingViewLibrary',
+  suites: 'InstanceSettingsPage.landingViewSuites',
+  runs: 'InstanceSettingsPage.landingViewRuns',
+  reports: 'InstanceSettingsPage.landingViewReports',
+} as const satisfies Record<LandingView, string>
+const LANDING_VIEWS = Object.keys(LANDING_VIEW_KEYS) as LandingView[]
+
+// Shared with ProfilePage.tsx's personal-language picker (add-ui-i18n,
+// Pepe design review) — same six `Languages.*` identity-label keys.
+const SUPPORTED_LANGUAGES = ['en', 'es', 'fr', 'de', 'pt', 'zh'] as const
+const LANGUAGE_LABEL_KEYS = {
+  en: 'Languages.en',
+  es: 'Languages.es',
+  fr: 'Languages.fr',
+  de: 'Languages.de',
+  pt: 'Languages.pt',
+  zh: 'Languages.zh',
+} as const satisfies Record<(typeof SUPPORTED_LANGUAGES)[number], string>
 
 // Tenant-Admin-only instance-wide settings (enable-public-project-access,
 // add-data-retention). Self-gates the same way RolesPage.tsx/PeoplePage.tsx
 // do — a client-side check, not just the route-level RequireAuth — since a
 // non-admin logged-in user can still navigate here directly.
 export default function InstanceSettingsPage() {
+  const { t } = useTranslation()
   const { user: me, refreshColorTheme, mcpEnabled } = useAuth()
   const [publicProjectsEnabled, setPublicProjectsEnabled] = useState<boolean>()
   const [runRetentionDays, setRunRetentionDays] = useState<number>()
@@ -52,6 +66,8 @@ export default function InstanceSettingsPage() {
   const [savingSessionTimeout, setSavingSessionTimeout] = useState(false)
   const [sessionTimeoutError, setSessionTimeoutError] = useState<string>()
   const [defaultLandingView, setDefaultLandingView] = useState<LandingView>()
+  const [defaultLanguage, setDefaultLanguage] = useState<(typeof SUPPORTED_LANGUAGES)[number]>()
+  const [perUserLanguageEnabled, setPerUserLanguageEnabled] = useState<boolean>()
 
   useEffect(() => {
     if (!me?.isTenantAdmin) return
@@ -69,11 +85,13 @@ export default function InstanceSettingsPage() {
       setSessionTimeoutDays(data.sessionTimeoutDays)
       setSessionTimeoutInput(String(data.sessionTimeoutDays))
       setDefaultLandingView(data.defaultLandingView)
+      setDefaultLanguage(data.defaultLanguage as (typeof SUPPORTED_LANGUAGES)[number] | undefined)
+      setPerUserLanguageEnabled(data.perUserLanguageEnabled)
     })
   }, [me])
 
   if (!me?.isTenantAdmin) {
-    return <p className="text-sm text-muted-foreground">Not authorized — admin only.</p>
+    return <p className="text-sm text-muted-foreground">{t('InstanceSettingsPage.notAuthorized')}</p>
   }
 
   async function toggle() {
@@ -101,6 +119,24 @@ export default function InstanceSettingsPage() {
   async function selectDefaultLandingView(view: LandingView) {
     const { data } = await api.PATCH('/api/v1/instance-settings', { body: { defaultLandingView: view } })
     if (data) setDefaultLandingView(data.defaultLandingView as LandingView)
+  }
+
+  async function selectDefaultLanguage(lang: (typeof SUPPORTED_LANGUAGES)[number]) {
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { defaultLanguage: lang } })
+    if (data) {
+      setDefaultLanguage(data.defaultLanguage as (typeof SUPPORTED_LANGUAGES)[number])
+      await refreshColorTheme()
+    }
+  }
+
+  async function togglePerUserLanguageEnabled() {
+    if (perUserLanguageEnabled === undefined) return
+    const next = !perUserLanguageEnabled
+    const { data } = await api.PATCH('/api/v1/instance-settings', { body: { perUserLanguageEnabled: next } })
+    if (data) {
+      setPerUserLanguageEnabled(data.perUserLanguageEnabled)
+      await refreshColorTheme()
+    }
   }
 
   async function selectColorTheme(theme: ColorTheme) {
@@ -142,7 +178,7 @@ export default function InstanceSettingsPage() {
     })
     setSavingSessionTimeout(false)
     if (error) {
-      setSessionTimeoutError((error as { error?: string }).error ?? 'Could not save session timeout.')
+      setSessionTimeoutError((error as { error?: string }).error ?? t('InstanceSettingsPage.sessionTimeoutSaveError'))
       return
     }
     if (data) {
@@ -164,28 +200,29 @@ export default function InstanceSettingsPage() {
 
   return (
     <AdminShell>
-      <h1 className="tp-heading text-xl">Instance</h1>
+      <h1 className="tp-heading text-xl">{t('InstanceSettingsPage.heading')}</h1>
 
       <section className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           <GlobeIcon className="size-3.5" aria-hidden="true" />
-          Access
+          {t('InstanceSettingsPage.accessSectionLabel')}
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>Public project access</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.publicProjectAccessTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Controls whether any project can ever be viewed without an account — a hard switch above each
-              project's own &quot;Public access&quot; setting.
+              {t('InstanceSettingsPage.publicProjectAccessDescription')}
             </p>
             <div className="flex items-center justify-between gap-4">
-              <span className="text-sm font-medium">Public project access, instance-wide</span>
+              <span className="text-sm font-medium">{t('InstanceSettingsPage.publicProjectAccessLabel')}</span>
               <div className="flex items-center gap-2">
-                <span className="text-xs text-muted-foreground">{publicProjectsEnabled ? 'On' : 'Off'}</span>
+                <span className="text-xs text-muted-foreground">
+                  {publicProjectsEnabled ? t('InstanceSettingsPage.on') : t('InstanceSettingsPage.off')}
+                </span>
                 <Switch
-                  aria-label="Public project access, instance-wide"
+                  aria-label={t('InstanceSettingsPage.publicProjectAccessLabel')}
                   checked={publicProjectsEnabled ?? false}
                   disabled={publicProjectsEnabled === undefined}
                   onCheckedChange={() => void toggle()}
@@ -193,9 +230,7 @@ export default function InstanceSettingsPage() {
               </div>
             </div>
             <p className="text-xs text-muted-foreground">
-              When off: no project is reachable anonymously, even one with its own &quot;Public access&quot; left
-              on — that project's setting is kept, not cleared, and takes effect again the moment this is switched
-              back on.
+              {t('InstanceSettingsPage.publicProjectAccessOffNote')}
             </p>
           </CardContent>
         </Card>
@@ -204,25 +239,24 @@ export default function InstanceSettingsPage() {
       <section className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           <LayoutDashboardIcon className="size-3.5" aria-hidden="true" />
-          Navigation
+          {t('InstanceSettingsPage.navigationSectionLabel')}
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>Default landing view</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.defaultLandingViewTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Which view a project opens into by default. A project can override this with its own landing view,
-              set from that project&apos;s own Settings.
+              {t('InstanceSettingsPage.defaultLandingViewDescription')}
             </p>
-            <div role="group" aria-label="Default landing view" className="flex flex-wrap gap-2">
+            <div role="group" aria-label={t('InstanceSettingsPage.defaultLandingViewTitle')} className="flex flex-wrap gap-2">
               {LANDING_VIEWS.map((view) => (
                 <Pill
                   key={view}
                   active={defaultLandingView === view}
                   onClick={() => void selectDefaultLandingView(view)}
                 >
-                  {LANDING_VIEW_LABELS[view]}
+                  {t(LANDING_VIEW_KEYS[view])}
                 </Pill>
               ))}
             </div>
@@ -233,33 +267,33 @@ export default function InstanceSettingsPage() {
       <section className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           <DatabaseIcon className="size-3.5" aria-hidden="true" />
-          Data
+          {t('InstanceSettingsPage.dataSectionLabel')}
         </div>
         <Card className={runRetentionDays ? 'ring-destructive/30' : undefined}>
           <CardHeader>
-            <CardTitle>Run retention</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.runRetentionTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Automatically and permanently deletes a closed run once it crosses this age, counted from when the run
-              was created. Open runs are never touched, no matter how old. This applies to every closed run already
-              in the system today, not just ones closed after you turn it on.
+              {t('InstanceSettingsPage.runRetentionDescription')}
             </p>
             <RetentionPillSelector
               value={runRetentionDays}
               onSelect={selectRunRetention}
-              ariaLabel="Run retention period"
-              customAriaLabel="Custom retention period, in days"
+              ariaLabel={t('InstanceSettingsPage.runRetentionAriaLabel')}
+              customAriaLabel={t('InstanceSettingsPage.runRetentionCustomAriaLabel')}
             />
             {runRetentionDays === undefined ? null : runRetentionDays === 0 ? (
-              <p className="text-xs text-muted-foreground">Off — runs are never automatically deleted.</p>
+              <p className="text-xs text-muted-foreground">{t('InstanceSettingsPage.runRetentionOffNote')}</p>
             ) : (
               <div role="alert" className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 p-2.5">
                 <TriangleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" aria-hidden="true" />
                 <p className="text-sm text-foreground">
-                  Closed runs older than {runRetentionDays} day{runRetentionDays === 1 ? '' : 's'} are deleted
-                  automatically and permanently — including runs already past that age right now.{' '}
-                  <strong>This cannot be undone.</strong>
+                  {t('InstanceSettingsPage.runRetentionWarning', {
+                    count: runRetentionDays,
+                    unit: runRetentionDays === 1 ? t('InstanceSettingsPage.day') : t('InstanceSettingsPage.days'),
+                  })}{' '}
+                  <strong>{t('InstanceSettingsPage.cannotBeUndone')}</strong>
                 </p>
               </div>
             )}
@@ -268,52 +302,54 @@ export default function InstanceSettingsPage() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Auto-archive inactive runs</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.autoArchiveRunsTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Automatically archives a closed run once it crosses this age, counted from when the run was created —
-              same basis as run retention above. Open runs are never touched, no matter how old. Unlike run
-              retention, archiving never deletes anything: it only hides the run from the project&apos;s active
-              list, and any admin can reverse it any time from the run&apos;s own page.
+              {t('InstanceSettingsPage.autoArchiveRunsDescription')}
             </p>
             <RetentionPillSelector
               value={runAutoArchiveInactiveDays}
               onSelect={selectRunAutoArchive}
-              ariaLabel="Run auto-archive inactivity period"
-              customAriaLabel="Custom run auto-archive inactivity period, in days"
+              ariaLabel={t('InstanceSettingsPage.autoArchiveRunsAriaLabel')}
+              customAriaLabel={t('InstanceSettingsPage.autoArchiveRunsCustomAriaLabel')}
             />
             <p className="text-xs text-muted-foreground">
               {runAutoArchiveInactiveDays === undefined
                 ? null
                 : runAutoArchiveInactiveDays === 0
-                  ? 'Off — runs are never automatically archived.'
-                  : `Closed runs older than ${runAutoArchiveInactiveDays} day${runAutoArchiveInactiveDays === 1 ? '' : 's'} are archived automatically. Reversible any time from the run's own page.`}
+                  ? t('InstanceSettingsPage.autoArchiveRunsOffNote')
+                  : t('InstanceSettingsPage.autoArchiveRunsWarning', {
+                      count: runAutoArchiveInactiveDays,
+                      unit: runAutoArchiveInactiveDays === 1 ? t('InstanceSettingsPage.day') : t('InstanceSettingsPage.days'),
+                    })}
             </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader>
-            <CardTitle>Auto-archive inactive projects</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.autoArchiveProjectsTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Automatically archives a project once it's gone quiet for this long — no new runs, case edits, or
-              suites. Archiving never deletes anything.
+              {t('InstanceSettingsPage.autoArchiveProjectsDescription')}
             </p>
             <RetentionPillSelector
               value={autoArchiveInactiveDays}
               onSelect={selectAutoArchive}
-              ariaLabel="Auto-archive inactivity period"
-              customAriaLabel="Custom inactivity period, in days"
+              ariaLabel={t('InstanceSettingsPage.autoArchiveProjectsAriaLabel')}
+              customAriaLabel={t('InstanceSettingsPage.autoArchiveProjectsCustomAriaLabel')}
             />
             <p className="text-xs text-muted-foreground">
               {autoArchiveInactiveDays === undefined
                 ? null
                 : autoArchiveInactiveDays === 0
-                  ? 'Off — projects are never automatically archived.'
-                  : `Projects inactive for ${autoArchiveInactiveDays} day${autoArchiveInactiveDays === 1 ? '' : 's'} are archived automatically. Reversible any time from the project's own Settings.`}
+                  ? t('InstanceSettingsPage.autoArchiveProjectsOffNote')
+                  : t('InstanceSettingsPage.autoArchiveProjectsWarning', {
+                      count: autoArchiveInactiveDays,
+                      unit: autoArchiveInactiveDays === 1 ? t('InstanceSettingsPage.day') : t('InstanceSettingsPage.days'),
+                    })}
             </p>
           </CardContent>
         </Card>
@@ -322,19 +358,19 @@ export default function InstanceSettingsPage() {
       <section className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           <PaletteIcon className="size-3.5" aria-hidden="true" />
-          Appearance
+          {t('InstanceSettingsPage.appearanceSectionLabel')}
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>Color theme</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.colorThemeTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div role="group" aria-label="Color theme" className="flex flex-wrap gap-3">
+            <div role="group" aria-label={t('InstanceSettingsPage.colorThemeTitle')} className="flex flex-wrap gap-3">
               {PRESETS.map((preset) => (
                 <PaletteSwatch
                   key={preset.key}
                   presetKey={preset.key}
-                  label={preset.label}
+                  label={t(preset.labelKey)}
                   light={preset.light}
                   lightPrimary={preset.lightPrimary}
                   dark={preset.dark}
@@ -345,7 +381,7 @@ export default function InstanceSettingsPage() {
               ))}
               <PaletteSwatch
                 presetKey="custom"
-                label="Custom"
+                label={t('InstanceSettingsPage.customLabel')}
                 light="#FFFFFF"
                 lightPrimary="#94A3B8"
                 dark="#0B0B0B"
@@ -359,8 +395,7 @@ export default function InstanceSettingsPage() {
               />
             </div>
             <p className="text-xs text-muted-foreground">
-              Applies instantly, instance-wide — every signed-in and public-project visitor sees it the next time
-              their page loads.
+              {t('InstanceSettingsPage.colorThemeAppliesNote')}
             </p>
             {showCustomEditor && (
               <CustomPaletteEditor
@@ -375,24 +410,69 @@ export default function InstanceSettingsPage() {
 
       <section className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-          <LockIcon className="size-3.5" aria-hidden="true" />
-          Authentication
+          <LanguagesIcon className="size-3.5" aria-hidden="true" />
+          {t('InstanceSettingsPage.localizationSectionLabel')}
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>Session timeout</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.languageTitle')}</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-sm text-muted-foreground">{t('InstanceSettingsPage.languageDescription')}</p>
+
+            <div>
+              <p className="text-sm font-medium mb-2">{t('InstanceSettingsPage.defaultLanguageLabel')}</p>
+              <div role="group" aria-label={t('InstanceSettingsPage.defaultLanguageLabel')} className="flex flex-wrap gap-2">
+                {SUPPORTED_LANGUAGES.map((lang) => (
+                  <Pill key={lang} active={defaultLanguage === lang} onClick={() => void selectDefaultLanguage(lang)}>
+                    {t(LANGUAGE_LABEL_KEYS[lang])}
+                  </Pill>
+                ))}
+              </div>
+            </div>
+
+            <div className="border-t pt-3">
+              <div className="flex items-center justify-between gap-4">
+                <span className="text-sm font-medium">{t('InstanceSettingsPage.allowPersonalLanguageLabel')}</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">
+                    {perUserLanguageEnabled ? t('InstanceSettingsPage.on') : t('InstanceSettingsPage.off')}
+                  </span>
+                  <Switch
+                    aria-label={t('InstanceSettingsPage.allowPersonalLanguageLabel')}
+                    checked={perUserLanguageEnabled ?? false}
+                    disabled={perUserLanguageEnabled === undefined}
+                    onCheckedChange={() => void togglePerUserLanguageEnabled()}
+                  />
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                {perUserLanguageEnabled
+                  ? t('InstanceSettingsPage.allowPersonalLanguageOnNote')
+                  : t('InstanceSettingsPage.allowPersonalLanguageOffNote')}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
+      <section className="space-y-2">
+        <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+          <LockIcon className="size-3.5" aria-hidden="true" />
+          {t('InstanceSettingsPage.authenticationSectionLabel')}
+        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>{t('InstanceSettingsPage.sessionTimeoutTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              How long a signed-in session stays valid before requiring another sign-in — a sliding window that
-              resets on activity, so nobody working stays logged out mid-session. Changing this only affects
-              sessions created or renewed from now on; anyone already signed in keeps their current session&apos;s
-              original expiry.
+              {t('InstanceSettingsPage.sessionTimeoutDescription')}
             </p>
             <div className="flex items-end gap-2">
               <div className="space-y-1">
                 <label htmlFor="session-timeout-days" className="text-sm font-medium">
-                  Timeout
+                  {t('InstanceSettingsPage.timeoutLabel')}
                 </label>
                 <div className="flex items-center gap-2">
                   <Input
@@ -406,26 +486,26 @@ export default function InstanceSettingsPage() {
                     disabled={sessionTimeoutDays === undefined}
                     aria-invalid={sessionTimeoutInvalid}
                   />
-                  <span className="text-sm text-muted-foreground">days</span>
+                  <span className="text-sm text-muted-foreground">{t('InstanceSettingsPage.days')}</span>
                 </div>
               </div>
               <Button
                 onClick={() => void saveSessionTimeout()}
                 disabled={sessionTimeoutDays === undefined || savingSessionTimeout || sessionTimeoutInvalid}
               >
-                {savingSessionTimeout ? 'Saving…' : 'Save'}
+                {savingSessionTimeout ? t('InstanceSettingsPage.saving') : t('InstanceSettingsPage.save')}
               </Button>
             </div>
             {sessionTimeoutInvalid ? (
               <p role="alert" className="text-xs text-destructive">
-                Enter a whole number of days between 1 and 90.
+                {t('InstanceSettingsPage.sessionTimeoutInvalidError')}
               </p>
             ) : sessionTimeoutError ? (
               <p role="alert" className="text-xs text-destructive">
                 {sessionTimeoutError}
               </p>
             ) : (
-              <p className="text-xs text-muted-foreground">1–90 days. Default 30.</p>
+              <p className="text-xs text-muted-foreground">{t('InstanceSettingsPage.sessionTimeoutDefaultNote')}</p>
             )}
           </CardContent>
         </Card>
@@ -435,54 +515,51 @@ export default function InstanceSettingsPage() {
       <section className="space-y-2">
         <div className="flex items-center gap-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
           <LinkIcon className="size-3.5" aria-hidden="true" />
-          Integrations
+          {t('InstanceSettingsPage.integrationsSectionLabel')}
         </div>
         <Card>
           <CardHeader>
-            <CardTitle>Jira</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.jiraTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              Used to build a working link out to a linked Jira issue from a test case or run item — separate from
-              the Jira connector&apos;s own credentials, which it configures independently. Leave empty to hide
-              working links (a linked issue key still shows, just without a clickable link).
+              {t('InstanceSettingsPage.jiraDescription')}
             </p>
             <div className="flex items-end gap-2">
               <div className="flex-1 space-y-1">
                 <label htmlFor="jira-site-url" className="text-sm font-medium">
-                  Jira site URL
+                  {t('InstanceSettingsPage.jiraSiteUrlLabel')}
                 </label>
                 <Input
                   id="jira-site-url"
                   value={jiraSiteUrl}
                   onChange={(e) => setJiraSiteUrl(e.target.value)}
-                  placeholder="https://mycompany.atlassian.net"
+                  placeholder={t('InstanceSettingsPage.jiraSiteUrlPlaceholder')}
                 />
               </div>
               <Button onClick={() => void saveJiraSiteUrl()} disabled={savingJiraSiteUrl}>
-                {savingJiraSiteUrl ? 'Saving…' : 'Save'}
+                {savingJiraSiteUrl ? t('InstanceSettingsPage.saving') : t('InstanceSettingsPage.save')}
               </Button>
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>MCP</CardTitle>
+            <CardTitle>{t('InstanceSettingsPage.mcpTitle')}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
             <p className="text-sm text-muted-foreground">
-              TestPulse exposes an MCP server at <code>/mcp</code>, authenticated with the same API tokens as the
-              REST API.{' '}
+              {t('InstanceSettingsPage.mcpDescriptionPrefix')}<code>/mcp</code>{t('InstanceSettingsPage.mcpDescriptionSuffix')}{' '}
               {mcpEnabled ? (
-                'Currently enabled.'
+                t('InstanceSettingsPage.mcpCurrentlyEnabled')
               ) : (
                 <>
-                  Currently disabled — set <code>TESTPULSE_MCP_ENABLED=true</code> to turn it back on.
+                  {t('InstanceSettingsPage.mcpCurrentlyDisabledPrefix')}<code>TESTPULSE_MCP_ENABLED=true</code>{t('InstanceSettingsPage.mcpCurrentlyDisabledSuffix')}
                 </>
               )}
             </p>
             <Link to="/settings/tokens" className="text-sm font-medium text-primary hover:underline">
-              Manage tokens
+              {t('InstanceSettingsPage.manageTokensLink')}
             </Link>
           </CardContent>
         </Card>
