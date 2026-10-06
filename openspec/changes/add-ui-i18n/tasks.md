@@ -19,7 +19,7 @@
 
 ## 2. Domain glossary (prerequisite for all translation work)
 
-- [ ] 2.1 Write a short glossary doc (scratch file, not committed product
+- [x] 2.1 Write a short glossary doc (scratch file, not committed product
   docs) listing TestPulse's domain nouns (Run, Case, Suite, Folder,
   Project, Release, Test Plan, Requirement) and each one's chosen
   translation or deliberate non-translation per locale (design.md Risk
@@ -28,15 +28,15 @@
 ## 3. String extraction to `en` (parallel by task group; each group runs
    its own tests/lint before moving on, per design.md's regression risk)
 
-- [ ] 3.1 Auth & setup: `LoginPage`, `ForgotPasswordPage`,
+- [x] 3.1 Auth & setup: `LoginPage`, `ForgotPasswordPage`,
   `ResetPasswordPage`, `RequiredPasswordChangePage`, `SetupPage`,
   `AuthLayout`, `LoginForm`, `ChangePasswordForm`, `GeneratedPasswordChip`,
   `SessionExpiredModal`, `ErrorBoundary`, `BrandMark`.
-- [ ] 3.2 Project & library core: `ProjectsPage`, `ProjectPage`,
+- [x] 3.2 Project & library core: `ProjectsPage`, `ProjectPage`,
   `ProjectSettingsPage`, `ProjectMembersPage`, `FolderExplorerPage`,
   `ProjectSwitcher`, `ProjectLandingPanels`, `FolderPicker`, `FolderTree`,
   `Breadcrumbs`, `LibraryBulkActionBar`.
-- [ ] 3.3 Case detail & editing: `CaseDetailPage`, `CreateCasePage`,
+- [x] 3.3 Case detail & editing: `CaseDetailPage`, `CreateCasePage`,
   `CaseContentView`, `CaseFormatEditor`, `CaseParametersEditor`,
   `CaseParametersView`, `CasePicker`, `CaseSidebarSection`,
   `CaseStepsList`, `CaseAttachmentField`, `AttachmentField`,
@@ -44,17 +44,17 @@
   `VersionDetailDialog`, `ExtractStepGroupDialog`, `InsertStepGroupDialog`,
   `StepGroupsCard`, `StepSnapshotSummary`, `ClassificationEditor`,
   `CustomFieldsCard`, `Lightbox`.
-- [ ] 3.4 Suites & runs: `SuitesPage`, `SuiteDetailPage`, `SuiteCaseGrid`,
+- [x] 3.4 Suites & runs: `SuitesPage`, `SuiteDetailPage`, `SuiteCaseGrid`,
   `SuiteActionsMenu`, `SuiteRunBreakdownTrend`, `NewRunPage`, `RunsPage`,
   `RunPage`, `RunItemDetailPage`, `RunComparePage`,
   `RunComparePickerPage`, `RunList`, `RunListbox`, `RunShortcuts`,
   `RunsListTriage`, `RunBulkActionBar`, `RunStatusBreakdown`,
   `CaseResultsPanel`, `ExecutionStepsList`, `RowActionMenu`.
-- [ ] 3.5 Releases, test plans, requirements, reports: `ReleasesPage`,
+- [x] 3.5 Releases, test plans, requirements, reports: `ReleasesPage`,
   `ReleaseDetailPage`, `ReleaseStatusBadge`, `ReleasesSettingsCard`,
   `TestPlanDetailPage`, `RequirementsPage`, `RequirementDetailPage`,
   `RequirementsSettingsCard`, `ProjectReportsPage`, `ImportProjectPage`.
-- [ ] 3.6 Admin, settings, people, tokens, roles: `InstanceSettingsPage`,
+- [x] 3.6 Admin, settings, people, tokens, roles: `InstanceSettingsPage`,
   `InstanceTokensPage`, `PeoplePage`, `RolesPage`, `TokensPage`,
   `ProfilePage`, `AdminMenu`, `AdminShell`, `UserMenu`, `UserPicker`,
   `CustomPaletteEditor`, `PaletteSwatchSelector`, `RetentionPillSelector`,
@@ -62,7 +62,7 @@
   (New Language controls are wired into `ProfilePage`/
   `InstanceSettingsPage` separately in task group 7, after Pepe's mock —
   this task only extracts their *existing* copy.)
-- [ ] 3.7 Shared chrome and UI primitives: `Layout`, `Avatar`,
+- [x] 3.7 Shared chrome and UI primitives: `Layout`, `Avatar`,
   `HealthBadge`, `HealthBar`, `JiraLinkBadge`, `Pills`, `PropertyRow`,
   `ResizeHandle`, `StatusBadge`, `LoadMoreButton`, and every file under
   `components/ui/` (`badge`, `button`, `card`, `dialog`, `input`, `label`,
@@ -282,13 +282,13 @@
 
 ## 10. Verification
 
-- [ ] 10.1 Run `make lint`, `make coverage-web`, `make coverage-api`, and
+- [x] 10.1 Run `make lint`, `make coverage-web`, `make coverage-api`, and
   the full `make e2e` suite — confirm all pass with no regressions.
-- [ ] 10.2 Deploy locally (`docker compose`, fresh volume) and manually
+- [x] 10.2 Deploy locally (`docker compose`, fresh volume) and manually
   click through: switch the instance default language in Instance
   Settings and confirm the UI updates; enable per-user customization, set
   a personal language on Profile, confirm it overrides; confirm an
   anonymous public-project visit always shows the instance default
   regardless of any personal setting.
-- [ ] 10.3 Confirm `git diff --stat` matches design.md's Impact section —
+- [x] 10.3 Confirm `git diff --stat` matches design.md's Impact section —
   no unexpected files touched.
