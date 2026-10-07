@@ -1,4 +1,4 @@
-.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down seed-demo license-report
+.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down seed-demo license-report perf-api
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -76,3 +76,7 @@ compose-down: ## Stop the compose stack
 
 license-report: ## Regenerate THIRD-PARTY-LICENSES from the npm workspace and all Go modules
 	node scripts/license-report.mjs > THIRD-PARTY-LICENSES
+
+perf-api: ## Run the k6 API load test suite (needs compose stack + seed-demo + TESTPULSE_PERF_TOKEN; see apps/api/perf/README.md)
+	@command -v k6 >/dev/null 2>&1 || { echo "k6 is not installed — see https://k6.io/docs/get-started/installation/ (brew install k6 on macOS)"; exit 1; }
+	k6 run apps/api/perf/summaries-and-run-items.js

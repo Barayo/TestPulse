@@ -90,3 +90,33 @@ the resulting JUnit XML to the importer
 ([Importing results](importing-results.md)). Cases were populated once via
 `scripts/dogfood/populate-and-tag.mjs`; that script isn't idempotent and
 isn't meant to be re-run.
+
+## Performance
+
+A local/manual k6 load test suite (`apps/api/perf/`, `add-api-performance-
+tests`) covers the two API endpoints with real aggregation/pagination cost:
+`GET /api/v1/projects/summaries` (flat request count regardless of project
+count, `add-project-stats-endpoint`'s whole reason for existing) and
+`GET /api/v1/runs/{runKey}/items` (cursor-paginated, the run execution
+board's main data source). Not wired into CI — no pass/fail gate, just a
+documented baseline (see `apps/api/perf/README.md`'s rationale).
+
+Run it with the compose stack up, `make seed-demo` populated (targets the
+denser "Banca Móvil" project, not the minimal always-on Sample Project),
+and a scoped API token exported:
+
+```bash
+export TESTPULSE_PERF_TOKEN=tp_...
+make perf-api
+```
+
+**Baseline** (captured 2026-10-07, 10 VUs for 30s, Apple M-series dev
+laptop against a local compose stack — not a certified SLA, a before/after
+comparison aid):
+
+| Metric | Value |
+|---|---|
+| p95 latency | 2.38ms |
+| p99 latency | 2.79ms |
+| Throughput | ~5,599 req/s |
+| Failure rate | 0% |
