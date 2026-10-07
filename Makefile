@@ -1,4 +1,4 @@
-.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down seed-demo license-report perf-api
+.PHONY: help build build-api build-web test test-api test-web lint lint-api lint-web dev-api dev-web compose-up compose-down seed-demo license-report perf-api seed-perf
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  %-14s %s\n", $$1, $$2}'
@@ -64,6 +64,9 @@ dev-api: ## Run the API locally (expects Postgres; see deploy/compose)
 
 seed-demo: ## Populate two realistic example projects for design/UI review (dev only, never run against a real deployment)
 	cd apps/api && go run ./cmd/seed-demo
+
+seed-perf: ## Populate a large-scale fixture for the perf-api load test suite (dev only, never run against a real deployment)
+	cd apps/api && go run ./cmd/seed-perf
 
 dev-web: ## Run the web dev server
 	cd apps/web && npm run dev

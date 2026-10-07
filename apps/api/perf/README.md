@@ -15,13 +15,16 @@ itself isn't Go or TypeScript, so it isn't covered by `make lint` or
 - **k6**: a standalone binary, not an npm/Go dependency — install per
   https://k6.io/docs/get-started/installation/ (`brew install k6` on
   macOS).
-- A running compose stack (`make compose-up`) with demo data seeded
-  (`make seed-demo` — creates the "Banca Móvil" project this suite
-  targets). The compose stack's `db` service does **not** publish its
-  port to the host by default, so `make seed-demo` (which runs on the
-  host and needs a host-reachable `TESTPULSE_DATABASE_URL`) fails with
-  "missing required environment variable" unless you expose it first,
-  e.g.:
+- A running compose stack (`make compose-up`) with the perf fixture
+  seeded (`make seed-perf` — creates 60 "Perf Load NN" projects, 10 of
+  them with a run each, purpose-built to be large enough to actually
+  exercise both target endpoints' cost-defining path; **not**
+  `make seed-demo`, which is a much smaller fixture for a different,
+  UI/design-review purpose). The compose stack's `db` service does
+  **not** publish its port to the host by default, so `make seed-perf`
+  (which runs on the host and needs a host-reachable
+  `TESTPULSE_DATABASE_URL`) fails with "missing required environment
+  variable" unless you expose it first, e.g.:
 
   ```bash
   cat <<'EOF' > /tmp/db-port-override.yml
@@ -31,7 +34,7 @@ itself isn't Go or TypeScript, so it isn't covered by `make lint` or
         - "5432:5432"
   EOF
   docker compose -f deploy/compose/docker-compose.yml -f /tmp/db-port-override.yml up -d db
-  TESTPULSE_DATABASE_URL='postgres://testpulse:testpulse@localhost:5432/testpulse?sslmode=disable' make seed-demo
+  TESTPULSE_DATABASE_URL='postgres://testpulse:testpulse@localhost:5432/testpulse?sslmode=disable' make seed-perf
   ```
 - A scoped API token: log in as the Tenant Admin, go to
   `/settings/tokens`, create a token, and export it:

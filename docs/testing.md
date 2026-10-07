@@ -94,29 +94,38 @@ isn't meant to be re-run.
 ## Performance
 
 A local/manual k6 load test suite (`apps/api/perf/`, `add-api-performance-
-tests`) covers the two API endpoints with real aggregation/pagination cost:
+tests`, methodology refined by `improve-api-perf-test-methodology`) covers
+the two API endpoints with real aggregation/pagination cost:
 `GET /api/v1/projects/summaries` (flat request count regardless of project
 count, `add-project-stats-endpoint`'s whole reason for existing) and
 `GET /api/v1/runs/{runKey}/items` (cursor-paginated, the run execution
-board's main data source). Not wired into CI — no pass/fail gate, just a
-documented baseline (see `apps/api/perf/README.md`'s rationale).
+board's main data source — the suite walks the full cursor chain, not just
+page 1). Not wired into CI — no pass/fail gate, just a documented baseline
+(see `apps/api/perf/README.md`'s rationale).
 
-Run it with the compose stack up, `make seed-demo` populated (targets the
-denser "Banca Móvil" project, not the minimal always-on Sample Project),
-and a scoped API token exported:
+Run it with the compose stack up, `make seed-perf` populated (a
+purpose-built, 60-project/10-run fixture large enough to actually exercise
+both endpoints' cost-defining path — not `make seed-demo`, which exists for
+a different, much smaller UI/design-review purpose), and a scoped API
+token exported:
 
 ```bash
 export TESTPULSE_PERF_TOKEN=tp_...
 make perf-api
 ```
 
-**Baseline** (captured 2026-10-07, 10 VUs for 30s, Apple M-series dev
-laptop against a local compose stack — not a certified SLA, a before/after
-comparison aid):
+**Baseline** (captured 2026-10-07, 10 VUs for 30s, 4 runs, Apple M-series
+dev laptop against a local compose stack — reported as a range across
+those runs, not a single sample; not a certified SLA, a before/after
+comparison aid). The throughput figure reflects latency at a fixed 10-VU
+concurrency, not a measured breaking point — it is not a capacity number.
+
+| Metric | `summaries` | `run_items` |
+|---|---|---|
+| p95 latency | 3.54–3.88ms | 3.39–3.67ms |
+| p99 latency | 4.10–5.31ms | 3.99–4.84ms |
 
 | Metric | Value |
 |---|---|
-| p95 latency | 2.38ms |
-| p99 latency | 2.79ms |
-| Throughput | ~5,599 req/s |
-| Failure rate | 0% |
+| Throughput | ~3,585–3,767 req/s |
+| Failure rate | 0% (all runs) |
