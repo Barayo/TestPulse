@@ -17,7 +17,22 @@ itself isn't Go or TypeScript, so it isn't covered by `make lint` or
   macOS).
 - A running compose stack (`make compose-up`) with demo data seeded
   (`make seed-demo` — creates the "Banca Móvil" project this suite
-  targets).
+  targets). The compose stack's `db` service does **not** publish its
+  port to the host by default, so `make seed-demo` (which runs on the
+  host and needs a host-reachable `TESTPULSE_DATABASE_URL`) fails with
+  "missing required environment variable" unless you expose it first,
+  e.g.:
+
+  ```bash
+  cat <<'EOF' > /tmp/db-port-override.yml
+  services:
+    db:
+      ports:
+        - "5432:5432"
+  EOF
+  docker compose -f deploy/compose/docker-compose.yml -f /tmp/db-port-override.yml up -d db
+  TESTPULSE_DATABASE_URL='postgres://testpulse:testpulse@localhost:5432/testpulse?sslmode=disable' make seed-demo
+  ```
 - A scoped API token: log in as the Tenant Admin, go to
   `/settings/tokens`, create a token, and export it:
 
