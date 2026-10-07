@@ -60,6 +60,10 @@ func run() error {
 // --- Banca Móvil: dense, mature project ---------------------------------
 
 func seedBancaMovil(ctx context.Context, svc *service.Service) error {
+	ctx, err := withTenantAdminActor(ctx, svc)
+	if err != nil {
+		return err
+	}
 	p, err := svc.CreateProject(ctx, service.ProjectInput{Name: "Banca Móvil"})
 	if err != nil {
 		return err
@@ -231,6 +235,10 @@ func seedBancaMovil(ctx context.Context, svc *service.Service) error {
 // --- Desktop App: brand-new project -------------------------------------
 
 func seedDesktopApp(ctx context.Context, svc *service.Service) error {
+	ctx, err := withTenantAdminActor(ctx, svc)
+	if err != nil {
+		return err
+	}
 	p, err := svc.CreateProject(ctx, service.ProjectInput{Name: "Desktop App"})
 	if err != nil {
 		return err
@@ -270,4 +278,18 @@ func seedDesktopApp(ctx context.Context, svc *service.Service) error {
 	// No suites, no runs yet — this is the "brand-new project" empty-state
 	// case (design.md D4/D10).
 	return nil
+}
+
+// withTenantAdminActor attaches the instance's Tenant Admin as the acting
+// user, so service-layer calls that require an actor in context (e.g.
+// recording a run result) succeed — mirrors sampledata.Seed's own
+// self-contained actor setup.
+func withTenantAdminActor(ctx context.Context, svc *service.Service) (context.Context, error) {
+	admin, err := sampledata.TenantAdmin(ctx, svc)
+	if err != nil {
+		return ctx, fmt.Errorf("looking up tenant admin: %w", err)
+	}
+	return domain.WithActor(ctx, domain.Actor{
+		ID: admin.ID, Kind: domain.ActorKindUser, DisplayName: admin.Email,
+	}), nil
 }

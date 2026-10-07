@@ -1104,6 +1104,13 @@ func seedArchivedShowcase(ctx context.Context, svc *service.Service) error {
 }
 
 func tenantAdmin(ctx context.Context, svc *service.Service) (domain.User, error) {
+	return TenantAdmin(ctx, svc)
+}
+
+// TenantAdmin looks up the instance's Tenant Admin user, for callers that
+// need to attribute service-layer calls (e.g. domain.WithActor) to a real
+// user — both Seed and the standalone cmd/seed-demo tool use this.
+func TenantAdmin(ctx context.Context, svc *service.Service) (domain.User, error) {
 	users, err := svc.ListUsers(ctx)
 	if err != nil {
 		return domain.User{}, fmt.Errorf("listing users: %w", err)
