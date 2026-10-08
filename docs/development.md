@@ -35,6 +35,7 @@ Everything routes through the root `Makefile` (`make help` lists targets):
 | `make seed-demo` | Populate two realistic example projects for UI/design review |
 | `make seed-perf` | Populate a large-scale fixture for the perf-api load test suite (not for UI review) |
 | `make perf-api` | Run the k6 API load test suite (needs compose stack + `seed-perf` + a scoped token — see `apps/api/perf/README.md`) |
+| `make perf-web` | Run the Lighthouse web performance suite (needs compose stack only — see `apps/web/perf/README.md`) |
 
 A convenient local loop: `make compose-up` for Postgres + a running stack,
 then `make dev-web` for UI work with hot reload against it.

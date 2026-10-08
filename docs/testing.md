@@ -93,15 +93,20 @@ isn't meant to be re-run.
 
 ## Performance
 
-A local/manual k6 load test suite (`apps/api/perf/`, `add-api-performance-
-tests`, methodology refined by `improve-api-perf-test-methodology`) covers
-the two API endpoints with real aggregation/pagination cost:
+Two local/manual performance suites exist — neither wired into CI, both
+documented-baseline-not-a-gate (`add-web-performance-lighthouse`'s
+Non-Goals/`api-performance-testing`'s D4 both call this out explicitly).
+
+### API
+
+A k6 load test suite (`apps/api/perf/`, `add-api-performance-tests`,
+methodology refined by `improve-api-perf-test-methodology`) covers the two
+API endpoints with real aggregation/pagination cost:
 `GET /api/v1/projects/summaries` (flat request count regardless of project
 count, `add-project-stats-endpoint`'s whole reason for existing) and
 `GET /api/v1/runs/{runKey}/items` (cursor-paginated, the run execution
 board's main data source — the suite walks the full cursor chain, not just
-page 1). Not wired into CI — no pass/fail gate, just a documented baseline
-(see `apps/api/perf/README.md`'s rationale).
+page 1). See `apps/api/perf/README.md`'s rationale.
 
 Run it with the compose stack up, `make seed-perf` populated (a
 purpose-built, 60-project/10-run fixture large enough to actually exercise
@@ -129,3 +134,48 @@ concurrency, not a measured breaking point — it is not a capacity number.
 |---|---|
 | Throughput | ~3,585–3,767 req/s |
 | Failure rate | 0% (all runs) |
+
+### Web
+
+A Lighthouse suite (`apps/web/perf/`, `add-web-performance-lighthouse`)
+covers the web app's four heaviest/most representative pages: the project
+list (`/`), a project landing page, the Library two-pane browser, and a
+run execution board. Runs `lighthouse` + `chrome-launcher` directly rather
+than `@lhci/cli` — the latter's own wrapper tooling (interactive wizard,
+server-upload support, neither needed here) pulls in a large unrelated
+`npm audit` surface with no functional benefit for this suite's scope. See
+`apps/web/perf/README.md`'s rationale.
+
+Unlike the API suite, no seed step or token is needed: all four pages are
+anonymously reachable because the always-on Sample Project is public by
+default, and Lighthouse scores page-load/interactivity cost rather than a
+throughput-scaling aggregation query, so the Sample Project's existing
+density is representative. Run it with the compose stack up:
+
+```bash
+make perf-web
+```
+
+**Baseline** (captured 2026-10-08, 3 Lighthouse runs per page — median
+reported — across 3 suite invocations, Apple M-series dev laptop against a
+local compose stack — reported as a range, not a single sample; not a
+certified score, a before/after comparison aid). Lighthouse's default
+simulated throttling (slow CPU/network) is intentionally pessimistic —
+these numbers reflect a cold, client-rendered SPA page load under that
+throttling, not a real-world broadband/desktop experience.
+
+| Metric | `/` | project | Library | run board |
+|---|---|---|---|---|
+| Performance score | 32–33 | 32–33 | 56 | 33 |
+| Accessibility score | 92 | 92 | 100 | 100 |
+| Best Practices score | 96 | 96 | 96 | 96 |
+| LCP | 10.2–11.9s | 10.4–12.3s | 12.5s | 9.8–11.9s |
+| TBT | 0ms | 2–3ms | 0ms | 0ms |
+| CLS | 0.748–0.951 | 0.739–0.834 | 0.004 | 0.756–0.765 |
+
+The low performance scores and high CLS on three of the four pages are a
+real signal this first baseline surfaces, not a tooling artifact — exactly
+what this suite exists to make visible. Investigating/fixing them is out
+of scope for `add-web-performance-lighthouse` itself (a tooling change,
+not a page-performance fix); a future change can use this baseline as its
+starting point.

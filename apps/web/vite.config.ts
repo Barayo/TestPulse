@@ -23,10 +23,15 @@ export default defineConfig({
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    // perf/discover-urls.mjs is real, unit-testable logic (add-web-
+    // performance-lighthouse design.md D3) — wired into the normal test +
+    // coverage run like src/**. Its sibling run.mjs/lighthouserc.json are
+    // config/tooling with no failing-test-first equivalent, so they stay
+    // out of both globs, same exemption apps/api/perf/'s k6 script has.
+    include: ['src/**/*.test.{ts,tsx}', 'perf/*.test.mjs'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.{ts,tsx}'],
+      include: ['src/**/*.{ts,tsx}', 'perf/discover-urls.mjs'],
       exclude: ['src/components/ui/**', 'src/main.tsx', 'src/test/**'],
       thresholds: {
         statements: 80,
