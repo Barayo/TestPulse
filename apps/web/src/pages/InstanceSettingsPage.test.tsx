@@ -643,6 +643,12 @@ describe('InstanceSettingsPage', () => {
       mockAsTenantAdmin(true, true, 0, 0, 'teal', '', 30)
       renderPage()
       await screen.findByLabelText(/timeout/i)
+      // SSOSettingsCard mounts in the same state update as the timeout
+      // input, but findByLabelText above can resolve against the input's
+      // initial disabled render before that update commits (race exposed
+      // under heavier CPU load, e.g. coverage instrumentation) — wait for
+      // it explicitly rather than asserting on a synchronous snapshot.
+      await screen.findByText('Single sign-on')
       const authHeading = screen.getByText('Authentication')
       const section = authHeading.closest('section') as HTMLElement
       expect(within(section).getByText('Session timeout')).toBeInTheDocument()
