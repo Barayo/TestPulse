@@ -137,20 +137,27 @@ concurrency, not a measured breaking point — it is not a capacity number.
 
 ### Web
 
-A Lighthouse suite (`apps/web/perf/`, `add-web-performance-lighthouse`)
-covers the web app's four heaviest/most representative pages: the project
-list (`/`), a project landing page, the Library two-pane browser, and a
-run execution board. Runs `lighthouse` + `chrome-launcher` directly rather
-than `@lhci/cli` — the latter's own wrapper tooling (interactive wizard,
+A Lighthouse suite (`apps/web/perf/`, `add-web-performance-lighthouse`,
+methodology corrected by `fix-web-perf-lighthouse-methodology`) covers the
+web app's four heaviest/most representative pages: the project list (`/`),
+a project landing page, the Library two-pane browser, and a run execution
+board. Runs `lighthouse` + `chrome-launcher` directly rather than
+`@lhci/cli` — the latter's own wrapper tooling (interactive wizard,
 server-upload support, neither needed here) pulls in a large unrelated
 `npm audit` surface with no functional benefit for this suite's scope. See
 `apps/web/perf/README.md`'s rationale.
 
-Unlike the API suite, no seed step or token is needed: all four pages are
-anonymously reachable because the always-on Sample Project is public by
-default, and Lighthouse scores page-load/interactivity cost rather than a
-throughput-scaling aggregation query, so the Sample Project's existing
-density is representative. Run it with the compose stack up:
+The suite logs in as the compose stack's fixed admin before measuring any
+page — not just to reach authenticated-only content (none of the four
+target pages require it), but because `/` silently redirects an anonymous
+visitor straight to the project landing page when exactly one public
+project exists, which otherwise collapses two of the four "distinct" pages
+into one identical measurement. Logging in also means Lighthouse scores
+desktop, not its default mobile profile — TestPulse is used on laptops,
+not phones. No seed step is needed: Lighthouse scores page-load/
+interactivity cost rather than a throughput-scaling aggregation query, so
+the always-on Sample Project's existing density is representative. Run it
+with the compose stack up:
 
 ```bash
 make perf-web
@@ -158,24 +165,22 @@ make perf-web
 
 **Baseline** (captured 2026-10-08, 3 Lighthouse runs per page — median
 reported — across 3 suite invocations, Apple M-series dev laptop against a
-local compose stack — reported as a range, not a single sample; not a
-certified score, a before/after comparison aid). Lighthouse's default
-simulated throttling (slow CPU/network) is intentionally pessimistic —
-these numbers reflect a cold, client-rendered SPA page load under that
-throttling, not a real-world broadband/desktop experience.
+local compose stack; desktop profile, authenticated — reported as a range,
+not a single sample; not a certified score, a before/after comparison
+aid).
 
 | Metric | `/` | project | Library | run board |
 |---|---|---|---|---|
-| Performance score | 32–33 | 32–33 | 56 | 33 |
-| Accessibility score | 92 | 92 | 100 | 100 |
-| Best Practices score | 96 | 96 | 96 | 96 |
-| LCP | 10.2–11.9s | 10.4–12.3s | 12.5s | 9.8–11.9s |
-| TBT | 0ms | 2–3ms | 0ms | 0ms |
-| CLS | 0.748–0.951 | 0.739–0.834 | 0.004 | 0.756–0.765 |
+| Performance score | 79 | 55–60 | 79–82 | 57–61 |
+| Accessibility score | 96 | 92 | 96 | 92 |
+| Best Practices score | 100 | 100 | 100 | 100 |
+| LCP | 2.10–2.14s | 1.83–2.27s | 2.14–2.18s | 2.14–2.17s |
+| TBT | 0ms | 0ms | 0ms | 0ms |
+| CLS | 0.000–0.061 | 0.873–0.902 | 0.000 | 0.529–0.693 |
 
-The low performance scores and high CLS on three of the four pages are a
-real signal this first baseline surfaces, not a tooling artifact — exactly
-what this suite exists to make visible. Investigating/fixing them is out
-of scope for `add-web-performance-lighthouse` itself (a tooling change,
-not a page-performance fix); a future change can use this baseline as its
-starting point.
+The project landing/run board pages' high CLS is a real signal this
+baseline surfaces, not a tooling artifact — exactly what this suite exists
+to make visible (issue #217 tracks surfacing the suite's own root-cause
+detail for findings like this one directly in its output). Investigating/
+fixing the CLS itself is out of scope for this tooling change; a future
+change can use this baseline as its starting point.

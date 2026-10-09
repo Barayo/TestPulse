@@ -65,11 +65,18 @@ export function setup() {
   }
   const allProjects = projectsRes.json()
   const perfProjects = allProjects.filter((p) => p.name.startsWith(PERF_PROJECT_PREFIX))
-  if (perfProjects.length < EXPECTED_PROJECT_COUNT) {
+  // Exact match, not a floor (fix-web-perf-lighthouse-methodology D3) —
+  // `make seed-perf` is now idempotent, so a correct re-run always
+  // converges to exactly EXPECTED_PROJECT_COUNT; a mismatch either way
+  // means the fixture drifted and should fail loudly, not silently pass.
+  if (perfProjects.length !== EXPECTED_PROJECT_COUNT) {
+    const hint =
+      perfProjects.length < EXPECTED_PROJECT_COUNT
+        ? 'Run `make seed-perf` against the compose stack before running the perf suite.'
+        : 'More projects than expected were found — wipe the database (docker compose down -v) and re-seed for a clean fixture.'
     fail(
-      `Expected at least ${EXPECTED_PROJECT_COUNT} "${PERF_PROJECT_PREFIX}*" projects, ` +
-        `found ${perfProjects.length}. Run \`make seed-perf\` against the compose stack ` +
-        'before running the perf suite — see README.md.',
+      `Expected exactly ${EXPECTED_PROJECT_COUNT} "${PERF_PROJECT_PREFIX}*" projects, ` +
+        `found ${perfProjects.length}. ${hint} See README.md.`,
     )
   }
 

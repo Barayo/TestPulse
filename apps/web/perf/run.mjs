@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url'
 import path from 'node:path'
 import * as chromeLauncher from 'chrome-launcher'
 import lighthouse from 'lighthouse'
+import desktopConfig from 'lighthouse/core/config/desktop-config.js'
 import { discoverUrls } from './discover-urls.mjs'
 
 // Local/manual Lighthouse baseline for the web app's four heaviest pages
@@ -14,6 +15,8 @@ import { discoverUrls } from './discover-urls.mjs'
 // none of which this suite uses.
 
 const BASE_URL = process.env.TESTPULSE_BASE_URL || 'http://localhost:8080'
+const ADMIN_EMAIL = process.env.TESTPULSE_ADMIN_EMAIL || 'admin@example.com'
+const ADMIN_PASSWORD = process.env.TESTPULSE_ADMIN_PASSWORD || 'correcthorsebatterystaple'
 const NUMBER_OF_RUNS = 3 // median of 3 reduces single-run CPU-throttling noise (D2)
 
 const RESULTS_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '.results')
@@ -23,19 +26,43 @@ function median(values) {
   return sorted[Math.floor(sorted.length / 2)]
 }
 
-async function runOnce(url, port) {
+// Logs in as the compose stack's fixed admin (deploy/compose/docker-
+// compose.yml) and returns the session cookie — fixes the `/` → single-
+// public-project redirect colliding two target pages into one
+// (fix-web-perf-lighthouse-methodology D2). No setup beyond the compose
+// stack being up: these credentials are already how cmd/seed-demo and
+// cmd/seed-perf's own documented workflow authenticates.
+async function login() {
+  const res = await fetch(`${BASE_URL}/api/v1/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: ADMIN_EMAIL, password: ADMIN_PASSWORD }),
+  })
+  if (!res.ok) {
+    throw new Error(
+      `Login failed: ${res.status}. Is the compose stack up with its default admin ` +
+        'credentials (TESTPULSE_ADMIN_EMAIL/TESTPULSE_ADMIN_PASSWORD)? See README.md.',
+    )
+  }
+  const [cookie] = res.headers.getSetCookie()
+  return cookie.split(';')[0]
+}
+
+async function runOnce(url, port, cookie) {
+  // Desktop, not Lighthouse's default mobile profile — TestPulse is a
+  // desktop test-management tool (fix-web-perf-lighthouse-methodology D1).
   const result = await lighthouse(
     url,
-    { port, output: 'json', logLevel: 'silent' },
-    undefined,
+    { port, output: 'json', logLevel: 'silent', extraHeaders: { Cookie: cookie } },
+    desktopConfig,
   )
   return result.lhr
 }
 
-async function runPage(name, url, port) {
+async function runPage(name, url, port, cookie) {
   const lhrs = []
   for (let i = 0; i < NUMBER_OF_RUNS; i++) {
-    lhrs.push(await runOnce(url, port))
+    lhrs.push(await runOnce(url, port, cookie))
   }
   await mkdir(RESULTS_DIR, { recursive: true })
   await Promise.all(
@@ -60,7 +87,8 @@ async function runPage(name, url, port) {
 }
 
 async function main() {
-  const urls = await discoverUrls(BASE_URL)
+  const cookie = await login()
+  const urls = await discoverUrls(BASE_URL, fetch, cookie)
   const chrome = await chromeLauncher.launch({ chromeFlags: ['--headless'] })
 
   try {
@@ -73,7 +101,7 @@ async function main() {
 
     const results = []
     for (const [name, url] of pages) {
-      results.push(await runPage(name, url, chrome.port))
+      results.push(await runPage(name, url, chrome.port, cookie))
     }
 
     console.log('\nLighthouse baseline (median of %d runs per page):\n', NUMBER_OF_RUNS)

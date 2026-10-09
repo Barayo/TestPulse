@@ -15,12 +15,18 @@ no functional benefit for this suite's scope (design.md D1).
 ## Prerequisites
 
 - A running compose stack (`make compose-up`). Unlike `apps/api/perf/`,
-  **no extra seed step and no API token are needed**: all four target
-  pages are anonymously reachable because the always-on Sample Project
-  is marked public by default (`apps/api/internal/sampledata/seed.go`),
-  and this suite scores page-load/interactivity cost, not a
-  throughput-scaling aggregation query — the Sample Project's existing
-  density is representative (design.md D2).
+  **no extra seed step is needed** — this suite scores page-load/
+  interactivity cost, not a throughput-scaling aggregation query, so the
+  always-on Sample Project's existing density is representative
+  (design.md D2). Nothing to set up for auth either: the suite logs in
+  itself using the compose stack's fixed admin credentials
+  (`TESTPULSE_ADMIN_EMAIL`/`TESTPULSE_ADMIN_PASSWORD` in
+  `deploy/compose/docker-compose.yml`), the same ones `cmd/seed-demo`/
+  `cmd/seed-perf` already rely on existing
+  (`fix-web-perf-lighthouse-methodology` D2 — logging in, rather than
+  relying on the Sample Project's public-access flags, also avoids a
+  redirect that otherwise collapses two of the four target pages into
+  one; see that change's design.md for the full story).
 - `lighthouse` + `chrome-launcher` are regular npm devDependencies
   (`apps/web/package.json`) — already installed by the repo's normal
   `npm install`, no separate binary to install (unlike k6).

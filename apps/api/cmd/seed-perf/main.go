@@ -79,10 +79,27 @@ func seedPerfFixture(ctx context.Context, svc *service.Service) error {
 	}
 	ctx = domain.WithActor(ctx, domain.Actor{
 		ID: admin.ID, Kind: domain.ActorKindUser, DisplayName: admin.Email,
+		EffectiveUserID: admin.ID, IsTenantAdmin: admin.IsTenantAdmin,
 	})
+
+	// Re-running this command against an already-seeded database must
+	// converge, not duplicate (fix-web-perf-lighthouse-methodology D3) —
+	// skip any Perf Load NN project that already exists rather than
+	// creating a second copy of it.
+	existing, err := svc.ListProjects(ctx)
+	if err != nil {
+		return fmt.Errorf("listing existing projects: %w", err)
+	}
+	existingNames := make(map[string]bool, len(existing))
+	for _, p := range existing {
+		existingNames[p.Name] = true
+	}
 
 	for i := 1; i <= ProjectCount; i++ {
 		name := fmt.Sprintf("Perf Load %02d", i)
+		if existingNames[name] {
+			continue
+		}
 		p, err := svc.CreateProject(ctx, service.ProjectInput{Name: name})
 		if err != nil {
 			return fmt.Errorf("creating %s: %w", name, err)

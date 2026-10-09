@@ -62,6 +62,32 @@ func TestSeedPerfFixtureCreatesSixtyProjects(t *testing.T) {
 	}
 }
 
+func TestSeedPerfFixtureIsIdempotent(t *testing.T) {
+	svc := seededService(t)
+	if err := seedPerfFixture(context.Background(), svc); err != nil {
+		t.Fatalf("seedPerfFixture (1st run): %v", err)
+	}
+	if err := seedPerfFixture(context.Background(), svc); err != nil {
+		t.Fatalf("seedPerfFixture (2nd run): %v", err)
+	}
+
+	ctx := adminActorCtx(t, svc)
+	projects, err := svc.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	perfLoadCount := 0
+	for _, p := range projects {
+		if strings.HasPrefix(p.Name, "Perf Load ") {
+			perfLoadCount++
+		}
+	}
+	const wantProjects = 60
+	if perfLoadCount != wantProjects {
+		t.Fatalf("expected %d 'Perf Load' projects after running seedPerfFixture twice, got %d", wantProjects, perfLoadCount)
+	}
+}
+
 func TestSeedPerfFixtureLastRunProjectHas120Items(t *testing.T) {
 	svc := seededService(t)
 	if err := seedPerfFixture(context.Background(), svc); err != nil {
