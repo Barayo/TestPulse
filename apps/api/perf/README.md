@@ -51,7 +51,10 @@ make perf-api
 
 Reports k6's summary (requests, p95/p99 latency, throughput) to the
 terminal. Exits 0 regardless of latency — see `summaries-and-run-items.js`'s
-`thresholds` config, which is informational-only.
+`thresholds` config, which is informational-only. Also writes the same
+data as machine-readable JSON to `apps/api/perf/.results/summary.json`
+(git-ignored) via k6's `handleSummary()`, so results are consumable by a
+future script or CI step without re-running the suite.
 
 ## Baseline
 

@@ -5,6 +5,7 @@ import * as chromeLauncher from 'chrome-launcher'
 import lighthouse from 'lighthouse'
 import desktopConfig from 'lighthouse/core/config/desktop-config.js'
 import { discoverUrls } from './discover-urls.mjs'
+import { rankAudits, describeAuditItem, detailAuditId } from './audit-insights.mjs'
 
 // Local/manual Lighthouse baseline for the web app's four heaviest pages
 // (add-web-performance-lighthouse, backlog #23). Not wired into CI — no
@@ -83,6 +84,10 @@ async function runPage(name, url, port, cookie) {
     lcp: median(vitals('largest-contentful-paint')),
     tbt: median(vitals('total-blocking-time')),
     cls: median(vitals('cumulative-layout-shift')),
+    // First of the NUMBER_OF_RUNS lhrs, not blended across all of
+    // them — a representative sample for diagnostics (D3), not another
+    // metric the median score/vitals above depend on.
+    lhr: lhrs[0],
   }
 }
 
@@ -111,7 +116,26 @@ async function main() {
         `  performance=${r.performance} accessibility=${r.accessibility} best-practices=${r.bestPractices}`,
       )
       console.log(`  LCP=${Math.round(r.lcp)}ms TBT=${Math.round(r.tbt)}ms CLS=${r.cls.toFixed(3)}`)
+
+      // Why, not just what — the 2-3 audits actually dragging this
+      // page's score down, with whatever detail each one's own data
+      // provides (improve-perf-suite-reporting D3/D4).
+      for (const audit of rankAudits(r.lhr)) {
+        console.log(`  - ${audit.title} (impact ${audit.impact.toFixed(1)})`)
+        const items = r.lhr.audits[detailAuditId(audit.id)]?.details?.items ?? []
+        for (const item of items.slice(0, 2)) {
+          console.log(`      ${describeAuditItem(item)}`)
+        }
+      }
+
+      const consoleErrors = r.lhr.audits['errors-in-console']?.details?.items ?? []
+      console.log(`  console errors: ${consoleErrors.length}`)
     }
+
+    await writeFile(
+      path.join(RESULTS_DIR, 'summary.json'),
+      JSON.stringify(results.map(({ lhr, ...r }) => r), null, 2),
+    )
   } finally {
     await chrome.kill()
   }

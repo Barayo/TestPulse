@@ -14,6 +14,7 @@ test-results/
 playwright-report/
 apps/web/e2e-results.xml
 apps/web/perf/.results/
+apps/api/perf/.results/
 # Playwright global-setup's saved session cookie (add-identity-basics)
 apps/web/e2e/.auth/
 # Embedded web bundle (placeholder index.html stays committed)

@@ -41,10 +41,17 @@ Resolves the Sample Project's real key and a real run key from the
 running API (`discover-urls.mjs`, D3 — keys aren't stable across
 reseeds), runs Lighthouse against all four pages 3 times each, and
 prints the median performance/accessibility/best-practices score and
-LCP/TBT/CLS per page to the terminal. Exits 0 regardless of score — see
-`run.mjs`'s own doc comment. Each run's full Lighthouse JSON report is
-saved under `apps/web/perf/.results/` (git-ignored) for closer
-inspection if a logged number looks off.
+LCP/TBT/CLS per page to the terminal. Also prints the 2-3 performance
+audits with the greatest actual impact on each page's score, with
+extracted detail where available (e.g. the specific element behind a
+layout shift), and the page's console error count
+(`improve-perf-suite-reporting` D3/D4) — not just the score, but a hint
+at why. Exits 0 regardless of score — see `run.mjs`'s own doc comment.
+Each run's full Lighthouse JSON report, plus a `summary.json` with every
+page's scores/vitals, is saved under `apps/web/perf/.results/`
+(git-ignored) — the per-run JSON for closer inspection if a logged number
+looks off, the summary for a future script or CI step to consume without
+re-running the suite.
 
 ## Baseline
 

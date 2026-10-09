@@ -29,6 +29,10 @@ export async function discoverUrls(baseUrl, fetchImpl = fetch, cookie) {
     throw new Error(`GET /api/v1/projects/${sample.key}/runs failed: ${runsRes.status}`)
   }
   const runsBody = await runsRes.json()
+  // items[0] is the most recent run, not an assumption — ListRuns
+  // (apps/api/internal/store/runs.go) is `ORDER BY created_at DESC,
+  // id DESC`, a real, already-enforced guarantee a future refactor
+  // would have to deliberately change (improve-perf-suite-reporting D6).
   const run = runsBody.items[0]
   if (!run) {
     throw new Error(

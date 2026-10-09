@@ -1,5 +1,6 @@
 import http from 'k6/http'
 import { check, fail } from 'k6'
+import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js'
 
 // Baseline load test for the two API endpoints with real aggregation/
 // pagination cost (backlog #22, methodology refined per #216): GET
@@ -142,4 +143,18 @@ export default function (data) {
     cursor = body && body.nextCursor
     page++
   } while (cursor && page < 10) // safety cap, well above the 3 pages 120 items/50-limit produces
+}
+
+// Returning a custom handleSummary() suppresses k6's own default
+// terminal summary unless explicitly reconstructed — textSummary() does
+// exactly that, preserving today's console output while also writing a
+// machine-readable summary.json next to it, consumable by a future
+// script or CI step without re-running the suite (improve-perf-suite-
+// reporting D1). Not an npm dependency — a k6-bundler-resolved HTTP(S)
+// import, cached by k6 after first fetch, the standard pattern for this.
+export function handleSummary(data) {
+  return {
+    stdout: textSummary(data, { indent: ' ', enableColors: true }),
+    'apps/api/perf/.results/summary.json': JSON.stringify(data, null, 2),
+  }
 }

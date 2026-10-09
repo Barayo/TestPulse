@@ -82,6 +82,7 @@ license-report: ## Regenerate THIRD-PARTY-LICENSES from the npm workspace and al
 
 perf-api: ## Run the k6 API load test suite (needs compose stack + seed-perf + TESTPULSE_PERF_TOKEN; see apps/api/perf/README.md)
 	@command -v k6 >/dev/null 2>&1 || { echo "k6 is not installed — see https://k6.io/docs/get-started/installation/ (brew install k6 on macOS)"; exit 1; }
+	@mkdir -p apps/api/perf/.results
 	k6 run apps/api/perf/summaries-and-run-items.js
 
 perf-web: ## Run the Lighthouse web performance suite (needs compose stack; see apps/web/perf/README.md)

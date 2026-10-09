@@ -31,7 +31,7 @@ export default defineConfig({
     include: ['src/**/*.test.{ts,tsx}', 'perf/*.test.mjs'],
     coverage: {
       provider: 'v8',
-      include: ['src/**/*.{ts,tsx}', 'perf/discover-urls.mjs'],
+      include: ['src/**/*.{ts,tsx}', 'perf/discover-urls.mjs', 'perf/audit-insights.mjs'],
       exclude: ['src/components/ui/**', 'src/main.tsx', 'src/test/**'],
       thresholds: {
         statements: 80,
