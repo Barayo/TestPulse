@@ -10,7 +10,9 @@ The system SHALL provide a Lighthouse-based suite covering `/` (project
 list), a project landing page, the Library two-pane browser, and a run
 execution board, runnable via a single documented command against a
 running compose stack. The suite SHALL resolve real project/run keys from
-the running API at suite-start rather than relying on hardcoded keys.
+the running API at suite-start rather than relying on hardcoded keys. The
+suite SHALL authenticate before requesting any target page, and SHALL
+score each page under a desktop usage profile.
 
 #### Scenario: Running the suite locally
 - **WHEN** a maintainer runs `make perf-web` against a running compose stack
@@ -25,11 +27,16 @@ the running API at suite-start rather than relying on hardcoded keys.
   and a run belonging to it, rather than assuming a fixed key that may not
   match the project's key after a reseed
 
-#### Scenario: No authentication setup is required
-- **WHEN** the suite requests any of the four target pages
-- **THEN** each page loads successfully with no session cookie or API
-  token, since the Sample Project is publicly accessible and all four
-  routes support anonymous rendering
+#### Scenario: Each target page is measured as a distinct render
+- **WHEN** the suite requests the `/` (project list) page
+- **THEN** it is measured as the project list page itself, not whatever
+  page an anonymous single-public-project redirect would otherwise land
+  on, because the suite's requests carry an authenticated session
+
+#### Scenario: Pages are scored under a desktop usage profile
+- **WHEN** Lighthouse scores any of the four target pages
+- **THEN** it uses a desktop viewport, desktop CPU/network throttling, and
+  a desktop user agent, not Lighthouse's default mobile profile
 
 ### Requirement: The suite produces a documented score/vitals baseline, not a pass/fail gate
 The system SHALL record real Lighthouse scores and core web vitals (LCP,
