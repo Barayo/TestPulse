@@ -88,6 +88,70 @@ func TestSeedPerfFixtureIsIdempotent(t *testing.T) {
 	}
 }
 
+func TestSeedPerfFixtureCreatesWriteLoadProject(t *testing.T) {
+	svc := seededService(t)
+	if err := seedPerfFixture(context.Background(), svc); err != nil {
+		t.Fatalf("seedPerfFixture: %v", err)
+	}
+
+	ctx := adminActorCtx(t, svc)
+	projects, err := svc.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	var target string
+	for _, p := range projects {
+		if p.Name == "Perf Write Load" {
+			target = p.ID
+		}
+	}
+	if target == "" {
+		t.Fatal("'Perf Write Load' project not found")
+	}
+
+	cases, err := svc.ListCases(ctx, target)
+	if err != nil {
+		t.Fatalf("ListCases: %v", err)
+	}
+	const wantCases = 500
+	if len(cases) != wantCases {
+		t.Fatalf("expected %d cases in 'Perf Write Load', got %d", wantCases, len(cases))
+	}
+
+	runs, err := svc.ListRuns(ctx, target)
+	if err != nil {
+		t.Fatalf("ListRuns: %v", err)
+	}
+	if len(runs) != 0 {
+		t.Fatalf("expected 0 runs in 'Perf Write Load', got %d", len(runs))
+	}
+}
+
+func TestSeedPerfFixtureWriteLoadProjectIsIdempotent(t *testing.T) {
+	svc := seededService(t)
+	if err := seedPerfFixture(context.Background(), svc); err != nil {
+		t.Fatalf("seedPerfFixture (1st run): %v", err)
+	}
+	if err := seedPerfFixture(context.Background(), svc); err != nil {
+		t.Fatalf("seedPerfFixture (2nd run): %v", err)
+	}
+
+	ctx := adminActorCtx(t, svc)
+	projects, err := svc.ListProjects(ctx)
+	if err != nil {
+		t.Fatalf("ListProjects: %v", err)
+	}
+	writeLoadCount := 0
+	for _, p := range projects {
+		if p.Name == "Perf Write Load" {
+			writeLoadCount++
+		}
+	}
+	if writeLoadCount != 1 {
+		t.Fatalf("expected exactly 1 'Perf Write Load' project after running seedPerfFixture twice, got %d", writeLoadCount)
+	}
+}
+
 func TestSeedPerfFixtureLastRunProjectHas120Items(t *testing.T) {
 	svc := seededService(t)
 	if err := seedPerfFixture(context.Background(), svc); err != nil {

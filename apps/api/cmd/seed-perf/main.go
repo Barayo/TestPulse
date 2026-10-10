@@ -33,6 +33,17 @@ const ProjectCount = 60
 // across instead of hammering a single hot row.
 const RunProjectCount = 10
 
+// WriteLoadProjectName is the dedicated scratch project for the
+// CreateRun write-path load scenario — not one of the numbered
+// "Perf Load NN" projects (see seedPerfFixture).
+const WriteLoadProjectName = "Perf Write Load"
+
+// WriteLoadCaseCount is large enough that a reintroduced per-case-key
+// round trip in CreateRun's case-key resolution (#180) would add
+// hundreds of milliseconds of clearly-visible latency against a
+// batched call's expected single-digit-millisecond cost.
+const WriteLoadCaseCount = 500
+
 // runItemCounts are the per-run item counts for Perf Load 01..10 — the
 // last one (120) is deliberately past store.DefaultPageLimit (50), so a
 // run-items fetch against it must page.
@@ -129,5 +140,29 @@ func seedPerfFixture(ctx context.Context, svc *service.Service) error {
 			return fmt.Errorf("running %s: %w", name, err)
 		}
 	}
+
+	// A dedicated scratch project for the CreateRun write-path load
+	// scenario (add-create-run-load-test, regression guard for #180) —
+	// deliberately not named "Perf Load NN": the read-suite's
+	// EXPECTED_PROJECT_COUNT check and this package's own
+	// TestSeedPerfFixtureCreatesSixtyProjects/IsIdempotent tests both
+	// filter/count on that exact prefix, and this project isn't part of
+	// that counted/paired family. No run is created here — the k6
+	// scenario creates and deletes its own runs against this project's
+	// case list every iteration.
+	if !existingNames[WriteLoadProjectName] {
+		p, err := svc.CreateProject(ctx, service.ProjectInput{Name: WriteLoadProjectName})
+		if err != nil {
+			return fmt.Errorf("creating %s: %w", WriteLoadProjectName, err)
+		}
+		root, err := sampledata.RootFolder(ctx, svc, p.ID)
+		if err != nil {
+			return fmt.Errorf("root folder for %s: %w", WriteLoadProjectName, err)
+		}
+		if _, err := sampledata.Filler(ctx, svc, p.ID, root.ID, WriteLoadProjectName, "case", WriteLoadCaseCount); err != nil {
+			return fmt.Errorf("filling %s: %w", WriteLoadProjectName, err)
+		}
+	}
+
 	return nil
 }
