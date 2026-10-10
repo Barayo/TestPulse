@@ -1,0 +1,98 @@
+name: Performance
+
+# Separate from ci.yml on purpose (#24) — these suites are slower and
+# noisier than functional tests, and establish a baseline rather than
+# gate a PR (api-performance-testing/web-performance-testing specs'
+# "not a pass/fail gate" requirements). Never pull_request/push.
+on:
+  schedule:
+    # 06:00 UTC daily — arbitrary off-peak time; nothing user-facing
+    # depends on exactly when this runs.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  performance:
+    name: Performance (k6 + Lighthouse)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5.6.0
+        with:
+          go-version-file: apps/api/go.mod
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 24
+          cache: npm
+      - name: Install
+        run: npm ci
+      - name: Install k6
+        # Official apt recipe (grafana.com/docs/k6/latest/set-up/install-k6/)
+        # — not a marketplace action, consistent with this repo's
+        # preference for direct, auditable steps where straightforward.
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+      - name: Start compose stack
+        run: docker compose -f deploy/compose/docker-compose.yml up --build -d --wait
+      - name: Wait for readiness
+        run: |
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/readyz && exit 0 || sleep 2
+          done
+          echo "stack never became ready"; docker compose -f deploy/compose/docker-compose.yml logs; exit 1
+      - name: Expose db port
+        # make seed-perf runs on the runner (the shipped app image is
+        # distroless — no Go toolchain to run it in-container), so db's
+        # port needs publishing to the host first. Same recipe documented
+        # in apps/api/perf/README.md for local use.
+        run: |
+          cat <<'EOF' > /tmp/db-port-override.yml
+          services:
+            db:
+              ports:
+                - "5432:5432"
+          EOF
+          docker compose -f deploy/compose/docker-compose.yml -f /tmp/db-port-override.yml up -d db
+      - name: Seed perf fixture
+        env:
+          TESTPULSE_DATABASE_URL: postgres://testpulse:testpulse@localhost:5432/testpulse?sslmode=disable
+        run: make seed-perf
+      - name: Create scoped API token
+        # Compose's fixed admin credentials (deploy/compose/docker-
+        # compose.yml) — fine here, same as apps/web/perf/run.mjs's own
+        # login and the local perf-api recipe; this is the local/E2E
+        # evaluation stack, not production. Password passed directly in
+        # the request body, never echoed to the log.
+        run: |
+          cookie=$(curl -sS -i -X POST http://localhost:8080/api/v1/auth/login \
+            -H 'Content-Type: application/json' \
+            -d '{"email":"admin@example.com","password":"correcthorsebatterystaple"}' \
+            | grep -i '^set-cookie:' | head -1 | sed -E 's/^[Ss]et-[Cc]ookie: ([^;]+);.*/\1/' | tr -d '\r')
+          token=$(curl -sS -b "$cookie" -X POST http://localhost:8080/api/v1/tokens \
+            -H 'Content-Type: application/json' -d '{"name":"ci-performance-workflow"}' | jq -r '.token')
+          echo "TESTPULSE_PERF_TOKEN=$token" >> "$GITHUB_ENV"
+      - name: Run API perf suite
+        run: make perf-api
+      - name: Run web perf suite
+        run: make perf-web
+      - name: Upload API perf results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: api-perf-results
+          path: apps/api/perf/.results/
+      - name: Upload web perf results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: web-perf-results
+          path: apps/web/perf/.results/
+      - name: Stop compose stack
+        if: always()
+        run: docker compose -f deploy/compose/docker-compose.yml down -v

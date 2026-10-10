@@ -93,9 +93,18 @@ isn't meant to be re-run.
 
 ## Performance
 
-Two local/manual performance suites exist — neither wired into CI, both
-documented-baseline-not-a-gate (`add-web-performance-lighthouse`'s
-Non-Goals/`api-performance-testing`'s D4 both call this out explicitly).
+Two performance suites exist, both documented-baseline-not-a-gate
+(`add-web-performance-lighthouse`'s Non-Goals/`api-performance-testing`'s
+D4 both call this out explicitly) — runnable locally via `make perf-api`/
+`make perf-web`, and also run automatically by
+`.github/workflows/performance.yml` (`wire-perf-tests-into-ci`) on a
+daily schedule and on manual dispatch. That workflow is deliberately
+separate from the PR-blocking `ci.yml` — it never runs on `pull_request`/
+`push` and never fails a PR; a low score/high latency doesn't fail the
+workflow either, only a genuine infrastructure problem (the compose
+stack never becoming ready, the fixture/token-creation steps erroring,
+or a suite script crashing) does. Both suites' results are uploaded as
+workflow artifacts on every scheduled/manual run.
 
 ### API
 

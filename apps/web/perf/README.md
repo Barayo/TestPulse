@@ -5,9 +5,11 @@ representative pages: the project list (`/`), a project landing page, the
 Library two-pane browser, and a run execution board. See
 `openspec/changes/archive/` (once archived) for the full design rationale.
 
-This is a local/manual tool, not wired into CI (see design.md's
-Non-Goals) — no pass/fail gate, just a documented baseline. Runs
-`lighthouse`/`chrome-launcher` directly rather than `@lhci/cli` — the
+Runnable locally, and also run automatically by
+`.github/workflows/performance.yml` (`wire-perf-tests-into-ci`) on a
+daily schedule and on manual dispatch — never on `pull_request`/`push`,
+so it never gates a PR. No pass/fail gate, just a documented baseline.
+Runs `lighthouse`/`chrome-launcher` directly rather than `@lhci/cli` — the
 latter's own wrapper tooling (interactive wizard, server-upload support,
 neither used here) pulls in ~17 high/moderate `npm audit` findings with
 no functional benefit for this suite's scope (design.md D1).

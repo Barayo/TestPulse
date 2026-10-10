@@ -8,8 +8,11 @@ proven to regress, `POST /api/v1/projects/{projectKey}/runs`
 bug, since fixed). See `openspec/changes/archive/` (once archived) for
 the full design rationale.
 
-This is a local/manual tool, not wired into CI (see design.md's
-Non-Goals) — no pass/fail gate, just a documented baseline. The script
+Runnable locally, and also run automatically by
+`.github/workflows/performance.yml` (`wire-perf-tests-into-ci`) on a
+daily schedule and on manual dispatch — never on `pull_request`/`push`,
+so it never gates a PR. No pass/fail gate, just a documented baseline.
+The script
 itself isn't Go or TypeScript, so it isn't covered by `make lint` or
 `make test` — a k6 script's own syntax errors surface when you run it.
 
