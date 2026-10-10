@@ -1,5 +1,6 @@
 import http from 'k6/http'
 import { check, fail } from 'k6'
+import exec from 'k6/execution'
 import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.2/index.js'
 
 // Baseline load test for the two API endpoints with real aggregation/
@@ -21,12 +22,30 @@ const PERF_PROJECT_PREFIX = 'Perf Load '
 const EXPECTED_PROJECT_COUNT = 60
 const RUN_PROJECT_COUNT = 10
 
+// The dedicated CreateRun write-path scratch project (add-create-run-
+// load-test, regression guard for #180) — deliberately not named
+// "Perf Load NN", so it's excluded from PERF_PROJECT_PREFIX filtering
+// above and doesn't affect EXPECTED_PROJECT_COUNT.
+const WRITE_LOAD_PROJECT_NAME = 'Perf Write Load'
+
 export const options = {
   scenarios: {
     summaries_heavy_mix: {
       executor: 'constant-vus',
       vus: 10,
       duration: '30s',
+    },
+    // Fewer VUs than the read scenario — each iteration here is
+    // strictly heavier (a ~500-case-key batched resolution plus a full
+    // run-creation write, then a delete). Runs concurrently with
+    // summaries_heavy_mix (k6's default — no startTime stagger), giving
+    // this one 30s suite invocation a realistic mixed read+write load
+    // (design.md D2).
+    create_run_write: {
+      executor: 'constant-vus',
+      vus: 5,
+      duration: '30s',
+      exec: 'createRunWrite',
     },
   },
   // p99 isn't in k6's default summary stats — add it explicitly so the
@@ -44,6 +63,8 @@ export const options = {
     http_req_duration: ['p(95)<5000'],
     'http_req_duration{endpoint:summaries}': ['p(95)<5000'],
     'http_req_duration{endpoint:run_items}': ['p(95)<5000'],
+    'http_req_duration{endpoint:create_run}': ['p(95)<5000'],
+    'http_req_duration{endpoint:create_run_delete}': ['p(95)<5000'],
   },
 }
 
@@ -110,7 +131,36 @@ export function setup() {
     http.get(`${BASE_URL}/api/v1/runs/${pairs[0].runKey}/items`, authHeaders({ endpoint: 'warmup' }))
   }
 
-  return { pairs }
+  // The CreateRun write scenario's fixture: find the scratch project and
+  // walk its full case list once here (not timed) rather than
+  // re-fetching it every iteration, which would otherwise time an
+  // unrelated read endpoint inside what's meant to be a pure write-path
+  // measurement (design.md D4).
+  const writeLoadProject = allProjects.find((p) => p.name === WRITE_LOAD_PROJECT_NAME)
+  if (!writeLoadProject) {
+    fail(`Expected project "${WRITE_LOAD_PROJECT_NAME}" not found. Run \`make seed-perf\` to (re)seed the fixture.`)
+  }
+  const caseKeys = []
+  let casesCursor = ''
+  do {
+    const url = casesCursor
+      ? `${BASE_URL}/api/v1/projects/${writeLoadProject.key}/cases?limit=200&cursor=${encodeURIComponent(casesCursor)}`
+      : `${BASE_URL}/api/v1/projects/${writeLoadProject.key}/cases?limit=200`
+    const casesRes = http.get(url, authHeaders({ endpoint: 'setup' }))
+    if (casesRes.status !== 200) {
+      fail(`GET /api/v1/projects/${writeLoadProject.key}/cases failed during setup: ${casesRes.status} ${casesRes.body}`)
+    }
+    const body = casesRes.json()
+    for (const c of body.items) {
+      caseKeys.push(c.key)
+    }
+    casesCursor = body.nextCursor
+  } while (casesCursor)
+  if (caseKeys.length === 0) {
+    fail(`Project "${WRITE_LOAD_PROJECT_NAME}" has no cases. Run \`make seed-perf\` to (re)seed the fixture.`)
+  }
+
+  return { pairs, writeLoadProjectKey: writeLoadProject.key, caseKeys }
 }
 
 export default function (data) {
@@ -143,6 +193,35 @@ export default function (data) {
     cursor = body && body.nextCursor
     page++
   } while (cursor && page < 10) // safety cap, well above the 3 pages 120 items/50-limit produces
+}
+
+// CreateRun write-path scenario (design.md D1-D3): every iteration
+// creates a run from the full ~500-case-key "Perf Write Load" fixture —
+// large enough that a reintroduced per-case-key round trip in
+// CreateRun's case-key resolution (#180) would be visible in
+// wall-clock terms — then deletes it immediately, so repeated suite
+// invocations never leave runs behind. Create and delete are tagged
+// separately: they have very different expected costs (a multi-row
+// write + spec expansion vs. an FK-cascade delete), and blending them
+// under one tag would make neither baseline number meaningful.
+export function createRunWrite(data) {
+  const runName = `Perf Write Load — VU${exec.vu.idInTest} iter${exec.vu.iterationInInstance}`
+  const createRes = http.post(
+    `${BASE_URL}/api/v1/projects/${data.writeLoadProjectKey}/runs`,
+    JSON.stringify({ name: runName, caseKeys: data.caseKeys }),
+    {
+      headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json' },
+      tags: { endpoint: 'create_run' },
+    },
+  )
+  const created = check(createRes, { 'create run status is 201': (r) => r.status === 201 })
+  if (!created) {
+    return
+  }
+
+  const runKey = createRes.json().key
+  const deleteRes = http.del(`${BASE_URL}/api/v1/runs/${runKey}`, null, authHeaders({ endpoint: 'create_run_delete' }))
+  check(deleteRes, { 'delete run status is 204': (r) => r.status === 204 })
 }
 
 // Returning a custom handleSummary() suppresses k6's own default
