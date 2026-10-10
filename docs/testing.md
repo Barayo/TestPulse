@@ -100,18 +100,25 @@ Non-Goals/`api-performance-testing`'s D4 both call this out explicitly).
 ### API
 
 A k6 load test suite (`apps/api/perf/`, `add-api-performance-tests`,
-methodology refined by `improve-api-perf-test-methodology`) covers the two
-API endpoints with real aggregation/pagination cost:
-`GET /api/v1/projects/summaries` (flat request count regardless of project
-count, `add-project-stats-endpoint`'s whole reason for existing) and
+methodology refined by `improve-api-perf-test-methodology`, extended by
+`add-create-run-load-test`) covers three API endpoints: the two
+highest-aggregation-cost reads — `GET /api/v1/projects/summaries` (flat
+request count regardless of project count,
+`add-project-stats-endpoint`'s whole reason for existing) and
 `GET /api/v1/runs/{runKey}/items` (cursor-paginated, the run execution
-board's main data source — the suite walks the full cursor chain, not just
-page 1). See `apps/api/perf/README.md`'s rationale.
+board's main data source — the suite walks the full cursor chain, not
+just page 1) — and the one write path already proven to regress once,
+`POST /api/v1/projects/{projectKey}/runs` (`CreateRun`, a regression
+guard for #180's N+1 case-key resolution bug, since fixed). All three
+scenarios run concurrently within the same 30s invocation. See
+`apps/api/perf/README.md`'s rationale.
 
 Run it with the compose stack up, `make seed-perf` populated (a
 purpose-built, 60-project/10-run fixture large enough to actually exercise
-both endpoints' cost-defining path — not `make seed-demo`, which exists for
-a different, much smaller UI/design-review purpose), and a scoped API
+both read endpoints' cost-defining path, plus a further "Perf Write Load"
+scratch project (500 cases, no run) the `CreateRun` scenario creates and
+deletes runs against every iteration — not `make seed-demo`, which exists
+for a different, much smaller UI/design-review purpose), and a scoped API
 token exported:
 
 ```bash
@@ -119,20 +126,29 @@ export TESTPULSE_PERF_TOKEN=tp_...
 make perf-api
 ```
 
-**Baseline** (captured 2026-10-07, 10 VUs for 30s, 4 runs, Apple M-series
-dev laptop against a local compose stack — reported as a range across
-those runs, not a single sample; not a certified SLA, a before/after
-comparison aid). The throughput figure reflects latency at a fixed 10-VU
-concurrency, not a measured breaking point — it is not a capacity number.
+**Baseline** (captured 2026-10-10, 10 VUs/30s for the read scenario plus 5
+VUs/30s for the write scenario running concurrently, 3 runs, Apple
+M-series dev laptop against a local compose stack — reported as a range
+across those runs, not a single sample; not a certified SLA, a
+before/after comparison aid). `summaries`/`run_items` latency is higher
+here than the pre-`add-create-run-load-test` baseline because the write
+scenario now runs concurrently in the same window — a real mixed-load
+effect (design.md D2 of that change), not a regression. `create_run`'s
+high latency reflects `CreateRun`'s still-sequential per-case
+`expandCaseIntoSpecs` lookup (a separate, smaller, known, not-yet-fixed
+N+1 — see that change's design.md Non-Goals), not a reintroduction of
+#180's batched-resolution bug. The throughput figure reflects latency at
+this fixed concurrency, not a measured breaking point — it is not a
+capacity number.
 
-| Metric | `summaries` | `run_items` |
-|---|---|---|
-| p95 latency | 3.54–3.88ms | 3.39–3.67ms |
-| p99 latency | 4.10–5.31ms | 3.99–4.84ms |
+| Metric | `summaries` | `run_items` | `create_run` | `create_run_delete` |
+|---|---|---|---|---|
+| p95 latency | 5.60–6.32ms | 5.51–5.82ms | 765–849ms | 15.2–17.2ms |
+| p99 latency | 6.63–7.95ms | 6.54–7.41ms | 1.00–1.08s | 17.5–20.2ms |
 
 | Metric | Value |
 |---|---|
-| Throughput | ~3,585–3,767 req/s |
+| Throughput | ~2,251–2,442 req/s |
 | Failure rate | 0% (all runs) |
 
 ### Web
