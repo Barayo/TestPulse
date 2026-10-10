@@ -87,12 +87,19 @@ jobs:
         with:
           name: api-perf-results
           path: apps/api/perf/.results/
+          # .results is a dot-directory — upload-artifact's default
+          # include-hidden-files: false silently excludes it entirely
+          # (confirmed via a real run: job succeeded but "No files were
+          # found with the provided path", despite the suite writing
+          # summary.json there as designed).
+          include-hidden-files: true
       - name: Upload web perf results
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: web-perf-results
           path: apps/web/perf/.results/
+          include-hidden-files: true
       - name: Stop compose stack
         if: always()
         run: docker compose -f deploy/compose/docker-compose.yml down -v
