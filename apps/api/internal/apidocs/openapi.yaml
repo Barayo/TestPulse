@@ -94,6 +94,24 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/InstanceSettings" }
         "403": { $ref: "#/components/responses/Forbidden" }
+  /api/v1/client-errors:
+    post:
+      operationId: recordClientError
+      summary: Report a frontend crash or failed API call for server-side logging
+      description: >-
+        Pure visibility (add-frontend-error-reporting): the report is logged
+        via the server's structured logger, never persisted or surfaced in
+        any UI.
+      tags: [system]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ClientErrorReport" }
+      responses:
+        "204": { description: Report logged }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
   /api/v1/projects:
     get:
       operationId: listProjects
@@ -616,6 +634,72 @@ paths:
                 type: array
                 items: { $ref: "#/components/schemas/CaseExecution" }
         "400": { $ref: "#/components/responses/ValidationError" }
+  /api/v1/cases/{caseKey}/attachments:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listCaseAttachments
+      summary: A case's reference attachments (images/PDFs), oldest first
+      tags: [cases]
+      responses:
+        "200":
+          description: Case attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseAttachment" }
+    post:
+      operationId: uploadCaseAttachment
+      summary: >-
+        Attach a reference file to this case — an image (PNG/JPEG/WebP), a
+        PDF document, or a plain-text file (.txt/.log), max 5MB. Belongs to
+        the case's identity, not a specific version; survives case edits.
+      tags: [cases]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file: { type: string, format: binary }
+              required: [file]
+      responses:
+        "201":
+          description: Created case attachment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CaseAttachment" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/case-attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getCaseAttachment
+      summary: The raw file bytes for a case attachment
+      tags: [cases]
+      responses:
+        "200":
+          description: Case attachment file
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+            text/plain: { schema: { type: string, format: binary } }
+        "304": { description: Not modified (matched If-None-Match) }
+        "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      operationId: deleteCaseAttachment
+      summary: Delete a case attachment
+      tags: [cases]
+      responses:
+        "204": { description: Deleted }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/projects/{projectKey}/flaky-cases:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -1478,6 +1562,28 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
         "409": { $ref: "#/components/responses/Conflict" }
+  /api/v1/runs/{runKey}/archive:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: archiveRun
+      summary: Archive a run — hides it from the active run list, reversible, no status precondition
+      tags: [runs]
+      responses:
+        "204": { description: Archived }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/runs/{runKey}/unarchive:
+    parameters:
+      - { name: runKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: unarchiveRun
+      summary: Unarchive a run — returns it to the active run list
+      tags: [runs]
+      responses:
+        "204": { description: Unarchived }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/runs/{runKey}/items:
     parameters:
       - { name: runKey, in: path, required: true, schema: { type: string } }
@@ -2075,6 +2181,22 @@ paths:
                 items: { $ref: "#/components/schemas/CaseExecution" }
         "400": { $ref: "#/components/responses/ValidationError" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/cases/{caseKey}/attachments:
+    parameters:
+      - { name: caseKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPublicCaseAttachments
+      summary: A case's reference attachments, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Case attachments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/CaseAttachment" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/public/suites/{suiteKey}:
     parameters:
       - { name: suiteKey, in: path, required: true, schema: { type: string } }
@@ -2197,6 +2319,23 @@ paths:
             image/png: { schema: { type: string, format: binary } }
             image/jpeg: { schema: { type: string, format: binary } }
             image/webp: { schema: { type: string, format: binary } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/public/case-attachments/{attachmentId}:
+    parameters:
+      - { name: attachmentId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getPublicCaseAttachment
+      summary: The raw file bytes for a case attachment, from a public project
+      tags: [public]
+      responses:
+        "200":
+          description: Case attachment file
+          content:
+            image/png: { schema: { type: string, format: binary } }
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            application/pdf: { schema: { type: string, format: binary } }
+            text/plain: { schema: { type: string, format: binary } }
         "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/auth/login:
     post:
@@ -2579,6 +2718,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/tokens/instance:
+    get:
+      operationId: listInstanceTokens
+      summary: >-
+        List every API token across every user in the instance,
+        Tenant-Admin-only (add-instance-token-listing)
+      tags: [tokens]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+      responses:
+        "200":
+          description: A page of tokens, owner/scope already resolved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ApiTokenWithOwnerListPage" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
   /api/v1/audit:
     get:
       operationId: listAuditEntries
@@ -3400,7 +3557,7 @@ components:
         name: { type: string }
     Run:
       type: object
-      required: [id, key, projectId, projectKey, name, status, createdAt]
+      required: [id, key, projectId, projectKey, name, status, archived, createdAt]
       properties:
         id: { type: string }
         key:
@@ -3427,6 +3584,9 @@ components:
           type: string
           nullable: true
           description: The key of the Test Plan this run is scoped to, if any (introduce-release-test-plan). Absent (null) for a run created with no Test Plan. Set once at creation and never changes; unaffected by later deletion of the Test Plan itself.
+        archived:
+          type: boolean
+          description: Hides this run from the project's active run list by default (auto-archive-runs). Reversible; independent of status — an open or closed run may be archived.
     RunListPage:
       type: object
       required: [items, nextCursor]
@@ -3723,6 +3883,15 @@ components:
         resultId:
           type: string
           description: Absent when staged but not yet linked to a result.
+        filename: { type: string }
+        contentType: { type: string }
+        createdAt: { type: string, format: date-time }
+    CaseAttachment:
+      type: object
+      required: [id, caseId, filename, contentType, createdAt]
+      properties:
+        id: { type: string }
+        caseId: { type: string }
         filename: { type: string }
         contentType: { type: string }
         createdAt: { type: string, format: date-time }
@@ -4156,7 +4325,7 @@ components:
           description: Present when status is "unavailable".
     Meta:
       type: object
-      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView, mcpEnabled]
+      required: [name, version, publicProjectsEnabled, passwordResetEnabled, setupRequired, colorTheme, ssoEnabled, ssoOnly, defaultLandingView, mcpEnabled, defaultLanguage, perUserLanguageEnabled]
       properties:
         name:
           type: string
@@ -4230,6 +4399,21 @@ components:
             (mcp-admin-discoverability-card) can show real enabled/disabled
             state instead of unconditionally claiming the server is
             available.
+        defaultLanguage:
+          $ref: '#/components/schemas/Language'
+          description: >
+            Instance-wide default UI language (add-ui-i18n). Read here (not
+            only via the Tenant-Admin-only InstanceSettings) since every
+            visitor, including anonymous ones, needs it to resolve which
+            language to render — the same reasoning that already put
+            colorTheme/defaultLandingView here.
+        perUserLanguageEnabled:
+          type: boolean
+          description: >
+            Whether a logged-in user's own Language preference is allowed
+            to override defaultLanguage for them (add-ui-i18n). Read here
+            so an authenticated client can resolve its effective language
+            on initial load, before any Tenant-Admin-only read.
     ColorTheme:
       type: string
       enum: [teal, indigo, ocean, forest, custom]
@@ -4245,6 +4429,11 @@ components:
         Which view a project opens into (add-configurable-project-landing).
         "dashboard" is the original fixed multi-panel view; the others
         redirect straight to that view's own existing route.
+    Language:
+      type: string
+      enum: [en, es, fr, de, pt, zh]
+      description: >
+        One of the six UI locales add-ui-i18n ships with.
     CustomPaletteMode:
       type: object
       required: [background, foreground, card, primary, primaryForeground, muted, mutedForeground, accent, border, input]
@@ -4271,7 +4460,7 @@ components:
         dark: { $ref: '#/components/schemas/CustomPaletteMode' }
     InstanceSettings:
       type: object
-      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView]
+      required: [publicProjectsEnabled, runRetentionDays, autoArchiveInactiveDays, runAutoArchiveInactiveDays, colorTheme, updatedAt, oidcClientSecretSet, oidcOnly, sessionTimeoutDays, defaultLandingView, defaultLanguage, perUserLanguageEnabled]
       properties:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays:
@@ -4289,6 +4478,14 @@ components:
             (in days) past which a non-exempt project is automatically
             archived. 0 (the default) means the policy is off. Archiving is
             reversible; unlike runRetentionDays, this never destroys data.
+        runAutoArchiveInactiveDays:
+          type: integer
+          minimum: 0
+          description: >
+            Instance-wide, Tenant-Admin-configurable age threshold (in days)
+            past which a closed, non-archived run is automatically archived
+            (auto-archive-runs). 0 (the default) means the policy is off.
+            Reversible; unlike runRetentionDays, this never destroys data.
         colorTheme:
           $ref: '#/components/schemas/ColorTheme'
         customPalette:
@@ -4338,6 +4535,13 @@ components:
             afterward — already-active sessions keep their existing expiry.
         defaultLandingView:
           $ref: '#/components/schemas/LandingView'
+        defaultLanguage:
+          $ref: '#/components/schemas/Language'
+        perUserLanguageEnabled:
+          type: boolean
+          description: >
+            Whether a user's own Language preference is allowed to
+            override defaultLanguage (add-ui-i18n). Off by default.
     InstanceSettingsUpdate:
       type: object
       description: A partial update — every field is optional; omitted fields are left unchanged.
@@ -4345,6 +4549,7 @@ components:
         publicProjectsEnabled: { type: boolean }
         runRetentionDays: { type: integer, minimum: 0 }
         autoArchiveInactiveDays: { type: integer, minimum: 0 }
+        runAutoArchiveInactiveDays: { type: integer, minimum: 0 }
         colorTheme:
           $ref: '#/components/schemas/ColorTheme'
         customPalette:
@@ -4377,6 +4582,43 @@ components:
           description: Sliding session expiry window in days (add-session-timeout-setting), 1-90.
         defaultLandingView:
           $ref: '#/components/schemas/LandingView'
+        defaultLanguage:
+          $ref: '#/components/schemas/Language'
+        perUserLanguageEnabled: { type: boolean }
+    ClientErrorReport:
+      type: object
+      required: [kind, message]
+      description: >-
+        A frontend crash or failed API call, reported for server-side
+        logging only (add-frontend-error-reporting) — never persisted.
+      properties:
+        kind:
+          type: string
+          enum: [crash, apiError]
+        message: { type: string }
+        stack:
+          type: string
+          description: JS stack trace, when available. Only meaningful for kind=crash.
+        componentStack:
+          type: string
+          description: React's component stack, set only for kind=crash.
+        url:
+          type: string
+          description: The page path where this occurred.
+        method:
+          type: string
+          description: The failed request's HTTP method. Only set for kind=apiError.
+        path:
+          type: string
+          description: >-
+            The failed request's OpenAPI schema path (not the raw
+            interpolated URL, to avoid leaking IDs). Only set for
+            kind=apiError.
+        status:
+          type: integer
+          description: >-
+            The failed response's HTTP status. Absent for a network-level
+            failure. Only set for kind=apiError.
     User:
       type: object
       required: [id, email, isTenantAdmin, createdAt, mustChangePassword]
@@ -4393,6 +4635,13 @@ components:
             "custom" meaning the user has uploaded their own photo —
             fetch it from GET /api/v1/users/{userId}/avatar.
         timezone: { type: string, nullable: true }
+        language:
+          allOf: [{ $ref: '#/components/schemas/Language' }]
+          nullable: true
+          description: >-
+            This user's personal UI language preference (add-ui-i18n),
+            null meaning "follow the instance default". Only takes effect
+            when InstanceSettings.perUserLanguageEnabled is true.
         deactivatedAt:
           type: string
           format: date-time
@@ -4431,6 +4680,9 @@ components:
             reserved value "custom" is rejected here — set only by
             POST /api/v1/users/me/avatar.
         timezone: { type: string, nullable: true }
+        language:
+          allOf: [{ $ref: '#/components/schemas/Language' }]
+          nullable: true
     UserInput:
       type: object
       required: [email, password]
@@ -4735,6 +4987,47 @@ components:
             token:
               type: string
               description: The full secret token value. Shown only in this response, never again.
+    ApiTokenWithOwner:
+      type: object
+      required: [id, ownerEmail, name, prefix, createdAt]
+      description: >-
+        One token in the instance-wide listing (add-instance-token-listing)
+        — owner/project/role already resolved server-side, never raw
+        internal ids.
+      properties:
+        id: { type: string }
+        ownerEmail: { type: string }
+        ownerDisplayName:
+          type: string
+          nullable: true
+        name: { type: string }
+        prefix:
+          type: string
+          description: Short, non-secret prefix of the token, for identification only.
+        projectKey:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
+        roleName:
+          type: string
+          nullable: true
+          description: Null for an unscoped (full-access) token.
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt: { type: string, format: date-time }
+    ApiTokenWithOwnerListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ApiTokenWithOwner" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
     TokenInput:
       type: object
       required: [name]

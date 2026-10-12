@@ -22,10 +22,13 @@ jobs:
   # Feeds helm/migrations below, the two jobs cheap enough to skip outright
   # when their own files didn't change (reduce-ci-actions-usage) — api/web/e2e
   # stay unconditional on path, since app code can affect either indirectly.
+  # Runs on push too, not just pull_request — this repo's real workflow is
+  # direct pushes to main, not PRs, so a PR-only gate here never actually
+  # ran (dorny/paths-filter diffs against github.event.before automatically
+  # for push events, no extra config needed).
   changes:
     name: Detect changed paths
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     outputs:
       helm: ${{ steps.filter.outputs.helm }}
       migrations: ${{ steps.filter.outputs.migrations }}
@@ -43,12 +46,6 @@ jobs:
   api:
     name: API (Go)
     runs-on: ubuntu-latest
-    # A push to main was already validated by the PR that merged it —
-    # re-running here would just spend minutes confirming the same commit
-    # again (reduce-ci-actions-usage). e2e is the one exception: it also
-    # reports results to the dogfood instance on main, so it keeps running
-    # on both triggers.
-    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: apps/api
@@ -100,7 +97,6 @@ jobs:
     # First CI coverage of any kind for this module (add-codeql-and-
     # govulncheck) — previously unbuilt, untested, and unlinted in CI
     # despite having a real test suite all along.
-    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: tools/import-connector
@@ -126,7 +122,6 @@ jobs:
     name: jira-connector (Go)
     runs-on: ubuntu-latest
     # Same rationale as import-connector above.
-    if: github.event_name == 'pull_request'
     defaults:
       run:
         working-directory: tools/jira-connector
@@ -151,7 +146,6 @@ jobs:
   web:
     name: Web (TypeScript)
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -185,7 +179,6 @@ jobs:
   license-check:
     name: Dependency license check
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -280,7 +273,7 @@ jobs:
     name: Helm chart
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.helm == 'true'
+    if: needs.changes.outputs.helm == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Lint chart
@@ -314,28 +307,32 @@ jobs:
   dco:
     name: DCO
     runs-on: ubuntu-latest
-    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
       - name: All commits are signed off
         run: |
-          range="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          base="${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}"
+          head="${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}"
+          if [ -z "$base" ] || [ "$base" = "0000000000000000000000000000000000000000" ]; then
+            echo "No base commit to compare against (first push to a new ref) — skipping."
+            exit 0
+          fi
           missing=0
           while read -r sha; do
             if ! git log -1 --format=%B "$sha" | grep -qi '^Signed-off-by: .\+<.\+>'; then
               echo "::error::Commit $sha is missing a Signed-off-by trailer (use git commit -s)"
               missing=1
             fi
-          done < <(git rev-list --no-merges "$range")
+          done < <(git rev-list --no-merges "$base..$head")
           exit $missing
 
   migrations:
     name: Migrations
     runs-on: ubuntu-latest
     needs: changes
-    if: github.event_name == 'pull_request' && needs.changes.outputs.migrations == 'true'
+    if: needs.changes.outputs.migrations == 'true'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
