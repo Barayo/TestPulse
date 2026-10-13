@@ -39,7 +39,20 @@ function npmLicenses() {
       // this project doesn't use) — those have no `version` field and
       // nothing on disk to resolve a license from. Skip them; they are not
       // actually a third-party dependency of this build.
-      if (!LOCAL_WORKSPACE_PACKAGES.has(name) && info.version) {
+      //
+      // Separately, npm's per-OS/arch native-binary optional dependencies
+      // (e.g. @rolldown/binding-darwin-arm64 vs. -linux-x64-gnu,
+      // lightningcss-*, fsevents) DO have a version and ARE installed, but
+      // only the one matching whoever generated the report. They declare
+      // `os`/`cpu` restrictions in their own package.json — use that as
+      // the generic, forward-compatible signal to exclude them, rather
+      // than naming each one, so the report stays identical regardless of
+      // which platform `make license-report` runs on.
+      if (
+        !LOCAL_WORKSPACE_PACKAGES.has(name) &&
+        info.version &&
+        !isPlatformRestricted(name)
+      ) {
         const key = `${name}@${info.version}`;
         if (!seen.has(key)) seen.set(key, { name, version: info.version });
       }
@@ -58,19 +71,37 @@ function npmLicenses() {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-function resolveNpmLicense(name) {
+function findPackageJson(name) {
   let dir = repoRoot;
   for (let i = 0; i < 5; i++) {
     const candidate = path.join(dir, "node_modules", ...name.split("/"), "package.json");
     if (existsSync(candidate)) {
-      const pkg = JSON.parse(readFileSync(candidate, "utf8"));
-      return formatNpmLicense(pkg.license ?? pkg.licenses);
+      return JSON.parse(readFileSync(candidate, "utf8"));
     }
     const parent = path.dirname(dir);
     if (parent === dir) break;
     dir = parent;
   }
-  return "UNKNOWN";
+  return null;
+}
+
+function isPlatformRestricted(name) {
+  const pkg = findPackageJson(name);
+  if (!pkg) return false;
+  // A package restricted to exactly one OS (e.g. fsevents: os:["darwin"])
+  // or declaring a `cpu` restriction at all (native binaries always pin
+  // to one arch) is a per-platform variant swapped at install time.
+  // Packages that merely list several supported platforms (e.g.
+  // systeminformation: os:["darwin","linux","win32",...]) are not — they
+  // resolve to the same package on every host and must stay in the report.
+  if (pkg.cpu && pkg.cpu.length) return true;
+  if (pkg.os && pkg.os.length === 1) return true;
+  return false;
+}
+
+function resolveNpmLicense(name) {
+  const pkg = findPackageJson(name);
+  return pkg ? formatNpmLicense(pkg.license ?? pkg.licenses) : "UNKNOWN";
 }
 
 function formatNpmLicense(license) {

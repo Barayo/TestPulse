@@ -36,6 +36,7 @@ coverage.out
 
 # Logs
 *.log
+!apps/api/internal/attachmentfile/testdata/sample.log
 
 # Visual brainstorming companion scratch files
 .superpowers/
