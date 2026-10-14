@@ -969,6 +969,38 @@ type RunItem struct {
 	TestDataRow map[string]string `json:"testDataRow,omitempty"`
 }
 
+// CoverageMatrix is a Test Plan's runs × cases pivot (add-run-
+// configurations, #129) — each run is a column, each case across all of
+// the plan's runs' items is a row. A case/run pair with no corresponding
+// item is simply absent from that case's Cells map: the gap the matrix
+// exists to surface, not an error.
+type CoverageMatrix struct {
+	Configurations []CoverageMatrixConfiguration `json:"configurations"`
+	Cases          []CoverageMatrixCase          `json:"cases"`
+}
+
+// CoverageMatrixConfiguration is one column: a run, labeled by its
+// Configuration if set, else its Name (design.md D2/D3).
+type CoverageMatrixConfiguration struct {
+	RunKey string `json:"runKey"`
+	Label  string `json:"label"`
+}
+
+// CoverageMatrixCase is one row: a case, with a sparse map of cells keyed
+// by the column's RunKey.
+type CoverageMatrixCase struct {
+	CaseKey string                        `json:"caseKey"`
+	Title   string                        `json:"title"`
+	Cells   map[string]CoverageMatrixCell `json:"cells"`
+}
+
+// CoverageMatrixCell is one filled cell: the run item that covers this
+// case in this run, and its live current status.
+type CoverageMatrixCell struct {
+	RunItemKey string `json:"runItemKey"`
+	Status     Status `json:"status"`
+}
+
 // CaseExecution is one run item's outcome, viewed from the case's side
 // (across every run it was part of) rather than one run's side — the shape
 // `extend-case-version-history`'s "executions by version" query returns.

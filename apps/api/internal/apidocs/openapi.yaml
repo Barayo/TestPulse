@@ -1135,6 +1135,19 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/Run" }
+  /api/v1/plans/{planKey}/coverage-matrix:
+    parameters:
+      - { name: planKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: getTestPlanCoverageMatrix
+      summary: Case x configuration coverage matrix for the test plan's runs
+      tags: [testPlans]
+      responses:
+        "200":
+          description: Coverage matrix
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CoverageMatrix" }
   /api/v1/projects/{projectKey}/runs/status-summary:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -3686,6 +3699,46 @@ components:
           type: integer
           nullable: true
           description: Null when runCount is 0 (or every run has no items yet).
+    CoverageMatrix:
+      type: object
+      required: [configurations, cases]
+      description: >-
+        A Test Plan's runs x cases pivot (add-run-configurations, #129):
+        each run is a column, each case across all of the plan's runs'
+        items is a row. A case/run pair with no corresponding item is
+        simply absent from that case's cells map — the gap the matrix
+        exists to surface, not an error.
+      properties:
+        configurations:
+          type: array
+          items: { $ref: "#/components/schemas/CoverageMatrixConfiguration" }
+        cases:
+          type: array
+          items: { $ref: "#/components/schemas/CoverageMatrixCase" }
+    CoverageMatrixConfiguration:
+      type: object
+      required: [runKey, label]
+      description: One column — a run, labeled by its Configuration if set, else its Name.
+      properties:
+        runKey: { type: string }
+        label: { type: string }
+    CoverageMatrixCase:
+      type: object
+      required: [caseKey, title, cells]
+      description: One row — a case, with a sparse map of cells keyed by the column's runKey.
+      properties:
+        caseKey: { type: string }
+        title: { type: string }
+        cells:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/CoverageMatrixCell" }
+    CoverageMatrixCell:
+      type: object
+      required: [runItemKey, status]
+      description: One filled cell — the run item covering this case in this run, and its live current status.
+      properties:
+        runItemKey: { type: string }
+        status: { $ref: "#/components/schemas/Status" }
     Requirement:
       type: object
       required: [id, key, projectId, name, description, externalRef, caseIds, createdAt]

@@ -154,6 +154,7 @@ func mountAPI(r chi.Router, h *api) {
 		r.With(h.requirePermission(domain.PermManageProject, projectIDFromTestPlan)).Delete("/", h.deleteTestPlan)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromTestPlan)).Get("/rollup", h.testPlanRollup)
 		r.With(h.requirePermission(domain.PermRead, projectIDFromTestPlan)).Get("/runs", h.listRunsByTestPlan)
+		r.With(h.requirePermission(domain.PermRead, projectIDFromTestPlan)).Get("/coverage-matrix", h.testPlanCoverageMatrix)
 	})
 	r.Route("/items/{itemID}", func(r chi.Router) {
 		r.With(h.requirePermission(domain.PermRead, projectIDFromItem)).Get("/results", h.listResults)
@@ -766,6 +767,11 @@ func (h *api) testPlanRollup(w http.ResponseWriter, r *http.Request) {
 func (h *api) listRunsByTestPlan(w http.ResponseWriter, r *http.Request) {
 	runs, err := h.svc.ListRunsByTestPlan(r.Context(), resolvedID(r, "planKey"))
 	h.respond(w, http.StatusOK, runs, err)
+}
+
+func (h *api) testPlanCoverageMatrix(w http.ResponseWriter, r *http.Request) {
+	matrix, err := h.svc.CoverageMatrix(r.Context(), resolvedID(r, "planKey"))
+	h.respond(w, http.StatusOK, matrix, err)
 }
 
 // --- Requirements (add-requirements-traceability) ---

@@ -1472,6 +1472,59 @@ func (s *Service) ListRunsByTestPlan(ctx context.Context, testPlanID string) ([]
 	return s.store.Runs.ListByTestPlan(ctx, testPlanID)
 }
 
+// CoverageMatrix pivots a Test Plan's runs and their items into a case ×
+// configuration matrix (add-run-configurations, #129, design.md D2): one
+// batched ItemsByRunIDs call regardless of how many runs the plan has,
+// then an in-memory pivot — never N per-run fetches from the caller.
+func (s *Service) CoverageMatrix(ctx context.Context, testPlanID string) (domain.CoverageMatrix, error) {
+	runs, err := s.store.Runs.ListByTestPlan(ctx, testPlanID)
+	if err != nil {
+		return domain.CoverageMatrix{}, err
+	}
+
+	configurations := make([]domain.CoverageMatrixConfiguration, len(runs))
+	runIDs := make([]string, len(runs))
+	for i, run := range runs {
+		label := run.Name
+		if run.Configuration != nil && *run.Configuration != "" {
+			label = *run.Configuration
+		}
+		configurations[i] = domain.CoverageMatrixConfiguration{RunKey: run.Key, Label: label}
+		runIDs[i] = run.ID
+	}
+	runKeyByID := make(map[string]string, len(runs))
+	for _, run := range runs {
+		runKeyByID[run.ID] = run.Key
+	}
+
+	items, err := s.store.Runs.ItemsByRunIDs(ctx, runIDs)
+	if err != nil {
+		return domain.CoverageMatrix{}, err
+	}
+
+	cases := []domain.CoverageMatrixCase{}
+	caseRowByKey := map[string]int{}
+	for _, item := range items {
+		rowIdx, ok := caseRowByKey[item.CaseKey]
+		if !ok {
+			rowIdx = len(cases)
+			caseRowByKey[item.CaseKey] = rowIdx
+			cases = append(cases, domain.CoverageMatrixCase{
+				CaseKey: item.CaseKey,
+				Title:   item.Content.Title,
+				Cells:   map[string]domain.CoverageMatrixCell{},
+			})
+		}
+		runKey := runKeyByID[item.RunID]
+		cases[rowIdx].Cells[runKey] = domain.CoverageMatrixCell{
+			RunItemKey: item.ID,
+			Status:     item.CurrentStatus,
+		}
+	}
+
+	return domain.CoverageMatrix{Configurations: configurations, Cases: cases}, nil
+}
+
 // CloseRun seals a run: subsequent run-item mutations are rejected until
 // it's reopened. Authorization (runRecordResult permission) is enforced by
 // requirePermission at the routing layer, not here (add-run-lifecycle-status

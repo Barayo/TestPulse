@@ -704,31 +704,27 @@ func (r *RunRepo) ListByTestPlan(ctx context.Context, testPlanID string) ([]doma
 	return runs, rows.Err()
 }
 
-// Items returns run items with pinned content and the newer-version flag,
-// optionally filtered by assignee (a user or team id — matches either).
-func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain.RunItem, error) {
-	rows, err := r.pool.Query(ctx,
-		`SELECT i.id, i.run_id, i.case_id, c.key, i.case_version,
+const runItemColumns = `i.id, i.run_id, i.case_id, c.key, i.case_version,
 		        i.assignee_user_id, i.assignee_team_id, u.email, t.name, u.avatar_key,
 		        i.current_status, i.test_name, i.created_at,
 		        (c.current_version > i.case_version) AS newer,
 		        v.title, v.description, v.steps, v.expected_result, v.priority, v.tags, v.platform, v.test_type, v.automated, v.custom_fields, v.format, v.gherkin_source, v.parameters,
 		        i.test_data_row_name,
-		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at
-		 FROM test_run_items i
+		        i.jira_issue_key, i.jira_issue_summary, i.jira_issue_status, i.jira_last_synced_at`
+
+const runItemFrom = `FROM test_run_items i
 		 JOIN test_runs r2 ON r2.id = i.run_id
 		 JOIN test_cases c ON c.id = i.case_id AND c.project_id = r2.project_id
 		 JOIN test_case_versions v ON v.case_id = i.case_id AND v.version = i.case_version
 		 LEFT JOIN users u ON u.id = i.assignee_user_id
-		 LEFT JOIN teams t ON t.id = i.assignee_team_id
-		 WHERE i.run_id = $1
-		   AND ($2 = '' OR i.assignee_user_id::text = $2 OR i.assignee_team_id::text = $2)
-		 ORDER BY i.created_at`, runID, assigneeID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
+		 LEFT JOIN teams t ON t.id = i.assignee_team_id`
 
+// scanRunItems scans every row of a runItemColumns/runItemFrom query into
+// domain.RunItem, applying pinned-content decoding and assignee resolution.
+// Callers still need to batch-fill StepStates afterward (shared across
+// Items/ItemsByRunIDs so a single stepStatesByItems call can cover every
+// item regardless of how many runs it spans).
+func scanRunItems(rows pgx.Rows) ([]domain.RunItem, error) {
 	items := []domain.RunItem{}
 	for rows.Next() {
 		var (
@@ -767,20 +763,69 @@ func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain
 		}
 		items = append(items, it)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+	return items, rows.Err()
+}
 
+// fillStepStates batch-loads and attaches StepStates for every item.
+func fillStepStates(ctx context.Context, pool *pgxpool.Pool, items []domain.RunItem) error {
 	ids := make([]string, len(items))
 	for i, it := range items {
 		ids[i] = it.ID
 	}
-	byItem, err := stepStatesByItems(ctx, r.pool, ids)
+	byItem, err := stepStatesByItems(ctx, pool, ids)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	for i, it := range items {
 		items[i].StepStates = byItem[it.ID]
+	}
+	return nil
+}
+
+// Items returns run items with pinned content and the newer-version flag,
+// optionally filtered by assignee (a user or team id — matches either).
+func (r *RunRepo) Items(ctx context.Context, runID, assigneeID string) ([]domain.RunItem, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+runItemColumns+`
+		 `+runItemFrom+`
+		 WHERE i.run_id = $1
+		   AND ($2 = '' OR i.assignee_user_id::text = $2 OR i.assignee_team_id::text = $2)
+		 ORDER BY i.created_at`, runID, assigneeID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items, err := scanRunItems(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := fillStepStates(ctx, r.pool, items); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+// ItemsByRunIDs returns run items across every given run in one call (the
+// coverage-matrix read path — add-run-configurations), so a Test Plan with
+// N runs costs one query instead of N.
+func (r *RunRepo) ItemsByRunIDs(ctx context.Context, runIDs []string) ([]domain.RunItem, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+runItemColumns+`
+		 `+runItemFrom+`
+		 WHERE i.run_id = ANY($1)
+		 ORDER BY i.created_at`, runIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items, err := scanRunItems(rows)
+	if err != nil {
+		return nil, err
+	}
+	if err := fillStepStates(ctx, r.pool, items); err != nil {
+		return nil, err
 	}
 	return items, nil
 }

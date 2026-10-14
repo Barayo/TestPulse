@@ -861,6 +861,25 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/plans/{planKey}/coverage-matrix": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        /** Case x configuration coverage matrix for the test plan's runs */
+        get: operations["getTestPlanCoverageMatrix"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/runs/status-summary": {
         parameters: {
             query?: never;
@@ -2957,6 +2976,29 @@ export interface components {
             runCount: number;
             /** @description Null when runCount is 0 (or every run has no items yet). */
             passRate?: number | null;
+        };
+        /** @description A Test Plan's runs x cases pivot (add-run-configurations, #129): each run is a column, each case across all of the plan's runs' items is a row. A case/run pair with no corresponding item is simply absent from that case's cells map — the gap the matrix exists to surface, not an error. */
+        CoverageMatrix: {
+            configurations: components["schemas"]["CoverageMatrixConfiguration"][];
+            cases: components["schemas"]["CoverageMatrixCase"][];
+        };
+        /** @description One column — a run, labeled by its Configuration if set, else its Name. */
+        CoverageMatrixConfiguration: {
+            runKey: string;
+            label: string;
+        };
+        /** @description One row — a case, with a sparse map of cells keyed by the column's runKey. */
+        CoverageMatrixCase: {
+            caseKey: string;
+            title: string;
+            cells: {
+                [key: string]: components["schemas"]["CoverageMatrixCell"];
+            };
+        };
+        /** @description One filled cell — the run item covering this case in this run, and its live current status. */
+        CoverageMatrixCell: {
+            runItemKey: string;
+            status: components["schemas"]["Status"];
         };
         /** @description A project-scoped, flat (no hierarchy) record linkable to test cases (add-requirements-traceability). externalRef is a free-text field only — no live Jira/ADO sync. */
         Requirement: {
@@ -5571,6 +5613,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Run"][];
+                };
+            };
+        };
+    };
+    getTestPlanCoverageMatrix: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                planKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Coverage matrix */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CoverageMatrix"];
                 };
             };
         };

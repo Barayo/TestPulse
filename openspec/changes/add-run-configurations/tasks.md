@@ -36,16 +36,16 @@
 
 ## 3. Coverage matrix endpoint (TDD)
 
-- [ ] 3.1 Write a failing store-layer test for a new
+- [x] 3.1 Write a failing store-layer test for a new
   `RunRepo.ItemsByRunIDs(ctx, runIDs []string) ([]domain.RunItem, error)`
   method (mirrors the existing `Items(ctx, runID, assigneeID)` but
   takes multiple run IDs via `WHERE run_id = ANY($1)`) — assert it
   returns items from all of 2+ given runs in one call. Confirm it fails
   (method doesn't exist).
-- [ ] 3.2 Implement `ItemsByRunIDs` in `apps/api/internal/store/runs.go`,
+- [x] 3.2 Implement `ItemsByRunIDs` in `apps/api/internal/store/runs.go`,
   reusing the existing row-scanning logic from `Items`. Run the test
   from 3.1, confirm it passes.
-- [ ] 3.3 Write a failing service-layer test for a new
+- [x] 3.3 Write a failing service-layer test for a new
   `Service.CoverageMatrix(ctx, testPlanID string) (domain.CoverageMatrix, error)`
   — define `domain.CoverageMatrix` (configurations list with
   runKey/label, cases list with caseKey/title/cells map keyed by
@@ -56,15 +56,15 @@
   union of cases appears as rows, and the case missing from one run's
   items is absent from that run's `cells` entry. Confirm it fails
   (method doesn't exist).
-- [ ] 3.4 Implement `Service.CoverageMatrix` in `service.go`: call
+- [x] 3.4 Implement `Service.CoverageMatrix` in `service.go`: call
   `ListRunsByTestPlan`, collect run IDs, call `store.Runs.ItemsByRunIDs`
   once, pivot in memory into `domain.CoverageMatrix`. Run the test from
   3.3, confirm it passes.
-- [ ] 3.5 Add `GET /plans/{planKey}/coverage-matrix` to `handlers.go`
+- [x] 3.5 Add `GET /plans/{planKey}/coverage-matrix` to `handlers.go`
   (same `PermRead`/`projectIDFromTestPlan` middleware as the existing
   `/plans/{planKey}/rollup` route) and `packages/shared/openapi.yaml`.
   Add a handler-level test. Run `make generate`.
-- [ ] 3.6 Commit: `feat(api): add Test Plan coverage matrix endpoint`.
+- [x] 3.6 Commit: `feat(api): add Test Plan coverage matrix endpoint`.
 
 ## 4. NewRunPage: configuration input (TDD)
 
