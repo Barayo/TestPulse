@@ -206,12 +206,13 @@ exactly one folder, defaulting to the project's root; see
 | GET / PUT / DELETE | `/api/v1/plans/{planKey}` | Get / update (`name`, `description`) / delete a test plan. Delete is `409` while it still has runs. Write requires `manageProject` |
 | GET | `/api/v1/plans/{planKey}/rollup` | Aggregated `{runCount, passRate}` across the test plan's own runs |
 | GET | `/api/v1/plans/{planKey}/runs` | The runs scoped to a single test plan, newest first |
+| GET | `/api/v1/plans/{planKey}/coverage-matrix` | Case x configuration coverage matrix across the test plan's runs (`add-run-configurations`) — one batched query, not a per-run fetch loop |
 
 **Runs and execution**
 
 | Method | Path | Description |
 |---|---|---|
-| GET / POST | `/api/v1/projects/{projectKey}/runs` | List ([cursor-paginated](#cursor-pagination), newest first) / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys`, plus an optional `testPlanKey` (`introduce-release-test-plan`) to scope the run to a Test Plan |
+| GET / POST | `/api/v1/projects/{projectKey}/runs` | List ([cursor-paginated](#cursor-pagination), newest first) / create a run — pins each case's *current* version at creation time; body takes `suiteKey` and/or `caseKeys`, plus an optional `testPlanKey` (`introduce-release-test-plan`) to scope the run to a Test Plan and an optional free-text `configuration` (`add-run-configurations`, e.g. `"Chrome"`), immutable after creation |
 | GET | `/api/v1/runs/{runKey}` | Get a run — response includes `projectKey` alongside `key`, since a run's own route isn't nested under its project's, and `status` (`open`/`closed`) |
 | POST | `/api/v1/runs/{runKey}/close` | Seal a run — requires `runRecordResult`, the same permission needed to record a verdict |
 | POST | `/api/v1/runs/{runKey}/reopen` | Reopen a closed run — requires `manageProject`, the project-admin-level permission |

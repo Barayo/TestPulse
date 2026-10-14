@@ -354,6 +354,10 @@ For a project with no Releases, nothing in the navigation changes. Once a projec
 
 Release- and Test-Plan-level pass rate/run-count rollups are always computed as a single server-side aggregate query, never assembled by fetching every child entity individually — the same discipline the project list's own summary aggregation follows.
 
+A run may optionally carry a free-text **Configuration** label (e.g. "Chrome", "iOS Safari") set once at creation on the **New run** page — available on any run, not just one scoped to a Test Plan, the same way a case's `Platform`/`Tags` are unconditionally available rather than gated behind another feature. It's immutable afterward, like a run's name; there's no dedicated taxonomy or admin screen for it, matching the project's standing preference for free text over a managed enum until a real pattern of values emerges.
+
+Configuration earns its keep on a Test Plan's own page, in its **Coverage Matrix** section (distinct from the Requirements coverage below, despite the similar name) — a case-by-configuration grid: each of the plan's runs is a column, labeled by its Configuration if set or its name otherwise; each case covered by any of those runs is a row; each filled cell links straight to that run's item and shows its live status. A case/run pair with no corresponding item renders as a plain dash — the gap the matrix exists to surface, flagged by a gap-count chip near the section title. Like every other rollup here, it's computed as one batched query across the plan's runs, not a per-run fetch loop. The section only appears once the plan has at least one run — a plan with runs but no recorded results yet gets its own empty state instead.
+
 ## Requirements and coverage
 
 Requirements are **optional**, like Releases — a project that never creates one is unaffected. They exist for teams that need to prove which parts of the product are actually tested, not just that some tests passed.

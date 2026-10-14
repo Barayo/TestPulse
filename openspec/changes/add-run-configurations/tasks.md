@@ -119,14 +119,34 @@
   Plan and its runs' configurations exist after seeding.
 - [x] 6.3 Commit: `feat(sampledata): showcase run configurations and coverage matrix`.
 
-## 7. Docs
+## 7. MCP agent parity (discovered while writing docs)
 
-- [ ] 7.1 Update relevant `docs/` pages describing Test Plans/Runs to
-  mention the new `configuration` field and the coverage matrix.
-- [ ] 7.2 Commit: `docs: document run configurations and coverage matrix`.
+- [x] 7.0a `create_test_run`'s MCP tool (`internal/mcp/write_tools.go`)
+  had no `configuration` field at all — only the REST/web path got one
+  in task groups 1-2, leaving agents unable to set or see it, against
+  CLAUDE.md's standing "every capability treats actor as human-or-
+  agent" rule. Write a failing MCP scenario test
+  (`TestMCPCreateTestRunWithConfiguration`) asserting a `configuration`
+  argument round-trips into the created run. Confirm it fails (unknown
+  property rejected by the tool's input schema).
+- [x] 7.0b Add `Configuration string` to `CreateTestRunInput`, thread it
+  into `service.RunInput`, and add `Configuration *string` to
+  `RunOutput`/`toRunOutput` (shared by `create_test_run` and
+  `get_details`). Run the test from 7.0a, confirm it passes; run the
+  full `internal/mcp_test` suite, confirm nothing else broke.
+- [x] 7.0c Commit: `feat(mcp): add configuration to create_test_run`.
 
-## 8. Spec sync & archive
+## 8. Docs
 
-- [ ] 8.1 Verify `openspec validate --changes add-run-configurations --strict` passes.
-- [ ] 8.2 Run `/opsx:archive add-run-configurations`, creating the new
+- [x] 8.1 Update relevant `docs/` pages describing Test Plans/Runs to
+  mention the new `configuration` field and the Coverage Matrix
+  (`docs/test-management.md`, `docs/api.md`'s REST endpoint table, and
+  `docs/mcp-server.md`'s `create_test_run` row — covering all three
+  surfaces, not just the web UI).
+- [x] 8.2 Commit: `docs: document run configurations and coverage matrix`.
+
+## 9. Spec sync & archive
+
+- [ ] 9.1 Verify `openspec validate --changes add-run-configurations --strict` passes.
+- [ ] 9.2 Run `/opsx:archive add-run-configurations`, creating the new
   `run-configurations` spec under `openspec/specs/`.
