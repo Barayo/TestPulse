@@ -689,6 +689,8 @@
   "NewRunPage.caseSingular": "caso",
   "NewRunPage.clearButton": "Limpar",
   "NewRunPage.clearDefaultAssigneeAriaLabel": "Limpar responsável padrão",
+  "NewRunPage.configurationLabel": "Configuração (opcional)",
+  "NewRunPage.configurationPlaceholder": "Chrome, iOS Safari, …",
   "NewRunPage.createRunButton": "Criar execução",
   "NewRunPage.defaultAssigneeDialogTitle": "Responsável padrão…",
   "NewRunPage.defaultAssigneeLabel": "Responsável padrão (opcional)",

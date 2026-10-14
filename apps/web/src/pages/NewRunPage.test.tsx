@@ -221,6 +221,47 @@ describe('NewRunPage', () => {
     })
   })
 
+  it('a run created with a configuration typed in sends configuration', async () => {
+    mockNewRunAPI([caseA])
+    mockPOST.mockResolvedValue({
+      data: { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Cross-browser run', createdAt: '' },
+      response: { ok: true },
+    })
+    renderNewRun()
+    await userEvent.type(await screen.findByLabelText(/^name$/i), 'Cross-browser run')
+    await userEvent.type(screen.getByLabelText(/configuration/i), 'Chrome')
+    await userEvent.click(await screen.findByRole('checkbox', { name: /login works/i }))
+    await userEvent.click(screen.getByRole('button', { name: /create run/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/runs',
+        expect.objectContaining({
+          body: { name: 'Cross-browser run', caseKeys: ['p1-1'], configuration: 'Chrome' },
+        }),
+      )
+    })
+  })
+
+  it('a run created with configuration left blank omits it entirely', async () => {
+    mockNewRunAPI([caseA])
+    mockPOST.mockResolvedValue({
+      data: { id: 'r2', key: 'p1-R2', projectId: 'p1', name: 'Ad hoc run', createdAt: '' },
+      response: { ok: true },
+    })
+    renderNewRun()
+    await userEvent.type(await screen.findByLabelText(/^name$/i), 'Ad hoc run')
+    await userEvent.click(await screen.findByRole('checkbox', { name: /login works/i }))
+    await userEvent.click(screen.getByRole('button', { name: /create run/i }))
+
+    await waitFor(() => {
+      expect(mockPOST).toHaveBeenCalledWith(
+        '/api/v1/projects/{projectKey}/runs',
+        expect.objectContaining({ body: { name: 'Ad hoc run', caseKeys: ['p1-1'] } }),
+      )
+    })
+  })
+
   it('deep-link route state from a suite\'s "Run suite" action seeds the selection and name', async () => {
     mockNewRunAPI([caseA, caseB], [smokeSuite])
     renderNewRun([

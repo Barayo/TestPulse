@@ -60,6 +60,7 @@ export default function NewRunPage() {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [selectedSuiteKey, setSelectedSuiteKey] = useState('')
   const [seededFromSuiteName, setSeededFromSuiteName] = useState('')
+  const [configuration, setConfiguration] = useState('')
   const [selectedTestPlanKey, setSelectedTestPlanKey] = useState('')
   const [seededFromTestPlanName, setSeededFromTestPlanName] = useState('')
   const [loaded, setLoaded] = useState(false)
@@ -200,6 +201,7 @@ export default function NewRunPage() {
         caseKeys: Array.from(selected),
         ...(selectedSuiteKey ? { suiteKey: selectedSuiteKey } : {}),
         ...(selectedTestPlanKey ? { testPlanKey: selectedTestPlanKey } : {}),
+        ...(configuration.trim() ? { configuration: configuration.trim() } : {}),
       },
     })
     bumpLanding()
@@ -251,7 +253,7 @@ export default function NewRunPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleCreateRun} className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
               <div className="space-y-1">
                 <Label htmlFor="run-name">{t('NewRunPage.nameLabel')}</Label>
                 <Input
@@ -277,6 +279,15 @@ export default function NewRunPage() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="run-configuration">{t('NewRunPage.configurationLabel')}</Label>
+                <Input
+                  id="run-configuration"
+                  value={configuration}
+                  onChange={(e) => setConfiguration(e.target.value)}
+                  placeholder={t('NewRunPage.configurationPlaceholder')}
+                />
               </div>
               <div className="space-y-1">
                 <Label htmlFor="run-default-assignee">{t('NewRunPage.defaultAssigneeLabel')}</Label>

@@ -689,6 +689,8 @@
   "NewRunPage.caseSingular": "caso",
   "NewRunPage.clearButton": "Borrar",
   "NewRunPage.clearDefaultAssigneeAriaLabel": "Borrar persona asignada por defecto",
+  "NewRunPage.configurationLabel": "Configuración (opcional)",
+  "NewRunPage.configurationPlaceholder": "Chrome, iOS Safari, …",
   "NewRunPage.createRunButton": "Crear ejecución",
   "NewRunPage.defaultAssigneeDialogTitle": "Persona asignada por defecto…",
   "NewRunPage.defaultAssigneeLabel": "Persona asignada por defecto (opcional)",

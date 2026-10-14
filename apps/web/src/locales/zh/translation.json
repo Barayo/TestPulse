@@ -689,6 +689,8 @@
   "NewRunPage.caseSingular": "用例",
   "NewRunPage.clearButton": "清除",
   "NewRunPage.clearDefaultAssigneeAriaLabel": "清除默认负责人",
+  "NewRunPage.configurationLabel": "配置（可选）",
+  "NewRunPage.configurationPlaceholder": "Chrome、iOS Safari……",
   "NewRunPage.createRunButton": "创建运行",
   "NewRunPage.defaultAssigneeDialogTitle": "默认负责人…",
   "NewRunPage.defaultAssigneeLabel": "默认负责人（可选）",

@@ -68,17 +68,17 @@
 
 ## 4. NewRunPage: configuration input (TDD)
 
-- [ ] 4.1 Write a failing Vitest test in `NewRunPage.test.tsx` asserting
+- [x] 4.1 Write a failing Vitest test in `NewRunPage.test.tsx` asserting
   that typing a value into a new "Configuration" input and submitting
   sends `configuration` in the `POST /api/v1/projects/{projectKey}/runs`
   body, and that leaving it blank omits the key entirely (matching the
   existing `suiteKey`/`testPlanKey` omit-when-empty pattern). Confirm
   it fails (input doesn't exist).
-- [ ] 4.2 Add the `Configuration` input to `NewRunPage.tsx`'s form grid,
+- [x] 4.2 Add the `Configuration` input to `NewRunPage.tsx`'s form grid,
   wire it into `handleCreateRun`'s request body with the same
   `...(x ? {...} : {})` spread pattern already used for
   `suiteKey`/`testPlanKey`. Run the test from 4.1, confirm it passes.
-- [ ] 4.3 Commit: `feat(web): add configuration field to new-run form`.
+- [x] 4.3 Commit: `feat(web): add configuration field to new-run form`.
 
 ## 5. TestPlanDetailPage: Coverage Matrix section (TDD)
 

@@ -689,6 +689,8 @@
   "NewRunPage.caseSingular": "case",
   "NewRunPage.clearButton": "Clear",
   "NewRunPage.clearDefaultAssigneeAriaLabel": "Clear default assignee",
+  "NewRunPage.configurationLabel": "Configuration (optional)",
+  "NewRunPage.configurationPlaceholder": "Chrome, iOS Safari, …",
   "NewRunPage.createRunButton": "Create run",
   "NewRunPage.defaultAssigneeDialogTitle": "Default assignee…",
   "NewRunPage.defaultAssigneeLabel": "Default assignee (optional)",

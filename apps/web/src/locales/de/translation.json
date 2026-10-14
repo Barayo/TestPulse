@@ -689,6 +689,8 @@
   "NewRunPage.caseSingular": "Testfall",
   "NewRunPage.clearButton": "Zurücksetzen",
   "NewRunPage.clearDefaultAssigneeAriaLabel": "Standardzuständigen zurücksetzen",
+  "NewRunPage.configurationLabel": "Konfiguration (optional)",
+  "NewRunPage.configurationPlaceholder": "Chrome, iOS Safari, …",
   "NewRunPage.createRunButton": "Durchlauf erstellen",
   "NewRunPage.defaultAssigneeDialogTitle": "Standardzuständiger…",
   "NewRunPage.defaultAssigneeLabel": "Standardzuständiger (optional)",
