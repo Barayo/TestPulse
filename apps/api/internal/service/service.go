@@ -1346,6 +1346,10 @@ type RunInput struct {
 	SuiteID    string
 	TestPlanID string
 	CaseIDs    []string
+	// Configuration is an optional free-text execution-configuration
+	// label (add-run-configurations, #129) — same spirit as a case's
+	// free-text platform/tags, not a managed/enumerated value.
+	Configuration string
 }
 
 // expandCaseIntoSpecs turns one case id into one-or-more store.RunItemSpec
@@ -1438,7 +1442,7 @@ func (s *Service) CreateRun(ctx context.Context, projectID string, in RunInput) 
 		}
 		specs = append(specs, caseSpecs...)
 	}
-	run, err := s.store.Runs.CreateWithSpecs(ctx, projectID, in.Name, in.SuiteID, in.TestPlanID, specs)
+	run, err := s.store.Runs.CreateWithSpecs(ctx, projectID, in.Name, in.SuiteID, in.TestPlanID, in.Configuration, specs)
 	if err != nil {
 		return domain.Run{}, err
 	}

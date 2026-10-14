@@ -3587,6 +3587,10 @@ components:
         archived:
           type: boolean
           description: Hides this run from the project's active run list by default (auto-archive-runs). Reversible; independent of status — an open or closed run may be archived.
+        configuration:
+          type: string
+          nullable: true
+          description: Free-text execution-configuration label (e.g. "Chrome", "Firefox", "iOS Safari") — not a managed/enumerated value, same spirit as a case's free-text platform/tags (add-run-configurations). Absent (null) for a run created without one. Set once at creation and never changes.
     RunListPage:
       type: object
       required: [items, nextCursor]
@@ -3613,6 +3617,9 @@ components:
           type: array
           items: { type: string }
           description: Explicit cases to include
+        configuration:
+          type: string
+          description: Optional free-text execution-configuration label (e.g. "Chrome", "Firefox", "iOS Safari") — not a managed/enumerated value (add-run-configurations).
     ReleaseStatus:
       type: string
       enum: [active, maintained, eol]

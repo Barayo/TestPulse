@@ -890,8 +890,15 @@ type Run struct {
 	// default (auto-archive-runs) — reversible, set either manually or by
 	// RunAutoArchiveWorker. Independent of Status: an open or closed run
 	// may be archived.
-	Archived  bool      `json:"archived"`
-	CreatedAt time.Time `json:"createdAt"`
+	Archived bool `json:"archived"`
+	// Configuration is a free-text label (e.g. "Chrome", "Firefox", "iOS
+	// Safari") describing which execution configuration this run covers
+	// (add-run-configurations, #129) — same spirit as a case's free-text
+	// platform/tags, not a managed/enumerated value. Set once at
+	// creation; nil for a run created without one. No update endpoint
+	// exists for it, same as Name.
+	Configuration *string   `json:"configuration,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
 }
 
 // RunStatus is a run's open/closed lifecycle state (add-run-lifecycle-status).

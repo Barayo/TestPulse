@@ -619,10 +619,11 @@ func (h *api) listRuns(w http.ResponseWriter, r *http.Request) {
 
 func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 	body, err := decode[struct {
-		Name        string   `json:"name"`
-		SuiteKey    string   `json:"suiteKey"`
-		TestPlanKey string   `json:"testPlanKey"`
-		CaseKeys    []string `json:"caseKeys"`
+		Name          string   `json:"name"`
+		SuiteKey      string   `json:"suiteKey"`
+		TestPlanKey   string   `json:"testPlanKey"`
+		CaseKeys      []string `json:"caseKeys"`
+		Configuration string   `json:"configuration"`
 	}](r)
 	if err != nil {
 		badBody(h, w)
@@ -650,7 +651,7 @@ func (h *api) createRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	run, err := h.svc.CreateRun(r.Context(), resolvedID(r, "projectKey"),
-		service.RunInput{Name: body.Name, SuiteID: suiteID, TestPlanID: testPlanID, CaseIDs: caseIDs})
+		service.RunInput{Name: body.Name, SuiteID: suiteID, TestPlanID: testPlanID, CaseIDs: caseIDs, Configuration: body.Configuration})
 	h.respond(w, http.StatusCreated, run, err)
 }
 

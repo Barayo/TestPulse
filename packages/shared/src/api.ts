@@ -2897,6 +2897,8 @@ export interface components {
             testPlanKey?: string | null;
             /** @description Hides this run from the project's active run list by default (auto-archive-runs). Reversible; independent of status — an open or closed run may be archived. */
             archived: boolean;
+            /** @description Free-text execution-configuration label (e.g. "Chrome", "Firefox", "iOS Safari") — not a managed/enumerated value, same spirit as a case's free-text platform/tags (add-run-configurations). Absent (null) for a run created without one. Set once at creation and never changes. */
+            configuration?: string | null;
         };
         RunListPage: {
             items: components["schemas"]["Run"][];
@@ -2911,6 +2913,8 @@ export interface components {
             testPlanKey?: string;
             /** @description Explicit cases to include */
             caseKeys?: string[];
+            /** @description Optional free-text execution-configuration label (e.g. "Chrome", "Firefox", "iOS Safari") — not a managed/enumerated value (add-run-configurations). */
+            configuration?: string;
         };
         /** @enum {string} */
         ReleaseStatus: "active" | "maintained" | "eol";
