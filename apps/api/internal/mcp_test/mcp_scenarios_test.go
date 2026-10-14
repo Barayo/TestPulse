@@ -1199,6 +1199,34 @@ func TestMCPCreateTestRunFromSuiteAndTestPlan(t *testing.T) {
 	}
 }
 
+// TestMCPCreateTestRunWithConfiguration covers add-run-configurations'
+// (#129) agent-parity requirement: create_test_run must accept and echo
+// back the same free-text configuration label the REST/web path already
+// supports, not just a human-only field.
+func TestMCPCreateTestRunWithConfiguration(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-run-config-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "run-config-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Run Config Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+	c, err := svc.CreateCase(ctx, project.ID, "", domain.CaseContent{Title: "Cross-browser case", Priority: domain.PriorityHigh})
+	if err != nil {
+		t.Fatalf("CreateCase: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var run domain.Run
+	callTool(t, session, "create_test_run", map[string]any{
+		"projectKey": project.Key, "name": "Chrome run", "caseKeys": []string{c.Key}, "configuration": "Chrome",
+	}, &run)
+	if run.Configuration == nil || *run.Configuration != "Chrome" {
+		t.Fatalf("run.Configuration = %v, want %q", run.Configuration, "Chrome")
+	}
+}
+
 // --- Requirement: record_result tool + update_run_item_status tool ---
 
 // TestMCPRecordResultResultHasReadableSummary covers

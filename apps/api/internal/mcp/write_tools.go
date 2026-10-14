@@ -473,31 +473,33 @@ func bulkAddCases(svc *service.Service) sdkmcp.ToolHandlerFor[BulkAddCasesInput,
 // SuiteKey/TestPlanKey siblings, but ID/ProjectID were still present on
 // the same struct and still leaked).
 type RunOutput struct {
-	Key         string           `json:"key"`
-	ProjectKey  string           `json:"projectKey"`
-	Name        string           `json:"name"`
-	Status      domain.RunStatus `json:"status"`
-	SuiteKey    *string          `json:"suiteKey,omitempty"`
-	TestPlanKey *string          `json:"testPlanKey,omitempty"`
-	PassRate    *int             `json:"passRate,omitempty"`
-	Archived    bool             `json:"archived"`
-	CreatedAt   time.Time        `json:"createdAt"`
+	Key           string           `json:"key"`
+	ProjectKey    string           `json:"projectKey"`
+	Name          string           `json:"name"`
+	Status        domain.RunStatus `json:"status"`
+	SuiteKey      *string          `json:"suiteKey,omitempty"`
+	TestPlanKey   *string          `json:"testPlanKey,omitempty"`
+	Configuration *string          `json:"configuration,omitempty"`
+	PassRate      *int             `json:"passRate,omitempty"`
+	Archived      bool             `json:"archived"`
+	CreatedAt     time.Time        `json:"createdAt"`
 }
 
 func toRunOutput(r domain.Run) RunOutput {
 	return RunOutput{
 		Key: r.Key, ProjectKey: r.ProjectKey, Name: r.Name, Status: r.Status,
-		SuiteKey: r.SuiteKey, TestPlanKey: r.TestPlanKey, PassRate: r.PassRate,
+		SuiteKey: r.SuiteKey, TestPlanKey: r.TestPlanKey, Configuration: r.Configuration, PassRate: r.PassRate,
 		Archived: r.Archived, CreatedAt: r.CreatedAt,
 	}
 }
 
 type CreateTestRunInput struct {
-	ProjectKey  string   `json:"projectKey"`
-	Name        string   `json:"name"`
-	SuiteKey    string   `json:"suiteKey,omitempty" jsonschema:"populate the run from this suite's cases"`
-	TestPlanKey string   `json:"testPlanKey,omitempty" jsonschema:"scope this run to a Test Plan"`
-	CaseKeys    []string `json:"caseKeys,omitempty" jsonschema:"explicit case keys to include, in addition to any suite's cases"`
+	ProjectKey    string   `json:"projectKey"`
+	Name          string   `json:"name"`
+	SuiteKey      string   `json:"suiteKey,omitempty" jsonschema:"populate the run from this suite's cases"`
+	TestPlanKey   string   `json:"testPlanKey,omitempty" jsonschema:"scope this run to a Test Plan"`
+	CaseKeys      []string `json:"caseKeys,omitempty" jsonschema:"explicit case keys to include, in addition to any suite's cases"`
+	Configuration string   `json:"configuration,omitempty" jsonschema:"optional free-text execution configuration label, e.g. Chrome or iOS Safari; immutable after creation"`
 	// IdempotencyKey: see UpsertTestCaseInput's own field for the shared
 	// contract (add-mcp-idempotency-keys).
 	IdempotencyKey string `json:"idempotencyKey,omitempty" jsonschema:"optional: retrying with the same key returns the original run instead of creating a second one"`
@@ -520,7 +522,7 @@ func createTestRun(svc *service.Service) sdkmcp.ToolHandlerFor[CreateTestRunInpu
 			}
 		}
 
-		runInput := service.RunInput{Name: in.Name}
+		runInput := service.RunInput{Name: in.Name, Configuration: in.Configuration}
 		if in.SuiteKey != "" {
 			suiteID, err := svc.SuiteIDByKey(ctx, in.SuiteKey)
 			if err != nil {
