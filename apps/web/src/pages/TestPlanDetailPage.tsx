@@ -14,6 +14,7 @@ import { OpenRunsTriage, ClosedRunsLedger } from '@/components/RunsListTriage'
 import { CaseSidebarSection } from '@/components/CaseSidebarSection'
 import { PropertyRow } from '@/components/PropertyRow'
 import { HealthBar } from '@/components/HealthBar'
+import { CoverageMatrixSection } from '@/components/CoverageMatrixSection'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogFooter, DialogTitle } from '@/components/ui/dialog'
 import { useProjectPermissions } from '@/lib/useProjectPermissions'
@@ -24,6 +25,7 @@ type Release = components['schemas']['Release']
 type Run = components['schemas']['Run']
 type Suite = components['schemas']['Suite']
 type Project = components['schemas']['Project']
+type CoverageMatrix = components['schemas']['CoverageMatrix']
 
 // Normalized (never undefined) — the generated Rollup schema types passRate
 // as optional since it isn't in `required`, even though the API always
@@ -41,6 +43,7 @@ export default function TestPlanDetailPage() {
   const [runs, setRuns] = useState<Run[]>([])
   const [suites, setSuites] = useState<Suite[]>([])
   const [rollup, setRollup] = useState<RollupRow>()
+  const [coverageMatrix, setCoverageMatrix] = useState<CoverageMatrix>()
   const [editing, setEditing] = useState(false)
   const [editName, setEditName] = useState('')
   const [editDescription, setEditDescription] = useState('')
@@ -62,12 +65,14 @@ export default function TestPlanDetailPage() {
       const { data: rel } = await api.GET('/api/v1/releases/{releaseKey}', { params: { path: { releaseKey: pl.releaseKey } } })
       setRelease(rel)
     }
-    const [{ data: r }, { data: roll }] = await Promise.all([
+    const [{ data: r }, { data: roll }, { data: matrix }] = await Promise.all([
       api.GET('/api/v1/plans/{planKey}/runs', { params: { path: { planKey } } }),
       api.GET('/api/v1/plans/{planKey}/rollup', { params: { path: { planKey } } }),
+      api.GET('/api/v1/plans/{planKey}/coverage-matrix', { params: { path: { planKey } } }),
     ])
     setRuns(r ?? [])
     setRollup({ runCount: roll?.runCount ?? 0, passRate: roll?.passRate ?? null })
+    setCoverageMatrix(matrix)
   }, [projectKey, planKey])
 
   useEffect(() => {
@@ -217,6 +222,8 @@ export default function TestPlanDetailPage() {
           )}
         </div>
       </div>
+
+      {runs.length > 0 && coverageMatrix && <CoverageMatrixSection matrix={coverageMatrix} />}
 
       <Dialog open={editing} onOpenChange={setEditing}>
         <DialogContent className="sm:max-w-md">

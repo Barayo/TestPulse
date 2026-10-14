@@ -82,25 +82,31 @@
 
 ## 5. TestPlanDetailPage: Coverage Matrix section (TDD)
 
-- [ ] 5.1 Write a failing Vitest test in `TestPlanDetailPage.test.tsx`
+- [x] 5.1 Write a failing Vitest test in `TestPlanDetailPage.test.tsx`
   asserting: given a plan with 2+ runs and a mocked
   `GET /api/v1/plans/{planKey}/coverage-matrix` response, the page
   renders a "Coverage Matrix" section with the expected run-column
   labels, case rows, status badges for filled cells, and a dash for a
   gap cell. Confirm it fails (section doesn't exist).
-- [ ] 5.2 Implement the Coverage Matrix card per the validated Pepe mock
+- [x] 5.2 Implement the Coverage Matrix card per the validated Pepe mock
   (bea10112-1b96-46d7-a5c2-f4a76ee3d2bf): full-width card below the
   existing plan-grid, sticky first column + `overflow-x-auto`, cells
   using the existing `StatusBadge` component linked to the run item,
   gap cells as a plain `—` (no badge/link), a neutral gap-count chip
   and muted meta-line near the card title, dedicated empty-state when
   the plan has runs but no recorded items, rendered only when the plan
-  has ≥1 run. Run the test from 5.1, confirm it passes.
-- [ ] 5.3 Start the dev stack and manually click through the real page
-  against seeded data (see task 6 — do this after seeding) to confirm
-  the mock translated correctly to the real fonts/icons/spacing Pepe's
-  sandboxed mock couldn't render.
-- [ ] 5.4 Commit: `feat(web): add coverage matrix to Test Plan detail page`.
+  has ≥1 run. Run the test from 5.1, confirm it passes. (Column headers
+  carry only `label`, linked to the run — the mock's run-name sub-line
+  and open/closed badge per column aren't representable with the
+  finalized `CoverageMatrixConfiguration{runKey,label}` contract, so
+  they were dropped rather than widening the API past design.md D3.)
+- [x] 5.3 Start the dev stack and manually click through the real page
+  against seeded data (created a second, differently-configured run on
+  the Sample Project's existing "iOS" test plan via the real UI) to
+  confirm the mock translated correctly to the real fonts/icons/spacing
+  Pepe's sandboxed mock couldn't render — matrix, gap chip, meta line,
+  gap dashes, and cell→run-item navigation all verified working.
+- [x] 5.4 Commit: `feat(web): add coverage matrix to Test Plan detail page`.
 
 ## 6. Sample Project showcase
 
