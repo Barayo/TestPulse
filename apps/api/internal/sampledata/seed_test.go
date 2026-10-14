@@ -1497,6 +1497,68 @@ func TestSeedContentShowcasesReleaseAndTestPlans(t *testing.T) {
 	}
 }
 
+// TestSeedContentShowcasesCoverageMatrix covers add-run-configurations'
+// (#129) Sample-Project-showcase task: without this, a fresh instance's
+// Coverage Matrix section would have nothing but a single-run, single-
+// column plan to show — never a real multi-configuration grid with a
+// genuine gap.
+func TestSeedContentShowcasesCoverageMatrix(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	releases, err := svc.ListReleases(actorCtx, p.ID, "")
+	if err != nil || len(releases) == 0 {
+		t.Fatalf("ListReleases: %v, %d releases", err, len(releases))
+	}
+
+	var webPlan *domain.TestPlan
+	for _, release := range releases {
+		plans, err := svc.ListTestPlans(actorCtx, release.ID)
+		if err != nil {
+			t.Fatalf("ListTestPlans(%q): %v", release.Name, err)
+		}
+		for i, plan := range plans {
+			if plan.Name == "Web" {
+				webPlan = &plans[i]
+			}
+		}
+	}
+	if webPlan == nil {
+		t.Fatal(`no "Web" test plan seeded — the Coverage Matrix showcase has nothing real to show`)
+	}
+
+	matrix, err := svc.CoverageMatrix(actorCtx, webPlan.ID)
+	if err != nil {
+		t.Fatalf("CoverageMatrix: %v", err)
+	}
+	if len(matrix.Configurations) != 3 {
+		t.Fatalf("len(Configurations) = %d, want 3 (Chrome/Firefox/iOS Safari)", len(matrix.Configurations))
+	}
+	labels := map[string]bool{}
+	for _, c := range matrix.Configurations {
+		labels[c.Label] = true
+	}
+	for _, want := range []string{"Chrome", "Firefox", "iOS Safari"} {
+		if !labels[want] {
+			t.Errorf("Configurations missing label %q, got %v", want, labels)
+		}
+	}
+
+	gapCount := 0
+	for _, c := range matrix.Cases {
+		gapCount += len(matrix.Configurations) - len(c.Cells)
+	}
+	if gapCount == 0 {
+		t.Error("Coverage Matrix has zero gaps — showcase requires at least one genuine gap, not a fully-green grid")
+	}
+}
+
 // TestSeedContentShowcasesScopedApiToken covers add-scoped-api-tokens'
 // Sample-Project-showcase task: without this, a fresh instance's token list
 // would only ever show unscoped tokens, leaving the project+role picker and

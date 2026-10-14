@@ -598,6 +598,33 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: %w", err)
 	}
 
+	// A third Test Plan under the same release, this one with three runs —
+	// one per browser Configuration (add-run-configurations, #129) — so the
+	// Coverage Matrix has real, multi-column data to show out of the box,
+	// not just a single-run plan. Deliberately not a fully-green grid: login/
+	// checkoutValid/passwordReset run under all three configurations, but
+	// timezone skips iOS Safari and notifOptOut skips Firefox — two genuine
+	// gaps for the matrix to surface.
+	webPlan, err := TestPlan(ctx, svc, p.ID, release.ID, "Web", "Cross-browser regression pass")
+	if err != nil {
+		return fmt.Errorf("sampledata: creating Web test plan: %w", err)
+	}
+	if err := RunFromTestPlanWithConfigurationAndVerdicts(ctx, svc, p.ID, webPlan.ID, "Web regression — build 4021", "Chrome",
+		[]string{login.ID, checkoutValid.ID, timezone.ID, notifOptOut.ID, passwordReset.ID},
+		[]domain.Verdict{domain.VerdictPass, domain.VerdictPass, domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := RunFromTestPlanWithConfigurationAndVerdicts(ctx, svc, p.ID, webPlan.ID, "Web regression — build 4021", "Firefox",
+		[]string{login.ID, checkoutValid.ID, timezone.ID, passwordReset.ID},
+		[]domain.Verdict{domain.VerdictPass, domain.VerdictPass, domain.VerdictSkipped, domain.VerdictPass}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+	if err := RunFromTestPlanWithConfigurationAndVerdicts(ctx, svc, p.ID, webPlan.ID, "Web regression — build 4021", "iOS Safari",
+		[]string{login.ID, checkoutValid.ID, notifOptOut.ID, passwordReset.ID},
+		[]domain.Verdict{domain.VerdictPass, domain.VerdictFailed, domain.VerdictPass, domain.VerdictPass}); err != nil {
+		return fmt.Errorf("sampledata: %w", err)
+	}
+
 	// --- Requirements (add-requirements-traceability) ---------------
 	// Three requirements demonstrating all three coverage statuses against
 	// release 2026.1 on first look, not an empty state:

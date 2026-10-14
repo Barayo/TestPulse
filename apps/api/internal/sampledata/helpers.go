@@ -140,6 +140,18 @@ func RunFromTestPlanWithVerdicts(ctx context.Context, svc *service.Service, proj
 	return recordVerdicts(ctx, svc, r.ID, caseIDs, verdicts)
 }
 
+// RunFromTestPlanWithConfigurationAndVerdicts is RunFromTestPlanWithVerdicts,
+// but the run also carries a free-text Configuration label
+// (add-run-configurations, #129) — so a Test Plan's Coverage Matrix has real
+// per-configuration columns to show, not just a single-run plan.
+func RunFromTestPlanWithConfigurationAndVerdicts(ctx context.Context, svc *service.Service, projectID, testPlanID, name, configuration string, caseIDs []string, verdicts []domain.Verdict) error {
+	r, err := svc.CreateRun(ctx, projectID, service.RunInput{Name: name, TestPlanID: testPlanID, Configuration: configuration, CaseIDs: caseIDs})
+	if err != nil {
+		return err
+	}
+	return recordVerdicts(ctx, svc, r.ID, caseIDs, verdicts)
+}
+
 func recordVerdicts(ctx context.Context, svc *service.Service, runID string, caseIDs []string, verdicts []domain.Verdict) error {
 	items, err := svc.RunItems(ctx, runID, "")
 	if err != nil {

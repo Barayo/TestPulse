@@ -110,14 +110,14 @@
 
 ## 6. Sample Project showcase
 
-- [ ] 6.1 In `apps/api/internal/sampledata/seed.go`, add a Test Plan
+- [x] 6.1 In `apps/api/internal/sampledata/seed.go`, add a Test Plan
   with 3 runs tagged `Configuration` "Chrome"/"Firefox"/"iOS Safari",
   sharing most but not all cases, with a realistic pass/fail/skip mix
   and at least one genuine coverage gap (a case present in two of the
   three runs' item lists but not the third).
-- [ ] 6.2 Add/extend a `seed_test.go` assertion confirming the new Test
+- [x] 6.2 Add/extend a `seed_test.go` assertion confirming the new Test
   Plan and its runs' configurations exist after seeding.
-- [ ] 6.3 Commit: `feat(sampledata): showcase run configurations and coverage matrix`.
+- [x] 6.3 Commit: `feat(sampledata): showcase run configurations and coverage matrix`.
 
 ## 7. Docs
 
