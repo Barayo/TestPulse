@@ -353,7 +353,12 @@ describe('InstanceSettingsPage', () => {
       mockAsTenantAdmin(true, true, 0, 0, 'ocean')
       renderPage()
       await screen.findByRole('group', { name: 'Color theme' })
-      expect(appearanceSection().getByRole('button', { name: 'Ocean' })).toHaveAttribute('aria-pressed', 'true')
+      // The preset buttons render unconditionally — "Ocean" selected isn't
+      // visible until the instance-settings fetch resolves and sets
+      // colorTheme, a separate render from the group itself existing (the
+      // same settled-vs-loading race already documented elsewhere in this
+      // file) — wait for it rather than asserting synchronously.
+      await waitFor(() => expect(appearanceSection().getByRole('button', { name: 'Ocean' })).toHaveAttribute('aria-pressed', 'true'))
       expect(appearanceSection().getByRole('button', { name: 'Teal' })).toHaveAttribute('aria-pressed', 'false')
     })
 
@@ -491,7 +496,9 @@ describe('InstanceSettingsPage', () => {
       for (const label of ['Dashboard', 'Library', 'Suites', 'Runs', 'Reports']) {
         expect(group.getByRole('button', { name: label })).toBeInTheDocument()
       }
-      expect(group.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-pressed', 'true')
+      // Same settled-vs-loading race as Appearance's "indicates the current
+      // selection" — the options render before defaultLandingView loads.
+      await waitFor(() => expect(group.getByRole('button', { name: 'Library' })).toHaveAttribute('aria-pressed', 'true'))
       expect(group.getByRole('button', { name: 'Dashboard' })).toHaveAttribute('aria-pressed', 'false')
     })
 
@@ -520,7 +527,9 @@ describe('InstanceSettingsPage', () => {
       for (const label of ['English', 'Español', 'Français', 'Deutsch', 'Português', '中文']) {
         expect(group.getByRole('button', { name: label })).toBeInTheDocument()
       }
-      expect(group.getByRole('button', { name: 'Français' })).toHaveAttribute('aria-pressed', 'true')
+      // Same settled-vs-loading race as Appearance's "indicates the current
+      // selection" — the options render before defaultLanguage loads.
+      await waitFor(() => expect(group.getByRole('button', { name: 'Français' })).toHaveAttribute('aria-pressed', 'true'))
       expect(group.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'false')
     })
 
@@ -563,7 +572,11 @@ describe('InstanceSettingsPage', () => {
     it('shows the currently configured site URL', async () => {
       mockAsTenantAdmin(true, true, 0, 0, 'teal', 'https://mycompany.atlassian.net')
       renderPage()
-      expect(await screen.findByLabelText(/jira site url/i)).toHaveValue('https://mycompany.atlassian.net')
+      // The input itself exists before instance-settings loads (it starts
+      // at jiraSiteUrl's '' default) — same settled-vs-loading race as
+      // elsewhere in this file. Wait for the loaded value, not just the
+      // input's existence.
+      await waitFor(() => expect(screen.getByLabelText(/jira site url/i)).toHaveValue('https://mycompany.atlassian.net'))
     })
 
     it('saving a new site URL calls PATCH /api/v1/instance-settings', async () => {
