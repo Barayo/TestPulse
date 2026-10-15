@@ -147,6 +147,6 @@
 
 ## 9. Spec sync & archive
 
-- [ ] 9.1 Verify `openspec validate --changes add-run-configurations --strict` passes.
-- [ ] 9.2 Run `/opsx:archive add-run-configurations`, creating the new
+- [x] 9.1 Verify `openspec validate --changes add-run-configurations --strict` passes.
+- [x] 9.2 Run `/opsx:archive add-run-configurations`, creating the new
   `run-configurations` spec under `openspec/specs/`.
