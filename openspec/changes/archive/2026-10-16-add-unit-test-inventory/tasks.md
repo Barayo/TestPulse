@@ -11,7 +11,11 @@
 - [x] 1.2 Add `domain.UnitTest` and `domain.UnitTestResult` structs to
   `apps/api/internal/domain/domain.go`, reusing the existing
   `domain.Verdict` type for both structs' verdict field (no new enum).
-- [ ] 1.3 Commit: `feat(api): add unit test inventory migration and domain types`.
+- [x] 1.3 Commit: consolidated into one squashed commit covering the
+  whole change (5f99bbd, `feat(api): add unit test inventory (#34)`) —
+  per-task-group commits were initially pushed individually, then
+  squashed into one on explicit request before this change was
+  considered finished.
 
 ## 2. junitxml parser: capture classname (TDD)
 
@@ -25,7 +29,7 @@
 - [x] 2.3 Run the full `execution_import_test.go` suite, confirm
   `execution-import`'s existing match/verdict behavior is byte-for-byte
   unaffected by the new field (design.md D6).
-- [ ] 2.4 Commit: `feat(api): capture testcase classname in junitxml parser`.
+- [x] 2.4 Commit: consolidated into the single squashed commit (5f99bbd).
 
 ## 3. Store layer: upsert identity + bounded history (TDD)
 
@@ -66,7 +70,7 @@
   than one pre-joined `classKey` string — the handler layer in task 6
   will do the URL-decode/split, keeping the store layer's identity
   columns primary.)
-- [ ] 3.7 Commit: `feat(api): add unit test results store layer`.
+- [x] 3.7 Commit: consolidated into the single squashed commit (5f99bbd).
 
 ## 4. Service layer: ingestion with idempotency (TDD)
 
@@ -108,7 +112,7 @@
   other list-style service method's convention (confirmed: permission
   checks live in handlers.go, not inside Service methods, anywhere in
   this codebase), not inside the service method itself.
-- [ ] 4.7 Commit: `feat(api): add unit test results service layer`.
+- [x] 4.7 Commit: consolidated into the single squashed commit (5f99bbd).
 
 ## 5. Ingestion endpoint (TDD)
 
@@ -135,7 +139,7 @@
   this route. Confirm it fails, implement (delegates to the
   service-layer validation from task 4.3 via `h.respond`'s existing
   `*service.ValidationError` → 400 mapping), confirm it passes.
-- [ ] 5.5 Commit: `feat(api): add unit test results ingestion endpoint`.
+- [x] 5.5 Commit: consolidated into the single squashed commit (5f99bbd).
 
 ## 6. Read endpoints (TDD)
 
@@ -156,7 +160,7 @@
 - [x] 6.3 Implement both routes with `requirePermission(domain.PermRead,
   projectIDParam)`. Run the tests from 6.2, confirm they pass. Ran the
   full `internal/server` suite to confirm nothing else broke.
-- [ ] 6.4 Commit: `feat(api): add unit test results read endpoints`.
+- [x] 6.4 Commit: consolidated into the single squashed commit (5f99bbd).
 
 ## 7. MCP agent parity (TDD)
 
@@ -172,9 +176,8 @@
   is purely write tools; `read_tools.go` already holds `list_run_items`
   and is the correct home), mirroring `list_run_items`'s shape and
   jsonschema tags. Run the test from 7.1, confirm it passes.
-- [ ] 7.3 Run the full `internal/mcp_test`/`internal/mcp` suites, confirm
-  nothing else broke, then commit:
-  `feat(mcp): add list_unit_test_results tool`.
+- [x] 7.3 Ran the full `internal/mcp_test`/`internal/mcp` suites (green).
+  Commit: consolidated into the single squashed commit (5f99bbd).
 
 ## 8. Sample Project showcase
 
@@ -193,8 +196,9 @@
   current verdict, and ≥2 history rows for the flaky one. Confirmed RED
   by reverting the `seed.go` addition (`git checkout` + re-run → 0 tests
   seeded), then restored and confirmed GREEN.
-- [ ] 8.3 Run the full `internal/sampledata` suite, confirm nothing else
-  broke, then commit: `feat(sampledata): showcase unit test inventory`.
+- [x] 8.3 Ran the full `internal/sampledata` suite (green, no
+  run-ordering regressions). Commit: consolidated into the single
+  squashed commit (5f99bbd).
 
 ## 9. Docs
 
@@ -212,10 +216,13 @@
   tables to `docs/database.md`'s per-table reference (kept out of the ER
   diagram, same treatment as the identity tables, since it has no FK
   relationship to the core test-asset domain).
-- [ ] 9.3 Commit: `docs: document unit test inventory`.
+- [x] 9.3 Commit: consolidated into the single squashed commit (5f99bbd).
 
 ## 10. Spec sync & archive
 
-- [ ] 10.1 Verify `openspec validate --changes add-unit-test-inventory --strict` passes.
-- [ ] 10.2 Run `/opsx:archive add-unit-test-inventory`, creating the new
-  `unit-test-inventory` spec under `openspec/specs/`.
+- [x] 10.1 Verified `openspec validate --changes add-unit-test-inventory
+  --strict` passes.
+- [x] 10.2 Synced the delta spec to a new main spec at
+  `openspec/specs/unit-test-inventory/spec.md` (6 requirements, 12
+  scenarios — brand-new capability, no existing main spec to merge
+  into). Re-validated after sync: still passes.
