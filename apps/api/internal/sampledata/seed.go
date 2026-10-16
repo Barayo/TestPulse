@@ -961,6 +961,38 @@ func Seed(ctx context.Context, svc *service.Service) error {
 		return fmt.Errorf("sampledata: importing CI results: %w", err)
 	}
 
+	// 5.4.1 Unit test inventory (add-unit-test-inventory, #34): a
+	// deliberately distinct surface from the curated-case import just
+	// above — this report carries NO testpulse_case_key/platform/version
+	// properties at all, showcasing the "zero setup, point at your test
+	// runner's native JUnit XML" ingestion path. Three calls at
+	// different <testsuite timestamp>s build a real multi-point trend
+	// for one flaky-looking backend test, rather than a single flat
+	// snapshot, so the bounded result-history endpoint has something to
+	// show beyond one row.
+	backendSuiteReport := func(timestamp, storeVerdict string) string {
+		storeFailure := ""
+		if storeVerdict == "failed" {
+			storeFailure = `<failure message="expected 3 rows, got 2">internal/store/run_test.go:42</failure>`
+		}
+		return fmt.Sprintf(`<testsuites><testsuite name="go test" timestamp="%s">`+
+			`<testcase classname="internal/service" name="TestCreateProject" time="0.02"/>`+
+			`<testcase classname="internal/service" name="TestAuthorize" time="0.01"/>`+
+			`<testcase classname="internal/junitxml" name="TestParseRejectsMalformed" time="0.01"/>`+
+			`<testcase classname="internal/store" name="TestRunRepo_Create" time="0.08"/>`+
+			`<testcase classname="internal/store" name="TestCaseRepo_List" time="0.05">%s</testcase>`+
+			`</testsuite></testsuites>`, timestamp, storeFailure)
+	}
+	for _, point := range []struct{ timestamp, storeVerdict string }{
+		{"2026-10-13T09:00:00", "pass"},
+		{"2026-10-14T09:00:00", "failed"},
+		{"2026-10-15T09:00:00", "failed"},
+	} {
+		if _, err := svc.ImportUnitTestResults(agentCtx, p.ID, backendSuiteReport(point.timestamp, point.storeVerdict), ""); err != nil {
+			return fmt.Errorf("sampledata: importing unit test results: %w", err)
+		}
+	}
+
 	// 5.5. A small, closed, low-stakes run explicitly labeled as disposable
 	// (add-data-retention) — somewhere safe for a user trying the new
 	// "Delete run" action to practice on, instead of being tempted to

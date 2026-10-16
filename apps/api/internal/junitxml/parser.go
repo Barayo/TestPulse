@@ -32,7 +32,12 @@ type TestCase struct {
 	CaseKey string
 	// Name is the literal name the runner reported, independent of
 	// whatever case it matches.
-	Name      string
+	Name string
+	// ClassName is the runner-reported classname attribute
+	// (add-unit-test-inventory, #34) — unused by execution-import's
+	// match-only CaseKey semantics, needed to build a unit test's
+	// (classname, name) identity.
+	ClassName string
 	Verdict   domain.Verdict
 	Platform  string
 	Version   string
@@ -62,6 +67,7 @@ type testsuiteXML struct {
 
 type testcaseXML struct {
 	Name       string    `xml:"name,attr"`
+	ClassName  string    `xml:"classname,attr"`
 	Time       string    `xml:"time,attr"`
 	Failure    *struct{} `xml:"failure"`
 	Error      *struct{} `xml:"error"`
@@ -131,8 +137,9 @@ func suiteCases(suite testsuiteXML) []TestCase {
 	cases := make([]TestCase, 0, len(suite.Testcases))
 	for _, tc := range suite.Testcases {
 		c := TestCase{
-			Name:    tc.Name,
-			Verdict: verdictOf(tc),
+			Name:      tc.Name,
+			ClassName: tc.ClassName,
+			Verdict:   verdictOf(tc),
 		}
 		for _, p := range tc.Properties.Property {
 			switch p.Name {

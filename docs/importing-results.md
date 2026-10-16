@@ -108,6 +108,69 @@ for how attachments render once imported.
 | `<error>` | `blocked` |
 | `<skipped>` | `skipped` |
 
+## Unit test inventory: zero-setup ingestion
+
+Everything above matches each `<testcase>` to an existing, curated test
+case by its key — it never auto-creates anything. If you just want to see
+which of your *unit* tests pass or fail over time — thousands of
+auto-discovered, thin, high-churn entries, not something you'd hand-author
+a case for — use the separate unit test inventory endpoint instead. It
+accepts whatever JUnit XML your test runner already produces natively, no
+`testpulse_case_key` property, no plugin, nothing to install:
+
+```
+POST /api/v1/projects/{projectKey}/unit-test-results/import
+{ "report": "<the XML>" }
+```
+
+Every `<testcase>` in the report becomes (or updates) a unit test
+identified by its own `classname`/`name` attributes — there's no
+match-or-skip branch, and no run is created. The response is
+`{ "imported": <count>, "created": <count>, "updated": <count> }`.
+
+```bash
+pytest --junitxml=report.xml   # no --testpulse-* flags, no plugin
+curl -s -X POST http://localhost:8080/api/v1/projects/LOGIN/unit-test-results/import \
+  -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TESTPULSE_TOKEN" \
+  -d "$(jq -n --rawfile report report.xml '{report: $report}')"
+```
+
+**Retrying is safe.** CI systems retry failed uploads, and a naive retry
+would otherwise insert a duplicate result. Pass a stable
+`idempotencyKey` and a retry with the same key returns the original
+response instead of re-ingesting:
+
+```json
+{ "report": "<the XML>", "idempotencyKey": "run-482913" }
+```
+
+**No continuity across renames.** A unit test's identity is its
+`(classname, name)` pair, read as-is from the report. Rename or move the
+test and it becomes a new, independent entry with no history carried
+over — this is a deliberate simplification for an auto-discovered,
+high-churn surface, unlike a curated case's stable key.
+
+**History is bounded, not unlimited.** Only the most recent results per
+test are retained (a server-side limit, not configurable per project in
+this release) — pruned automatically as new results arrive, so the table
+doesn't grow without bound regardless of how often CI reports.
+
+Read the data back with:
+
+```
+GET /api/v1/projects/{projectKey}/unit-test-results?verdict=failed
+GET /api/v1/projects/{projectKey}/unit-test-results/{classname}::{name}/history
+```
+
+The first lists every test's current status (optionally filtered to one
+verdict); the second returns one test's bounded history, newest first.
+Both require only the `read` permission, same as any other project data.
+An agent connected over MCP has the same read access via the
+`list_unit_test_results` tool — see [MCP server](mcp-server.md). There is
+no web UI for this data in this release; it's an API/agent-facing
+capability for now.
+
 ## pytest: `pytest-testpulse` plugin
 
 The recommended way to report pytest results is the installable

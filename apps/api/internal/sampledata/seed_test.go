@@ -1000,6 +1000,54 @@ func TestSeedContentCoversRunLifecycleAndImport(t *testing.T) {
 	}
 }
 
+// add-unit-test-inventory (#34): the Sample Project showcases the
+// auto-discovered, zero-setup unit test surface — distinct from the
+// curated-case JUnit import just above — with a multi-point trend for at
+// least one test, not just a single flat snapshot.
+func TestSeedContentShowcasesUnitTestInventory(t *testing.T) {
+	svc := seededService(t)
+	ctx := context.Background()
+	if err := sampledata.Seed(ctx, svc); err != nil {
+		t.Fatalf("Seed: %v", err)
+	}
+	actorCtx := adminActorCtx(t, svc)
+	projects, _ := svc.ListProjects(actorCtx)
+	p := projects[0]
+
+	tests, _, err := svc.ListUnitTestResults(actorCtx, p.ID, nil, "", 0)
+	if err != nil {
+		t.Fatalf("ListUnitTestResults: %v", err)
+	}
+	if len(tests) < 5 {
+		t.Errorf("unit tests seeded = %d, want at least 5", len(tests))
+	}
+
+	var sawFailing bool
+	var flaky *domain.UnitTest
+	for i, ut := range tests {
+		if ut.LastVerdict == domain.VerdictFailed {
+			sawFailing = true
+		}
+		if ut.ClassName == "internal/store" && ut.Name == "TestCaseRepo_List" {
+			flaky = &tests[i]
+		}
+	}
+	if !sawFailing {
+		t.Error("no seeded unit test has a failing current verdict")
+	}
+	if flaky == nil {
+		t.Fatal("expected unit test internal/store::TestCaseRepo_List not found")
+	}
+
+	history, err := svc.UnitTestResultHistory(actorCtx, p.ID, flaky.ClassName, flaky.Name)
+	if err != nil {
+		t.Fatalf("UnitTestResultHistory: %v", err)
+	}
+	if len(history) < 2 {
+		t.Errorf("history for %s::%s = %d results, want at least 2 (a real trend, not a flat snapshot)", flaky.ClassName, flaky.Name, len(history))
+	}
+}
+
 // add-data-retention: the Sample Project ships a small, closed, explicitly
 // disposable run so a user trying the new "Delete run" action has something
 // low-stakes to practice on, rather than being tempted to delete one of the

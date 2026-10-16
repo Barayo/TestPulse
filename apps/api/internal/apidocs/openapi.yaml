@@ -1397,6 +1397,74 @@ paths:
       tags: [stepGroups]
       responses:
         "204": { description: Deleted }
+  /api/v1/projects/{projectKey}/unit-test-results/import:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    post:
+      operationId: importUnitTestResults
+      summary: >-
+        Auto-create/update unit test identities and append result history
+        from a project's native JUnit XML (add-unit-test-inventory, #34) —
+        no TestPulse-specific property required, unlike POST .../imports'
+        match-only semantics. Requires the runCreate permission even
+        though this never creates a Run.
+      tags: [unitTestResults]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UnitTestResultsImportRequest" }
+      responses:
+        "201":
+          description: Report ingested
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnitTestResultsImportResponse" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/unit-test-results:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listUnitTestResults
+      summary: List a project's unit tests' cached current status, cursor-paginated
+      tags: [unitTestResults]
+      parameters:
+        - $ref: "#/components/parameters/cursor"
+        - $ref: "#/components/parameters/limit"
+        - name: verdict
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/Verdict" }
+          description: Only return tests whose current (most recent) verdict matches.
+      responses:
+        "200":
+          description: A page of unit tests
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnitTestListPage" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /api/v1/projects/{projectKey}/unit-test-results/{classKey}/history:
+    parameters:
+      - { name: projectKey, in: path, required: true, schema: { type: string } }
+      - name: classKey
+        in: path
+        required: true
+        schema: { type: string }
+        description: >-
+          The URL-encoded "className::name" pair identifying a unit test
+          — no synthetic id exists for this capability.
+    get:
+      operationId: getUnitTestResultHistory
+      summary: One unit test's bounded result history, newest first
+      tags: [unitTestResults]
+      responses:
+        "200":
+          description: Result history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/UnitTestResultHistory" }
+        "404": { $ref: "#/components/responses/NotFound" }
   /api/v1/projects/{projectKey}/imports:
     parameters:
       - { name: projectKey, in: path, required: true, schema: { type: string } }
@@ -3989,6 +4057,80 @@ components:
             moment it was recorded (add-step-level-results). Absent when no
             step was marked at that time.
         createdAt: { type: string, format: date-time }
+    UnitTestResultsImportRequest:
+      type: object
+      required: [report]
+      description: >-
+        add-unit-test-inventory (#34) — no format field, unlike
+        ImportRequest: this endpoint only ever accepts native JUnit XML.
+      properties:
+        report:
+          type: string
+          description: The raw report content (native JUnit XML, no TestPulse-specific property required).
+        idempotencyKey:
+          type: string
+          description: >-
+            Optional. A retry with the same key (and the same actor)
+            returns the original response instead of re-ingesting —
+            protects bounded result history from CI's at-least-once
+            delivery retries. Omit to always ingest fresh.
+    UnitTestResultsImportResponse:
+      type: object
+      required: [imported, created, updated]
+      properties:
+        imported:
+          type: integer
+          description: Total <testcase> entries ingested from the report.
+        created:
+          type: integer
+          description: Distinct unit test identities that did not exist before this import.
+        updated:
+          type: integer
+          description: Distinct unit test identities that already existed.
+    UnitTest:
+      type: object
+      required: [className, name, firstSeenAt, lastSeenAt, lastVerdict, lastOccurredAt]
+      description: >-
+        An auto-discovered unit test identity (add-unit-test-inventory,
+        #34) — deliberately lean: no versioned content, no folder, no
+        Jira link, unlike TestCase. A rename/move starts a fresh
+        identity; there is no continuity across one.
+      properties:
+        className: { type: string }
+        name: { type: string }
+        firstSeenAt: { type: string, format: date-time }
+        lastSeenAt: { type: string, format: date-time }
+        lastVerdict: { $ref: "#/components/schemas/Verdict" }
+        lastDurationMs: { type: integer, nullable: true }
+        lastOccurredAt: { type: string, format: date-time }
+    UnitTestListPage:
+      type: object
+      required: [items, nextCursor]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/UnitTest" }
+        nextCursor:
+          type: string
+          nullable: true
+          description: Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter.
+    UnitTestResult:
+      type: object
+      required: [verdict, occurredAt]
+      properties:
+        verdict: { $ref: "#/components/schemas/Verdict" }
+        durationMs: { type: integer, nullable: true }
+        occurredAt: { type: string, format: date-time }
+    UnitTestResultHistory:
+      type: object
+      required: [results]
+      description: >-
+        Bounded to the server's retention limit (add-unit-test-inventory
+        design.md D4) — not a complete history.
+      properties:
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/UnitTestResult" }
     ImportRequest:
       type: object
       required: [format, report]

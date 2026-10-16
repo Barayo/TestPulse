@@ -2202,6 +2202,46 @@ func TestMCPToolsCarryAnnotations(t *testing.T) {
 	}
 }
 
+// --- Requirement: Agent parity for reading unit test results ---
+
+func TestMCPListUnitTestResultsListsResults(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	ctx := context.Background()
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-unittestresults-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "unittestresults-agent")
+	project, err := svc.CreateProject(ctx, service.ProjectInput{Name: "MCP Unit Test Results Project"})
+	if err != nil {
+		t.Fatalf("CreateProject: %v", err)
+	}
+
+	report := `<testsuites><testsuite name="pytest">` +
+		`<testcase classname="tests.test_mod" name="test_pass" time="0.1"/>` +
+		`<testcase classname="tests.test_mod" name="test_fail" time="0.1"><failure message="x">trace</failure></testcase>` +
+		`</testsuite></testsuites>`
+	if _, err := svc.ImportUnitTestResults(domain.WithActor(ctx, admin), project.ID, report, ""); err != nil {
+		t.Fatalf("ImportUnitTestResults: %v", err)
+	}
+
+	session := mustConnectMCP(t, ts, token)
+	var out map[string]any
+	callTool(t, session, "list_unit_test_results", map[string]any{"projectKey": project.Key}, &out)
+	items, ok := out["items"].([]any)
+	if !ok || len(items) != 2 {
+		t.Fatalf("out[items] = %+v, want a 2-element array", out["items"])
+	}
+
+	var filtered map[string]any
+	callTool(t, session, "list_unit_test_results", map[string]any{"projectKey": project.Key, "verdict": "failed"}, &filtered)
+	filteredItems, ok := filtered["items"].([]any)
+	if !ok || len(filteredItems) != 1 {
+		t.Fatalf("filtered items = %+v, want a 1-element array", filtered["items"])
+	}
+	m, ok := filteredItems[0].(map[string]any)
+	if !ok || m["name"] != "test_fail" {
+		t.Errorf("filtered item = %+v, want test_fail", m)
+	}
+}
+
 // --- Requirement: No delete operations via MCP ---
 
 func TestMCPNoDeleteToolIsRegistered(t *testing.T) {

@@ -42,6 +42,7 @@ type Store struct {
 	ImportJobs          *ImportJobRepo
 	Webhooks            *WebhookRepo
 	MCPIdempotencyKeys  *MCPIdempotencyKeyRepo
+	UnitTestResults     *UnitTestResultRepo
 }
 
 func New(pool *pgxpool.Pool) *Store {
@@ -74,6 +75,7 @@ func New(pool *pgxpool.Pool) *Store {
 		ImportJobs:          &ImportJobRepo{pool: pool},
 		Webhooks:            &WebhookRepo{pool: pool},
 		MCPIdempotencyKeys:  &MCPIdempotencyKeyRepo{pool: pool},
+		UnitTestResults:     &UnitTestResultRepo{pool: pool},
 	}
 }
 

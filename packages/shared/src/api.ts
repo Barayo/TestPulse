@@ -1115,6 +1115,65 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/projects/{projectKey}/unit-test-results/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Auto-create/update unit test identities and append result history from a project's native JUnit XML (add-unit-test-inventory, #34) — no TestPulse-specific property required, unlike POST .../imports' match-only semantics. Requires the runCreate permission even though this never creates a Run. */
+        post: operations["importUnitTestResults"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/unit-test-results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        /** List a project's unit tests' cached current status, cursor-paginated */
+        get: operations["listUnitTestResults"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/projects/{projectKey}/unit-test-results/{classKey}/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                /** @description The URL-encoded "className::name" pair identifying a unit test — no synthetic id exists for this capability. */
+                classKey: string;
+            };
+            cookie?: never;
+        };
+        /** One unit test's bounded result history, newest first */
+        get: operations["getUnitTestResultHistory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/projects/{projectKey}/imports": {
         parameters: {
             query?: never;
@@ -3151,6 +3210,49 @@ export interface components {
             stepResults?: components["schemas"]["StepResult"][];
             /** Format: date-time */
             createdAt: string;
+        };
+        /** @description add-unit-test-inventory (#34) — no format field, unlike ImportRequest: this endpoint only ever accepts native JUnit XML. */
+        UnitTestResultsImportRequest: {
+            /** @description The raw report content (native JUnit XML, no TestPulse-specific property required). */
+            report: string;
+            /** @description Optional. A retry with the same key (and the same actor) returns the original response instead of re-ingesting — protects bounded result history from CI's at-least-once delivery retries. Omit to always ingest fresh. */
+            idempotencyKey?: string;
+        };
+        UnitTestResultsImportResponse: {
+            /** @description Total <testcase> entries ingested from the report. */
+            imported: number;
+            /** @description Distinct unit test identities that did not exist before this import. */
+            created: number;
+            /** @description Distinct unit test identities that already existed. */
+            updated: number;
+        };
+        /** @description An auto-discovered unit test identity (add-unit-test-inventory, #34) — deliberately lean: no versioned content, no folder, no Jira link, unlike TestCase. A rename/move starts a fresh identity; there is no continuity across one. */
+        UnitTest: {
+            className: string;
+            name: string;
+            /** Format: date-time */
+            firstSeenAt: string;
+            /** Format: date-time */
+            lastSeenAt: string;
+            lastVerdict: components["schemas"]["Verdict"];
+            lastDurationMs?: number | null;
+            /** Format: date-time */
+            lastOccurredAt: string;
+        };
+        UnitTestListPage: {
+            items: components["schemas"]["UnitTest"][];
+            /** @description Opaque token for the next page, or null if this is the last page. Pass back verbatim as the cursor query parameter. */
+            nextCursor: string | null;
+        };
+        UnitTestResult: {
+            verdict: components["schemas"]["Verdict"];
+            durationMs?: number | null;
+            /** Format: date-time */
+            occurredAt: string;
+        };
+        /** @description Bounded to the server's retention limit (add-unit-test-inventory design.md D4) — not a complete history. */
+        UnitTestResultHistory: {
+            results: components["schemas"]["UnitTestResult"][];
         };
         ImportRequest: {
             /** @enum {string} */
@@ -6061,6 +6163,89 @@ export interface operations {
                 };
                 content?: never;
             };
+        };
+    };
+    importUnitTestResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UnitTestResultsImportRequest"];
+            };
+        };
+        responses: {
+            /** @description Report ingested */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitTestResultsImportResponse"];
+                };
+            };
+            400: components["responses"]["ValidationError"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    listUnitTestResults: {
+        parameters: {
+            query?: {
+                /** @description Opaque pagination token from a prior response's nextCursor. Omit for the first page. Never construct or decode this value — replay it verbatim. */
+                cursor?: components["parameters"]["cursor"];
+                /** @description Max items per page. Defaults to 50; values above 200 are silently clamped to 200, not rejected. */
+                limit?: components["parameters"]["limit"];
+                /** @description Only return tests whose current (most recent) verdict matches. */
+                verdict?: components["schemas"]["Verdict"];
+            };
+            header?: never;
+            path: {
+                projectKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of unit tests */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitTestListPage"];
+                };
+            };
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getUnitTestResultHistory: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectKey: string;
+                /** @description The URL-encoded "className::name" pair identifying a unit test — no synthetic id exists for this capability. */
+                classKey: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Result history */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnitTestResultHistory"];
+                };
+            };
+            404: components["responses"]["NotFound"];
         };
     };
     importResults: {

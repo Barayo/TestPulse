@@ -1856,6 +1856,45 @@ type WebhookDestination struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// UnitTest is an auto-discovered, auto-created identity for an externally
+// run unit test (add-unit-test-inventory, #34) — deliberately separate
+// from TestCase/RunItem: no versioned content, no folder, no Jira link.
+// Identity is (ProjectID, ClassName, Name), read directly from a native
+// JUnit report's <testcase classname="..." name="..."> pair, with no
+// continuity across a rename/move (design.md D5) — a changed ClassName or
+// Name starts a fresh UnitTest, never carrying over the old one's history.
+// Last* fields are a cache of the most recently recorded UnitTestResult,
+// written in the same transaction as each new result, so listing every
+// test's current status never joins against unit_test_results — this
+// table's cardinality (tens of thousands per project) is explicitly
+// higher than TestCase's, which has no such cache because it doesn't need
+// one (design.md D2).
+type UnitTest struct {
+	ID             string    `json:"id"`
+	ProjectID      string    `json:"projectId"`
+	ClassName      string    `json:"className"`
+	Name           string    `json:"name"`
+	FirstSeenAt    time.Time `json:"firstSeenAt"`
+	LastSeenAt     time.Time `json:"lastSeenAt"`
+	LastVerdict    Verdict   `json:"lastVerdict"`
+	LastDurationMs *int      `json:"lastDurationMs,omitempty"`
+	LastOccurredAt time.Time `json:"lastOccurredAt"`
+}
+
+// UnitTestResult is one reported result in a UnitTest's bounded history
+// (add-unit-test-inventory design.md D4) — pruned to the most recent N
+// rows per UnitTest inline on write, not by a background worker. ImportRef
+// is a plain free-text provenance marker: this capability never creates a
+// Run, so there's no entity for it to reference by ID.
+type UnitTestResult struct {
+	ID         string    `json:"id"`
+	UnitTestID string    `json:"unitTestId"`
+	Verdict    Verdict   `json:"verdict"`
+	DurationMs *int      `json:"durationMs,omitempty"`
+	OccurredAt time.Time `json:"occurredAt"`
+	ImportRef  string    `json:"importRef,omitempty"`
+}
+
 // actorContextKey is unexported so only WithActor/ActorFromContext can set
 // or read the request's resolved Actor (design D1: resolved once by auth
 // middleware, threaded through context.Context like other request-scoped

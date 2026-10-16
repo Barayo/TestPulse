@@ -149,3 +149,29 @@ func TestParseRejectsMalformedXML(t *testing.T) {
 		t.Error("Parse(malformed) = nil error, want an error")
 	}
 }
+
+func TestParseCapturesClassName(t *testing.T) {
+	// add-unit-test-inventory (#34) needs classname to build a unit
+	// test's (classname, name) identity — distinct from CaseKey, which
+	// stays empty here since no testpulse_case_key property is present.
+	xml := `<testsuites>
+  <testsuite name="pytest">
+    <testcase classname="tests.test_login" name="test_login" time="0.1"/>
+  </testsuite>
+</testsuites>`
+
+	report, err := junitxml.Parse([]byte(xml))
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	if len(report.Cases) != 1 {
+		t.Fatalf("Cases = %d, want 1", len(report.Cases))
+	}
+	c := report.Cases[0]
+	if c.ClassName != "tests.test_login" {
+		t.Errorf("ClassName = %q, want tests.test_login", c.ClassName)
+	}
+	if c.CaseKey != "" {
+		t.Errorf("CaseKey = %q, want empty (no testpulse_case_key property)", c.CaseKey)
+	}
+}

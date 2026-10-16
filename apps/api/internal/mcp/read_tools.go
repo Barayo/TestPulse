@@ -41,6 +41,11 @@ func registerReadTools(srv *sdkmcp.Server, svc *service.Service) {
 		Description: "List a run's items (case key + current status), cursor-paginated. Use this to discover which case keys still need a result, rather than requiring every case key to already be known.",
 		Annotations: readAnnotations,
 	}, listRunItems(svc))
+	sdkmcp.AddTool(srv, &sdkmcp.Tool{
+		Name:        "list_unit_test_results",
+		Description: "List a project's auto-discovered unit tests (ingested from native JUnit XML via the unit-test-results REST endpoint, add-unit-test-inventory #34) and their current pass/fail status, cursor-paginated. Distinct from curated test cases — there is no create/edit tool for this surface, it is read-only here.",
+		Annotations: readAnnotations,
+	}, listUnitTestResults(svc))
 }
 
 type SearchInput struct {
@@ -384,5 +389,68 @@ func listRunItems(svc *service.Service) sdkmcp.ToolHandlerFor[ListRunItemsInput,
 			out[i] = toRunItemOutput(it)
 		}
 		return textResult("Found %d item(s) in run %s", len(out), in.RunKey), ListRunItemsOutput{Items: out, NextCursor: nextCursor}, nil
+	}
+}
+
+// ListUnitTestResultsInput/Output mirror ListRunItemsInput/Output's shape
+// (add-unit-test-inventory, #34) — one pagination convention across every
+// cursor-paginated MCP tool, not a special case for this one.
+type ListUnitTestResultsInput struct {
+	ProjectKey string `json:"projectKey" jsonschema:"project key"`
+	Verdict    string `json:"verdict,omitempty" jsonschema:"one of pass, failed, skipped, blocked; omit for no filter"`
+	Cursor     string `json:"cursor,omitempty" jsonschema:"opaque pagination cursor from a prior call's nextCursor; omit for the first page"`
+	Limit      int    `json:"limit,omitempty" jsonschema:"max items per page; defaults to 50, capped at 200"`
+}
+
+// UnitTestOutput mirrors domain.UnitTest for MCP tool output — no id field,
+// since this capability's identity is its own (className, name) pair, not
+// an internal UUID a caller would ever need (fix-mcp-output-id-leaks'
+// standing convention, applied here from the start).
+type UnitTestOutput struct {
+	ClassName      string         `json:"className"`
+	Name           string         `json:"name"`
+	FirstSeenAt    time.Time      `json:"firstSeenAt"`
+	LastSeenAt     time.Time      `json:"lastSeenAt"`
+	LastVerdict    domain.Verdict `json:"lastVerdict"`
+	LastDurationMs *int           `json:"lastDurationMs,omitempty"`
+	LastOccurredAt time.Time      `json:"lastOccurredAt"`
+}
+
+type ListUnitTestResultsOutput struct {
+	Items      []UnitTestOutput `json:"items"`
+	NextCursor string           `json:"nextCursor,omitempty"`
+}
+
+func listUnitTestResults(svc *service.Service) sdkmcp.ToolHandlerFor[ListUnitTestResultsInput, ListUnitTestResultsOutput] {
+	return func(ctx context.Context, _ *sdkmcp.CallToolRequest, in ListUnitTestResultsInput) (*sdkmcp.CallToolResult, ListUnitTestResultsOutput, error) {
+		projectID, err := svc.ProjectIDByKey(ctx, in.ProjectKey)
+		if err != nil {
+			return nil, ListUnitTestResultsOutput{}, notFoundf("project", in.ProjectKey, err)
+		}
+		if err := svc.Authorize(ctx, domain.PermRead, projectID); err != nil {
+			return nil, ListUnitTestResultsOutput{}, err
+		}
+		var verdict *domain.Verdict
+		if in.Verdict != "" {
+			v := domain.Verdict(in.Verdict)
+			verdict = &v
+		}
+		tests, nextCursor, err := svc.ListUnitTestResults(ctx, projectID, verdict, in.Cursor, in.Limit)
+		if err != nil {
+			return nil, ListUnitTestResultsOutput{}, err
+		}
+		out := make([]UnitTestOutput, len(tests))
+		for i, ut := range tests {
+			out[i] = UnitTestOutput{
+				ClassName:      ut.ClassName,
+				Name:           ut.Name,
+				FirstSeenAt:    ut.FirstSeenAt,
+				LastSeenAt:     ut.LastSeenAt,
+				LastVerdict:    ut.LastVerdict,
+				LastDurationMs: ut.LastDurationMs,
+				LastOccurredAt: ut.LastOccurredAt,
+			}
+		}
+		return textResult("Found %d unit test(s) in project %s", len(out), in.ProjectKey), ListUnitTestResultsOutput{Items: out, NextCursor: nextCursor}, nil
 	}
 }

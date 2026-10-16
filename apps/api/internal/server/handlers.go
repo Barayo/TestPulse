@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -64,6 +65,13 @@ func mountAPI(r chi.Router, h *api) {
 			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/step-groups", h.listStepGroups)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/step-groups", h.createStepGroup)
 			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/imports", h.importResults)
+			// runCreate is reused here even though this never creates a Run
+			// (add-unit-test-inventory design.md D3) — a dedicated permission
+			// flag would ripple into Role/RBAC surfaces for a capability
+			// scoped to API/MCP only in v1.
+			r.With(h.requirePermission(domain.PermRunCreate, projectIDParam)).Post("/unit-test-results/import", h.importUnitTestResults)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/unit-test-results", h.listUnitTestResults)
+			r.With(h.requirePermission(domain.PermRead, projectIDParam)).Get("/unit-test-results/{classKey}/history", h.unitTestResultHistory)
 			r.With(h.requirePermission(domain.PermManageProject, projectIDParam)).Post("/import-jobs", h.createImportJob)
 			r.With(h.requirePermissionEvenIfArchived(domain.PermManageProject, projectIDParam)).Get("/import-jobs", h.listImportJobs)
 			r.With(h.requirePermissionEvenIfArchived(domain.PermManageProject, projectIDFromImportJob)).Get("/import-jobs/{jobId}", h.getImportJob)
@@ -882,6 +890,49 @@ func (h *api) importResults(w http.ResponseWriter, r *http.Request) {
 		Matched:   result.Matched,
 		Unmatched: unmatched,
 	}, nil)
+}
+
+// --- Unit test inventory (add-unit-test-inventory, #34) ---
+
+func (h *api) importUnitTestResults(w http.ResponseWriter, r *http.Request) {
+	body, err := decode[struct {
+		Report         string `json:"report"`
+		IdempotencyKey string `json:"idempotencyKey"`
+	}](r)
+	if err != nil {
+		badBody(h, w)
+		return
+	}
+	outcome, err := h.svc.ImportUnitTestResults(r.Context(), resolvedID(r, "projectKey"), body.Report, body.IdempotencyKey)
+	h.respond(w, http.StatusCreated, outcome, err)
+}
+
+func (h *api) listUnitTestResults(w http.ResponseWriter, r *http.Request) {
+	cursor, limit := parsePageParams(r)
+	var verdict *domain.Verdict
+	if v := r.URL.Query().Get("verdict"); v != "" {
+		dv := domain.Verdict(v)
+		verdict = &dv
+	}
+	tests, nextCursor, err := h.svc.ListUnitTestResults(r.Context(), resolvedID(r, "projectKey"), verdict, cursor, limit)
+	h.respond(w, http.StatusOK, newPagePayload(tests, nextCursor), err)
+}
+
+// unitTestResultHistoryJSON wraps the results list so the response shape
+// matches packages/shared/openapi.yaml's UnitTestResultHistory schema
+// rather than returning a bare array.
+type unitTestResultHistoryJSON struct {
+	Results []domain.UnitTestResult `json:"results"`
+}
+
+func (h *api) unitTestResultHistory(w http.ResponseWriter, r *http.Request) {
+	className, name, ok := strings.Cut(resolvedID(r, "classKey"), "::")
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": `classKey must be "className::name"`})
+		return
+	}
+	results, err := h.svc.UnitTestResultHistory(r.Context(), resolvedID(r, "projectKey"), className, name)
+	h.respond(w, http.StatusOK, unitTestResultHistoryJSON{Results: results}, err)
 }
 
 func (h *api) getRun(w http.ResponseWriter, r *http.Request) {
