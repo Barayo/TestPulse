@@ -41,6 +41,23 @@ func TestMCPAuthenticationAcceptsValidUnscopedToken(t *testing.T) {
 	callTool(t, session, "list_projects", struct{}{}, &out)
 }
 
+// --- Requirement: MCP tool-surface versioning policy (#226) ---
+
+func TestMCPServerReportsAStableSemverNotTheOldPlaceholder(t *testing.T) {
+	ts, svc := testMCPServer(t)
+	admin := actorForUser(mustBootstrapAdmin(t, svc, "mcp-version-admin@example.com"))
+	token := mustCreateUnscopedToken(t, svc, admin, "version-check-agent")
+
+	session := mustConnectMCP(t, ts, token)
+	got := session.InitializeResult().ServerInfo.Version
+	if got == "0.1.0" {
+		t.Fatalf("serverInfo.version = %q, want it updated past the old never-bumped placeholder (docs/mcp-server.md#versioning-policy)", got)
+	}
+	if got != "1.0.0" {
+		t.Errorf("serverInfo.version = %q, want 1.0.0 (see docs/mcp-server.md#versioning-policy)", got)
+	}
+}
+
 // --- Requirement: upsert_test_case tool ---
 
 func TestMCPUpsertTestCaseCreatesThenEdits(t *testing.T) {

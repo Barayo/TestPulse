@@ -80,6 +80,41 @@ it's always safe to retry freely with the same key once the input is
 fixed. Omitting `idempotencyKey` entirely preserves the exact prior
 behavior — every call creates a new record, no dedup.
 
+## Versioning policy
+
+The MCP tool surface carries its own semantic version — reported as
+`serverInfo.version` in the `initialize` response (`mcp.go`'s
+`sdkmcp.Implementation.Version`) — independent of TestPulse's own product
+release version. An MCP client cares about tool-schema compatibility, not
+which UI release it's talking to, and the two change on different
+schedules: a doc-only product patch release doesn't touch tool schemas, and
+a tool-schema addition doesn't necessarily ship alongside a product release.
+
+This version is `1.0.0` as of TestPulse 1.0 — the fourteen tools above have
+grown by strictly additive changes (new tools, new optional fields) across
+every one of the fourteen archived OpenSpec changes that have touched this
+surface since `add-mcp-server`, so nothing in the existing surface has ever
+actually broken a connected agent. `1.0.0` marks the point this surface is
+considered stable and the policy below becomes binding, rather than
+implying a false history of prior versions that were never really tracked.
+
+Going forward, a change to this surface bumps the version by the same rule
+as any public API:
+
+- **Patch** (`1.0.x`) — a tool's description/documentation changes, or an
+  internal bug fix with no change to any tool's name, input schema, or
+  output schema.
+- **Minor** (`1.x.0`) — a new tool is added, or an existing tool gains a new
+  *optional* input field or a new field in its output. An agent built
+  against the previous minor version keeps working unmodified.
+- **Major** (`x.0.0`) — any of: a tool is removed or renamed, an existing
+  input field is removed, renamed, or has its required-ness or type
+  changed, or an output field is removed, renamed, or has its type changed
+  in a way that breaks an existing consumer's parsing. Reserved for cases
+  with no reasonable additive alternative — the strong default, consistent
+  with every tool above being additive so far, is to add a new tool or a
+  new optional field rather than break an existing one.
+
 ## Example: the flagship demo
 
 *"Read `requirements.md` and create a test suite in TestPulse."* An agent

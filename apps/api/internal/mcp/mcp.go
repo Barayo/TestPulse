@@ -42,7 +42,14 @@ Start with search or list_projects to find real keys before calling a tool that 
 // REST's own model.
 func NewHTTPHandler(svc *service.Service) http.Handler {
 	srv := sdkmcp.NewServer(
-		&sdkmcp.Implementation{Name: "testpulse", Version: "0.1.0"},
+		// 1.0.0 — the tool surface's own semver, independent of the product
+		// release version; see docs/mcp-server.md#versioning-policy. Never
+		// bumped from "0.1.0" across the fourteen prior OpenSpec changes
+		// that touched this surface because none of them were breaking —
+		// that additive history is exactly why 1.0.0 is the right starting
+		// point now that the policy is in force, not a sign anything here
+		// changed behaviorally in this commit.
+		&sdkmcp.Implementation{Name: "testpulse", Version: "1.0.0"},
 		&sdkmcp.ServerOptions{Instructions: serverInstructions},
 	)
 	registerTools(srv, svc)
