@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import type { TFunction, ParseKeys } from 'i18next'
 import type { components } from '@testpulse/shared/api'
+import { statusTextClass } from '@/components/HealthBar'
 
 type Status = components['schemas']['Status']
 
@@ -72,7 +73,7 @@ export function RunStatusBreakdown({
   return (
     <div className="space-y-2">
       <div className="flex items-baseline gap-2">
-        <span className="text-2xl font-black tracking-tight">{passRate}%</span>
+        <span className={`text-2xl font-black tracking-tight ${statusTextClass(passRate)}`}>{passRate}%</span>
         <span className="text-xs text-muted-foreground">{t('RunStatusBreakdown.passRateCaption', { count: total })}</span>
       </div>
       <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-border">

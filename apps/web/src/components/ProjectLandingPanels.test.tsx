@@ -24,6 +24,19 @@ describe('FoldersPanel', () => {
     expect(screen.getByText(/see all 6/i)).toBeInTheDocument()
   })
 
+  it('uses a real elevation shadow instead of a flat border (visual-elevation-redesign)', () => {
+    render(
+      <FoldersPanel
+        folders={[{ id: 'f1', name: 'Onboarding', caseCount: 1, subsectionCount: 0, children: [] }]}
+        totalCount={1}
+        onSeeAll={vi.fn()}
+        onSelectFolder={vi.fn()}
+      />,
+    )
+    const panel = screen.getByText('Onboarding').closest('li')?.closest('div.flex.flex-col') as HTMLElement
+    expect(panel.className).toContain('shadow-[var(--elev-1),var(--elev-rim)]')
+  })
+
   it('shows an empty section with an italic name, "No cases yet", and no magnitude bar', () => {
     render(
       <FoldersPanel

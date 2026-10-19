@@ -8,6 +8,16 @@ describe('RunStatusBreakdown', () => {
     expect(screen.getByText('75%')).toBeInTheDocument()
   })
 
+  it('colors the pass-rate headline by status band, not flat foreground (visual-elevation-redesign)', () => {
+    render(<RunStatusBreakdown total={4} counts={{ pass: 3, failed: 1 }} />)
+    expect(screen.getByText('75%')).toHaveClass('text-status-progress-fg')
+  })
+
+  it('colors a healthy pass-rate headline with the healthy token', () => {
+    render(<RunStatusBreakdown total={10} counts={{ pass: 9, failed: 1 }} />)
+    expect(screen.getByText('90%')).toHaveClass('text-status-healthy-fg')
+  })
+
   it('renders one bar segment per present status, proportionally sized', () => {
     render(<RunStatusBreakdown total={4} counts={{ pass: 3, failed: 1 }} />)
     const pass = screen.getByTestId('run-status-segment-pass')

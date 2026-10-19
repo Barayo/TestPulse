@@ -210,8 +210,8 @@ export default function ProjectPage() {
     Boolean(project) && landing.loaded && landing.totalCases === 0 && landing.totalSuites === 0 && landing.totalRuns === 0
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="tp-hero-wash -mx-6 -mt-8 space-y-6 px-6 pt-8">
+      <div className="tp-rise flex items-start justify-between gap-4">
         {project && (
           <div>
             <div className="flex items-center gap-1.5">
@@ -257,7 +257,8 @@ export default function ProjectPage() {
       {summary && (
         <div
           data-testid="summary-strip"
-          className="grid grid-cols-1 gap-4 rounded-lg border bg-card p-4 md:grid-cols-[minmax(200px,1.1fr)_auto_minmax(220px,1.3fr)_auto_minmax(160px,0.9fr)] md:items-center md:gap-5 md:px-5.5"
+          className="tp-rise grid grid-cols-1 gap-4 rounded-lg bg-card p-4 shadow-[var(--elev-1),var(--elev-rim)] md:grid-cols-[minmax(200px,1.1fr)_auto_minmax(220px,1.3fr)_auto_minmax(160px,0.9fr)] md:items-center md:gap-5 md:px-5.5"
+          style={{ animationDelay: '70ms' }}
         >
           <div className="flex items-center gap-3">
             <HealthRing rate={summary.passRate} />
@@ -384,7 +385,7 @@ export default function ProjectPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-[1fr_1fr_1.28fr]">
+          <div className="tp-rise grid grid-cols-1 items-start gap-4 md:grid-cols-[1fr_1fr_1.28fr]" style={{ animationDelay: '120ms' }}>
             <FoldersPanel
               folders={landing.folders}
               totalCount={landing.totalFolders}
@@ -414,21 +415,27 @@ export default function ProjectPage() {
             />
           </div>
           {releases.length > 0 && (
-            <ReleasesPanel
-              releases={releases}
-              onSeeAll={() => navigate(`/projects/${projectKey}/releases`)}
-              onSelectRelease={(releaseKey) => navigate(`/projects/${projectKey}/releases/${releaseKey}`)}
-            />
+            <div className="tp-rise" style={{ animationDelay: '220ms' }}>
+              <ReleasesPanel
+                releases={releases}
+                onSeeAll={() => navigate(`/projects/${projectKey}/releases`)}
+                onSelectRelease={(releaseKey) => navigate(`/projects/${projectKey}/releases/${releaseKey}`)}
+              />
+            </div>
           )}
-          <ReportsPanel
-            total={reportsTeaser.total}
-            counts={reportsTeaser.counts}
-            flakyCases={reportsTeaser.flakyCases}
-            passRateHistory={passRateHistory.points}
-            onOpenReports={() => navigate(`/projects/${projectKey}/reports`)}
-            onSelectFlakyCase={(caseKey) => navigate(`/projects/${projectKey}/cases/${caseKey}`)}
-          />
-          <ActivityPanel entries={activity.entries} />
+          <div className="tp-rise" style={{ animationDelay: '260ms' }}>
+            <ReportsPanel
+              total={reportsTeaser.total}
+              counts={reportsTeaser.counts}
+              flakyCases={reportsTeaser.flakyCases}
+              passRateHistory={passRateHistory.points}
+              onOpenReports={() => navigate(`/projects/${projectKey}/reports`)}
+              onSelectFlakyCase={(caseKey) => navigate(`/projects/${projectKey}/cases/${caseKey}`)}
+            />
+          </div>
+          <div className="tp-rise" style={{ animationDelay: '300ms' }}>
+            <ActivityPanel entries={activity.entries} />
+          </div>
         </div>
       )}
     </div>

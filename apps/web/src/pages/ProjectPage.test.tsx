@@ -189,6 +189,28 @@ describe('ProjectPage landing', () => {
     expect(screen.getByText(/p1 · project overview/i)).toBeInTheDocument()
   })
 
+  it('wraps the landing hero in the bounded background wash (visual-elevation-redesign)', async () => {
+    mockProjectAPI()
+    renderProject()
+    const heading = await screen.findByRole('heading', { name: 'QA Platform' })
+    expect(heading.closest('.tp-hero-wash')).not.toBeNull()
+  })
+
+  it('staggers the panel grid and reports/activity sections with the rise-in animation (visual-elevation-redesign)', async () => {
+    mockProjectAPI()
+    renderProject()
+    await screen.findByRole('heading', { name: 'QA Platform' })
+    const foldersPanel = screen.getByText('Library').closest('.tp-rise') as HTMLElement | null
+    const reportsPanel = screen.getByText('Reports').closest('.tp-rise') as HTMLElement | null
+    const activityPanel = screen.getByText('Activity').closest('.tp-rise') as HTMLElement | null
+    expect(foldersPanel).not.toBeNull()
+    expect(reportsPanel).not.toBeNull()
+    expect(activityPanel).not.toBeNull()
+    expect(foldersPanel?.style.animationDelay).toBe('120ms')
+    expect(reportsPanel?.style.animationDelay).toBe('260ms')
+    expect(activityPanel?.style.animationDelay).toBe('300ms')
+  })
+
   // add-data-retention design.md D5: same badge as ProjectsPage's cards.
   it('shows an "Archived" badge on the heading for an archived project', async () => {
     mockProjectAPI({ project: { id: 'p1', key: 'p1', name: 'QA Platform', archived: true, description: '', createdAt: '' } })

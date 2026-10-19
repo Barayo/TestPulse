@@ -522,6 +522,31 @@ describe('Status filter (rework-run-detail-ux)', () => {
   })
 })
 
+describe('Row status emphasis (visual-elevation-redesign)', () => {
+  it('tints a failed row with a destructive left accent and background', async () => {
+    const failedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', currentStatus: 'failed', content: { ...pendingItem.content, title: 'Logout works' } }
+    mockRunAPI([pendingItem, failedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const failedRow = screen.getByText('Logout works').closest('button')
+    const pendingRow = screen.getByText('Login works').closest('button')
+    expect(failedRow?.className).toContain('border-l-destructive')
+    expect(failedRow?.className).toContain('bg-destructive/5')
+    expect(pendingRow?.className).not.toContain('border-l-destructive')
+  })
+
+  it('tints a blocked row the same way as a failed row', async () => {
+    const blockedItem = { ...pendingItem, id: 'i4', caseKey: 'c4', currentStatus: 'blocked', content: { ...pendingItem.content, title: 'Refund works' } }
+    mockRunAPI([pendingItem, blockedItem])
+    renderRun()
+    await screen.findByText('Login works')
+
+    const blockedRow = screen.getByText('Refund works').closest('button')
+    expect(blockedRow?.className).toContain('border-l-destructive')
+  })
+})
+
 describe('Group by status (rework-run-detail-ux)', () => {
   const passItem = { ...pendingItem, id: 'i2', caseKey: 'c2', currentStatus: 'pass', content: { ...pendingItem.content, title: 'Checkout works' } }
   const failedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', currentStatus: 'failed', content: { ...pendingItem.content, title: 'Logout works' } }

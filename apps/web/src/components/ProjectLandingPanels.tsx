@@ -38,8 +38,8 @@ export function PanelShell({
 }) {
   return (
     <div
-      className={`flex flex-col overflow-hidden rounded-lg border bg-card ${
-        featured ? 'border-primary/35 shadow-sm' : 'border-border'
+      className={`flex flex-col overflow-hidden rounded-lg bg-card shadow-[var(--elev-1),var(--elev-rim)] ${
+        featured ? 'shadow-[var(--elev-1),0_0_0_1.5px_color-mix(in_oklch,var(--primary),transparent_65%)]' : ''
       }`}
     >
       {featured && <div className="h-[3px] bg-primary" aria-hidden="true" />}
@@ -417,7 +417,7 @@ export function ReportsPanel({
   const visibleFlakyCases = flakyCases.slice(0, FLAKY_ROWS_SHOWN)
 
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+    <div className="flex flex-col overflow-hidden rounded-lg bg-card shadow-[var(--elev-1),var(--elev-rim)]">
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
         <span className="flex items-center gap-2 text-sm font-bold text-foreground">
           <span className="text-primary">
@@ -512,7 +512,7 @@ export function ReportsPanel({
 export function ActivityPanel({ entries }: { entries: AuditEntry[] }) {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-col overflow-hidden rounded-lg border border-border bg-card">
+    <div className="flex flex-col overflow-hidden rounded-lg bg-card shadow-[var(--elev-1),var(--elev-rim)]">
       <div className="flex items-center gap-2 border-b border-border px-4 py-3">
         <span className="flex items-center gap-2 text-sm font-bold text-foreground">
           <span className="text-primary">

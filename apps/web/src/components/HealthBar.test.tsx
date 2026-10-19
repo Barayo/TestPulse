@@ -128,6 +128,16 @@ describe('HealthRing', () => {
     render(<HealthRing rate={25} size={128} />)
     expect(screen.getByTestId('health-ring')).toHaveStyle({ width: '128px', height: '128px' })
   })
+
+  it('colors the headline percentage by the same status band as the ring fill, not flat foreground (visual-elevation-redesign)', () => {
+    render(<HealthRing rate={90} />)
+    expect(screen.getByText('90%')).toHaveClass('text-status-healthy-fg')
+  })
+
+  it('colors a risk-band headline percentage with the risk token', () => {
+    render(<HealthRing rate={10} />)
+    expect(screen.getByText('10%')).toHaveClass('text-status-risk-fg')
+  })
 })
 
 describe('statusDotClass', () => {

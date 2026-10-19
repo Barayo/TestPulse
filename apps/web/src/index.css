@@ -132,6 +132,19 @@
     --avatar-4-bg: #F5E7D0; --avatar-4-fg: #8A5A1E;
     --avatar-5-bg: #FBE1E6; --avatar-5-fg: #A23A55;
     --avatar-6-bg: #E4EEDD; --avatar-6-fg: #4B6B33;
+
+    /* Card elevation (visual-elevation-redesign) — a real two-layer drop
+       shadow + 1px rim, replacing the flat `ring-1 ring-foreground/10`
+       every card used before. Neutral (ink-based, not brand-hued), so one
+       definition covers every palette preset below without per-preset
+       duplication — only --wash (which reads var(--primary)) needs that. */
+    --elev-1: 0 1px 2px rgb(11 46 44 / 0.05), 0 6px 14px -6px rgb(11 46 44 / 0.10), 0 14px 28px -16px rgb(11 46 44 / 0.10);
+    --elev-rim: 0 0 0 1px rgb(11 46 44 / 0.045);
+    /* Hero-zone background wash (ProjectPage's header + summary strip only,
+       fully resolved to flat --background by 480px) — a formula, not a
+       hardcoded color, so it also already adapts correctly to every
+       data-palette preset below without its own override block. */
+    --wash: color-mix(in oklch, var(--primary), var(--background) 94%);
 }
 
 .dark {
@@ -191,6 +204,10 @@
     --avatar-4-bg: #3A2C10; --avatar-4-fg: #EFC77C;
     --avatar-5-bg: #3A1A21; --avatar-5-fg: #F2A6B6;
     --avatar-6-bg: #243318; --avatar-6-fg: #B7D69A;
+
+    --elev-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 10px 22px -8px rgb(0 0 0 / 0.5), 0 20px 40px -20px rgb(0 0 0 / 0.55);
+    --elev-rim: 0 0 0 1px rgb(255 255 255 / 0.07);
+    --wash: color-mix(in oklch, var(--primary), var(--background) 90%);
 }
 
 /*
@@ -606,6 +623,47 @@
    statically at the clip boundary for 40% of every cycle, which is
    exactly what read as an ugly wash/hard-cut artifact in a screenshot
    (founder report). */
+/*
+ * Project landing hero (visual-elevation-redesign, Pepe round 2) — a
+ * background wash bounded to the header + summary-strip zone only, fully
+ * resolved back to flat --background by 480px so it's gone before the
+ * dense panel grid starts (data-density/scanability over atmosphere, past
+ * that point). --wash is a color-mix formula reading var(--primary), so
+ * this already adapts correctly to every data-palette preset without its
+ * own override block.
+ */
+.tp-hero-wash {
+  background: linear-gradient(180deg, var(--wash) 0%, var(--background) 480px);
+}
+
+/*
+ * Staggered load-in (visual-elevation-redesign, Pepe round 2) — the
+ * landing hero's title row, summary strip, and panel grid fade+rise once
+ * on mount, staggered via each caller's own animation-delay, then settle
+ * into the page's ordinary static layout. Disabled outright under
+ * prefers-reduced-motion.
+ */
+.tp-rise {
+  opacity: 0;
+  animation: tp-rise 0.42s ease-out both;
+}
+@keyframes tp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tp-rise {
+    animation: none;
+    opacity: 1;
+  }
+}
+
 @keyframes auth-run-strip-sweep {
   0% {
     left: -46px;

@@ -172,7 +172,7 @@ export function HealthRing({ rate, size }: { rate: number | null; size?: number 
       }}
     >
       <span
-        className={`flex items-center justify-center rounded-full bg-card font-bold tabular-nums ${size === undefined ? 'size-8.5 text-[11px]' : ''}`}
+        className={`flex items-center justify-center rounded-full bg-card font-bold tabular-nums ${statusTextClass(rate)} ${size === undefined ? 'size-8.5 text-[11px]' : ''}`}
         style={size !== undefined ? { width: innerSize, height: innerSize, fontSize } : undefined}
       >
         {rate === null ? '—' : `${rate}%`}
