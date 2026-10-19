@@ -73,9 +73,13 @@ curl http://localhost:8080/readyz
 
 ## What you get right now
 
-TestPulse is at the **walking skeleton** stage (v0.0): a deployable, healthy,
-essentially empty application. Test cases, suites, runs, users, and the MCP
-server arrive in v0.1 — see the [Roadmap](../ROADMAP.md).
+The instance you just started is fully usable, not a skeleton: projects,
+versioned test cases, suites, run execution (open/closed lifecycle, JUnit XML
+import), local auth with sessions and scoped API tokens for agents, SSO/OIDC,
+project-scoped RBAC, an [MCP server](mcp-server.md) over the same service
+layer as the REST API, pass-rate reporting and flaky-case detection, and a
+Jira connector. See the [Roadmap](../ROADMAP.md) for the full release ladder
+and what's still ahead.
 
 ## Next steps
 
