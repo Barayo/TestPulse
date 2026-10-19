@@ -81,7 +81,16 @@ func TestProjectSummariesLastRunAtReflectsLatestRun(t *testing.T) {
 	}
 }
 
-func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
+// TestProjectSummariesPassRateAggregatesAcrossAllRuns: reversed from its
+// original intent (fix-project-landing-pass-rate-aggregation, #221) — the
+// landing summary strip's own label says "Pass rate across all suites,"
+// but the query behind it previously computed the rate from only the
+// single most recently created run, which could (and did, on the real
+// Sample Project) show a misleading badge that contradicted the Reports
+// panel's genuinely-aggregated number two inches below it on the same
+// page. PassRate must now aggregate every run's items for the project,
+// matching ProjectStatusSummary's (the Reports teaser's) semantics.
+func TestProjectSummariesPassRateAggregatesAcrossAllRuns(t *testing.T) {
 	s := testStore(t)
 	ctx := context.Background()
 	caller := mustUser(t, s, "stats-caller-3@b.com", false)
@@ -101,7 +110,8 @@ func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
 		}
 	}
 
-	// Newer run: both pass (100% pass) — must be what Summaries reports.
+	// Newer run: both pass (100% pass) — the old buggy query reported this
+	// run alone; the correct aggregate across both runs is 2/4 = 50%.
 	newRun, err := s.Runs.Create(ctx, p.ID, "new run", []string{c1.ID, c2.ID})
 	if err != nil {
 		t.Fatalf("create new run: %v", err)
@@ -117,8 +127,8 @@ func TestProjectSummariesPassRateReflectsLatestRunOnly(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Summaries: %v", err)
 	}
-	if summaries[0].PassRate == nil || *summaries[0].PassRate != 100 {
-		t.Errorf("PassRate = %v, want 100 (from the newer run only)", summaries[0].PassRate)
+	if summaries[0].PassRate == nil || *summaries[0].PassRate != 50 {
+		t.Errorf("PassRate = %v, want 50 (aggregated across both runs, not just the newer one)", summaries[0].PassRate)
 	}
 }
 

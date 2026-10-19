@@ -505,18 +505,28 @@ func (r *ProjectRepo) Summaries(ctx context.Context, userID string) ([]domain.Pr
 		return nil, err
 	}
 
+	// LastRunAt reflects the single latest run (for the "last run" caption),
+	// but PassRate aggregates across every run's items for the project —
+	// matching ProjectStatusSummary's (the Reports teaser's) semantics, so
+	// the landing summary strip's badge can't contradict the Reports panel
+	// two inches below it on the same page (#221). A "latest run only" rate
+	// doesn't match this field's own "Pass rate across all suites" label.
 	passRates, err := r.pool.Query(ctx,
-		`SELECT r.project_id,
-		        r.created_at,
-		        count(i.id) AS total,
-		        count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
-		 FROM (
-		     SELECT DISTINCT ON (project_id) id, project_id, created_at
+		`WITH latest AS (
+		     SELECT DISTINCT ON (project_id) project_id, created_at
 		     FROM test_runs
 		     ORDER BY project_id, created_at DESC
-		 ) r
-		 LEFT JOIN test_run_items i ON i.run_id = r.id
-		 GROUP BY r.project_id, r.created_at`)
+		 ), agg AS (
+		     SELECT r.project_id,
+		            count(i.id) AS total,
+		            count(i.id) FILTER (WHERE i.current_status = 'pass') AS pass_count
+		     FROM test_runs r
+		     LEFT JOIN test_run_items i ON i.run_id = r.id
+		     GROUP BY r.project_id
+		 )
+		 SELECT latest.project_id, latest.created_at, agg.total, agg.pass_count
+		 FROM latest
+		 JOIN agg ON agg.project_id = latest.project_id`)
 	if err != nil {
 		return nil, err
 	}

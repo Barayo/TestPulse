@@ -792,7 +792,7 @@ export default function CaseDetailPage() {
                         className="flex w-full items-center justify-between px-2 py-1.5 text-left hover:bg-accent"
                         onClick={() => setExpandedVersion(expanded ? null : v.version)}
                       >
-                        <span className="flex flex-col gap-0.5">
+                        <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                           <span className="flex items-center gap-2">
                             <span>{t('CaseDetailPage.versionValue', { version: v.version })}</span>
                             {v.version === testCase.currentVersion && <Badge variant="default">{t('CaseDetailPage.current')}</Badge>}

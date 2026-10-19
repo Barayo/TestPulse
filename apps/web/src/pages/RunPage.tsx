@@ -726,10 +726,10 @@ export default function RunPage() {
       )}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle className="tp-heading">{run?.name ?? t('RunPage.runFallbackTitle')}</CardTitle>
             {run && (
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 {run.status === 'closed' && (
                   <Button
                     size="sm"

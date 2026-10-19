@@ -450,6 +450,20 @@ describe('CaseDetailPage', () => {
     expect(within(v1Row!).queryByText('Jane')).not.toBeInTheDocument()
   })
 
+  it("keeps the date column from overflowing the card on a long diff-signal line (#224)", async () => {
+    mockDetailAPI()
+    renderDetail()
+    const history = await screen.findByRole('list', { name: /version history/i })
+    const v2Row = within(history).getByText('v2').closest('button')
+    expect(v2Row).not.toBeNull()
+    const signalSpan = v2Row!.querySelector('.truncate')
+    expect(signalSpan).not.toBeNull()
+    const leftColumn = signalSpan!.closest('.flex-col')
+    expect(leftColumn).not.toBeNull()
+    expect(leftColumn!.className).toContain('min-w-0')
+    expect(leftColumn!.className).toContain('flex-1')
+  })
+
   it('shows no avatar for a version with an unknown actor', async () => {
     mockDetailAPI()
     renderDetail()

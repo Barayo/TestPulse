@@ -547,6 +547,20 @@ describe('Row status emphasis (visual-elevation-redesign)', () => {
   })
 })
 
+describe('Header wraps on narrow viewports (#225)', () => {
+  it('lets the title row and action button cluster wrap instead of overflowing', async () => {
+    mockRunAPI([pendingItem])
+    renderRun()
+    const deleteButton = await screen.findByRole('button', { name: /delete run/i })
+    const buttonCluster = deleteButton.closest('div.flex')
+    expect(buttonCluster).not.toBeNull()
+    expect(buttonCluster!.className).toContain('flex-wrap')
+    const titleRow = buttonCluster!.parentElement
+    expect(titleRow).not.toBeNull()
+    expect(titleRow!.className).toContain('flex-wrap')
+  })
+})
+
 describe('Group by status (rework-run-detail-ux)', () => {
   const passItem = { ...pendingItem, id: 'i2', caseKey: 'c2', currentStatus: 'pass', content: { ...pendingItem.content, title: 'Checkout works' } }
   const failedItem = { ...pendingItem, id: 'i3', caseKey: 'c3', currentStatus: 'failed', content: { ...pendingItem.content, title: 'Logout works' } }
