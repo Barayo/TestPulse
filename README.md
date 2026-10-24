@@ -6,11 +6,36 @@ TestPulse is an AI-native, MCP-first test management platform. Humans get a clea
 
 > **Status**: approaching 1.0 — the core test management domain (projects, versioned test cases, suites, runs, execution), local auth with sessions and scoped API tokens, SSO/OIDC, project-scoped RBAC, reporting (pass-rate trends, flaky-case detection), and a Jira connector are all implemented and usable. See [ROADMAP.md](ROADMAP.md) for the full release ladder and what's still ahead.
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="assets/screenshots/project-overview-dark.png">
+  <img alt="TestPulse project overview — suites, runs, releases, and reports for the always-seeded Sample Project" src="assets/screenshots/project-overview.png">
+</picture>
+
 ## Why TestPulse?
 
 - **AI-native, not AI-bolted-on** — agents are real actors in the RBAC model and audit log, and the MCP server is part of the core product, not a plugin.
 - **Genuinely open source** — AGPLv3, built entirely on open-source technology. The open core includes SSO.
 - **Trivially self-hostable** — a single Go binary, a PostgreSQL database, multi-arch container images (amd64 + arm64). One `docker compose up` to evaluate; a Helm chart for production Kubernetes.
+
+## Screenshots
+
+### Run execution
+
+Every case in a run carries a clear pass/fail/blocked verdict; a failure stays visible in context instead of hiding in a summary count.
+
+![Run execution board for Release 1.2 — go/no-go, showing a 90% pass rate and one failed case called out in red among nine passing cases](assets/screenshots/run-execution.png)
+
+### Test case detail
+
+Steps, classification, suite membership, linked requirements and Jira issue, result history, and full version history — one case, one page.
+
+![Test case detail page for "User can log in with valid credentials", showing three numbered steps, a Properties sidebar with priority/automation/Jira linkage, a 7-run result-history strip, and version history back to v1](assets/screenshots/case-detail.png)
+
+### Agent tokens
+
+Creating a token for a CI pipeline or an AI agent works the same way as inviting a person: give it a name, then scope it to exactly one project and one role — never a single master key with the run of the instance.
+
+![New API token form named "release-bot", scoped to the Sample Project with the Contributor role — the same project-and-role scoping a human teammate's access gets](assets/screenshots/agent-tokens.png)
 
 ## Quickstart
 
