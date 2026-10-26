@@ -1612,7 +1612,7 @@ describe('permission gating', () => {
     mockRunAPI([pendingItem], undefined, undefined, undefined, { ...fullPermissions, runRecordResult: false })
     renderRun()
     await screen.findByText('Login works')
-    await userEvent.click(screen.getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /actions for login works/i }))
     expect(screen.queryByRole('menuitem', { name: /assign to/i })).not.toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
   })
@@ -1631,7 +1631,7 @@ describe('permission gating', () => {
     renderRun()
     await screen.findByText('Login works')
     expect(screen.queryByRole('button', { name: /close run/i })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /actions for login works/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /actions for login works/i })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /actions for login works/i }))
     expect(screen.queryByRole('menuitem', { name: /assign to/i })).not.toBeInTheDocument()
   })
@@ -1660,7 +1660,7 @@ describe('anonymous / dual-mode', () => {
     // The row's actions trigger stays present (it still offers "Open
     // execution"/"Go to case", pure navigation) — only "Assign to…" is
     // gated, already covered by the permission-gating tests above.
-    await userEvent.click(screen.getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /actions for login works/i }))
     expect(screen.queryByRole('menuitem', { name: /assign to/i })).not.toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
   })
