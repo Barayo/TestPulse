@@ -544,8 +544,8 @@ describe('App language resolution', () => {
   // file in this run (registered once in src/test/setup.ts) — reset it
   // after each test here so a changed language never leaks into an
   // unrelated test elsewhere that renders English text unconditionally.
-  afterEach(() => {
-    void i18next.changeLanguage('en')
+  afterEach(async () => {
+    await i18next.changeLanguage('en')
   })
 
   function mockMetaAndUser(meta: Record<string, unknown>, user: Record<string, unknown> | null) {
