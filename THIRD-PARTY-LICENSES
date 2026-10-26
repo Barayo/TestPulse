@@ -5,7 +5,7 @@ regenerate). Lists every third-party dependency's license across the npm
 workspace and the three first-party Go modules, per MIT/BSD/Apache-2.0's
 copyright-notice-retention requirement (trademark-license-review).
 
-## npm workspace (415 packages)
+## npm workspace (414 packages)
 
 - @babel/code-frame@7.29.7: MIT
 - @babel/compat-data@7.29.7: MIT
@@ -55,7 +55,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - @nodelib/fs.scandir@2.1.5: MIT
 - @nodelib/fs.stat@2.0.5: MIT
 - @nodelib/fs.walk@1.2.8: MIT
-- @oxc-project/types@0.149.0: MIT
+- @oxc-project/types@0.155.0: MIT
 - @radix-ui/number@1.1.3: MIT
 - @radix-ui/primitive@1.1.7: MIT
 - @radix-ui/react-accessible-icon@1.1.15: MIT
@@ -118,7 +118,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - @radix-ui/rect@1.1.3: MIT
 - @rolldown/pluginutils@1.0.1: MIT
 - @sec-ant/readable-stream@0.4.1: MIT
-- @shadcn/registry@0.1.3: MIT
+- @shadcn/registry@0.2.0: MIT
 - @sindresorhus/merge-streams@4.0.0: MIT
 - @tailwindcss/node@4.3.3: MIT
 - @tailwindcss/oxide@4.3.3: MIT
@@ -139,16 +139,16 @@ copyright-notice-retention requirement (trademark-license-review).
 - ast-types@0.16.3: MIT
 - atomically@1.7.0: MIT
 - balanced-match@4.0.4: MIT
-- baseline-browser-mapping@2.11.27: Apache-2.0
-- body-parser@2.3.0: MIT
+- baseline-browser-mapping@2.11.33: Apache-2.0
+- body-parser@2.4.0: MIT
 - brace-expansion@5.0.12: MIT
 - braces@3.0.3: MIT
-- browserslist@4.29.3: MIT
-- bundle-name@4.1.0: MIT
+- browserslist@4.29.4: MIT
+- bundle-name@4.1.1: MIT
 - bytes@3.1.2: MIT
 - call-bind-apply-helpers@1.0.2: MIT
 - call-bound@1.0.4: MIT
-- caniuse-lite@1.0.30001815: CC-BY-4.0
+- caniuse-lite@1.0.30001819: CC-BY-4.0
 - chalk@5.6.2: MIT
 - class-variance-authority@0.7.1: Apache-2.0
 - cli-cursor@5.0.0: MIT
@@ -186,7 +186,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - dotenv@17.4.2: BSD-2-Clause
 - dunder-proto@1.0.1: MIT
 - ee-first@1.1.1: MIT
-- electron-to-chromium@1.5.451: ISC
+- electron-to-chromium@1.5.464: ISC
 - emoji-regex@10.6.0: MIT
 - encodeurl@2.0.0: MIT
 - enhanced-resolve@5.24.5: MIT
@@ -207,7 +207,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - express-rate-limit@8.7.0: MIT
 - fast-deep-equal@3.1.3: MIT
 - fast-glob@3.3.3: MIT
-- fast-uri@3.1.8: BSD-3-Clause
+- fast-uri@3.1.9: BSD-3-Clause
 - fastq@1.20.3: ISC
 - fdir@6.5.0: MIT
 - figures@6.1.0: MIT
@@ -232,7 +232,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - graceful-fs@4.2.11: ISC
 - has-symbols@1.1.0: MIT
 - hasown@2.0.4: MIT
-- hono@4.13.7: MIT
+- hono@4.13.14: MIT
 - html-parse-stringify@4.0.1: MIT
 - http-errors@2.0.1: MIT
 - human-signals@2.1.0: Apache-2.0
@@ -241,7 +241,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - iconv-lite@0.7.3: MIT
 - ignore@5.3.2: MIT
 - inherits@2.0.4: ISC
-- ip-address@10.7.3: MIT
+- ip-address@10.7.5: MIT
 - ipaddr.js@1.9.1: MIT
 - is-docker@2.2.1: MIT
 - is-docker@3.0.0: MIT
@@ -296,9 +296,9 @@ copyright-notice-retention requirement (trademark-license-review).
 - minimatch@10.2.6: BlueOak-1.0.0
 - minimist@1.2.8: MIT
 - ms@2.1.3: MIT
-- nanoid@3.3.19: MIT
+- nanoid@3.3.20: MIT
 - negotiator@1.1.0: MIT
-- node-releases@2.0.58: MIT
+- node-releases@2.0.60: MIT
 - npm-run-path@4.0.1: MIT
 - npm-run-path@6.0.0: MIT
 - object-assign@4.1.1: MIT
@@ -309,7 +309,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - onetime@5.1.2: MIT
 - onetime@7.0.0: MIT
 - open@8.4.2: MIT
-- open@11.0.2: MIT
+- open@11.0.4: MIT
 - openapi-fetch@0.17.0: MIT
 - openapi-typescript-helpers@0.1.0: MIT
 - ora@8.2.0: MIT
@@ -328,14 +328,13 @@ copyright-notice-retention requirement (trademark-license-review).
 - picomatch@2.3.2: MIT
 - pkce-challenge@5.0.1: MIT
 - pkg-up@3.1.0: MIT
-- postcss@8.5.28: MIT
+- postcss@8.5.31: MIT
 - postcss-selector-parser@7.1.6: MIT
 - powershell-utils@0.2.1: MIT
-- powershell-utils@0.1.0: MIT
 - pretty-ms@9.3.1: MIT
 - prompts@2.4.2: MIT
 - proxy-addr@2.0.8: MIT
-- qs@6.16.0: BSD-3-Clause
+- qs@6.16.1: BSD-3-Clause
 - queue-microtask@1.2.3: MIT
 - radix-ui@1.6.7: MIT
 - range-parser@1.3.0: MIT
@@ -351,7 +350,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - require-from-string@2.0.2: MIT
 - restore-cursor@5.1.0: MIT
 - reusify@1.1.0: MIT
-- rolldown@1.2.8: MIT
+- rolldown@1.2.15: MIT
 - router@2.2.0: MIT
 - run-applescript@7.1.0: MIT
 - run-parallel@1.2.0: MIT
@@ -362,7 +361,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - send@1.2.1: MIT
 - serve-static@2.2.1: MIT
 - setprototypeof@1.2.0: ISC
-- shadcn@4.21.4: MIT
+- shadcn@4.22.1: MIT
 - shebang-command@2.0.0: MIT
 - shebang-regex@3.0.0: MIT
 - side-channel@1.1.1: MIT
@@ -385,7 +384,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - strip-bom@3.0.0: MIT
 - strip-final-newline@2.0.0: MIT
 - strip-final-newline@4.0.0: MIT
-- systeminformation@5.33.15: MIT
+- systeminformation@5.33.16: MIT
 - tailwind-merge@3.6.0: MIT
 - tailwindcss@4.3.3: MIT
 - tapable@2.3.3: MIT
@@ -400,7 +399,7 @@ copyright-notice-retention requirement (trademark-license-review).
 - type-fest@4.41.0: (MIT OR CC0-1.0)
 - type-is@2.1.0: MIT
 - typescript@6.0.3: Apache-2.0
-- undici@7.29.1: MIT
+- undici@7.30.1: MIT
 - undici-types@7.18.2: MIT
 - unicorn-magic@0.3.0: MIT
 - universalify@2.0.1: MIT
@@ -412,15 +411,15 @@ copyright-notice-retention requirement (trademark-license-review).
 - util-deprecate@1.0.2: MIT
 - validate-npm-package-name@7.0.2: ISC
 - vary@1.1.2: MIT
-- vite@8.3.0: MIT
+- vite@8.3.5: MIT
 - which@4.0.0: ISC
 - which@2.0.2: ISC
 - wrappy@1.0.2: ISC
-- wsl-utils@1.0.0: MIT
+- wsl-utils@1.0.1: MIT
 - yallist@3.1.1: ISC
 - yocto-spinner@1.2.2: MIT
 - yoctocolors@2.2.0: MIT
-- zod@3.25.76: MIT
+- zod@4.6.7: MIT
 - zod-to-json-schema@3.25.2: ISC
 
 ## apps/api (32 packages)
