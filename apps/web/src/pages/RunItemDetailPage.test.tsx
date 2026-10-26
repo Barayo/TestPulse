@@ -716,7 +716,7 @@ describe('Keyboard shortcuts (add-run-keyboard-shortcuts)', () => {
     mockItemAPI()
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
-    await userEvent.click(screen.getByRole('button', { name: /record on behalf of someone else/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /record on behalf of someone else/i }))
 
     await userEvent.type(screen.getByLabelText(/record on behalf of/i), 'bob')
 
