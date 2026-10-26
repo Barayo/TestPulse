@@ -213,7 +213,7 @@ describe('RunItemDetailPage', () => {
     renderPage()
     await screen.findByRole('heading', { name: 'Login works' })
     const sidebar = screen.getByTestId('run-item-sidebar')
-    const link = within(sidebar).getByRole('link', { name: /c1/i })
+    const link = await within(sidebar).findByRole('link', { name: /c1/i })
     expect(link).toHaveAttribute('href', '/projects/p1/cases/c1')
   })
 
