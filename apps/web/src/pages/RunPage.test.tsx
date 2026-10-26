@@ -312,7 +312,7 @@ describe('Run execution board', () => {
       mockRunAPI([{ ...pendingItem, jiraIssueKey: null }])
       renderRun()
       await screen.findByText('Login works')
-      expect(screen.getByRole('button', { name: /link jira issue/i })).toBeInTheDocument()
+      expect(await screen.findByRole('button', { name: /link jira issue/i })).toBeInTheDocument()
     })
 
     it('renders nothing when unlinked and the caller lacks runRecordResult', async () => {
@@ -331,7 +331,7 @@ describe('Run execution board', () => {
       renderRun()
       await screen.findByText('Login works')
 
-      await userEvent.click(screen.getByRole('button', { name: /link jira issue/i }))
+      await userEvent.click(await screen.findByRole('button', { name: /link jira issue/i }))
       await userEvent.type(screen.getByRole('textbox', { name: /jira issue key/i }), 'proj-1')
       await userEvent.click(screen.getByRole('button', { name: /save/i }))
 
@@ -1143,7 +1143,7 @@ describe('Assignment (add-run-item-assignment-ui)', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
-    await userEvent.click(screen.getByRole('button', { name: /assign selected/i }))
+    await userEvent.click(await screen.findByRole('button', { name: /assign selected/i }))
     await userEvent.click(await screen.findByRole('button', { name: 'ana@example.com' }))
 
     await waitFor(() => {
@@ -1170,7 +1170,7 @@ describe('Bulk verdict actions (add-bulk-status-verdicts)', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'Mark as' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark as' }))
 
     expect(screen.getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Failed' })).toBeInTheDocument()
@@ -1186,7 +1186,7 @@ describe('Bulk verdict actions (add-bulk-status-verdicts)', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'Mark as' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark as' }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Pass' }))
 
     await waitFor(() => {
@@ -1209,7 +1209,7 @@ describe('Bulk verdict actions (add-bulk-status-verdicts)', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
 
-    expect(screen.getByRole('button', { name: /assign selected/i })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /assign selected/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Mark as' })).not.toBeInTheDocument()
   })
 
@@ -1223,7 +1223,7 @@ describe('Bulk verdict actions (add-bulk-status-verdicts)', () => {
 
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
-    await userEvent.click(screen.getByRole('button', { name: 'Mark as' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark as' }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Pass' }))
 
     expect(await screen.findByText(/1 item.*not updated/i)).toBeInTheDocument()
@@ -1242,7 +1242,7 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     const row = screen.getByText('Login works').closest('li') as HTMLElement
-    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
 
     expect(screen.getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: 'Pass' })).toBeInTheDocument()
@@ -1261,7 +1261,7 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     const row = screen.getByText('Password reset works').closest('li') as HTMLElement
-    await userEvent.click(within(row).getByRole('button', { name: /actions for password reset works/i }))
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for password reset works/i }))
 
     expect(screen.getByRole('menuitem', { name: /open execution/i })).toBeInTheDocument()
     expect(screen.getByRole('menuitem', { name: /go to case in library/i })).toBeInTheDocument()
@@ -1279,7 +1279,7 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     const row = screen.getByText('Login works').closest('li') as HTMLElement
-    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Failed' }))
 
     await waitFor(() => {
@@ -1302,7 +1302,7 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     const row = screen.getByText('Login works').closest('li') as HTMLElement
-    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
     await userEvent.click(screen.getByRole('menuitem', { name: 'Assign 2 selected…' }))
 
     expect(await screen.findByText('Assign 2 items to…')).toBeInTheDocument()
@@ -1316,7 +1316,7 @@ describe('Right-click a row while a multi-selection is active (add-bulk-status-v
     await userEvent.click(screen.getByRole('checkbox', { name: /select login works/i }))
     await userEvent.click(screen.getByRole('checkbox', { name: /select checkout works/i }))
     const row = screen.getByText('Login works').closest('li') as HTMLElement
-    await userEvent.click(within(row).getByRole('button', { name: /actions for login works/i }))
+    await userEvent.click(await within(row).findByRole('button', { name: /actions for login works/i }))
 
     expect(screen.getByRole('menuitem', { name: 'Assign 2 selected…' })).toBeInTheDocument()
     expect(screen.queryByRole('menuitem', { name: 'Pass' })).not.toBeInTheDocument()
